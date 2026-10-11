@@ -1,0 +1,18 @@
+[package]
+name = "dvkit"
+version = "0.1.0"
+edition = "2021"
+description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
+
+[dependencies]
+eframe = "0.36"
+egui = "0.36"
+egui_extras = "0.36"
+bollard = "0.21"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+futures = "0.3"
+serde_json = "1"
+anyhow = "1"
+
+[profile.release]
+opt-level = 2

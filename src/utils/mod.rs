@@ -39,7 +39,8 @@ pub fn apply_theme(ctx: &Context) {
     v.window_fill = PANEL_BG;
     v.window_stroke = Stroke::new(1.0, DIVIDER);
     v.extreme_bg_color = SURFACE_BG;
-    v.faint_bg_color = Color32::from_rgb(30, 35, 43); // 斑马纹：与面板底拉开层次
+    // 斑马纹底色：与面板底拉开层次
+    v.faint_bg_color = Color32::from_rgb(30, 35, 43);
     v.code_bg_color = DEEP_BG;
 
     // 圆角

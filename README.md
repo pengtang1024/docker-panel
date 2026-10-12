@@ -2,6 +2,9 @@
 
 极简 Docker 桌面管理工具，基于 Rust + egui 原生 GUI。单二进制、无 Electron、无运行时依赖，启动即用。
 
+[![CI](https://github.com/pengtang1024/dvkit/actions/workflows/ci.yml/badge.svg)](https://github.com/pengtang1024/dvkit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/pengtang1024/dvkit?label=Release)](https://github.com/pengtang1024/dvkit/releases/latest)
+
 文档导航：[Wiki 首页](https://github.com/pengtang1024/dvkit/wiki) · [安装](https://github.com/pengtang1024/dvkit/wiki/Install) · [使用指南](https://github.com/pengtang1024/dvkit/wiki/Usage) · [架构设计](docs/architecture.md) · [常见问题](https://github.com/pengtang1024/dvkit/wiki/FAQ)
 
 ## 功能特性
@@ -53,6 +56,8 @@
 
 ### Debian / Ubuntu（deb 包）
 
+从 [Releases](https://github.com/pengtang1024/dvkit/releases) 下载 `dvkit_<版本>_amd64.deb`：
+
 ```bash
 sudo dpkg -i dvkit_0.1.0_amd64.deb
 ```
@@ -65,6 +70,12 @@ sudo usermod -aG docker $USER
 ```
 
 ### 从源码构建
+
+Linux 上需先安装 GUI 开发依赖：
+
+```bash
+sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev
+```
 
 ```bash
 # 调试运行
@@ -114,6 +125,7 @@ UI 线程 (egui/eframe)                    tokio 后台运行时
 ```
 dvkit/
 ├── Cargo.toml              # 依赖与构建配置
+├── CHANGELOG.md            # 更新日志
 ├── assets/
 │   └── MaterialIcons-Regular.ttf
 ├── packaging/              # desktop 入口与图标（deb 打包用）
@@ -147,6 +159,7 @@ dvkit/
 
 - [项目 Wiki](https://github.com/pengtang1024/dvkit/wiki)（安装、使用指南、架构、常见问题）
 - [架构设计](docs/architecture.md)（随仓库版本管理的开发文档）
+- [更新日志](CHANGELOG.md)
 
 ## 许可证
 

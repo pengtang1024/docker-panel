@@ -23,10 +23,12 @@ pub(super) fn container_table(
         let mut table = TableBuilder::new(ui)
             .striped(true)
             .resizable(true)
-            .sense(egui::Sense::click()) // 整行 hover 高亮 + 右键菜单
+            // 整行可点击：hover 高亮 + 右键菜单
+            .sense(egui::Sense::click())
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .vscroll(false)
-            .column(Column::initial(34.0).at_least(34.0).resizable(false)); // 选择
+            // 选择列固定宽度，不参与拖拽
+            .column(Column::initial(34.0).at_least(34.0).resizable(false));
         for (i, col) in cols.iter().enumerate() {
             table = table.column(col.column(i + 1 == cols.len()));
         }

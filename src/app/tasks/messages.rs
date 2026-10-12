@@ -66,8 +66,8 @@ impl DvApp {
                 }
                 Msg::PullProgress(text) => {
                     self.pull_progress.push(text);
-                    if self.pull_progress.len() > 200 {
-                        self.pull_progress.drain(..100);
+                    if self.pull_progress.len() > PULL_PROGRESS_CAP {
+                        self.pull_progress.drain(..PULL_PROGRESS_DROP);
                     }
                 }
                 Msg::PullDone(r) => {
@@ -120,7 +120,7 @@ impl DvApp {
                 mem_usage: s.mem_usage,
                 mem_limit: s.mem_limit,
             });
-            if rv.history.len() > 120 {
+            if rv.history.len() > HISTORY_CAP {
                 rv.history.pop_front();
             }
         }
@@ -133,8 +133,8 @@ impl DvApp {
                 match ev {
                     LogEvent::Line(line) => {
                         lv.lines.push(line);
-                        if lv.lines.len() > 5000 {
-                            lv.lines.drain(..500);
+                        if lv.lines.len() > LOG_LINES_CAP {
+                            lv.lines.drain(..LOG_LINES_DROP);
                         }
                     }
                     LogEvent::Closed => lv.ended = true,
@@ -154,17 +154,19 @@ impl DvApp {
     /// 定时刷新容器/镜像/资源采样
     pub(in crate::app) fn maybe_refresh(&mut self) {
         if !self.containers_loading
-            && self.last_container_refresh.elapsed() >= Duration::from_secs(2)
+            && self.last_container_refresh.elapsed() >= Duration::from_secs(CONTAINER_REFRESH_SECS)
         {
             self.refresh_containers();
         }
         if self.tab == Tab::Images
             && !self.images_loading
-            && self.last_image_refresh.elapsed() >= Duration::from_secs(15)
+            && self.last_image_refresh.elapsed() >= Duration::from_secs(IMAGE_REFRESH_SECS)
         {
             self.refresh_images();
         }
-        if self.stats_pending == 0 && self.last_stats.elapsed() >= Duration::from_secs(2) {
+        if self.stats_pending == 0
+            && self.last_stats.elapsed() >= Duration::from_secs(STATS_SAMPLE_SECS)
+        {
             self.refresh_stats();
         }
     }

@@ -50,7 +50,7 @@ impl DvApp {
         let mut open = true;
         let mut accepted = false;
         egui::Window::new(title)
-            .id(egui::Id::new("dvkit_confirm_window"))
+            .id(egui::Id::new(WIN_CONFIRM))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])

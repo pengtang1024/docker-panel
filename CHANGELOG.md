@@ -18,7 +18,7 @@
 - 无感刷新：列表刷新保留上一次资源数据，CPU 超过 80% 自动标红。
 - GitHub Dark 风格暗色主题，内置 Material Icons，启动时自动注入系统中文字体。
 - 顶部 Docker 连接状态角标；破坏性操作全部二次确认。
-- GitHub Actions：推送 `X.Y.Z` tag 自动跑 fmt / clippy 门禁、构建 deb 与二进制并创建 Release（仅此一条流水线）。
+- GitHub Actions：推送 `X.Y.Z` tag 自动构建 deb 与二进制并创建 Release（仅此一条流水线）。
 
 ### 工程
 

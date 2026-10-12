@@ -11,12 +11,14 @@
 //! - 每帧轮询消息 + 定时刷新（容器 2s / 镜像 15s / 资源采样 2s）
 
 mod columns;
+mod constants;
 mod containers;
 mod images;
 mod tasks;
 mod windows;
 
 use columns::*;
+use constants::*;
 use tasks::ActionKind;
 
 use std::cmp::Ordering;
@@ -101,7 +103,7 @@ struct LogView {
 struct ResourceView {
     id: String,
     name: String,
-    /// 历史采样点（最多保留 120 个 ≈ 4 分钟；VecDeque 便于头部淘汰）
+    /// 历史采样点（最多保留 HISTORY_CAP 个 ≈ 4 分钟；VecDeque 便于头部淘汰）
     history: VecDeque<ChartPoint>,
 }
 
@@ -224,8 +226,8 @@ impl DvApp {
             cleanup_unused: false,
             log_view: None,
             resource_view: None,
-            last_container_refresh: Instant::now() - Duration::from_secs(10),
-            last_image_refresh: Instant::now() - Duration::from_secs(10),
+            last_container_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
+            last_image_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
             last_stats: Instant::now(),
             status: "正在连接 Docker...".into(),
         };
@@ -269,6 +271,6 @@ impl eframe::App for DvApp {
         self.ui_result_window(&ctx);
 
         // 4. 保证后台消息被及时处理
-        ctx.request_repaint_after(Duration::from_millis(250));
+        ctx.request_repaint_after(Duration::from_millis(REPAINT_INTERVAL_MS));
     }
 }

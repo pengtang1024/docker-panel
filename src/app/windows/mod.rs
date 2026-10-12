@@ -13,7 +13,7 @@ impl DvApp {
         let mut open = self.log_view.is_some();
         if let Some(lv) = self.log_view.as_mut() {
             egui::Window::new(format!("日志 — {}", lv.name))
-                .id(egui::Id::new("dvkit_log_window"))
+                .id(egui::Id::new(WIN_LOG))
                 .open(&mut open)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .default_width(900.0)
@@ -80,7 +80,7 @@ impl DvApp {
         if let Some(rv) = self.resource_view.as_mut() {
             let latest = rv.history.back().copied();
             egui::Window::new(format!("资源监控 — {}", rv.name))
-                .id(egui::Id::new("dvkit_resource_window"))
+                .id(egui::Id::new(WIN_RESOURCE))
                 .open(&mut open)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .default_width(560.0)

@@ -85,7 +85,7 @@ impl DvApp {
                 let r = docker::sample_container(&id).await;
                 (id, r)
             }))
-            .buffer_unordered(4);
+            .buffer_unordered(STATS_CONCURRENCY);
             let results: Vec<_> = tasks.collect().await;
             for (id, r) in results {
                 if tx.send(Msg::Sample(id, r)).is_err() {
@@ -180,7 +180,7 @@ impl DvApp {
         let (tx, rx) = channel();
         let task_id = id.clone();
         let handle = self.rt.spawn(async move {
-            let _ = docker::follow_logs(&task_id, 200, tx).await;
+            let _ = docker::follow_logs(&task_id, LOG_TAIL_LINES, tx).await;
         });
         self.log_view = Some(LogView {
             id,

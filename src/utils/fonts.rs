@@ -103,7 +103,8 @@ fn font_weight_rank(lower_name: &str) -> u8 {
     {
         4
     } else {
-        3 // 未标注字重的按中性处理
+        // 未标注字重的按中性处理
+        3
     }
 }
 

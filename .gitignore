@@ -1,2 +1,4 @@
 /target
 /*.deb
+/dvkit_*_amd64/
+/checksums.txt

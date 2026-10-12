@@ -58,7 +58,8 @@
 从 [Releases](https://github.com/pengtang1024/dvkit/releases) 下载 `dvkit_<版本>_amd64.deb`：
 
 ```bash
-sudo dpkg -i dvkit_0.1.0_amd64.deb
+# 替换 <版本> 为 Releases 页面的最新版本号，如 0.1.1
+sudo dpkg -i dvkit_<版本>_amd64.deb
 ```
 
 安装后在应用菜单中找到 dvkit；若点了没反应，多半是当前用户没有 Docker socket
@@ -125,6 +126,9 @@ UI 线程 (egui/eframe)                    tokio 后台运行时
 dvkit/
 ├── Cargo.toml              # 依赖与构建配置
 ├── CHANGELOG.md            # 更新日志
+├── docs/
+│   ├── architecture.md     # 架构设计
+│   └── git-flow.md         # Git Flow 分支与发版规范
 ├── assets/
 │   └── MaterialIcons-Regular.ttf
 ├── packaging/              # desktop 入口与图标（deb 打包用）
@@ -142,7 +146,6 @@ dvkit/
 │   ├── docker/             # bollard 封装（containers / images / system）
 │   ├── utils/              # 主题色板、格式化、CJK + 图标字体加载
 │   └── widgets/            # 无状态 UI 组件：按钮、表头、选择框、折线图
-└── docs/                   # 项目文档
 ```
 
 ## 主要依赖
@@ -159,6 +162,7 @@ dvkit/
 
 - [项目 Wiki](https://github.com/pengtang1024/dvkit/wiki)（安装、使用指南、架构、常见问题）
 - [架构设计](docs/architecture.md)（随仓库版本管理的开发文档）
+- [Git Flow 规范](docs/git-flow.md)（分支模型、发版流程、常见错误）
 - [更新日志](CHANGELOG.md)
 
 ## 许可证

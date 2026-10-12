@@ -1,6 +1,6 @@
 [package]
 name = "dvkit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
 

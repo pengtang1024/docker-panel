@@ -4,6 +4,7 @@ mod app;
 mod docker;
 mod models;
 mod utils;
+mod widgets;
 
 fn main() -> eframe::Result {
     // 原生窗口选项：默认 1000x700，支持缩放（用户可拖拽改变窗口大小）

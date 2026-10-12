@@ -34,6 +34,10 @@ pub struct ContainerInfo {
     pub net_rx: u64,
     /// 网络发送（字节）
     pub net_tx: u64,
+    /// compose 项目名（label `com.docker.compose.project`，非 compose 启动为 None）
+    pub compose_project: Option<String>,
+    /// compose 服务名（label `com.docker.compose.service`）
+    pub compose_service: Option<String>,
 }
 
 impl ContainerInfo {
@@ -63,9 +67,9 @@ impl ContainerInfo {
 pub struct ImageInfo {
     /// 镜像 ID
     pub id: String,
-    /// 镜像仓库名（无 tag 时为 <none>）
+    /// 镜像仓库名（无 tag 时为 `<none>`）
     pub name: String,
-    /// Tag（无 tag 时为 <none>）
+    /// Tag（无 tag 时为 `<none>`）
     pub tag: String,
     /// 镜像大小（字节）
     pub size: i64,
@@ -82,6 +86,11 @@ impl ImageInfo {
     pub fn short_id(&self) -> &str {
         let len = self.id.len().min(12);
         &self.id[..len]
+    }
+
+    /// 选中集合里的唯一键（"名称:tag"），选中/过滤/剪除选择统一走这里
+    pub fn key(&self) -> String {
+        format!("{}:{}", self.name, self.tag)
     }
 }
 

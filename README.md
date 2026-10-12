@@ -2,7 +2,6 @@
 
 极简 Docker 桌面管理工具，基于 Rust + egui 原生 GUI。单二进制、无 Electron、无运行时依赖，启动即用。
 
-[![CI](https://github.com/pengtang1024/dvkit/actions/workflows/ci.yml/badge.svg)](https://github.com/pengtang1024/dvkit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/pengtang1024/dvkit?label=Release)](https://github.com/pengtang1024/dvkit/releases/latest)
 
 文档导航：[Wiki 首页](https://github.com/pengtang1024/dvkit/wiki) · [安装](https://github.com/pengtang1024/dvkit/wiki/Install) · [使用指南](https://github.com/pengtang1024/dvkit/wiki/Usage) · [架构设计](docs/architecture.md) · [常见问题](https://github.com/pengtang1024/dvkit/wiki/FAQ)

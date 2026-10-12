@@ -15,7 +15,7 @@ jobs:
     name: 打包并发布
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 读取 tag 版本
         id: ver
@@ -28,8 +28,16 @@ jobs:
             libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: cargo build --release
         run: cargo build --release --locked
@@ -57,7 +65,7 @@ jobs:
           cat checksums.txt
 
       - name: 发布 GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: dvkit ${{ steps.ver.outputs.version }}
           draft: false

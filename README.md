@@ -2,7 +2,7 @@
 
 极简 Docker 桌面管理工具，基于 Rust + egui 原生 GUI。单二进制、无 Electron、无运行时依赖，启动即用。
 
-文档导航：[Wiki 首页](docs/wiki/Home.md) · [安装](docs/wiki/Install.md) · [使用指南](docs/wiki/Usage.md) · [架构设计](docs/architecture.md) · [常见问题](docs/wiki/FAQ.md)
+文档导航：[Wiki 首页](https://github.com/pengtang1024/dvkit/wiki) · [安装](https://github.com/pengtang1024/dvkit/wiki/Install) · [使用指南](https://github.com/pengtang1024/dvkit/wiki/Usage) · [架构设计](docs/architecture.md) · [常见问题](https://github.com/pengtang1024/dvkit/wiki/FAQ)
 
 ## 功能特性
 
@@ -107,7 +107,7 @@ UI 线程 (egui/eframe)                    tokio 后台运行时
 - 资源采样并发上限 4（`buffer_unordered(4)`），且上一次采样未完成不会发起新的轮询。
 - 列表刷新时保留上一次的资源数据并剪除已失效的选择，避免指标闪归零和批量操作误伤。
 
-详见 [docs/architecture.md](docs/architecture.md) 与 [Wiki 架构设计](docs/wiki/Architecture.md)。
+详见 [docs/architecture.md](docs/architecture.md) 与 [Wiki 架构设计](https://github.com/pengtang1024/dvkit/wiki/Architecture)。
 
 ## 项目结构
 
@@ -145,8 +145,8 @@ dvkit/
 
 ## 文档
 
-- [Wiki 首页](docs/wiki/Home.md)（安装、使用指南、架构、常见问题）
-- [架构设计](docs/architecture.md)
+- [项目 Wiki](https://github.com/pengtang1024/dvkit/wiki)（安装、使用指南、架构、常见问题）
+- [架构设计](docs/architecture.md)（随仓库版本管理的开发文档）
 
 ## 许可证
 

@@ -12,7 +12,7 @@ impl DvApp {
         let mut execute = false;
         let mut decided: Option<bool> = None;
         egui::Window::new("简易清理")
-            .id(egui::Id::new("dvkit_cleanup_window"))
+            .id(egui::Id::new(WIN_CLEANUP))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -82,7 +82,7 @@ impl DvApp {
         };
         let mut open = true;
         egui::Window::new("错误详情")
-            .id(egui::Id::new("dvkit_error_window"))
+            .id(egui::Id::new(WIN_ERROR))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -112,7 +112,7 @@ impl DvApp {
         };
         let mut open = true;
         egui::Window::new("执行结果")
-            .id(egui::Id::new("dvkit_result_window"))
+            .id(egui::Id::new(WIN_RESULT))
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])

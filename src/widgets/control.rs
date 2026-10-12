@@ -6,6 +6,9 @@ use crate::utils::{ACCENT, BLUE, SURFACE_BG, TEXT_DIM};
 
 use super::{ic, NEUTRAL};
 
+/// 批量删除确认弹窗中预览列表最多列出的条数，超出折叠为「… 等共 N 项」
+const PREVIEW_MAX_ITEMS: usize = 8;
+
 /// 彩色小徽章（如 compose 标识），悬停显示 tip
 pub fn chip(ui: &mut egui::Ui, text: &str, color: Color32, tip: &str) {
     let font = FontId::new(10.5, egui::FontFamily::Proportional);
@@ -116,13 +119,18 @@ pub fn solid_button(ui: &mut egui::Ui, text: &str, fill: Color32, enabled: bool)
     .clicked()
 }
 
-/// 批量删除确认的截断预览：最多列 8 项，超出用 "… 等共 N 项" 收尾
+/// 批量删除确认的截断预览：最多列 PREVIEW_MAX_ITEMS 项，超出用 "… 等共 N 项" 收尾
 pub fn preview_items(
     items: &[(String, String)],
     fmt: impl Fn(&(String, String)) -> String,
 ) -> String {
-    let mut out = items.iter().take(8).map(fmt).collect::<Vec<_>>().join("\n");
-    if items.len() > 8 {
+    let mut out = items
+        .iter()
+        .take(PREVIEW_MAX_ITEMS)
+        .map(fmt)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if items.len() > PREVIEW_MAX_ITEMS {
         out.push_str(&format!("\n… 等共 {} 项", items.len()));
     }
     out

@@ -89,7 +89,8 @@ pub async fn follow_logs(id: &str, tail: usize, tx: Sender<LogEvent>) -> Result<
                 for line in text.split('\n') {
                     let line = line.trim_end_matches('\r');
                     if !line.is_empty() && tx.send(LogEvent::Line(line.to_string())).is_err() {
-                        return Ok(()); // 界面已关闭
+                        // 接收端（日志窗口）已关闭，直接结束读取
+                        return Ok(());
                     }
                 }
             }

@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: 打包并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 读取 tag 版本
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: 安装 Linux GUI 依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo build --release
+        run: cargo build --release --locked
+
+      - name: 生成 deb 包
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          stage=dvkit_"$version"_amd64
+          rm -rf "$stage"
+          install -d "$stage/DEBIAN" "$stage/usr/bin" \
+            "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps"
+          install -m 0755 target/release/dvkit "$stage/usr/bin/dvkit"
+          install -m 0644 packaging/dvkit.desktop "$stage/usr/share/applications/dvkit.desktop"
+          install -m 0644 packaging/dvkit.svg "$stage/usr/share/icons/hicolor/scalable/apps/dvkit.svg"
+          sed "s/^Version: .*/Version: $version/" packaging/debian/control > "$stage/DEBIAN/control"
+          dpkg-deb --build --root-owner-group "$stage"
+          echo "deb=dvkit_${version}_amd64.deb" >> "$GITHUB_OUTPUT"
+
+      - name: 生成校验和
+        id: sum
+        run: |
+          version="${{ steps.ver.outputs.version }}"
+          sha256sum "dvkit_${version}_amd64.deb" > checksums.txt
+          cat checksums.txt
+
+      - name: 发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: dvkit ${{ steps.ver.outputs.version }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            dvkit_${{ steps.ver.outputs.version }}_amd64.deb
+            target/release/dvkit
+            checksums.txt

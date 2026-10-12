@@ -134,6 +134,7 @@ dvkit/
 │   ├── models.rs           # 数据结构：ContainerInfo / ImageInfo / Msg 等
 │   ├── app/                # GUI 主状态与渲染
 │   │   ├── mod.rs          #   DvApp、全局状态、帧调度
+│   │   ├── constants.rs    #   策略常量：刷新周期、历史容量、窗口 ID
 │   │   ├── columns.rs      #   列定义、排序比较器、显示列菜单
 │   │   ├── containers/     #   容器 Tab：工具条 / 预处理 / 表格 / 行
 │   │   ├── images/         #   镜像 Tab：工具条 / 表格

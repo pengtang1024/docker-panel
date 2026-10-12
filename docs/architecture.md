@@ -8,6 +8,7 @@
 main.rs                         入口：创建 eframe 原生窗口（1000x700，最小 820x520）
 └── app/                        GUI 层：状态、渲染、帧调度
     ├── mod.rs                    DvApp 全局状态、Tab 调度、弹窗装配
+    ├── constants.rs              策略常量：刷新/采样周期、历史容量、窗口稳定 ID
     ├── columns.rs                列枚举（CtlCol/ImgCol）、宽度表、排序比较器、显示列菜单
     ├── containers/               容器 Tab
     │   ├── mod.rs                  工具条、批量操作条、交互结果应用

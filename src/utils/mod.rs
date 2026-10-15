@@ -100,8 +100,23 @@ pub fn apply_theme(ctx: &Context) {
         style.spacing.window_margin = Margin::same(14);
         style.spacing.menu_margin = Margin::same(8);
         style.spacing.indent = 16.0;
-        // 现代悬浮滚动条：平时隐藏，悬停时浮现
-        style.spacing.scroll = egui::style::ScrollStyle::floating();
+        // 悬浮滚动条：GitHub Dark 风格 —— 细、低调、悬停才显色
+        style.spacing.scroll = egui::style::ScrollStyle {
+            floating: true,
+            bar_width: 8.0,
+            floating_width: 3.0,
+            floating_allocated_width: 0.0,
+            foreground_color: true,
+            dormant_background_opacity: 0.0,
+            active_background_opacity: 0.25,
+            interact_background_opacity: 0.45,
+            dormant_handle_opacity: 0.35,
+            active_handle_opacity: 0.6,
+            interact_handle_opacity: 0.85,
+            handle_min_length: 24.0,
+            bar_inner_margin: 3.0,
+            ..Default::default()
+        };
         style.text_styles.insert(
             TextStyle::Heading,
             egui::FontId::new(17.0, egui::FontFamily::Proportional),

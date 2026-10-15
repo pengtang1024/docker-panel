@@ -5,13 +5,13 @@ edition = "2021"
 description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
 
 [dependencies]
-# 砍掉默认的 accesskit：GNOME 下每帧向 AT-SPI D-Bus 推送全量 UI 树，拖动滚动条时严重掉帧
+# 砍掉默认的 accesskit + 换 glow renderer：NVIDIA+Wayland 下 wgpu/Vulkan 呈现路径偶发 200ms+ 阻塞
 eframe = { version = "0.36", default-features = false, features = [
     "default_fonts",
+    "glow",
     "links",
     "wayland",
     "x11",
-    "wgpu",
 ] }
 egui = "0.36"
 egui_extras = "0.36"
@@ -23,3 +23,9 @@ anyhow = "1"
 
 [profile.release]
 opt-level = 2
+
+[patch.crates-io]
+# Patch egui ScrollArea thumb drag bug: pointer leaves window on Wayland →
+# scroll_start_offset_from_top_left gets cleared → offset jumps on re-entry.
+# See src/containers/scroll_area.rs line 1432 for the fix.
+egui = { path = "vendor/egui-0.36.2" }

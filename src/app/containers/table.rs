@@ -3,7 +3,7 @@
 use super::row::render_row;
 use super::*;
 
-/// 渲染容器表格，返回需要上层应用的交互结果
+/// 渲染容器表格，返回上层应用需要的交互结果
 #[allow(clippy::too_many_arguments)]
 pub(super) fn container_table(
     ui: &mut egui::Ui,

@@ -14,7 +14,6 @@ mod columns;
 mod constants;
 mod containers;
 mod images;
-mod prof;
 mod tasks;
 mod windows;
 
@@ -178,8 +177,6 @@ pub struct DvApp {
     last_stats: Instant,
     /// 底部状态栏文本
     status: String,
-    /// 帧耗时插桩（DV_PROFILE=1 启用）
-    prof: prof::FrameProfiler,
 }
 
 impl DvApp {
@@ -233,7 +230,6 @@ impl DvApp {
             last_image_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
             last_stats: Instant::now(),
             status: "正在连接 Docker...".into(),
-            prof: prof::FrameProfiler::new(),
         };
         app.refresh_containers();
         app.refresh_images();
@@ -243,7 +239,6 @@ impl DvApp {
 
 impl eframe::App for DvApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.prof.begin();
         let ctx = ui.ctx().clone();
 
         // 1. 消息与定时器
@@ -256,7 +251,7 @@ impl eframe::App for DvApp {
             .frame(
                 egui::Frame::default()
                     .fill(DEEP_BG)
-                    .inner_margin(egui::Margin::symmetric(14, 8))
+                    .inner_margin(egui::Margin::symmetric(12, 4))
                     .stroke(Stroke::new(1.0, DIVIDER)),
             )
             .show(ui, |ui| {
@@ -275,9 +270,26 @@ impl eframe::App for DvApp {
         self.ui_error_window(&ctx);
         self.ui_result_window(&ctx);
 
-        // 4. 保证后台消息被及时处理
-        ctx.request_repaint_after(Duration::from_millis(REPAINT_INTERVAL_MS));
+        // 4. 无系统装饰时，自己画一圈外框让窗口在桌面里有边界感
+        let screen = ui.max_rect();
+        ui.painter().rect_stroke(
+            screen,
+            CornerRadius::same(10),
+            Stroke::new(1.0, DIVIDER),
+            egui::epaint::StrokeKind::Inside,
+        );
 
-        self.prof.end(&ctx);
+        // 5. 自适应重绘：交互中立即重绘保证 60fps，空闲才退回定时器
+        let active_interaction = ctx.input(|i| {
+            i.pointer.is_decidedly_dragging()
+                || i.pointer.velocity().length() > 0.5
+                || i.pointer.any_pressed()
+                || i.pointer.any_released()
+        });
+        if active_interaction {
+            ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(REPAINT_INTERVAL_MS));
+        }
     }
 }

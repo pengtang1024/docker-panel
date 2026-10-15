@@ -12,7 +12,9 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1000.0, 700.0])
             .with_min_inner_size([820.0, 520.0])
-            .with_title("Docker Panel"),
+            .with_decorations(false)
+            .with_title("dvkit"),
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
 

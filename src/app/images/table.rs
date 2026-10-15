@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// 渲染镜像表格（横向滚动 + 可拖宽列 + 排序表头）
+/// 渲染镜像表格（横向滚动 + 可拖宽列 + 排序表头），返回交互结果
 pub(super) fn image_table(
     ui: &mut egui::Ui,
     rows: &[ImageInfo],

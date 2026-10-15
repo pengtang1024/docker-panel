@@ -38,31 +38,31 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.ver.outputs.version }}"
-          stage=docker-panel_"$version"_amd64
+          stage=dvkit_"$version"_amd64
           rm -rf "$stage"
           install -d "$stage/DEBIAN" "$stage/usr/bin" \
             "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps"
-          install -m 0755 target/release/docker-panel "$stage/usr/bin/docker-panel"
-          install -m 0644 packaging/docker-panel.desktop "$stage/usr/share/applications/docker-panel.desktop"
-          install -m 0644 packaging/docker-panel.svg "$stage/usr/share/icons/hicolor/scalable/apps/docker-panel.svg"
+          install -m 0755 target/release/dvkit "$stage/usr/bin/dvkit"
+          install -m 0644 packaging/dvkit.desktop "$stage/usr/share/applications/dvkit.desktop"
+          install -m 0644 packaging/dvkit.svg "$stage/usr/share/icons/hicolor/scalable/apps/dvkit.svg"
           sed "s/^Version: .*/Version: $version/" packaging/debian/control > "$stage/DEBIAN/control"
           dpkg-deb --build --root-owner-group "$stage"
-          echo "deb=docker-panel_${version}_amd64.deb" >> "$GITHUB_OUTPUT"
+          echo "deb=dvkit_${version}_amd64.deb" >> "$GITHUB_OUTPUT"
 
       - name: 生成校验和
         id: sum
         run: |
           version="${{ steps.ver.outputs.version }}"
-          sha256sum "docker-panel_${version}_amd64.deb" > checksums.txt
+          sha256sum "dvkit_${version}_amd64.deb" > checksums.txt
           cat checksums.txt
 
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          name: Docker Panel ${{ steps.ver.outputs.version }}
+          name: dvkit ${{ steps.ver.outputs.version }}
           draft: false
           generate_release_notes: true
           files: |
-            docker-panel_${{ steps.ver.outputs.version }}_amd64.deb
-            target/release/docker-panel
+            dvkit_${{ steps.ver.outputs.version }}_amd64.deb
+            target/release/dvkit
             checksums.txt

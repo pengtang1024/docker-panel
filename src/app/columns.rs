@@ -82,7 +82,7 @@ impl CtlCol {
             CtlCol::Mem => (140.0, 100.0),
             CtlCol::Disk => (130.0, 100.0),
             CtlCol::Net => (140.0, 100.0),
-            CtlCol::Actions => (220.0, 220.0),
+            CtlCol::Actions => (44.0, 44.0),
         }
     }
 
@@ -258,7 +258,7 @@ pub(super) fn cmp_container(a: &ContainerInfo, b: &ContainerInfo, col: CtlCol) -
         CtlCol::Ports => a.ports.cmp(&b.ports),
         CtlCol::Cpu => a.cpu_percent.total_cmp(&b.cpu_percent),
         CtlCol::Mem => a.mem_percent().total_cmp(&b.mem_percent()),
-        CtlCol::Disk => (a.block_read + a.block_write).cmp(&(b.block_read + b.block_write)),
+        CtlCol::Disk => a.size_rw.cmp(&b.size_rw),
         CtlCol::Net => (a.net_rx + a.net_tx).cmp(&(b.net_rx + b.net_tx)),
         CtlCol::Actions => Ordering::Equal,
     }

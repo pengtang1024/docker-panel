@@ -1,4 +1,4 @@
-# Docker Panel
+# dvkit
 
 极简 Docker 桌面管理工具，基于 Rust + egui 原生 GUI。单二进制、无 Electron、无运行时依赖，启动即用。
 
@@ -55,14 +55,14 @@
 
 ### Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/dvkit/releases) 下载 `docker-panel_<版本>_amd64.deb`：
+从 [Releases](https://github.com/pengtang1024/dvkit/releases) 下载 `dvkit_<版本>_amd64.deb`：
 
 ```bash
 # 替换 <版本> 为 Releases 页面的最新版本号，如 0.1.1
-sudo dpkg -i docker-panel_<版本>_amd64.deb
+sudo dpkg -i dvkit_<版本>_amd64.deb
 ```
 
-安装后在应用菜单中找到 Docker Panel；若点了没反应，多半是当前用户没有 Docker socket
+安装后在应用菜单中找到 dvkit；若点了没反应，多半是当前用户没有 Docker socket
 权限，把自己加入 docker 用户组后重新登录即可：
 
 ```bash
@@ -83,7 +83,7 @@ cargo run
 
 # 发布构建
 cargo build --release
-./target/release/docker-panel
+./target/release/dvkit
 ```
 
 > 若系统缺少中文字体，界面中文会显示为方块。程序启动时会自动扫描
@@ -123,7 +123,7 @@ UI 线程 (egui/eframe)                    tokio 后台运行时
 ## 项目结构
 
 ```
-docker-panel/
+dvkit/
 ├── Cargo.toml              # 依赖与构建配置
 ├── CHANGELOG.md            # 更新日志
 ├── docs/

@@ -1,4 +1,4 @@
-Package: docker-panel
+Package: dvkit
 Version: 0.1.1
 Section: utils
 Priority: optional

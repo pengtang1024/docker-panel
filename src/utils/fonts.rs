@@ -128,9 +128,9 @@ fn collect_fonts(dir: &std::path::Path, out: &mut impl FnMut(&std::path::Path)) 
 
 /// 简单的标准输出日志（GUI 程序无终端交互需求，直接打印）
 fn log_info(msg: impl AsRef<str>) {
-    println!("[docker-panel] {}", msg.as_ref());
+    println!("[dvkit] {}", msg.as_ref());
 }
 
 fn log_warn(msg: impl AsRef<str>) {
-    eprintln!("[docker-panel][警告] {}", msg.as_ref());
+    eprintln!("[dvkit][警告] {}", msg.as_ref());
 }

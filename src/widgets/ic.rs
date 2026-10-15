@@ -22,3 +22,5 @@ pub const WARNING: char = '\u{e002}';
 pub const SUCCESS: char = '\u{e86c}';
 /// error：调用失败
 pub const ERROR: char = '\u{e000}';
+/// more_horiz：更多操作溢出按钮
+pub const MORE: char = '\u{e5d3}';

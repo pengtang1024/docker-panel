@@ -1,5 +1,5 @@
 [package]
-name = "docker-panel"
+name = "dvkit"
 version = "0.1.1"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
@@ -20,6 +20,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"
 futures = "0.3"
 serde_json = "1"
 anyhow = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [profile.release]
 opt-level = 2
@@ -29,3 +30,7 @@ opt-level = 2
 # scroll_start_offset_from_top_left gets cleared → offset jumps on re-entry.
 # See src/containers/scroll_area.rs line 1432 for the fix.
 egui = { path = "vendor/egui-0.36.2" }
+
+[[bin]]
+name = "docker-panel"
+path = "src/main.rs"

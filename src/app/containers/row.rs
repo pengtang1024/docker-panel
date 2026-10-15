@@ -1,6 +1,7 @@
 //! 容器表格行渲染：compose 组头（点击折叠）+ 容器单元格 + 右键菜单
 
 use super::*;
+use egui::Popup;
 
 /// 渲染表格 body 里的一行：组头整行绘制，容器行按显示列逐格渲染
 #[allow(clippy::too_many_arguments)]
@@ -148,18 +149,15 @@ pub(super) fn render_row(
                 }
             }
             CtlCol::Disk => {
-                if running {
-                    right_label(
-                        ui,
-                        format!(
-                            "R {} / W {}",
-                            format_bytes(c.block_read),
-                            format_bytes(c.block_write)
-                        ),
-                    );
-                } else {
-                    right_label(ui, RichText::new("-").weak());
-                }
+                ui.horizontal(|ui| {
+                    right_label(ui, format_bytes(c.size_rw));
+                    if c.size_root_fs > 0 {
+                        right_label(
+                            ui,
+                            RichText::new(format!(" / {}", format_bytes(c.size_root_fs))).weak(),
+                        );
+                    }
+                });
             }
             CtlCol::Net => {
                 if running {
@@ -176,32 +174,56 @@ pub(super) fn render_row(
                 }
             }
             CtlCol::Actions => {
-                ui.horizontal(|ui| {
-                    if icon_button(ui, ic::LOG, "查看日志", BLUE, true) {
-                        widget_clicked = true;
-                        actions.push(RowAction::Logs(id.clone(), name.clone()));
+                // ⋯ 溢出按钮：压缩 6 个行内按钮为单一图标，点击弹出菜单
+                let fg = NEUTRAL;
+                let galley = ui.painter().layout_no_wrap(
+                    ic::MORE.to_string(),
+                    FontId::proportional(16.0),
+                    fg,
+                );
+                let pad = egui::vec2(7.0, 5.0);
+                let (rect, resp) =
+                    ui.allocate_exact_size(galley.size() + pad * 2.0, egui::Sense::click());
+                let bg = if resp.hovered() {
+                    fg.gamma_multiply(0.30)
+                } else {
+                    fg.gamma_multiply(0.16)
+                };
+                ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
+                let pos = egui::pos2(rect.left() + pad.x, rect.center().y - galley.size().y * 0.5);
+                ui.painter().galley(pos, galley, fg);
+                let resp = resp.on_hover_text("更多操作");
+                widget_clicked = resp.clicked();
+
+                let mut action: Option<RowAction> = None;
+                Popup::menu(&resp).show(|ui| {
+                    if menu_item(ui, ic::LOG, "查看日志", BLUE, true) {
+                        action = Some(RowAction::Logs(id.clone(), name.clone()));
                     }
-                    if icon_button(ui, ic::CHART, "资源监控", CYAN, true) {
-                        widget_clicked = true;
-                        actions.push(RowAction::Stats(id.clone(), name.clone()));
+                    if menu_item(ui, ic::CHART, "资源监控", CYAN, true) {
+                        action = Some(RowAction::Stats(id.clone(), name.clone()));
                     }
-                    if icon_button(ui, ic::PLAY, "启动", GREEN, !running) {
-                        widget_clicked = true;
-                        actions.push(RowAction::Start(id.clone(), name.clone()));
+                    ui.separator();
+                    if menu_item(ui, ic::PLAY, "启动", GREEN, !running) {
+                        action = Some(RowAction::Start(id.clone(), name.clone()));
                     }
-                    if icon_button(ui, ic::STOP, "停止", RED, running) {
-                        widget_clicked = true;
-                        actions.push(RowAction::Stop(id.clone(), name.clone()));
+                    if menu_item(ui, ic::STOP, "停止", RED, running) {
+                        action = Some(RowAction::Stop(id.clone(), name.clone()));
                     }
-                    if icon_button(ui, ic::RESTART, "重启", AMBER, running) {
-                        widget_clicked = true;
-                        actions.push(RowAction::Restart(id.clone(), name.clone()));
+                    if menu_item(ui, ic::RESTART, "重启", AMBER, running) {
+                        action = Some(RowAction::Restart(id.clone(), name.clone()));
                     }
-                    if icon_button(ui, ic::DELETE, "删除容器", RED, true) {
-                        widget_clicked = true;
-                        actions.push(RowAction::DeleteContainer(id.clone(), name.clone()));
+                    ui.separator();
+                    if menu_item(ui, ic::COPY, "复制容器 ID", NEUTRAL, true) {
+                        ui.ctx().copy_text(id.clone());
+                    }
+                    if menu_item(ui, ic::DELETE, "删除容器", RED, true) {
+                        action = Some(RowAction::DeleteContainer(id.clone(), name.clone()));
                     }
                 });
+                if let Some(a) = action {
+                    actions.push(a);
+                }
             }
         });
     }

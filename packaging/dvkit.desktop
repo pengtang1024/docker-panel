@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Docker Panel
+Name=dvkit
 GenericName=Docker Manager
 Comment=极简 Docker 桌面管理工具
-Exec=docker-panel
-Icon=docker-panel
+Exec=dvkit
+Icon=dvkit
 Terminal=false
 Categories=System;
 Keywords=docker;container;image;容器;镜像;
-StartupWMClass=docker-panel
+StartupWMClass=dvkit

@@ -36,7 +36,11 @@ fn format_ports(ports: &Option<Vec<bollard::models::PortSummary>>) -> String {
 /// 拉取容器列表（all=true 时包含已停止容器）
 pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
     let docker = connect()?;
-    let options = ListContainersOptionsBuilder::new().all(all).build();
+    // size=true 让 Docker 返回 SizeRw/SizeRootFs（遍历文件系统，容器多时略慢）
+    let options = ListContainersOptionsBuilder::new()
+        .all(all)
+        .size(true)
+        .build();
     let list = docker
         .list_containers(Some(options))
         .await
@@ -53,6 +57,11 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
             let labels = c.labels.unwrap_or_default();
             let compose_project = labels.get("com.docker.compose.project").cloned();
             let compose_service = labels.get("com.docker.compose.service").cloned();
+            let size_rw = c.size_rw.and_then(|v| u64::try_from(v).ok()).unwrap_or(0);
+            let size_root_fs = c
+                .size_root_fs
+                .and_then(|v| u64::try_from(v).ok())
+                .unwrap_or(0);
             ContainerInfo {
                 id: c.id.unwrap_or_default(),
                 name: c
@@ -72,6 +81,8 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 mem_limit: 0,
                 block_read: 0,
                 block_write: 0,
+                size_rw,
+                size_root_fs,
                 net_rx: 0,
                 net_tx: 0,
                 compose_project,

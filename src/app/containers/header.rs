@@ -1,26 +1,28 @@
 //! 顶部品牌头：标识 + Tab 切换 + Docker 连接状态 + 自定义窗口控制
 //!
-//! Mutter/Wayland 无法跟随 GTK 深色主题，故关闭系统装饰自行绘制。
-//! 拖拽用 StartDrag（egui-winit 在 Wayland 下翻译成 xdg_toplevel::move，
-//! 由合成器处理窗口移动；X11 下同样有效）。
-//!
-//! 事件隔离：左侧品牌+Tab 区域注册 drag，右侧按钮+状态区域不注册 drag，
-//! 这样按钮的 click 事件不会被 drag 抢占。
+//! 无系统装饰窗口自绘：header 本身就是标题栏。
+//! 惯用布局：单一 ui.horizontal（左→右）+ 中间弹性 space + 内嵌 right_to_left 推右。
+//! 渲染完后 interact 整块 header 加 drag sense（后注册覆盖子控件），
+//! 用户点 header 空白/品牌/Tab → 触发 StartDrag 移动窗口；点窗口按钮 → 响应 click。
 
 use super::*;
 use egui::viewport::ViewportCommand;
 
+/// 窗口按钮尺寸
+const BTN: egui::Vec2 = egui::vec2(26.0, 22.0);
+
 impl DvApp {
-    /// 顶部品牌头：标识 + Tab + 连接状态 + 自定义窗口控制
-    ///
-    /// 布局：单一 ui.horizontal 左到右 → 弹性 space → 内嵌 right_to_left 推到最右。
-    /// 渲染完后 interact 加 drag sense（后注册覆盖子控件）。
+    /// 顶部品牌头
     pub(in crate::app) fn ui_header(&mut self, ui: &mut egui::Ui) {
         ui.set_height(26.0);
 
+        // 单一 horizontal：品牌 → 名称 → Tab → 弹性 space → (状态 + 窗口按钮)（内嵌 right_to_left）
         ui.horizontal(|ui| {
             // 品牌方块
-            let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
+            let (r, _) = ui.allocate_exact_size(
+                egui::vec2(18.0, 18.0),
+                egui::Sense::hover(),
+            );
             let painter = ui.painter_at(r);
             painter.rect_filled(r, CornerRadius::same(5), ACCENT);
             painter.text(
@@ -30,14 +32,16 @@ impl DvApp {
                 FontId::proportional(12.0),
                 Color32::WHITE,
             );
+
+            ui.add_space(4.0);
             ui.label(
-                RichText::new("Docker Panel")
+                RichText::new("dvkit")
                     .size(14.0)
                     .strong()
                     .color(Color32::from_rgb(240, 243, 248)),
             );
 
-            ui.add_space(14.0);
+            ui.add_space(12.0);
             if nav_tab(ui, "容器", self.tab == Tab::Containers) {
                 self.tab = Tab::Containers;
             }
@@ -45,28 +49,30 @@ impl DvApp {
                 self.tab = Tab::Images;
             }
 
-            // 弹性 space 把右侧推到最右
+            // 弹性 space 把右侧内容推到窗口最右
             ui.add_space(ui.available_width());
 
-            // 右侧（right_to_left：最右关闭按钮 → 依次往左是状态文本）
+            // 右侧：right_to_left 让窗口按钮从右往左排（最右是关闭 ✕）
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 self.ui_window_controls(ui);
+
                 let (dot, tip) = match self.docker_ok {
                     None => (AMBER, "正在连接 Docker…"),
                     Some(true) => (GREEN, "Docker 连接正常"),
                     Some(false) => (RED, "Docker 连接异常"),
                 };
-                ui.add_space(8.0);
+                ui.add_space(6.0);
                 ui.colored_label(dot, RichText::new("●").size(10.5))
                     .on_hover_text(tip);
                 ui.label(RichText::new(&self.status).weak());
             });
         });
 
-        // 整块 header rect（Panel::top frame 内的）
+        // ---- 给整块 header 区域加 drag sense ----
+        // 后 interact → 覆盖之前 horizontal 里的子控件 sense
+        // 这样拖 header 任何空白处/品牌/Tab → 触发 StartDrag
+        // 窗口按钮在最右小区域，用户本能点按钮不会拖，click 正常响应
         let header_rect = ui.min_rect();
-
-        // drag sense 后注册 → 覆盖子控件 click
         let drag = ui.interact(
             header_rect,
             ui.id().with("header_drag"),
@@ -82,10 +88,10 @@ impl DvApp {
     fn ui_window_controls(&self, ui: &mut egui::Ui) {
         let maximized = ui.ctx().input(|i| i.viewport().maximized).unwrap_or(false);
 
-        // right_to_left 布局：代码顺序 = 视觉从右到左
-        let close_resp = close_x_button(ui); // 最右：✕
+        // right_to_left 布局：代码顺序 = 视觉从右到左（最右是关闭按钮）
+        let close_resp = close_x_button(ui);
         let max_resp = ctrl_icon_button(ui, if maximized { "❐" } else { "□" });
-        let min_resp = ctrl_icon_button(ui, "—"); // 最左：—
+        let min_resp = ctrl_icon_button(ui, "—");
 
         let ctx = ui.ctx();
         if close_resp.clicked() {
@@ -102,7 +108,7 @@ impl DvApp {
 
 /// 关闭按钮：两条交叉线（避免字体不支持 "✕" 渲染成方块）
 fn close_x_button(ui: &mut egui::Ui) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(26.0, 22.0), egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(BTN, egui::Sense::click());
     let painter = ui.painter_at(rect);
 
     let pad = 6.5;
@@ -125,7 +131,7 @@ fn close_x_button(ui: &mut egui::Ui) -> egui::Response {
 
 /// 通用图标按钮（最小化 / 最大化）
 fn ctrl_icon_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(26.0, 22.0), egui::Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(BTN, egui::Sense::click());
     let painter = ui.painter_at(rect);
 
     if resp.hovered() {

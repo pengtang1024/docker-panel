@@ -1,3 +1,6 @@
+// suppress deprecation: std::f32::EPSILON → f32::EPSILON associated const (Rust 1.82+)
+#![allow(deprecated)]
+
 use core::f32;
 
 use emath::{GuiRounding as _, Pos2};

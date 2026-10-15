@@ -246,8 +246,33 @@ impl eframe::App for DvApp {
         self.poll_logs();
         self.maybe_refresh();
 
+        // 1.5 全局键盘快捷键
+        ctx.input(|i| {
+            // F5 — 刷新当前 tab
+            if i.key_pressed(egui::Key::F5) {
+                match self.tab {
+                    Tab::Containers => self.refresh_containers(),
+                    Tab::Images => self.refresh_images(),
+                }
+            }
+            // Ctrl+1 / Ctrl+2 — 切换 tab
+            if i.modifiers.command && i.key_pressed(egui::Key::Digit1) {
+                self.tab = Tab::Containers;
+            }
+            if i.modifiers.command && i.key_pressed(egui::Key::Digit2) {
+                self.tab = Tab::Images;
+            }
+            // Ctrl+Tab — 循环切换
+            if i.modifiers.command && i.key_pressed(egui::Key::Tab) {
+                self.tab = match self.tab {
+                    Tab::Containers => Tab::Images,
+                    Tab::Images => Tab::Containers,
+                };
+            }
+        });
+
         // 2. 主界面
-        egui::Panel::top("docker_panel_tabs")
+        egui::Panel::top("dvkit_tabs")
             .frame(
                 egui::Frame::default()
                     .fill(DEEP_BG)
@@ -271,8 +296,10 @@ impl eframe::App for DvApp {
         self.ui_result_window(&ctx);
 
         // 4. 无系统装饰时，自己画一圈外框让窗口在桌面里有边界感
-        let screen = ui.max_rect();
-        ui.painter().rect_stroke(
+        //    用 ctx.screen_rect() 拿整个窗口的范围（含 TopBottomPanel），
+        //    再通过 LayerId::background 确保在最底层绘制不被面板遮挡
+        let screen = ctx.viewport_rect();
+        ctx.layer_painter(egui::LayerId::background()).rect_stroke(
             screen,
             CornerRadius::same(10),
             Stroke::new(1.0, DIVIDER),

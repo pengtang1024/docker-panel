@@ -30,6 +30,10 @@ pub struct ContainerInfo {
     pub block_read: u64,
     /// 磁盘写（字节）
     pub block_write: u64,
+    /// 容器可写层占用（字节，来自 list_containers sizeRw）
+    pub size_rw: u64,
+    /// 容器根文件系统总大小（字节，含镜像只读层，来自 sizeRootFs）
+    pub size_root_fs: u64,
     /// 网络接收（字节）
     pub net_rx: u64,
     /// 网络发送（字节）

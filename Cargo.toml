@@ -1,11 +1,18 @@
 [package]
-name = "dvkit"
+name = "docker-panel"
 version = "0.1.1"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
 
 [dependencies]
-eframe = "0.36"
+# 砍掉默认的 accesskit：GNOME 下每帧向 AT-SPI D-Bus 推送全量 UI 树，拖动滚动条时严重掉帧
+eframe = { version = "0.36", default-features = false, features = [
+    "default_fonts",
+    "links",
+    "wayland",
+    "x11",
+    "wgpu",
+] }
 egui = "0.36"
 egui_extras = "0.36"
 bollard = "0.21"

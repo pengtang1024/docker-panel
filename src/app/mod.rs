@@ -14,6 +14,7 @@ mod columns;
 mod constants;
 mod containers;
 mod images;
+mod prof;
 mod tasks;
 mod windows;
 
@@ -177,6 +178,8 @@ pub struct DvApp {
     last_stats: Instant,
     /// 底部状态栏文本
     status: String,
+    /// 帧耗时插桩（DV_PROFILE=1 启用）
+    prof: prof::FrameProfiler,
 }
 
 impl DvApp {
@@ -230,6 +233,7 @@ impl DvApp {
             last_image_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
             last_stats: Instant::now(),
             status: "正在连接 Docker...".into(),
+            prof: prof::FrameProfiler::new(),
         };
         app.refresh_containers();
         app.refresh_images();
@@ -239,6 +243,7 @@ impl DvApp {
 
 impl eframe::App for DvApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.prof.begin();
         let ctx = ui.ctx().clone();
 
         // 1. 消息与定时器
@@ -247,7 +252,7 @@ impl eframe::App for DvApp {
         self.maybe_refresh();
 
         // 2. 主界面
-        egui::Panel::top("dvkit_tabs")
+        egui::Panel::top("docker_panel_tabs")
             .frame(
                 egui::Frame::default()
                     .fill(DEEP_BG)
@@ -272,5 +277,7 @@ impl eframe::App for DvApp {
 
         // 4. 保证后台消息被及时处理
         ctx.request_repaint_after(Duration::from_millis(REPAINT_INTERVAL_MS));
+
+        self.prof.end(&ctx);
     }
 }

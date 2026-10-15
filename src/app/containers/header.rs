@@ -18,7 +18,7 @@ impl DvApp {
                 Color32::WHITE,
             );
             ui.label(
-                RichText::new("dvkit")
+                RichText::new("Docker Panel")
                     .size(16.0)
                     .strong()
                     .color(Color32::from_rgb(240, 243, 248)),

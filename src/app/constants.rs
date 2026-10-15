@@ -33,9 +33,9 @@ pub(in crate::app) const LOG_TAIL_LINES: usize = 200;
 
 // ---------- egui 窗口稳定 ID（跨帧保持窗口状态，集中管理避免拼错） ----------
 
-pub(in crate::app) const WIN_CONFIRM: &str = "dvkit_confirm_window";
-pub(in crate::app) const WIN_LOG: &str = "dvkit_log_window";
-pub(in crate::app) const WIN_RESOURCE: &str = "dvkit_resource_window";
-pub(in crate::app) const WIN_CLEANUP: &str = "dvkit_cleanup_window";
-pub(in crate::app) const WIN_ERROR: &str = "dvkit_error_window";
-pub(in crate::app) const WIN_RESULT: &str = "dvkit_result_window";
+pub(in crate::app) const WIN_CONFIRM: &str = "docker_panel_confirm_window";
+pub(in crate::app) const WIN_LOG: &str = "docker_panel_log_window";
+pub(in crate::app) const WIN_RESOURCE: &str = "docker_panel_resource_window";
+pub(in crate::app) const WIN_CLEANUP: &str = "docker_panel_cleanup_window";
+pub(in crate::app) const WIN_ERROR: &str = "docker_panel_error_window";
+pub(in crate::app) const WIN_RESULT: &str = "docker_panel_result_window";

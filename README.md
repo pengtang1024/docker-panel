@@ -1,10 +1,10 @@
-# dvkit
+# Docker Panel
 
 极简 Docker 桌面管理工具，基于 Rust + egui 原生 GUI。单二进制、无 Electron、无运行时依赖，启动即用。
 
-[![Release](https://img.shields.io/github/v/release/pengtang1024/dvkit?label=Release)](https://github.com/pengtang1024/dvkit/releases/latest)
+[![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
 
-文档导航：[Wiki 首页](https://github.com/pengtang1024/dvkit/wiki) · [安装](https://github.com/pengtang1024/dvkit/wiki/Install) · [使用指南](https://github.com/pengtang1024/dvkit/wiki/Usage) · [架构设计](docs/architecture.md) · [常见问题](https://github.com/pengtang1024/dvkit/wiki/FAQ)
+文档导航：[Wiki 首页](https://github.com/pengtang1024/docker-panel/wiki) · [安装](https://github.com/pengtang1024/docker-panel/wiki/Install) · [使用指南](https://github.com/pengtang1024/docker-panel/wiki/Usage) · [架构设计](docs/architecture.md) · [常见问题](https://github.com/pengtang1024/docker-panel/wiki/FAQ)
 
 ## 功能特性
 
@@ -55,14 +55,14 @@
 
 ### Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/dvkit/releases) 下载 `dvkit_<版本>_amd64.deb`：
+从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`：
 
 ```bash
 # 替换 <版本> 为 Releases 页面的最新版本号，如 0.1.1
-sudo dpkg -i dvkit_<版本>_amd64.deb
+sudo dpkg -i docker-panel_<版本>_amd64.deb
 ```
 
-安装后在应用菜单中找到 dvkit；若点了没反应，多半是当前用户没有 Docker socket
+安装后在应用菜单中找到 Docker Panel；若点了没反应，多半是当前用户没有 Docker socket
 权限，把自己加入 docker 用户组后重新登录即可：
 
 ```bash
@@ -83,7 +83,7 @@ cargo run
 
 # 发布构建
 cargo build --release
-./target/release/dvkit
+./target/release/docker-panel
 ```
 
 > 若系统缺少中文字体，界面中文会显示为方块。程序启动时会自动扫描
@@ -118,12 +118,12 @@ UI 线程 (egui/eframe)                    tokio 后台运行时
 - 资源采样并发上限 4（`buffer_unordered(4)`），且上一次采样未完成不会发起新的轮询。
 - 列表刷新时保留上一次的资源数据并剪除已失效的选择，避免指标闪归零和批量操作误伤。
 
-详见 [docs/architecture.md](docs/architecture.md) 与 [Wiki 架构设计](https://github.com/pengtang1024/dvkit/wiki/Architecture)。
+详见 [docs/architecture.md](docs/architecture.md) 与 [Wiki 架构设计](https://github.com/pengtang1024/docker-panel/wiki/Architecture)。
 
 ## 项目结构
 
 ```
-dvkit/
+docker-panel/
 ├── Cargo.toml              # 依赖与构建配置
 ├── CHANGELOG.md            # 更新日志
 ├── docs/
@@ -160,7 +160,7 @@ dvkit/
 
 ## 文档
 
-- [项目 Wiki](https://github.com/pengtang1024/dvkit/wiki)（安装、使用指南、架构、常见问题）
+- [项目 Wiki](https://github.com/pengtang1024/docker-panel/wiki)（安装、使用指南、架构、常见问题）
 - [架构设计](docs/architecture.md)（随仓库版本管理的开发文档）
 - [Git Flow 规范](docs/git-flow.md)（分支模型、发版流程、常见错误）
 - [更新日志](CHANGELOG.md)

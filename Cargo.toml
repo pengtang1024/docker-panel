@@ -1,5 +1,5 @@
 [package]
-name = "dvkit"
+name = "docker-panel"
 version = "0.1.1"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
@@ -31,6 +31,3 @@ opt-level = 2
 # See src/containers/scroll_area.rs line 1432 for the fix.
 egui = { path = "vendor/egui-0.36.2" }
 
-[[bin]]
-name = "docker-panel"
-path = "src/main.rs"

@@ -19,10 +19,7 @@ impl DvApp {
         // 单一 horizontal：品牌 → 名称 → Tab → 弹性 space → (状态 + 窗口按钮)（内嵌 right_to_left）
         ui.horizontal(|ui| {
             // 品牌方块
-            let (r, _) = ui.allocate_exact_size(
-                egui::vec2(18.0, 18.0),
-                egui::Sense::hover(),
-            );
+            let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
             let painter = ui.painter_at(r);
             painter.rect_filled(r, CornerRadius::same(5), ACCENT);
             painter.text(
@@ -35,7 +32,7 @@ impl DvApp {
 
             ui.add_space(4.0);
             ui.label(
-                RichText::new("dvkit")
+                RichText::new("Docker Panel")
                     .size(14.0)
                     .strong()
                     .color(Color32::from_rgb(240, 243, 248)),

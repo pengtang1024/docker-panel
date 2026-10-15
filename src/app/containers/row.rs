@@ -197,29 +197,7 @@ pub(super) fn render_row(
 
                 let mut action: Option<RowAction> = None;
                 Popup::menu(&resp).show(|ui| {
-                    if menu_item(ui, ic::LOG, "查看日志", BLUE, true) {
-                        action = Some(RowAction::Logs(id.clone(), name.clone()));
-                    }
-                    if menu_item(ui, ic::CHART, "资源监控", CYAN, true) {
-                        action = Some(RowAction::Stats(id.clone(), name.clone()));
-                    }
-                    ui.separator();
-                    if menu_item(ui, ic::PLAY, "启动", GREEN, !running) {
-                        action = Some(RowAction::Start(id.clone(), name.clone()));
-                    }
-                    if menu_item(ui, ic::STOP, "停止", RED, running) {
-                        action = Some(RowAction::Stop(id.clone(), name.clone()));
-                    }
-                    if menu_item(ui, ic::RESTART, "重启", AMBER, running) {
-                        action = Some(RowAction::Restart(id.clone(), name.clone()));
-                    }
-                    ui.separator();
-                    if menu_item(ui, ic::COPY, "复制容器 ID", NEUTRAL, true) {
-                        ui.ctx().copy_text(id.clone());
-                    }
-                    if menu_item(ui, ic::DELETE, "删除容器", RED, true) {
-                        action = Some(RowAction::DeleteContainer(id.clone(), name.clone()));
-                    }
+                    render_row_menu(ui, &mut action, &id, &name, running);
                 });
                 if let Some(a) = action {
                     actions.push(a);
@@ -233,29 +211,7 @@ pub(super) fn render_row(
     // 右键菜单：操作就地完成，不必移到行尾
     let mut chosen: Option<RowAction> = None;
     resp.context_menu(|ui| {
-        if menu_item(ui, ic::LOG, "查看日志", BLUE, true) {
-            chosen = Some(RowAction::Logs(id.clone(), name.clone()));
-        }
-        if menu_item(ui, ic::CHART, "资源监控", CYAN, true) {
-            chosen = Some(RowAction::Stats(id.clone(), name.clone()));
-        }
-        ui.separator();
-        if menu_item(ui, ic::PLAY, "启动", GREEN, !running) {
-            chosen = Some(RowAction::Start(id.clone(), name.clone()));
-        }
-        if menu_item(ui, ic::STOP, "停止", RED, running) {
-            chosen = Some(RowAction::Stop(id.clone(), name.clone()));
-        }
-        if menu_item(ui, ic::RESTART, "重启", AMBER, running) {
-            chosen = Some(RowAction::Restart(id.clone(), name.clone()));
-        }
-        ui.separator();
-        if menu_item(ui, ic::COPY, "复制容器 ID", NEUTRAL, true) {
-            ui.ctx().copy_text(id.clone());
-        }
-        if menu_item(ui, ic::DELETE, "删除容器", RED, true) {
-            chosen = Some(RowAction::DeleteContainer(id.clone(), name.clone()));
-        }
+        render_row_menu(ui, &mut chosen, &id, &name, running);
         ui.close();
     });
     if let Some(action) = chosen {
@@ -267,5 +223,38 @@ pub(super) fn render_row(
         actions.push(RowAction::Logs(id.clone(), name.clone()));
     } else if resp.clicked() && !widget_clicked {
         toggles.push(id);
+    }
+}
+
+/// 容器行右键菜单 & 行内 "⋯" 菜单的共享渲染
+fn render_row_menu(
+    ui: &mut egui::Ui,
+    out: &mut Option<RowAction>,
+    id: &str,
+    name: &str,
+    running: bool,
+) {
+    if menu_item(ui, ic::LOG, "查看日志", BLUE, true) {
+        *out = Some(RowAction::Logs(id.to_string(), name.to_string()));
+    }
+    if menu_item(ui, ic::CHART, "资源监控", CYAN, true) {
+        *out = Some(RowAction::Stats(id.to_string(), name.to_string()));
+    }
+    ui.separator();
+    if menu_item(ui, ic::PLAY, "启动", GREEN, !running) {
+        *out = Some(RowAction::Start(id.to_string(), name.to_string()));
+    }
+    if menu_item(ui, ic::STOP, "停止", RED, running) {
+        *out = Some(RowAction::Stop(id.to_string(), name.to_string()));
+    }
+    if menu_item(ui, ic::RESTART, "重启", AMBER, running) {
+        *out = Some(RowAction::Restart(id.to_string(), name.to_string()));
+    }
+    ui.separator();
+    if menu_item(ui, ic::COPY, "复制容器 ID", NEUTRAL, true) {
+        ui.ctx().copy_text(id.to_string());
+    }
+    if menu_item(ui, ic::DELETE, "删除容器", RED, true) {
+        *out = Some(RowAction::DeleteContainer(id.to_string(), name.to_string()));
     }
 }

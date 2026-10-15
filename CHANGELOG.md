@@ -1,6 +1,6 @@
 # 更新日志
 
-本文件记录 dvkit 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+本文件记录 Docker Panel 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [0.1.1] - 2026-10-12
@@ -34,5 +34,5 @@
 - 资源采样并发上限 4，且上次未完成时不发起新轮询。
 - 单文件不超过 300 行，按职责拆分为 `app/`、`docker/`、`utils/`、`widgets/` 四层模块。
 
-[0.1.1]: https://github.com/pengtang1024/dvkit/releases/tag/0.1.1
-[0.1.0]: https://github.com/pengtang1024/dvkit/releases/tag/0.1.0
+[0.1.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.1
+[0.1.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.0

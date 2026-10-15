@@ -1,4 +1,4 @@
-//! dvkit 程序入口：创建 eframe 原生窗口并启动 egui 应用
+//! Docker Panel 程序入口：创建 eframe 原生窗口并启动 egui 应用
 
 mod app;
 mod docker;
@@ -24,14 +24,14 @@ fn main() -> eframe::Result {
             .with_inner_size([1000.0, 700.0])
             .with_min_inner_size([820.0, 520.0])
             .with_decorations(false)
-            .with_title("dvkit")
+            .with_title("Docker Panel")
             .with_icon(load_app_icon()),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
 
     eframe::run_native(
-        "dvkit",
+        "Docker Panel",
         options,
         Box::new(|cc| Ok(Box::new(app::DvApp::new(cc)))),
     )

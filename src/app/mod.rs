@@ -1,6 +1,7 @@
 //! egui App：全局状态、生命周期与帧调度
 //!
 //! 子模块按职责拆分：
+//! - `types`：共享枚举/结构体（Tab、RowAction、弹窗/视图状态）
 //! - `tasks`：后台任务发起与 channel 消息泵
 //! - `containers` / `images`：两个 Tab 的表格渲染
 //! - `windows`：日志、资源监控、清理、确认等弹窗
@@ -15,11 +16,13 @@ mod constants;
 mod containers;
 mod images;
 mod tasks;
+mod types;
 mod windows;
 
 use columns::*;
 use constants::*;
 use tasks::ActionKind;
+use types::*;
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -38,74 +41,6 @@ use crate::utils::{
     DIVIDER, GREEN, PANEL_BG, RED, SURFACE_BG, TEXT_DIM,
 };
 use crate::widgets::*;
-
-/// 顶部 Tab
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum Tab {
-    Containers,
-    Images,
-}
-
-/// 容器筛选条件
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum Filter {
-    Running,
-    All,
-}
-
-/// 表格行内待执行的动作（渲染结束后统一执行）
-enum RowAction {
-    Logs(String, String),
-    Stats(String, String),
-    Start(String, String),
-    Stop(String, String),
-    Restart(String, String),
-    DeleteContainer(String, String),
-    DeleteImage(String, String),
-}
-
-/// 二次确认弹窗（变体名统一以 Delete 开头，便于一眼读出弹窗性质）
-#[derive(Clone)]
-#[allow(clippy::enum_variant_names)]
-enum Confirm {
-    DeleteContainer {
-        id: String,
-        name: String,
-    },
-    DeleteImage {
-        name: String,
-        tag: String,
-    },
-    /// 批量删除容器（items: (id, 名称)）
-    DeleteContainers {
-        items: Vec<(String, String)>,
-    },
-    /// 批量删除镜像（items: (名称, tag)）
-    DeleteImages {
-        items: Vec<(String, String)>,
-    },
-}
-
-/// 日志查看窗口状态
-struct LogView {
-    id: String,
-    name: String,
-    lines: Vec<String>,
-    /// 是否跟随滚动到底部
-    follow: bool,
-    /// 日志流是否已结束
-    ended: bool,
-    rx: Receiver<LogEvent>,
-    handle: Option<tokio::task::JoinHandle<()>>,
-}
-
-/// 资源监控窗口状态
-struct ResourceView {
-    id: String,
-    name: String,
-    /// 历史采样点（最多保留 HISTORY_CAP 个 ≈ 4 分钟；VecDeque 便于头部淘汰）
-    history: VecDeque<ChartPoint>,
-}
 
 /// 应用主状态
 pub struct DvApp {
@@ -272,7 +207,7 @@ impl eframe::App for DvApp {
         });
 
         // 2. 主界面
-        egui::Panel::top("dvkit_tabs")
+        egui::Panel::top("docker_panel_tabs")
             .frame(
                 egui::Frame::default()
                     .fill(DEEP_BG)

@@ -16,7 +16,6 @@ pub struct ContainerInfo {
     /// Docker 原始状态描述（如 "Up 2 hours"）
     pub status: String,
     /// 创建时间（unix 秒）
-    #[allow(dead_code)]
     pub created: i64,
     /// 端口映射文本
     pub ports: String,

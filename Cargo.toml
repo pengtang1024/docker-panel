@@ -1,33 +1,31 @@
 [package]
-name = "docker-panel"
-version = "0.1.1"
+name = "dvkit"
+version = "0.2.0"
 edition = "2021"
-description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
+description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
 
 [dependencies]
-# 砍掉默认的 accesskit + 换 glow renderer：NVIDIA+Wayland 下 wgpu/Vulkan 呈现路径偶发 200ms+ 阻塞
-eframe = { version = "0.36", default-features = false, features = [
-    "default_fonts",
-    "glow",
-    "links",
-    "wayland",
-    "x11",
+# Slint：关闭默认 backend，手动选 winit + 软件渲染器，极致轻量
+slint = { version = "1.14", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-software",
+    "software-renderer-systemfonts",
 ] }
-egui = "0.36"
-egui_extras = "0.36"
+
+# Docker API
 bollard = "0.21"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 futures = "0.3"
 serde_json = "1"
 anyhow = "1"
-image = { version = "0.25", default-features = false, features = ["png"] }
+
+# 极简 tokio：单线程运行时（current_thread）减少资源占用
+tokio = { version = "1", default-features = false, features = ["rt", "macros", "time", "sync"] }
 
 [profile.release]
-opt-level = 2
-
-[patch.crates-io]
-# Patch egui ScrollArea thumb drag bug: pointer leaves window on Wayland →
-# scroll_start_offset_from_top_left gets cleared → offset jumps on re-entry.
-# See src/containers/scroll_area.rs line 1432 for the fix.
-egui = { path = "vendor/egui-0.36.2" }
-
+opt-level = "z"      # 体积最小化
+lto = true            # 链接时优化
+codegen-units = 1     # 单编译单元 = 更好的优化
+strip = "symbols"     # 去除符号表
+panic = "abort"       # panic 直接 abort，省掉 unwind 信息

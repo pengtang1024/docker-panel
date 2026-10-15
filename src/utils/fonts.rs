@@ -4,16 +4,6 @@ use egui::{Context, FontData, FontDefinitions, FontFamily};
 
 /// egui 默认字体不含中文，启动时扫描系统字体目录并注入 CJK 字体
 pub fn load_cjk_fonts(ctx: &Context) {
-    // 候选字体目录（按优先级）
-    let mut dirs: Vec<std::path::PathBuf> = vec![
-        std::path::PathBuf::from("/usr/share/fonts"),
-        std::path::PathBuf::from("/usr/local/share/fonts"),
-    ];
-    if let Ok(home) = std::env::var("HOME") {
-        dirs.push(std::path::PathBuf::from(&home).join(".local/share/fonts"));
-        dirs.push(std::path::PathBuf::from(home).join(".fonts"));
-    }
-
     // 候选字体文件关键词（按优先级：思源黑体 > Noto CJK > 文泉驿 > Droid 备用）
     const KEYWORDS: [&str; 6] = [
         "sourcehansans",
@@ -23,6 +13,16 @@ pub fn load_cjk_fonts(ctx: &Context) {
         "droidsansfallback",
         "uming",
     ];
+
+    // 候选字体目录（按优先级）
+    let mut dirs: Vec<std::path::PathBuf> = vec![
+        std::path::PathBuf::from("/usr/share/fonts"),
+        std::path::PathBuf::from("/usr/local/share/fonts"),
+    ];
+    if let Ok(home) = std::env::var("HOME") {
+        dirs.push(std::path::PathBuf::from(&home).join(".local/share/fonts"));
+        dirs.push(std::path::PathBuf::from(home).join(".fonts"));
+    }
 
     // 按关键词优先级挑选出的最佳字体文件
     let mut best: Option<(usize, u8, std::path::PathBuf)> = None;
@@ -38,8 +38,7 @@ pub fn load_cjk_fonts(ctx: &Context) {
                     let weight = font_weight_rank(&name);
                     let better = best
                         .as_ref()
-                        .map(|(bi, bw, _)| (i, weight) < (*bi, *bw))
-                        .unwrap_or(true);
+                        .is_none_or(|(bi, bw, _)| (i, weight) < (*bi, *bw));
                     if better {
                         best = Some((i, weight, path.to_path_buf()));
                     }

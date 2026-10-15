@@ -1,6 +1,9 @@
 //! 清理 / 错误 / 执行结果三个提示类弹窗
 
-use super::*;
+use super::{
+    docker, ghost_button, ic, modal_footer, modal_note, mono_box, opt_row, solid_button, DvApp,
+    Msg, ACCENT, AMBER, GREEN, NEUTRAL, RED, WIN_CLEANUP, WIN_ERROR, WIN_RESULT,
+};
 
 impl DvApp {
     /// 清理弹窗（勾选 + 执行前确认）

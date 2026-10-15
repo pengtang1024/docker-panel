@@ -1,6 +1,9 @@
 //! 二次确认弹窗（删除容器 / 删除镜像，含批量预览）
 
-use super::*;
+use super::{
+    docker, ghost_button, ic, modal_footer, modal_note, mono_box, preview_items, solid_button,
+    ActionKind, Confirm, DvApp, Msg, RichText, NEUTRAL, RED, WIN_CONFIRM,
+};
 
 impl DvApp {
     /// 二次确认弹窗
@@ -83,7 +86,7 @@ impl DvApp {
             if accepted {
                 match confirm {
                     Confirm::DeleteContainer { id, name } => {
-                        self.spawn_action(ActionKind::Remove, id, name)
+                        self.spawn_action(ActionKind::Remove, id, name);
                     }
                     Confirm::DeleteImage { name, tag } => {
                         let tx = self.tx.clone();

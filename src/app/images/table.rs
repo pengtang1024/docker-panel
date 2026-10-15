@@ -1,6 +1,10 @@
 //! 镜像表格渲染：表头排序/全选 + 行单元格 + 右键菜单
 
-use super::*;
+use super::{
+    check_box, format_age, format_bytes, header_cell, ic, icon_button, menu_item, right_label,
+    sort_header, Column, HashSet, ImageInfo, ImgCol, RowAction, ScrollArea, TableBuilder,
+    TableOutcome, AMBER, NEUTRAL, RED, SURFACE_BG,
+};
 
 /// 渲染镜像表格（横向滚动 + 可拖宽列 + 排序表头），返回交互结果
 pub(super) fn image_table(

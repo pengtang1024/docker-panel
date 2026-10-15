@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use super::*;
+use super::{cmp_container, ContainerInfo, DispRow, DvApp, Filter};
 
 impl DvApp {
     /// 过滤排序后的容器行、表格展示序列（含 compose 组头）与小写搜索词

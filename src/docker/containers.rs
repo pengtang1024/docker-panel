@@ -8,7 +8,7 @@ use crate::models::{ContainerInfo, ResourceSample};
 use super::connect;
 
 /// 端口映射列表 → "0.0.0.0:6399->6379/tcp, ..." 文本
-fn format_ports(ports: &Option<Vec<bollard::models::PortSummary>>) -> String {
+fn format_ports(ports: Option<&Vec<bollard::models::PortSummary>>) -> String {
     let Some(ports) = ports else {
         return String::new();
     };
@@ -18,7 +18,7 @@ fn format_ports(ports: &Option<Vec<bollard::models::PortSummary>>) -> String {
             let proto = p
                 .typ
                 .as_ref()
-                .map(|t| t.to_string())
+                .map(std::string::ToString::to_string)
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "tcp".into());
             match (p.ip.as_deref(), p.public_port) {
@@ -49,10 +49,7 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
     Ok(list
         .into_iter()
         .map(|c| {
-            let state = c
-                .state
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "unknown".into());
+            let state = c.state.map_or_else(|| "unknown".into(), |s| s.to_string());
             // compose 通过 label 标记归属项目与服务
             let labels = c.labels.unwrap_or_default();
             let compose_project = labels.get("com.docker.compose.project").cloned();
@@ -75,7 +72,7 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 state,
                 status: c.status.unwrap_or_default(),
                 created: c.created.unwrap_or(0),
-                ports: format_ports(&c.ports),
+                ports: format_ports(c.ports.as_ref()),
                 cpu_percent: 0.0,
                 mem_usage: 0,
                 mem_limit: 0,
@@ -120,7 +117,7 @@ pub async fn sample_container(id: &str) -> Result<ResourceSample, String> {
             .unwrap_or(0);
         let system = cpu.system_cpu_usage.unwrap_or(0);
         let presystem = precpu.system_cpu_usage.unwrap_or(0);
-        let online = cpu.online_cpus.unwrap_or(0) as f64;
+        let online = f64::from(cpu.online_cpus.unwrap_or(0));
         let online = if online > 0.0 { online } else { 1.0 };
         if system > presystem && cpu_total >= precpu_total {
             cpu_percent =

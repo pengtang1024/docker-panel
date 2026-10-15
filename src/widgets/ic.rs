@@ -14,13 +14,13 @@ pub const SWEEP: char = '\u{e16c}';
 pub const COPY: char = '\u{e14d}';
 pub const CHECK_ON: char = '\u{e834}';
 pub const CHECK_OFF: char = '\u{e835}';
-/// view_column：自定义显示列
+/// `view_column：自定义显示列`
 pub const COLUMNS: char = '\u{e8f3}';
 /// warning：危险操作提示
 pub const WARNING: char = '\u{e002}';
-/// check_circle：操作成功
+/// `check_circle：操作成功`
 pub const SUCCESS: char = '\u{e86c}';
 /// error：调用失败
 pub const ERROR: char = '\u{e000}';
-/// more_horiz：更多操作溢出按钮
+/// `more_horiz：更多操作溢出按钮`
 pub const MORE: char = '\u{e5d3}';

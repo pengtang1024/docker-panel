@@ -2,7 +2,7 @@
 //!
 //! 约定：
 //! - 连接地址不硬编码，统一使用 `Docker::connect_with_local_defaults()`
-//!   （自动读取 DOCKER_HOST，默认本机 unix socket /var/run/docker.sock）
+//!   （自动读取 `DOCKER_HOST，默认本机` unix socket /var/run/docker.sock）
 //! - 所有函数都是 async，由上层 tokio 运行时在后台线程执行，不阻塞 GUI
 
 use bollard::Docker;

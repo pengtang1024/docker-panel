@@ -1,6 +1,6 @@
-//! 表格列定义与排序比较器：容器列 CtlCol、镜像列 ImgCol
+//! 表格列定义与排序比较器：容器列 CtlCol、镜像列 `ImgCol`
 
-use super::*;
+use super::{Column, ContainerInfo, ImageInfo, Ordering, RichText, RowAction};
 
 /// 容器表的可选列（顺序即默认显示顺序）
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -69,7 +69,7 @@ impl CtlCol {
         matches!(self, CtlCol::Cpu | CtlCol::Mem | CtlCol::Disk | CtlCol::Net)
     }
 
-    /// 列的（初始宽度, 最小宽度），column() 与 width() 共用一份宽度表
+    /// 列的（初始宽度, `最小宽度），column()` 与 `width()` 共用一份宽度表
     fn dims(self) -> (f32, f32) {
         match self {
             CtlCol::Id => (95.0, 80.0),
@@ -79,9 +79,8 @@ impl CtlCol {
             CtlCol::Uptime => (130.0, 90.0),
             CtlCol::Ports => (200.0, 120.0),
             CtlCol::Cpu => (75.0, 65.0),
-            CtlCol::Mem => (140.0, 100.0),
+            CtlCol::Mem | CtlCol::Net => (140.0, 100.0),
             CtlCol::Disk => (130.0, 100.0),
-            CtlCol::Net => (140.0, 100.0),
             CtlCol::Actions => (44.0, 44.0),
         }
     }
@@ -147,7 +146,7 @@ impl ImgCol {
         matches!(self, ImgCol::Size | ImgCol::Refs)
     }
 
-    /// 列的（初始宽度, 最小宽度），column() 与 width() 共用一份宽度表
+    /// 列的（初始宽度, `最小宽度），column()` 与 `width()` 共用一份宽度表
     fn dims(self) -> (f32, f32) {
         match self {
             ImgCol::Name => (240.0, 150.0),

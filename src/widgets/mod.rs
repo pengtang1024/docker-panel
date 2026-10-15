@@ -4,7 +4,7 @@
 
 use egui::Color32;
 
-/// 最深背景色（顶栏/日志底色），与主题 dark_bg 保持一致
+/// 最深背景色（顶栏/日志底色），与主题 `dark_bg` 保持一致
 pub const DEEP_BG: Color32 = Color32::from_rgb(13, 17, 23);
 
 /// 中性按钮前景色（无语义色的次要操作，如刷新/取消）

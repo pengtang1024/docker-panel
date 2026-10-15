@@ -119,7 +119,7 @@ pub fn solid_button(ui: &mut egui::Ui, text: &str, fill: Color32, enabled: bool)
     .clicked()
 }
 
-/// 批量删除确认的截断预览：最多列 PREVIEW_MAX_ITEMS 项，超出用 "… 等共 N 项" 收尾
+/// 批量删除确认的截断预览：最多列 `PREVIEW_MAX_ITEMS` 项，超出用 "… 等共 N 项" 收尾
 pub fn preview_items(
     items: &[(String, String)],
     fmt: impl Fn(&(String, String)) -> String,

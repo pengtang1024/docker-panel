@@ -1,5 +1,21 @@
 //! Docker Panel 程序入口：创建 eframe 原生窗口并启动 egui 应用
 
+// pedantic clippy：以下 lint 对本项目（Docker API 返回的整数类型间转换）是过度严苛的
+#![allow(
+    clippy::cast_precision_loss,        // u64→f64 百分比、i64→f64 排序等，精度可接受
+    clippy::cast_sign_loss,             // i64→u64 创建时间（unix 时间戳非负）
+    clippy::cast_possible_wrap,         // u64→i64 / usize→i64 同样非负可保证
+    clippy::cast_possible_truncation,   // f32→u8 opacity 值在 0.0-1.0
+    clippy::too_many_lines,             // 表格渲染函数业务逻辑多但不宜拆分
+    clippy::struct_excessive_bools,     // DvApp 状态位多但集中
+    clippy::needless_pass_by_value,     // id/name String 参数后续会 clone 或消费
+    clippy::needless_pass_by_ref_mut,   // &mut self 是 egui callback 签名
+    clippy::clone_on_copy,              // 编译器会优化，可读性优先
+    clippy::format_push_string,         // write! 需要 import std::fmt::Write，push_str 更直接
+    clippy::unused_self,                // 某些 DvApp 方法 self 是 egui trait 签名要求
+    clippy::assigning_clones,           // 两个 String 字段各需同一份值所有权
+)]
+
 mod app;
 mod docker;
 mod models;

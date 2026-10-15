@@ -19,10 +19,15 @@ mod tasks;
 mod types;
 mod windows;
 
-use columns::*;
-use constants::*;
+use columns::{cmp_container, cmp_image, column_menu, CtlCol, ImgCol, TableOutcome};
+use constants::{
+    CONTAINER_REFRESH_SECS, HISTORY_CAP, IMAGE_REFRESH_SECS, INITIAL_REFRESH_LEAD_SECS,
+    LOG_LINES_CAP, LOG_LINES_DROP, LOG_TAIL_LINES, PULL_PROGRESS_CAP, PULL_PROGRESS_DROP,
+    REPAINT_INTERVAL_MS, STATS_CONCURRENCY, STATS_SAMPLE_SECS, WIN_CLEANUP, WIN_CONFIRM, WIN_ERROR,
+    WIN_LOG, WIN_RESOURCE, WIN_RESULT,
+};
 use tasks::ActionKind;
-use types::*;
+use types::{Confirm, Filter, LogView, ResourceView, RowAction, Tab};
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -31,7 +36,6 @@ use std::time::{Duration, Instant};
 
 use egui::{Color32, CornerRadius, FontId, RichText, ScrollArea, Stroke};
 use egui_extras::{Column, TableBuilder};
-use futures::StreamExt;
 use tokio::runtime::Runtime;
 
 use crate::docker;
@@ -40,7 +44,7 @@ use crate::utils::{
     apply_theme, format_age, format_bytes, load_cjk_fonts, state_label, ACCENT, AMBER, BLUE, CYAN,
     DIVIDER, GREEN, PANEL_BG, RED, SURFACE_BG, TEXT_DIM,
 };
-use crate::widgets::*;
+use crate::widgets::DEEP_BG;
 
 /// 应用主状态
 pub struct DvApp {
@@ -72,7 +76,7 @@ pub struct DvApp {
     stats_pending: usize,
 
     // ---- 列表展示控制 ----
-    /// 当前显示的容器列（CtlCol::ALL 的子集，选择列恒显示）
+    /// `当前显示的容器列（CtlCol::ALL` 的子集，选择列恒显示）
     ctl_cols: Vec<CtlCol>,
     /// 当前显示的镜像列
     img_cols: Vec<ImgCol>,
@@ -161,8 +165,12 @@ impl DvApp {
             cleanup_unused: false,
             log_view: None,
             resource_view: None,
-            last_container_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
-            last_image_refresh: Instant::now() - Duration::from_secs(INITIAL_REFRESH_LEAD_SECS),
+            last_container_refresh: Instant::now()
+                .checked_sub(Duration::from_secs(INITIAL_REFRESH_LEAD_SECS))
+                .unwrap(),
+            last_image_refresh: Instant::now()
+                .checked_sub(Duration::from_secs(INITIAL_REFRESH_LEAD_SECS))
+                .unwrap(),
             last_stats: Instant::now(),
             status: "正在连接 Docker...".into(),
         };

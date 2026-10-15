@@ -83,7 +83,7 @@ pub async fn remove_image(name: &str, tag: &str) -> Result<String, String> {
     Ok(format!("镜像 {reference} 已删除"))
 }
 
-/// 拉取镜像（spec 形如 "nginx:latest"，进度通过 on_progress 回调上报）
+/// 拉取镜像（spec 形如 "nginx:latest"，进度通过 `on_progress` 回调上报）
 pub async fn pull_image(spec: &str, on_progress: impl Fn(String)) -> Result<String, String> {
     let spec = spec.trim();
     if spec.is_empty() {

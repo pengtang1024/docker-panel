@@ -2,8 +2,15 @@
 
 mod table;
 
-use super::*;
-use crate::widgets::*;
+use super::{
+    cmp_image, column_menu, format_age, format_bytes, Column, Confirm, DvApp, HashSet, ImageInfo,
+    ImgCol, RichText, RowAction, ScrollArea, TableBuilder, TableOutcome, ACCENT, AMBER, BLUE, RED,
+    SURFACE_BG,
+};
+use crate::widgets::{
+    check_box, header_cell, ic, icon_button, menu_item, right_label, search_box, sort_header,
+    NEUTRAL,
+};
 
 use table::image_table;
 
@@ -28,7 +35,12 @@ impl DvApp {
                 }
                 // 自定义显示列
                 ui.menu_button(format!("{}  显示列", ic::COLUMNS), |ui| {
-                    column_menu(ui, &ImgCol::ALL, &mut self.img_cols, |col| col.title());
+                    column_menu(
+                        ui,
+                        &ImgCol::ALL,
+                        &mut self.img_cols,
+                        super::columns::ImgCol::title,
+                    );
                 })
                 .response
                 .on_hover_text("自定义显示列");

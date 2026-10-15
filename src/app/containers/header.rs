@@ -1,11 +1,13 @@
 //! 顶部品牌头：标识 + Tab 切换 + Docker 连接状态 + 自定义窗口控制
 //!
 //! 无系统装饰窗口自绘：header 本身就是标题栏。
-//! 惯用布局：单一 ui.horizontal（左→右）+ 中间弹性 space + 内嵌 right_to_left 推右。
+//! 惯用布局：单一 ui.horizontal（左→右）+ 中间弹性 space + 内嵌 `right_to_left` 推右。
 //! 渲染完后 interact 整块 header 加 drag sense（后注册覆盖子控件），
-//! 用户点 header 空白/品牌/Tab → 触发 StartDrag 移动窗口；点窗口按钮 → 响应 click。
+//! 用户点 header 空白/品牌/Tab → 触发 `StartDrag` 移动窗口；点窗口按钮 → 响应 click。
 
-use super::*;
+use super::{
+    nav_tab, Color32, CornerRadius, DvApp, FontId, RichText, Stroke, Tab, ACCENT, AMBER, GREEN, RED,
+};
 use egui::viewport::ViewportCommand;
 
 /// 窗口按钮尺寸

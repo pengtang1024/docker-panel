@@ -4,8 +4,15 @@
 mod confirm;
 mod dialogs;
 
-use super::*;
-use crate::widgets::*;
+use super::{
+    docker, format_bytes, ActionKind, Color32, Confirm, CornerRadius, DvApp, Msg, RichText,
+    ScrollArea, Stroke, ACCENT, AMBER, BLUE, DIVIDER, GREEN, RED, SURFACE_BG, TEXT_DIM,
+    WIN_CLEANUP, WIN_CONFIRM, WIN_ERROR, WIN_LOG, WIN_RESOURCE, WIN_RESULT,
+};
+use crate::widgets::{
+    check_box, chip, draw_chart, ghost_button, ic, icon_button, modal_footer, modal_note,
+    preview_items, solid_button, DEEP_BG, NEUTRAL,
+};
 
 impl DvApp {
     /// 日志窗口
@@ -115,7 +122,7 @@ impl DvApp {
 
                     // CPU 曲线
                     let cpu_values: Vec<f64> = rv.history.iter().map(|p| p.cpu).collect();
-                    let cpu_max = cpu_values.iter().cloned().fold(10.0f64, f64::max) * 1.2;
+                    let cpu_max = cpu_values.iter().copied().fold(10.0f64, f64::max) * 1.2;
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.label(

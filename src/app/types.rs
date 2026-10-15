@@ -73,6 +73,6 @@ pub(crate) struct LogView {
 pub(crate) struct ResourceView {
     pub(crate) id: String,
     pub(crate) name: String,
-    /// 历史采样点（最多保留 HISTORY_CAP 个 ≈ 4 分钟；VecDeque 便于头部淘汰）
+    /// 历史采样点（最多保留 `HISTORY_CAP` 个 ≈ 4 分钟；VecDeque 便于头部淘汰）
     pub(crate) history: VecDeque<ChartPoint>,
 }

@@ -23,8 +23,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let n = resp
             .containers_deleted
             .as_ref()
-            .map(|v| v.len())
-            .unwrap_or(0);
+            .map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "停止的容器：删除 {n} 个，释放 {}",
@@ -40,7 +39,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
             .prune_images(Some(options))
             .await
             .map_err(|e| format!("清理悬空镜像失败: {e}"))?;
-        let n = resp.images_deleted.as_ref().map(|v| v.len()).unwrap_or(0);
+        let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "悬空镜像：删除 {n} 项，释放 {}",
@@ -57,7 +56,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
             .prune_images(Some(options))
             .await
             .map_err(|e| format!("清理未使用镜像失败: {e}"))?;
-        let n = resp.images_deleted.as_ref().map(|v| v.len()).unwrap_or(0);
+        let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "未使用镜像：删除 {n} 项，释放 {}",
@@ -71,7 +70,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
     Ok(lines.join("\n"))
 }
 
-/// 持续读取容器日志流，逐行回传；流结束时发送 LogEvent::Closed
+/// 持续读取容器日志流，逐行回传；流结束时发送 `LogEvent::Closed`
 pub async fn follow_logs(id: &str, tail: usize, tx: Sender<LogEvent>) -> Result<(), String> {
     let docker = connect()?;
     let options = LogsOptionsBuilder::new()

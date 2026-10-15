@@ -1,6 +1,10 @@
 //! channel 消息处理与定时轮询
 
-use super::*;
+use super::{
+    ChartPoint, ContainerInfo, Duration, DvApp, HashMap, HashSet, LogEvent, Msg, ResourceSample,
+    Tab, CONTAINER_REFRESH_SECS, HISTORY_CAP, IMAGE_REFRESH_SECS, LOG_LINES_CAP, LOG_LINES_DROP,
+    PULL_PROGRESS_CAP, PULL_PROGRESS_DROP, STATS_SAMPLE_SECS,
+};
 
 impl DvApp {
     // ---------- 消息处理 ----------
@@ -48,7 +52,11 @@ impl DvApp {
                     self.docker_ok = Some(true);
                     self.images = list;
                     // 剪除已消失镜像的选择
-                    let alive: HashSet<String> = self.images.iter().map(|i| i.key()).collect();
+                    let alive: HashSet<String> = self
+                        .images
+                        .iter()
+                        .map(crate::models::ImageInfo::key)
+                        .collect();
                     self.selected_images.retain(|k| alive.contains(k));
                 }
                 Msg::Images(Err(e)) => {

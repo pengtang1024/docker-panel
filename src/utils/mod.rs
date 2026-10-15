@@ -32,23 +32,23 @@ pub fn apply_theme(ctx: &Context) {
     // 最深背景（顶栏/日志底色）
     const DEEP_BG: Color32 = Color32::from_rgb(13, 17, 23);
 
-    let mut v = Visuals::dark();
+    let mut visuals = Visuals::dark();
 
     // 背景层次：面板 → 弹窗 → 输入框/表头
-    v.panel_fill = PANEL_BG;
-    v.window_fill = PANEL_BG;
-    v.window_stroke = Stroke::new(1.0, DIVIDER);
-    v.extreme_bg_color = SURFACE_BG;
+    visuals.panel_fill = PANEL_BG;
+    visuals.window_fill = PANEL_BG;
+    visuals.window_stroke = Stroke::new(1.0, DIVIDER);
+    visuals.extreme_bg_color = SURFACE_BG;
     // 斑马纹底色：与面板底拉开层次
-    v.faint_bg_color = Color32::from_rgb(30, 35, 43);
-    v.code_bg_color = DEEP_BG;
+    visuals.faint_bg_color = Color32::from_rgb(30, 35, 43);
+    visuals.code_bg_color = DEEP_BG;
 
     // 圆角
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
+    visuals.window_corner_radius = CornerRadius::same(10);
+    visuals.menu_corner_radius = CornerRadius::same(8);
 
     // 弹窗柔和投影，营造悬浮层级感
-    v.window_shadow = egui::epaint::Shadow {
+    visuals.window_shadow = egui::epaint::Shadow {
         offset: [0, 10],
         blur: 28,
         spread: 0,
@@ -56,42 +56,42 @@ pub fn apply_theme(ctx: &Context) {
     };
 
     // 强调与语义色
-    v.selection.bg_fill = ACCENT;
+    visuals.selection.bg_fill = ACCENT;
     // 输入框获焦边框用强调蓝，替代生硬的白框
-    v.selection.stroke = Stroke::new(1.0, BLUE);
-    v.hyperlink_color = BLUE;
-    v.warn_fg_color = AMBER;
-    v.error_fg_color = RED;
-    v.weak_text_alpha = 0.75;
+    visuals.selection.stroke = Stroke::new(1.0, BLUE);
+    visuals.hyperlink_color = BLUE;
+    visuals.warn_fg_color = AMBER;
+    visuals.error_fg_color = RED;
+    visuals.weak_text_alpha = 0.75;
 
     // 控件三态
-    let a = &mut v.widgets.active;
-    a.bg_fill = ACCENT;
-    a.weak_bg_fill = ACCENT;
-    a.bg_stroke = Stroke::new(1.0, BLUE);
-    a.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-    a.corner_radius = CornerRadius::same(6);
-    let h = &mut v.widgets.hovered;
-    h.bg_fill = Color32::from_rgb(55, 61, 71);
-    h.weak_bg_fill = Color32::from_rgb(55, 61, 71);
-    // 悬停描边压暗，避免“描边框”的老式观感
-    h.bg_stroke = Stroke::new(1.0, Color32::from_rgb(76, 83, 94));
-    h.fg_stroke = Stroke::new(1.0, Color32::from_rgb(240, 243, 248));
-    h.corner_radius = CornerRadius::same(6);
-    let i = &mut v.widgets.inactive;
-    i.bg_fill = SURFACE_BG;
-    i.weak_bg_fill = SURFACE_BG;
-    i.bg_stroke = Stroke::new(1.0, DIVIDER);
-    i.fg_stroke = Stroke::new(1.0, Color32::from_rgb(201, 207, 214));
-    i.corner_radius = CornerRadius::same(6);
-    let n = &mut v.widgets.noninteractive;
-    n.bg_fill = PANEL_BG;
-    n.weak_bg_fill = PANEL_BG;
-    n.bg_stroke = Stroke::new(1.0, DIVIDER);
-    n.fg_stroke = Stroke::new(1.0, TEXT_DIM);
-    n.corner_radius = CornerRadius::same(6);
+    let active = &mut visuals.widgets.active;
+    active.bg_fill = ACCENT;
+    active.weak_bg_fill = ACCENT;
+    active.bg_stroke = Stroke::new(1.0, BLUE);
+    active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
+    active.corner_radius = CornerRadius::same(6);
+    let hovered = &mut visuals.widgets.hovered;
+    hovered.bg_fill = Color32::from_rgb(55, 61, 71);
+    hovered.weak_bg_fill = Color32::from_rgb(55, 61, 71);
+    // 悬停描边压暗，避免"描边框"的老式观感
+    hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(76, 83, 94));
+    hovered.fg_stroke = Stroke::new(1.0, Color32::from_rgb(240, 243, 248));
+    hovered.corner_radius = CornerRadius::same(6);
+    let inactive = &mut visuals.widgets.inactive;
+    inactive.bg_fill = SURFACE_BG;
+    inactive.weak_bg_fill = SURFACE_BG;
+    inactive.bg_stroke = Stroke::new(1.0, DIVIDER);
+    inactive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(201, 207, 214));
+    inactive.corner_radius = CornerRadius::same(6);
+    let noninteractive = &mut visuals.widgets.noninteractive;
+    noninteractive.bg_fill = PANEL_BG;
+    noninteractive.weak_bg_fill = PANEL_BG;
+    noninteractive.bg_stroke = Stroke::new(1.0, DIVIDER);
+    noninteractive.fg_stroke = Stroke::new(1.0, TEXT_DIM);
+    noninteractive.corner_radius = CornerRadius::same(6);
 
-    ctx.set_visuals(v);
+    ctx.set_visuals(visuals);
 
     // 间距与字号
     ctx.all_styles_mut(|style| {
@@ -166,13 +166,13 @@ pub fn duration_text(seconds: i64) -> String {
     let hours = (s % 86400) / 3600;
     let mins = (s % 3600) / 60;
     if days > 0 {
-        format!("{}天{}小时", days, hours)
+        format!("{days}天{hours}小时")
     } else if hours > 0 {
-        format!("{}小时{}分", hours, mins)
+        format!("{hours}小时{mins}分")
     } else if mins > 0 {
-        format!("{}分", mins)
+        format!("{mins}分")
     } else {
-        format!("{}秒", s)
+        format!("{s}秒")
     }
 }
 
@@ -180,8 +180,7 @@ pub fn duration_text(seconds: i64) -> String {
 pub fn format_age(timestamp: i64) -> String {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs() as i64);
     let delta = now - timestamp;
     if delta < 0 {
         return "刚刚".into();

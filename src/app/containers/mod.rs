@@ -5,8 +5,16 @@ mod prep;
 mod row;
 mod table;
 
-use super::*;
-use crate::widgets::*;
+use super::{
+    cmp_container, column_menu, format_bytes, state_label, ActionKind, Color32, Column, Confirm,
+    ContainerInfo, CornerRadius, CtlCol, DvApp, Filter, FontId, HashSet, RichText, RowAction,
+    ScrollArea, Stroke, Tab, TableBuilder, TableOutcome, ACCENT, AMBER, BLUE, CYAN, GREEN,
+    PANEL_BG, RED, SURFACE_BG, TEXT_DIM,
+};
+use crate::widgets::{
+    check_box, chip, fold_arrow, header_cell, ic, icon_button, menu_item, nav_tab, right_label,
+    search_box, sort_header, NEUTRAL,
+};
 
 use table::container_table;
 
@@ -51,7 +59,12 @@ impl DvApp {
                 }
                 // 自定义显示列
                 ui.menu_button(format!("{}  显示列", ic::COLUMNS), |ui| {
-                    column_menu(ui, &CtlCol::ALL, &mut self.ctl_cols, |col| col.label());
+                    column_menu(
+                        ui,
+                        &CtlCol::ALL,
+                        &mut self.ctl_cols,
+                        super::columns::CtlCol::label,
+                    );
                 })
                 .response
                 .on_hover_text("自定义显示列");

@@ -256,10 +256,10 @@ impl eframe::App for DvApp {
                 }
             }
             // Ctrl+1 / Ctrl+2 — 切换 tab
-            if i.modifiers.command && i.key_pressed(egui::Key::Digit1) {
+            if i.modifiers.command && i.key_pressed(egui::Key::Num1) {
                 self.tab = Tab::Containers;
             }
-            if i.modifiers.command && i.key_pressed(egui::Key::Digit2) {
+            if i.modifiers.command && i.key_pressed(egui::Key::Num2) {
                 self.tab = Tab::Images;
             }
             // Ctrl+Tab — 循环切换

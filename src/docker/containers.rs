@@ -55,6 +55,11 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
             let labels = c.labels.unwrap_or_default();
             let compose_project = labels.get("com.docker.compose.project").cloned();
             let compose_service = labels.get("com.docker.compose.service").cloned();
+            let networks: Vec<String> = c
+                .network_settings
+                .and_then(|ns| ns.networks)
+                .map(|m| m.into_keys().collect())
+                .unwrap_or_default();
             let size_rw = c.size_rw.and_then(|v| u64::try_from(v).ok()).unwrap_or(0);
             let size_root_fs = c
                 .size_root_fs
@@ -85,6 +90,7 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 net_tx: 0,
                 compose_project,
                 compose_service,
+                networks,
             }
         })
         .collect())

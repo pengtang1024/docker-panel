@@ -55,6 +55,8 @@ pub struct ContainerInfo {
     pub compose_project: Option<String>,
     /// compose 服务名（label `com.docker.compose.service`）
     pub compose_service: Option<String>,
+    /// 容器连接的网络名列表（从 ContainerSummary.NetworkSettings.Networks 提取）
+    pub networks: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -177,7 +179,6 @@ pub struct NetworkInfo {
     pub name: String,
     pub driver: String,
     pub scope: String,
-    pub containers: usize,
 }
 
 /// 卷列表简化视图（卷 Tab 用）

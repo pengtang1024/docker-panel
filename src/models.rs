@@ -1,7 +1,21 @@
-//! 数据结构体定义：容器、镜像、资源采样点等
+//! 数据结构体 + channel 消息枚举
+//!
+//! Msg 枚举是三线程架构里唯一跨线程传递的数据类型：
+//!   tokio spawn 的异步任务 → tx.send(Msg) → mpsc channel →
+//!   consumer 线程 recv()/try_recv() → drain_messages 更新 AppState →
+//!   consumer drop 锁 → invoke_from_event_loop 更新 Slint Model
+//!
+//! 各变体发送者一览：
+//!   Containers/Images     ← ui_state::refresh() spawn 的列表任务
+//!                          main.rs 初始加载 spawn 的列表任务
+//!   PullProgress          ← docker::pull_image 的 on_progress 闭包
+//!   PullDone              ← docker::pull_image 结束时 tx.send
+//!   ActionDone            ← callbacks.rs 所有操作回调 spawn 的任务
+//!   CleanupDone           ← callbacks.rs cleanup_submit spawn 的任务
 
 /// 容器信息（表格一行的数据）
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ContainerInfo {
     /// 完整容器 ID
     pub id: String,
@@ -16,7 +30,6 @@ pub struct ContainerInfo {
     /// Docker 原始状态描述（如 "Up 2 hours"）
     pub status: String,
     /// 创建时间（unix 秒）
-    #[allow(dead_code)]
     pub created: i64,
     /// 端口映射文本
     pub ports: String,
@@ -30,6 +43,10 @@ pub struct ContainerInfo {
     pub block_read: u64,
     /// 磁盘写（字节）
     pub block_write: u64,
+    /// 容器可写层占用（字节，来自 `list_containers` sizeRw）
+    pub size_rw: u64,
+    /// 容器根文件系统总大小（字节，含镜像只读层，来自 sizeRootFs）
+    pub size_root_fs: u64,
     /// 网络接收（字节）
     pub net_rx: u64,
     /// 网络发送（字节）
@@ -40,6 +57,7 @@ pub struct ContainerInfo {
     pub compose_service: Option<String>,
 }
 
+#[allow(dead_code)]
 impl ContainerInfo {
     /// 是否正在运行
     pub fn is_running(&self) -> bool {
@@ -64,6 +82,7 @@ impl ContainerInfo {
 
 /// 镜像信息（表格一行的数据）
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ImageInfo {
     /// 镜像 ID
     pub id: String,
@@ -94,35 +113,14 @@ impl ImageInfo {
     }
 }
 
-/// 资源历史采样点（用于折线小图）
-#[derive(Debug, Clone, Copy)]
-pub struct ChartPoint {
-    /// CPU 使用率（%）
-    pub cpu: f64,
-    /// 内存使用量（字节）
-    pub mem_usage: u64,
-    /// 内存上限（字节）
-    pub mem_limit: u64,
-}
-
-/// 日志流事件
-#[derive(Debug, Clone)]
-pub enum LogEvent {
-    /// 一行日志文本
-    Line(String),
-    /// 日志流结束
-    Closed,
-}
-
 /// 后台任务回传给 GUI 的消息
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Msg {
     /// 容器列表刷新结果
     Containers(Result<Vec<ContainerInfo>, String>),
     /// 镜像列表刷新结果
     Images(Result<Vec<ImageInfo>, String>),
-    /// 一次性资源采样结果（容器 ID, 采样结果）
-    Sample(String, Result<ResourceSample, String>),
     /// 拉取镜像进度文本
     PullProgress(String),
     /// 拉取镜像完成
@@ -131,23 +129,62 @@ pub enum Msg {
     ActionDone(String, Result<String, String>),
     /// 清理完成
     CleanupDone(Result<String, String>),
+    /// 容器 inspect 结果（详情面板）
+    ContainerDetail(Result<ContainerDetail, String>),
+    /// 日志流的一行（详情面板日志页签）
+    LogLine(String),
+    /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
+    Stats(String, crate::docker::ContainerStatsSnapshot),
+    /// 网络列表
+    Networks(Result<Vec<NetworkInfo>, String>),
+    /// 卷列表
+    Volumes(Result<Vec<VolumeInfo>, String>),
 }
 
-/// 单次资源采样结果（一次性 stats 请求的返回）
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ResourceSample {
-    /// CPU 使用率（%）
-    pub cpu_percent: f64,
-    /// 内存使用量（字节）
-    pub mem_usage: u64,
-    /// 内存上限（字节）
-    pub mem_limit: u64,
-    /// 磁盘读累计（字节）
-    pub block_read: u64,
-    /// 磁盘写累计（字节）
-    pub block_write: u64,
-    /// 网络接收累计（字节）
-    pub net_rx: u64,
-    /// 网络发送累计（字节）
-    pub net_tx: u64,
+/// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ContainerDetail {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub image_id: String,
+    pub created: String,
+    pub state: String,
+    pub status: String,
+    pub pid: i64,
+    pub exit_code: i64,
+    pub started_at: String,
+    pub finished_at: String,
+    pub ports: Vec<String>,
+    pub mounts: Vec<String>,
+    pub env: Vec<String>,
+    pub labels: Vec<(String, String)>,
+    pub command: String,
+    pub working_dir: String,
+    pub entrypoint: String,
+    pub restart_policy: String,
+    pub log_path: String,
+    pub network_mode: String,
+    pub networks: Vec<String>,
+}
+
+/// 网络列表简化视图（网络 Tab 用）
+#[derive(Debug, Clone)]
+pub struct NetworkInfo {
+    pub id: String,
+    pub short_id: String,
+    pub name: String,
+    pub driver: String,
+    pub scope: String,
+    pub containers: usize,
+}
+
+/// 卷列表简化视图（卷 Tab 用）
+#[derive(Debug, Clone)]
+pub struct VolumeInfo {
+    pub name: String,
+    pub driver: String,
+    pub mountpoint: String,
+    pub size: String,
 }

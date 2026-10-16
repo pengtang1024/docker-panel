@@ -1,14 +1,40 @@
-//! 系统级 API：清理（prune）与日志流
+//! 系统级 API：清理（prune）
+//!
+//! cleanup(stopped, dangling, unused) 三个 bool 可以任意组合：
+//!   - stopped  → prune_containers（删所有停止的容器）
+//!   - dangling → prune_images(dangling=true)
+//!   - unused   → prune_images(dangling=false)，等价 `docker image prune -a`
+//!     勾选 unused 时 dangling 自动被包含（因为 unused 范围更大）
+//!     所以有 `if dangling && !unused` 的判断——避免对 dangling 做两次 prune
+//!
+//! 为啥不直接把三个全跑一遍：
+//! 因为 dangling 是 unused 的子集。全跑会导致 dangling 已删完，
+//! 再跑 unused 时 dangling 那部分就变成了"删没东西的空操作"。
+//! 结果一样但效率低。
+//!
+//! 错误处理：每项独立 try，失败不中断其他项（Docker API 独立）。
+//! 如果三项全勾都没效果 → 返回 Err("请至少勾选一项清理内容")。
 
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
 
-use bollard::query_parameters::{LogsOptionsBuilder, PruneImagesOptionsBuilder};
-use futures::StreamExt;
-
-use crate::models::LogEvent;
+use bollard::query_parameters::PruneImagesOptionsBuilder;
 
 use super::connect;
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut v = bytes as f64;
+    let mut i = 0;
+    while v >= 1024.0 && i < UNITS.len() - 1 {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{bytes} {}", UNITS[i])
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
+}
 
 /// 清理：停止的容器 / 悬空镜像 / 未使用镜像（可组合勾选）
 pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<String, String> {
@@ -23,12 +49,11 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let n = resp
             .containers_deleted
             .as_ref()
-            .map(|v| v.len())
-            .unwrap_or(0);
+            .map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "停止的容器：删除 {n} 个，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
@@ -40,16 +65,15 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
             .prune_images(Some(options))
             .await
             .map_err(|e| format!("清理悬空镜像失败: {e}"))?;
-        let n = resp.images_deleted.as_ref().map(|v| v.len()).unwrap_or(0);
+        let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "悬空镜像：删除 {n} 项，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
     if unused {
-        // dangling=false 等价 docker image prune -a：清理所有未被容器使用的镜像
         let mut filters = HashMap::new();
         filters.insert("dangling".to_string(), vec!["false".to_string()]);
         let options = PruneImagesOptionsBuilder::new().filters(&filters).build();
@@ -57,11 +81,11 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
             .prune_images(Some(options))
             .await
             .map_err(|e| format!("清理未使用镜像失败: {e}"))?;
-        let n = resp.images_deleted.as_ref().map(|v| v.len()).unwrap_or(0);
+        let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "未使用镜像：删除 {n} 项，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
@@ -69,37 +93,4 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         return Err("请至少勾选一项清理内容".into());
     }
     Ok(lines.join("\n"))
-}
-
-/// 持续读取容器日志流，逐行回传；流结束时发送 LogEvent::Closed
-pub async fn follow_logs(id: &str, tail: usize, tx: Sender<LogEvent>) -> Result<(), String> {
-    let docker = connect()?;
-    let options = LogsOptionsBuilder::new()
-        .follow(true)
-        .stdout(true)
-        .stderr(true)
-        .tail(&tail.to_string())
-        .build();
-    let mut stream = docker.logs(id, Some(options));
-
-    while let Some(item) = stream.next().await {
-        match item {
-            Ok(out) => {
-                let text = out.to_string();
-                for line in text.split('\n') {
-                    let line = line.trim_end_matches('\r');
-                    if !line.is_empty() && tx.send(LogEvent::Line(line.to_string())).is_err() {
-                        // 接收端（日志窗口）已关闭，直接结束读取
-                        return Ok(());
-                    }
-                }
-            }
-            Err(e) => {
-                let _ = tx.send(LogEvent::Line(format!("[日志读取错误] {e}")));
-                break;
-            }
-        }
-    }
-    let _ = tx.send(LogEvent::Closed);
-    Ok(())
 }

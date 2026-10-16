@@ -1,0 +1,130 @@
+// app.slint — Docker Panel 主骨架
+import { VerticalBox } from "std-widgets.slint";
+import { TopBar, ToolBar, StatusBar } from "panes.slint";
+import { PullDialog, CleanupDialog } from "dialogs.slint";
+import { DetailLogPanel } from "detail-log-panel.slint";
+import { TabBar, ListArea } from "list-area.slint";
+import { ContainerRow, ImageRow, LogLineRow, NetworkRow, VolumeRow } from "models.slint";
+
+export global AppActions {
+    callback container_toggle(string);
+    callback container_restart(string);
+    callback container_remove(string);
+    callback container_logs(string);
+    callback container_select(string);
+    callback image_remove(string);
+}
+
+export component MainWindow inherits Window {
+    title: "Docker Panel";
+    width: 1100px; height: 680px;
+    in-out property <int> active_view: 0;
+    in-out property <length> right_pane_width: 320px;
+    in-out property <bool> docker_ok: false;
+    in-out property <string> status_text: "连接 Docker...";
+    in-out property <string> container_count: "0";
+    in-out property <string> image_count: "0";
+    in-out property <[ContainerRow]> container_rows: [];
+    in-out property <[ImageRow]> image_rows: [];
+    in-out property <[NetworkRow]> network_rows: [];
+    in-out property <[VolumeRow]> volume_rows: [];
+    in-out property <string> d_name: "";
+    in-out property <string> d_state: "";
+    in-out property <string> d_status: "";
+    in-out property <string> d_image: "";
+    in-out property <string> d_id: "";
+    in-out property <string> d_pid: "";
+    in-out property <string> d_exit: "";
+    in-out property <string> d_created: "";
+    in-out property <string> d_started: "";
+    in-out property <string> d_restart: "";
+    in-out property <string> d_netmode: "";
+    in-out property <string> d_ports: "";
+    in-out property <string> d_mounts: "";
+    in-out property <string> d_networks: "";
+    in-out property <string> d_entry: "";
+    in-out property <string> d_cmd: "";
+    in-out property <string> d_workdir: "";
+    in-out property <string> d_labels: "";
+    in-out property <[LogLineRow]> log_lines: [];
+    in-out property <bool> pull_open: false;
+    in-out property <string> pull_input: "";
+    in-out property <bool> pull_busy: false;
+    in-out property <bool> cleanup_open: false;
+    in-out property <bool> cleanup_stopped: true;
+    in-out property <bool> cleanup_dangling: true;
+    in-out property <bool> cleanup_unused: false;
+    callback refresh_requested();
+    callback search_accepted(string);
+    callback stop_all_requested();
+    callback pull_requested();
+    callback cleanup_requested();
+    callback pull_submit(string);
+    callback pull_close();
+    callback cleanup_submit(bool, bool, bool);
+    callback cleanup_close();
+
+    Rectangle { background: #0f172a; width: parent.width; height: parent.height; }
+
+    Rectangle {
+        x: 0px; y: 0px;
+        width: parent.width - root.right_pane_width;
+        height: parent.height; background: #0f172a;
+        VerticalBox { spacing: 0px; width: parent.width; height: parent.height;
+            Rectangle { background: #1e293b; width: parent.width; height: 48px;
+                TopBar { docker_ok <=> root.docker_ok;
+                    refresh => { root.refresh_requested(); }
+                    search(val) => { root.search_accepted(val); } } }
+            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            TabBar { active_view <=> root.active_view; }
+            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            ListArea {
+                width: parent.width;
+                height: parent.height - 48px - 36px - 36px - 28px - 4px;
+                active_view <=> root.active_view;
+                container_rows <=> root.container_rows;
+                image_rows <=> root.image_rows;
+                network_rows <=> root.network_rows;
+                volume_rows <=> root.volume_rows;
+                container_click(id) => { AppActions.container_select(id); }
+                container_toggle(id) => { AppActions.container_toggle(id); }
+                container_restart(id) => { AppActions.container_restart(id); }
+                container_logs(id) => { AppActions.container_logs(id); }
+                container_remove(id) => { AppActions.container_remove(id); }
+                image_remove(id) => { AppActions.image_remove(id); }
+            }
+            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            Rectangle { background: #1e293b; width: parent.width; height: 40px;
+                ToolBar { stop_all => { root.stop_all_requested(); }
+                    pull_requested => { root.pull_requested(); }
+                    cleanup_requested => { root.cleanup_requested(); } } }
+            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            Rectangle { background: #0f172a; width: parent.width; height: 28px;
+                StatusBar { status_text <=> root.status_text;
+                    container_count <=> root.container_count;
+                    image_count <=> root.image_count; } }
+        }
+    }
+
+    DetailLogPanel {
+        x: parent.width - root.right_pane_width; y: 0px;
+        width: root.right_pane_width; height: parent.height;
+        active_view <=> root.active_view;
+        d_name <=> root.d_name; d_state <=> root.d_state; d_status <=> root.d_status;
+        d_image <=> root.d_image; d_id <=> root.d_id; d_pid <=> root.d_pid;
+        d_exit <=> root.d_exit; d_created <=> root.d_created; d_started <=> root.d_started;
+        d_restart <=> root.d_restart; d_netmode <=> root.d_netmode; d_ports <=> root.d_ports;
+        d_mounts <=> root.d_mounts; d_networks <=> root.d_networks; d_entry <=> root.d_entry;
+        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir; d_labels <=> root.d_labels;
+        log_lines <=> root.log_lines;
+    }
+
+    if root.pull_open: PullDialog {
+        input <=> root.pull_input; busy <=> root.pull_busy;
+        close => { root.pull_close(); } submit(val) => { root.pull_submit(val); } }
+    if root.cleanup_open: CleanupDialog {
+        stopped <=> root.cleanup_stopped; dangling <=> root.cleanup_dangling;
+        unused <=> root.cleanup_unused;
+        close => { root.cleanup_close(); }
+        submit(s, d, u) => { root.cleanup_submit(s, d, u); } }
+}

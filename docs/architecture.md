@@ -1,234 +1,392 @@
-# dvkit 架构设计
+# Docker Panel 架构设计
 
-本文档描述 dvkit 的模块分层、线程模型、消息流与关键设计决策。
+v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构。
+本文档描述当前实际代码状态，随仓库版本管理。
 
-## 1. 分层与模块职责
+写代码时必须按下方精确版本的 API 写，禁止凭旧版本记忆。
+更完整的版本特有 API 限制清单见仓库内 `AGENTS.md`。
 
-```
-main.rs                         入口：创建 eframe 原生窗口（1000x700，最小 820x520）
-└── app/                        GUI 层：状态、渲染、帧调度
-    ├── mod.rs                    DvApp 全局状态、Tab 调度、弹窗装配
-    ├── constants.rs              策略常量：刷新/采样周期、历史容量、窗口稳定 ID
-    ├── columns.rs                列枚举（CtlCol/ImgCol）、宽度表、排序比较器、显示列菜单
-    ├── containers/               容器 Tab
-    │   ├── mod.rs                  工具条、批量操作条、交互结果应用
-    │   ├── header.rs               顶部品牌头：Logo + Tab + Docker 连接角标
-    │   ├── prep.rs                 build_disp：搜索过滤 + 排序 + compose 分组序列
-    │   ├── table.rs                表格骨架：表头排序/全选 + 横向滚动
-    │   └── row.rs                  行渲染：组头、单元格、右键菜单、双击/单击
-    ├── images/                   镜像 Tab
-    │   ├── mod.rs                  工具条、拉取输入、过滤排序、批量删除
-    │   └── table.rs                表格：表头、单元格、右键菜单
-    ├── tasks/                    后台任务层
-    │   ├── mod.rs                  任务发起：刷新/采样/单个与批量操作/拉取/日志流
-    │   └── messages.rs             消息泵 pump_messages、poll_logs、maybe_refresh
-    └── windows/                  弹窗层
-        ├── mod.rs                  日志窗口、资源监控窗口 + 通用弹窗小部件
-        ├── confirm.rs              删除二次确认（单个/批量，带预览清单）
-        └── dialogs.rs              清理、错误、执行结果弹窗
-├── docker/                     Docker API 层（全部 async）
-    ├── mod.rs                    connect()：本机默认连接
-    ├── containers.rs             列表、资源采样、启停重启删除
-    ├── images.rs                 列表（含关联容器统计）、拉取、删除
-    └── system.rs                 prune 清理、follow 日志流
-├── models.rs                   纯数据结构：ContainerInfo / ImageInfo / Msg / …
-├── utils/                      基础设施
-    ├── mod.rs                    GitHub Dark 主题色板、字节/时间格式化、状态文案
-    └── fonts.rs                  系统 CJK 字体扫描注入 + Material Icons
-└── widgets/                    无状态 UI 组件（自由函数，不持有业务状态）
-    ├── ic.rs                     Material Icons 码位常量
-    ├── control.rs                图标按钮、选择框、菜单项、搜索框、徽章
-    ├── table.rs                  排序表头、折叠三角、右对齐文本
-    └── chart.rs                  CPU/内存折线小图
-```
+## 0. 技术栈（精确版本）
 
-依赖单向：`main → app → docker → models`；`utils` 与 `widgets` 是底层设施，
-被各层复用，不反向依赖业务模块。`app` 内部子模块通过 `use super::*` 共享
-`DvApp` 与类型定义，每个文件只承担一个明确职责。
+| 组件 | 精确版本 | Feature / 备注 |
+|------|----------|----------------|
+| Rust | stable | edition 2021 |
+| Slint | **1.14** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std`；TabWidget 无 `current-tab`、delegate 无 MouseArea、子组件不继承 parent 尺寸——详见 AGENTS.md「Slint 1.14 版本特有限制」 |
+| slint-build | **1.14** | build-dependency；`slint_build::compile("ui/app.slint")` |
+| bollard | **0.21** | Docker Engine API 纯 async 客户端；`LogOutput` 是 struct 不是 tuple——详见下方「bollard 0.21 易踩坑速查」 |
+| tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features=false）；必须多线程 runtime 不能 current_thread；spawn 前必须 `handle().clone()`——详见 AGENTS.md「tokio 1.x 版本关键用法」 |
+| futures | **0.3** | — |
+| futures-util | **0.3** | 提供 `StreamExt`（`.next().await`），需显式引入 |
+| 渲染 | — | 纯软件渲染器（`renderer-software`），**无 Vulkan/GL/WGPU 依赖**，deb 包不依赖 `libgl1` |
+| 构建优化 | — | `opt-level="z"` + LTO + `codegen-units=1` + `panic="abort"` + strip（release profile） |
 
-> 代码规范：单文件超过 300 行必须按职责拆分。当前最大的文件也在此线以内。
-
-## 2. 线程模型与消息流
+## 1. 模块地图与文件交互
 
 ```
-                 ┌─────────────────────────────────────────┐
-                 │              UI 线程 (eframe)            │
-                 │  pump_messages()  poll_logs()            │
-                 │  maybe_refresh()  → 渲染 → 弹窗          │
-                 └───────┬──────────────────────▲───────────┘
-              spawn 任务 │                      │ std::mpsc::Sender<Msg>
-                         ▼                      │
-                 ┌─────────────────────────────────────────┐
-                 │        tokio 多线程运行时 (DvApp.rt)      │
-                 │  list_containers / list_images /         │
-                 │  sample_container / pull_image /          │
-                 │  start/stop/restart/remove / cleanup      │
-                 │  follow_logs（长驻日志流，独立 channel）    │
-                 └─────────────────────────────────────────┘
+docker-panel/
+├── Cargo.toml                依赖：slint 1.14 / bollard 0.21 / tokio / futures
+├── build.rs                  slint_build::compile("ui/app.slint")
+│
+├── src/                       Rust 层（所有 ≤ 300 行）
+│   ├── main.rs                桥接中枢：consumer 线程 + 定时刷新 + pump_and_apply
+│   ├── slint_gen.rs           include_modules!() 集中入口（仅 7 行）
+│   │
+│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail
+│   │
+│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）
+│   │                          + drain_messages / handle_one / build_detail_data
+│   │
+│   ├── ui_update.rs           derive_update(Msg → UiUpdate) + UiUpdate 结构体
+│   │                          （从 ui_state.rs 拆出，86 行）
+│   │
+│   ├── ui_apply.rs            apply_detail(&ui, &DetailTuple) — 把 17 字段灌入 DetailPanel
+│   │                          apply_lists(&ui, cm, im, lm) — 三个 ModelRc 一次性 set
+│   │                          （从 main.rs 的 invoke_from_event_loop 闭包拆出，42 行）
+│   │
+│   ├── callbacks.rs           顶栏按钮 + PullDialog + CleanupDialog 回调绑定
+│   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
+│   ├── callbacks_image.rs     镜像删除（AppActions global）
+│   │
+│   └── docker/
+│       ├── mod.rs             connect() + pub use 重导出
+│       ├── containers.rs      list / start / stop / restart / remove
+│       ├── images.rs          list / pull（含进度闭包）/ remove
+│       ├── logs.rs            inspect_container / follow_logs（Stream → tx.send）
+│       └── system.rs          cleanup prune
+│
+└── ui/                        Slint 层（所有 ≤ 300 行）
+    ├── app.slint              主骨架：MainWindow + AppActions global + import 组装 + 布局
+    ├── models.slint           ContainerRow / ImageRow / LogLineRow struct（Rust↔Slint 数据桥）
+    ├── delegates.slint        行 delegate（ContainerRowDelegate / ImageRowDelegate）callback 属性注入
+    ├── headers.slint          ContainerHeader / ImageHeader（列宽严格对齐 delegates）
+    ├── panes.slint            TopBar / ToolBar / StatusBar 三个横向 strip
+    ├── dialogs.slint          PullDialog + CleanupDialog 弹窗
+    ├── detail-panel.slint     DetailRow + DetailPanel（17 字段 in-out 属性）
+    └── log-panel.slint        LogLineDelegate + LogPanel（ListView 滚动）
 ```
 
-每帧固定顺序（`DvApp::ui`）：
+### 依赖方向（严格单向，无循环）
 
-1. `pump_messages()`：`try_recv` 非阻塞排空消息队列；
-2. `poll_logs()`：排空日志流事件；
-3. `maybe_refresh()`：按节奏发起后台任务；
-4. 渲染顶栏与当前 Tab；
-5. 依次装配日志、监控、清理、确认、错误、结果六类弹窗；
-6. `ctx.request_repaint_after(250ms)`，保证后台消息最迟 250ms 内被处理。
+```
+main.rs
+  ├── ui_state.rs    → models.rs + docker::{list_containers, list_images, inspect_container}
+  ├── ui_update.rs   → models.rs
+  ├── ui_apply.rs    → slint_gen (MainWindow) + ui_state::DetailTuple
+  ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker
+  ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
+  └── docker/        → 纯 async 层，不反依赖任何上层模块
 
-关键点：
+ui/*.slint           app.slint 是唯一组装入口，import 其余 7 个子文件，
+                     子文件之间不互相 import（避免 Slint 跨文件 global 兼容性坑）
+```
 
-- **UI 永不阻塞**：`docker/` 的所有函数都是 async，只在 tokio 后台任务执行；
-  结果打包为 `Msg` 枚举经 `std::mpsc` 回传。
-- **日志流独立通道**：日志窗口持有自己的 `Sender<LogEvent>` 与 `JoinHandle`，
-  关窗时 `abort()` 中断长驻任务；channel 断开后 `follow_logs` 自行退出。
-- **拉取进度回调**：`pull_image(spec, on_progress)` 用闭包把进度文本转成
-  `Msg::PullProgress`，进度最多保留 200 条（超出一次裁掉前 100 条）。
-- **错误去重**：`show_error()` 配合 `last_error`，同一错误连续出现只弹一次；
-  弹窗关闭后清空记录，之后再次出现仍会提示。
+## 2. 线程模型（三线程架构）
 
-## 3. 刷新节奏
+```
+主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
+┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
+│ Slint Timer 3s ──lock─▶│ recv() 阻塞（锁外）           │       │ spawn 异步任务      │
+│ 手动刷新 ───────lock─▶│ drain_messages            │       │ bollard API 调用    │
+│ UI 回调 ────────lock─▶│ build_container_rows      │       │ tx.send(Msg)        │
+│                        │ build_image_rows          │◀──────│ follow_logs 流      │
+│                        │ build_detail_data          │       │ inspect_container   │
+│                        │ build_log_lines            │       │                     │
+│                        │ drop(s) ──────────────────lock release
+│                        │ invoke_from_event_loop     │       │                     │
+│                        │   set_d_xxx / set_log_lines│       │                     │
+└──────────────────────┘       └────────────────────────┘       └───────────────────┘
+     Mutex<AppState>                 mpsc::Receiver<Msg>          spawn(async { ... })
+                                     （consumer 独占，不进 Mutex）
+```
 
-| 数据 | 周期 | 触发与限流 |
-|------|------|------------|
-| 容器列表 | 2s | `containers_loading == false` 时才发起 |
-| 镜像列表 | 15s | 仅停留在镜像 Tab；非 loading 时发起 |
-| 资源采样 | 2s | `stats_pending == 0` 才发起，天然限流；并发上限 4 |
-| 日志 | 实时 | follow 流，事件在 `poll_logs()` 中排空 |
-| 手动刷新 | — | 工具条刷新按钮、筛选切换时立即触发 |
+### Receiver 不进 Mutex — 死锁唯一保证
 
-采样任务用 `futures::stream::iter(...).buffer_unordered(4)` 并发，
-所有结果在同一个后台任务里收集后逐条回传。监控窗口打开的容器即使
-不在列表（如刚停止）也会被临时加入采样名单。
+`mpsc::Receiver<Msg>` 由 consumer 线程独占所有权，**不**放在 `AppState` 里。
+这样 `rx.recv()` 永远不会阻塞主线程拿 state 锁。
+如果 Receiver 放进 Mutex，consumer 阻塞 `recv()` 时持有锁 → 主线程任何 `state.lock()`（Timer 回调、UI 回调）全卡死。
 
-## 4. UI 层关键设计
-
-### 4.1 TableOutcome：规避 egui 借用冲突
-
-表格渲染闭包内持有 `&self` 不可变借用，不能同时修改状态。因此表格组件
-不直接改状态，而是把交互结果收集进 `TableOutcome`：
+### pump_and_apply 两阶段铁律
 
 ```rust
-struct TableOutcome<C> {
-    select_all: Option<bool>,   // 表头全选框
-    sort_click: Option<C>,      // 被点击的排序表头
-    toggles: Vec<String>,       // 单击/复选框切换的行 key
-    actions: Vec<RowAction>,    // 行内按钮/右键菜单产生的动作
+// Phase 1 — 锁内（微秒级）：
+let Ok(mut s) = state.lock() else { return };
+let (need_update, latest_msg) = s.drain_messages(rx, first);
+let cm_rows = build_container_rows(&s);    // 纯读取
+let im_rows = build_image_rows(&s);        // 纯读取
+let detail = s.build_detail_data();         // 17 字段 SharedString 元组
+let log_lines: Vec<LogLineRow> = s.logs.iter().map(...).collect();
+let running_total = format!("{}/{}", running, s.containers.len());
+let update = derive_update(len, &latest_msg);
+drop(s);  // ⚠️ 必须在 invoke_from_event_loop 之前释放
+
+// Phase 2 — 锁外：
+invoke_from_event_loop(move || {
+    let Some(ui) = ui_w.upgrade() else { return };
+    ui_apply::apply_lists(&ui, cm, im, lm);
+    ui_apply::apply_detail(&ui, &detail);  // None 时无操作
+    ui.set_container_count(SharedString::from(running_total));
+    // ... status_text / docker_ok / pull_open / pull_busy ...
+}).ok();
+```
+
+### 主线程 Timer 与 Consumer 的协作
+
+Slint Timer 3s → `refresh()` → spawn 两个列表任务 → `tx.send(Msg::Containers)` + `tx.send(Msg::Images)`。
+consumer 正在 `recv()` 阻塞，被新消息唤醒后 pump → 更新 Slint Model。
+Timer 回调本身**不**碰 Slint Model——只负责发任务，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
+这符合 Slint 线程安全模型：只有主线程可以修改 Model。
+
+## 3. 消息流（Msg 变体一览）
+
+| 变体 | 触发源 | UI 行为 |
+|------|--------|---------|
+| `Containers(Result<Vec<ContainerInfo>>)` | Timer 刷新 / 手动刷新 | 替换容器列表 + 剪失效选择 |
+| `Images(Result<Vec<ImageInfo>>)` | Timer 刷新 / 手动刷新 | 替换镜像列表 + 剪失效选择 |
+| `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
+| `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 刷新镜像列表 |
+| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本（下次 Timer 会自动刷新列表） |
+| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 下次 Timer 刷新 |
+| **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail`，pump_and_apply 灌入 DetailPanel |
+| **`LogLine(String)`** | `follow_logs` Stream | 推入 `AppState.logs`（环形缓冲 cap=500），pump_and_apply 灌入 LogPanel |
+
+### 消息处理流水线
+
+```
+                     tokio spawn
+  ┌──────────┐    refresh()     ┌──────────────┐    tx.send()    ┌───────────┐
+  │ 主线程    │────────────────▶│ 后台 async    │──────────────▶│ Receiver  │
+  │ Timer    │  /UI 操作/inspect│ bollard API   │                 │ (consumer)│
+  │          │                  │ follow_logs   │◀──Stream──────│           │
+  └──────────┘                  └──────────────┘                 └─────┬─────┘
+                                                                       │
+                   ┌──────────────────────────────────────────────────┘
+                   ▼
+         ┌────────────────┐
+         │ lock state      │
+         │ drain_messages  │  逐条 handle_one → 更新 containers / images / detail / logs
+         │ build rows      │  （调用 build_container_rows / build_image_rows / build_detail_data）
+         │ drop lock       │
+         └────────┬───────┘
+                  │ invoke_from_event_loop
+                  ▼
+         ┌──────────────────────────────────────────────────┐
+         │ 主线程（闭包在 Slint 事件队列里执行）                 │
+         │                                                    │
+         │  ui_apply::apply_lists(&ui, cm, im, lm)           │
+         │    └ ui.set_container_rows(ModelRc::from(...))     │
+         │    └ ui.set_image_rows(ModelRc::from(...))        │
+         │    └ ui.set_log_lines(ModelRc::from(...))         │
+         │                                                    │
+         │  if let Some(ref d) = detail_data:                 │
+         │    ui_apply::apply_detail(&ui, d)                  │
+         │      └ ui.set_d_name / set_d_state / set_d_... ×17│
+         │                                                    │
+         │  ui.set_container_count / set_docker_ok / ...     │
+         └──────────────────────────────────────────────────┘
+```
+
+### 日志流特殊点
+
+`follow_logs` 返回 bollard 的 `impl Stream<Item=Result<LogOutput, Error>>`：
+
+```rust
+// LogOutput 是 struct 变体，不是 tuple！
+// LogOutput::StdOut { message: Bytes } | LogOutput::StdErr { message: Bytes }
+
+rt_handle.spawn(async move {
+    let _ = docker::follow_logs(&id, tx, 200).await;
+    // 内部：stream.next().await → LogOutput::StdOut { message } → Bytes → String → tx.send(Msg::LogLine(line))
+});
+```
+
+环形缓冲在 `handle_one` 里做（`drain(0..excess)`），避免 `push` 无限增长。
+
+## 4. Slint UI 模块交互
+
+8 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+
+### 交互总图
+
+```
+                               app.slint（组装层 + 布局）
+                          ╱ ╲   ╱ ╲   ╱ ╲   ╱ ╲   ╱ ╲
+                         ╱   ╲ ╱   ╲ ╱   ╲ ╱   ╲ ╱   ╲
+            models.slint  delegates.slint  headers.slint  panes.slint  dialogs.slint
+            (数据桥)       (行视图+cb注入)  (表头列宽对齐)   (横向strip)   (弹窗)
+                 │              │              │
+                 │              │              │
+                 └──────┬───────┴──────────────┘
+                        ▼
+              ListView [容器 Tab] / ListView [镜像 Tab]
+                        │
+                        ▼
+              右侧 TabWidget
+           ┌──────────┴──────────┐
+           ▼                     ▼
+     detail-panel.slint    log-panel.slint
+     (17 字段 in-out)       (ListView 滚动)
+```
+
+### 四种交互模式
+
+#### ① models.slint → Rust：property 数据注入（不变）
+
+```
+models.slint struct           Rust pump_and_apply 构造
+┌──────────────────────────┐  ┌─────────────────────────┐
+│ ContainerRow { id, ... } │  │ let rows = state.lock() │
+│ ImageRow    { id, ... } │  │   .containers.iter()    │
+│ LogLineRow  { text }    │  │   .map(build_row)       │
+│ ContainerDetail 无 Slint│  │   .collect::<Vec<_>>(); │
+│   struct —— Rust 单独定义│  │ ui_apply::apply_lists() │
+└──────────────────────────┘  └─────────────────────────┘
+```
+
+`include_modules!()` 在 `slint_gen.rs` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入。
+
+#### ② delegates.slint ← app.slint：callback 属性注入（不变）
+
+delegates 不 import AppActions global——它只声明 `callback toggle()` / `callback restart()` / `callback logs()` / `callback remove()`。
+app.slint 的 ListView 循环里注入实现：
+
+```
+ContainerRowDelegate {
+    toggle => { AppActions.container_toggle(row.id); },
+    restart => { AppActions.container_restart(row.id); },
+    logs    => { AppActions.container_logs(row.id); },     // 🆕 Phase 2
+    remove  => { AppActions.container_remove(row.id); },
 }
 ```
 
-渲染结束后由 `ui_containers` / `ui_images` 统一应用：先处理排序与选择，
-再逐个 match 执行 `RowAction`（打开窗口或 spawn Docker 操作）。
-工具条上的批量按钮同理：闭包内只置局部 flag，闭包外执行。
+`AppActions` 只在 app.slint 声明、只在 callbacks_container.rs / callbacks_image.rs 绑定。
 
-### 4.2 选择模型
+#### ③ panes.slint ↔ app.slint：`<=>` 双向绑定（不变）
 
-- 容器选择集是 `HashSet<容器 ID>`；镜像选择集是 `HashSet<"名称:tag">`
-  （`ImageInfo::key()`），与 `ImageInfo` 的唯一键保持一致。
-- 批量操作的对象 = **选择集 ∩ 当前可见行**（经过搜索过滤后），避免误操作
-  被关键词藏起来的行。
-- 列表刷新后，按新列表剪除已消失项的选择，不会保留悬空选中。
-- 点行空白处切换选中；点行内控件（按钮、复选框）不触发整行切换。
+`StatusBar.status_text <=> root.status_text` / `TopBar.docker_ok <=> root.docker_ok`
 
-### 4.3 排序与行序稳定
+#### ④ 详情/日志面板：`<=>` in-out 双向绑定 + TabWidget
 
-- 点表头：同列再次点击翻转升降序；换列默认升序。
-- 任何排序都以 ID 做最终兜底键（`then_with`），保证资源采样导致的数据
-  变化不会让相同键值的行来回跳动。
-- 状态列不按字符串排，而是按 `state_rank` 权重：running → restarting →
-  paused → created → removing → exited → dead。
+```
+detail-panel.slint 声明：        app.slint 组装：
+┌────────────────────────┐     ┌─────────────────────────────┐
+│ DetailPanel inherits   │     │ TabWidget {                 │
+│   Rectangle (背景+尺寸) │     │   Tab { title: "详情";      │
+│ {                      │     │     DetailPanel {           │
+│   in-out property      │  ╱═ │       width: 320px;         │
+│     <string> d_name;   │ ╱   │       height: 600px;        │
+│   in-out property      │     │       d_name <=> root.d_name│
+│     <string> d_state;  │     │       d_state <=> root.d_...│
+│   ... ×17              │     │       d_workdir <=> ...     │
+│ }                      │     │     }                       │
+│                        │     │   }                         │
+│ LogPanel {             │     │   Tab { title: "日志";      │
+│   in-out property      │     │     LogPanel {              │
+│     <[LogLineRow]>     │     │       log_lines <=>         │
+│       log_lines;       │     │         root.log_lines;    │
+│ }                      │     │     }                       │
+└────────────────────────┘     └─────────────────────────────┘
+```
 
-### 4.4 过滤与 Compose 分组（build_disp）
+**TabWidget 内容需要显式 width/height**——Slint Tab 容器不给子组件自动传 parent 尺寸，必须在 app.slint 的实例化处硬设。
 
-`prep.rs::build_disp()` 产出三样东西：过滤排序后的 `rows`、供表格按序
-渲染的 `disp: Vec<DispRow>`、小写搜索词（用于空态文案）。
+### Slint 文件清单速查
 
-- 搜索在本地对已拉取数据做即时过滤，不发 Docker 请求。
-- 开启 Compose 分组后，带 `com.docker.compose.project` label 的容器按
-  项目名（`BTreeMap` 保证字母序）收进组头 `DispRow::Group { project, count }`，
-  不带 label 的散容器排在前面。
-- 组头整行手绘（强调条 + 折叠三角 + 项目名 + 成员数），点击切换折叠；
-  折叠状态记录在 `collapsed_groups: HashSet<String>`。
+| 文件 | 行数 | 职责 | import 谁 |
+|------|------|------|-----------|
+| `app.slint` | ~218 | MainWindow + AppActions global + 布局（FixedLayout 绝对定位左右分栏） | models / delegates / headers / panes / dialogs / detail-panel / log-panel |
+| `models.slint` | ~24 | ContainerRow / ImageRow / LogLineRow struct | 无 |
+| `delegates.slint` | ~121 | 行视图 + callback 属性注入（含日志按钮） | 无 |
+| `headers.slint` | ~51 | ContainerHeader / ImageHeader（列宽严格对齐 delegates） | 无 |
+| `panes.slint` | ~80 | TopBar / ToolBar / StatusBar | 无 |
+| `dialogs.slint` | ~157 | PullDialog / CleanupDialog | 无 |
+| `detail-panel.slint` | ~116 | DetailRow + DetailPanel（17 字段） | 无 |
+| `log-panel.slint` | ~57 | LogLineDelegate + LogPanel（ListView） | models.slint (LogLineRow) |
 
-### 4.5 无感刷新与指标保留
+## 5. Rust 回调绑定三段式
 
-处理 `Msg::Containers(Ok(list))` 时，先按容器 ID 建立旧数据哈希表，
-把 `cpu_percent / mem_usage / mem_limit / block_* / net_*` 六个采样字段
-从旧记录拷到新记录，避免 2 秒刷新瞬间指标闪归零。loading 转圈只在
-首屏（列表为空）显示，日常刷新不让工具条布局抖动。
+```
+callbacks.rs                    callbacks_container.rs      callbacks_image.rs
+┌────────────────────┐          ┌───────────────────────┐   ┌──────────────────────┐
+│ bind_callbacks()   │          │ bind_container_       │   │ bind_image_actions() │
+│ {                  │          │   actions()            │   │ ┌─────────────────┐  │
+│   bind_top_bar()   │          │ {                     │   │ │ on_image_remove │  │
+│   bind_pull_dialog │          │ │ on_container_toggle │   │ └─────────────────┘  │
+│   bind_cleanup_    │          │ │ on_container_restart│   └──────────────────────┘
+│     dialog()       │          │ │ on_container_remove │
+│   bind_container_  │          │ │ on_container_logs   │
+│     actions() ←────┼──────────│ │   ├─ inspect (锁内) │
+│   bind_image_      │          │ │   └─ follow_logs    │
+│     actions() ←────┼──┐       │ │      (锁外 spawn)  │
+│ }                  │  │       │ └────────────────────┘
+└────────────────────┘  │       └───────────────────────┘
+                        │
+                        └─────────────────────────────────────────┐
+                                                                  ▼
+                                          app.slint global AppActions {
+                                            callback container_toggle(string);
+                                            callback container_restart(string);
+                                            callback container_remove(string);
+                                            callback container_logs(string);    ← 🆕
+                                            callback image_remove(string);
+                                          }
+```
 
-### 4.6 弹窗状态机
+### 统一回调套路（铁律）
 
-| 状态 | 类型 | 用途 |
-|------|------|------|
-| `confirm` | `Option<Confirm>` | 单个/批量删除容器、单个/批量删除镜像；批量带最多 8 项预览清单 |
-| `error` | `Option<String>` + `last_error` | Docker API 错误，多行聚合文本等宽滚动展示 |
-| `result` | `Option<String>` | 操作/拉取/清理成功结果 |
-| `cleanup_open` + 三个勾选 | — | 清理弹窗，未勾任何项时确认按钮禁用 |
-| `log_view` | `Option<LogView>` | 日志窗口（同屏最多一个） |
-| `resource_view` | `Option<ResourceView>` | 资源监控窗口 |
+```rust
+ui.on_xxx_requested(move || {
+    // 1. 锁内取 handle + tx clone（微秒级）
+    let (rt_handle, tx) = {
+        let Ok(st) = s.lock() else { return };
+        (st.rt.handle().clone(), st.tx.clone())
+    };  // ← 立即 drop Mutex
 
-弹窗统一锚定屏幕中心；确认窗不可折叠、不可缩放，防止误操作时丢失焦点。
+    // 2. 锁外 spawn 真正的 Docker 操作
+    rt_handle.spawn(async move {
+        let result = docker::do_thing().await;
+        let _ = tx.send(Msg::ActionDone(..., result));
+    });
+});
+```
 
-### 4.7 资源监控小图
+锁内**绝不**做任何可能耗时的操作（包括 await、invoke_from_event_loop）。
 
-`widgets::chart::draw_chart()` 是 110px 高的自绘折线图：深底 + 3 条
-水平网格线 + 曲线 + 逐段矩形面积填充（避免非凸多边形接缝问题）+
-右上角当前值。CPU 曲线自适应上限（历史峰值 ×1.2，下限 10%），
-内存曲线固定 0–100%（按容器内存上限换算百分比）。历史保留
-120 个采样点 ≈ 4 分钟（`VecDeque` 头部淘汰）。
+## 6. Docker 接入约定
 
-## 5. Docker 接入约定
+- 连接：`Docker::connect_with_local_defaults()`，自动读 `DOCKER_HOST`，默认 `/var/run/docker.sock`
+- 错误统一转中文 `String` 上抛，UI 层展示
+- 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
+- `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
+- `follow_logs`：`.follow(true).tail("200")` 返回 Stream，逐行 `tx.send(Msg::LogLine)`
+- 清理：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused→prune_images(-a)`，可任意组合
 
-- 连接统一走 `docker::connect()` → `Docker::connect_with_local_defaults()`：
-  自动读 `DOCKER_HOST`，默认本机 unix socket；Windows/macOS 走各自默认管道。
-- 每次 API 调用新建连接（bollard 连接轻量，且避免跨任务持有状态）。
-- 错误统一转中文 `String`（如 `"获取容器列表失败: {e}"`）上抛，UI 层弹窗展示。
-- 删除容器 `force=true`，运行中容器也能删；删除镜像同样 `force=true`，
-  但被容器引用时 Docker 仍会拒绝，错误直接展示给用户。
-- 清理：停止容器用 `prune_containers`；悬空镜像用 `dangling=true` 过滤；
-  未使用镜像用 `dangling=false`，等价 `docker image prune -a`
-  （勾选「未使用」时不再单独清理 dangling，因为前者已包含）。
-- 镜像列表关联容器数：优先按 image_id 精确匹配，匹配不到再按
-  `repo_tag == 容器镜像名` 兜底求和。
-- Compose 归属通过 label 识别：`com.docker.compose.project` /
-  `com.docker.compose.service`。
+### bollard 0.21 易踩坑速查
 
-## 6. 资源指标计算
+| 项目 | 实际类型 | 备注 |
+|------|----------|------|
+| `LogOutput` | `LogOutput::StdOut { message: Bytes }` | struct 变体，**不是** tuple |
+| `ContainerStateStatusEnum` | 没有 Default | 用 `.as_ref().map(\|e\| e.to_string()).unwrap_or_default()` |
+| `NetworkSettings.ports` | `Option<HashMap<String, Option<Vec<PortBinding>>>>` | 双层 Option |
+| `PortBinding.host_port` | `Option<String>` | 不是 u16 |
+| `LogsOptionsBuilder.tail` | 收 `&str` | 不是 `String` |
+| 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` 调 `.next().await` |
 
-- **CPU%**：`(cpu_total - precpu_total) / (system - presystem) × online_cpus × 100`，
-  与 `docker stats` 公式一致；用 `stream=false` 取单次采样；分母无效时为 0。
-- **内存**：`usage` 扣除缓存文件（cgroup v2 取 `inactive_file`，
-  v1 取 `total_inactive_file`）。
-- **磁盘 IO**：读取 `blkio_stats.io_service_bytes_recursive` 按
-  Read/Write 累加；cgroup v2 下无此明细，显示 0（与 docker stats 一致）。
-- **网络 IO**：汇总所有网卡的 `rx_bytes / tx_bytes`。
+## 7. 文件规范
 
-## 7. 主题、字体与图标
+所有源码文件 ≤ 300 行（当前最大 main.rs 269 / ui_state.rs 264）。
 
-- 主题在 `utils::apply_theme()` 一次性配置：四级背景层次
-  （DEEP_BG 顶栏/日志 → PANEL_BG 面板 → SURFACE_BG 表头/输入框 →
-  斑马纹）、控件三态配色、柔和投影、浮动滚动条、五档字号。
-- 语义色集中在 `utils/mod.rs` 常量：蓝（主操作）/绿（运行、启动）/
-  红（停止、删除、错误）/琥珀（重启、警告）/青（监控、compose）。
-- egui 默认字体不含 CJK。`load_cjk_fonts()` 递归扫描
-  `/usr/share/fonts`、`/usr/local/share/fonts`、`~/.local/share/fonts`、
-  `~/.fonts`，按「思源黑体 → Noto Sans/Serif CJK → 文泉驿 →
-  Droid Sans Fallback → Uming」优先级挑选，同族内 Regular 字重优先，
-  找到后追加到 Proportional / Monospace 家族**末尾**，不覆盖默认字体。
-- Material Icons 字体（`assets/MaterialIcons-Regular.ttf`）以
-  `include_bytes!` 编进二进制，同样放在家族末尾作 fallback；
-  码位常量集中在 `widgets::ic`，界面里不出现裸码位。
-- 找不到 CJK 字体时仅向 stderr 打警告，程序降级运行（图标与拉丁字符正常）。
+**Slint 拆分原则：**
+- app.slint 做组装层——只放 MainWindow 骨架 + AppActions global + import 语句 + 布局 markup
+- 子文件之间不互相 import——避免循环依赖和跨文件 global 可见性问题
+- delegates 用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
+- panes/dialogs 用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见
+- **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸
 
-## 8. 消息类型一览（models::Msg）
-
-| 变体 | 触发任务 | UI 处理 |
-|------|----------|---------|
-| `Containers(Result<Vec<ContainerInfo>>)` | 列表刷新 | 保留采样字段、更新状态角标、剪除失效选择 |
-| `Images(Result<Vec<ImageInfo>>)` | 镜像刷新 | 替换列表、剪除失效选择 |
-| `Sample(id, Result<ResourceSample>)` | 并发采样 | 更新表格行 + 追加监控曲线历史 |
-| `PullProgress(String)` | 拉取流回调 | 追加进度文本（上限 200 条） |
-| `PullDone(Result<String>)` | 拉取结束 | 成功则清空输入、弹窗并刷新镜像列表 |
-| `ActionDone(desc, Result<String>)` | 单个/批量操作 | 成功刷新容器与镜像列表；失败弹聚合错误 |
-| `CleanupDone(Result<String>)` | 清理 | 结果弹窗 + 刷新两个列表 |
+**Rust 拆分原则：**
+- 桥接层分离：main.rs（consumer 线程 + pump + 入口）与 callbacks.rs（UI 回调绑定）分离
+- **pump_and_apply 闭包内的 set_d_xxx 抽成 ui_apply::apply_detail**——避免 main.rs 被 17 个 set_ 调用撑爆
+- **derive_update match 抽成独立 ui_update.rs**——ui_state.rs 只管状态变更，update 推导单独一个文件
+- 回调按实体分：callbacks.rs（顶栏+弹窗）+ callbacks_container.rs + callbacks_image.rs
+- 类型集中入口：`slint_gen.rs` 只做 `include_modules!()` 一次展开
+- **所有 spawn 都走 state.rt（锁内 clone handle → drop → spawn）**——主线程不持有独立 tokio runtime
+- **所有 Docker 操作结果都走 `tx.send(Msg)`**——不直接碰 Slint Model，统一由 consumer pump 更新

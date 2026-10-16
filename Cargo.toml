@@ -1,18 +1,35 @@
 [package]
-name = "dvkit"
-version = "0.1.1"
+name = "docker-panel"
+version = "0.2.1"
 edition = "2021"
-description = "极简 Docker 桌面管理工具（egui 原生 GUI）"
+description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
 
 [dependencies]
-eframe = "0.36"
-egui = "0.36"
-egui_extras = "0.36"
+# Slint：关闭默认 backend，手动选 winit + 软件渲染器，极致轻量
+slint = { version = "1.14", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-software",
+    "software-renderer-systemfonts",
+] }
+
+# Docker API
 bollard = "0.21"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 futures = "0.3"
+futures-util = "0.3"
 serde_json = "1"
 anyhow = "1"
 
+# tokio 多线程运行时（不能用 current_thread：单线程下后台 Docker 任务可能无法调度）
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "rt"] }
+
+[build-dependencies]
+slint-build = "1.14"
+
 [profile.release]
-opt-level = 2
+opt-level = "z"      # 体积最小化
+lto = true            # 链接时优化
+codegen-units = 1     # 单编译单元 = 更好的优化
+strip = "symbols"     # 去除符号表
+panic = "abort"       # panic 直接 abort，省掉 unwind 信息

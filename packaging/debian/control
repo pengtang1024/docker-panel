@@ -1,8 +1,9 @@
-Package: dvkit
-Version: 0.1.1
+Package: docker-panel
+Version: 0.2.1
 Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: pengtang1024 <pengtang1024@users.noreply.github.com>
-Depends: libc6, libgcc-s1, libgl1
-Description: 极简 Docker 桌面管理工具（Rust + egui 原生 GUI，单二进制、无 Electron、无运行时依赖）
+Depends: libc6
+Description: 极简 Docker 桌面管理工具（Rust + Slint 原生 GUI，
+ 软件渲染器零 GPU 依赖，单二进制、无 Electron、无运行时依赖）

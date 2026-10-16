@@ -1,0 +1,48 @@
+// —— 数据 struct：Rust ↔ Slint 桥接 ——
+// Slint 自动生成对应 Rust 类型（snake_case 转换）
+
+export struct ContainerRow {
+    id: string,
+    short_id: string,
+    name: string,
+    image: string,
+    status: string,
+    is_running: bool,
+    // —— Compose 分组 ——
+    compose_project: string,       // 空字符串表示非 Compose 容器
+    compose_service: string,       // Compose 服务名
+    is_group_start: bool,          // 是否是某 Compose 项目第一行（渲染分组标题）
+    // —— 资源监控 ——
+    cpu_percent: string,           // 如 "12.3%"（空字符串 = 未采样）
+    mem_usage: string,              // 如 "512MB / 1GB"
+    net_traffic: string,            // 如 "↓1.2MB ↑345KB"
+}
+
+export struct ImageRow {
+    id: string,
+    short_id: string,
+    name: string,
+    tag: string,
+    size: string,
+    containers: int,
+}
+
+export struct LogLineRow {
+    text: string,
+}
+
+export struct NetworkRow {
+    id: string,
+    short_id: string,
+    name: string,
+    driver: string,
+    scope: string,
+    containers: int,
+}
+
+export struct VolumeRow {
+    name: string,
+    driver: string,
+    mountpoint: string,
+    size: string,
+}

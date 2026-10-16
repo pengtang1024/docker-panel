@@ -1,0 +1,136 @@
+// ═══════════════════════════════════════════════════════════
+// delegates.slint — ListView 的行视图组件
+//
+// 设计约束：
+//   ⚠️ 本文件**不** import AppActions global——因为 AppActions 定义在 app.slint，
+//   而 app.slint 已经 import 了本文件的 delegate。如果这里再 import AppActions
+//   就变成 Slint 的循环依赖（app.slint ↔ delegates.slint），Slint 编译器会拒绝。
+//
+//   解法：delegate 只声明 callback 属性（callback toggle() / restart() / remove()），
+//   然后由 MainWindow（app.slint）在 for 循环里把 AppActions 的全局回调作为属性注入：
+//
+//     for row in root.container_rows: ContainerRowDelegate {
+//         ...
+//         toggle => { AppActions.container_toggle(row.id); }   // 注入回调体
+//     }
+//
+//   这样 delegates.slint 就变成"纯展示组件"——不依赖任何全局、不做业务派发，
+//   谁用谁把回调体塞进来。
+//
+// callback 属性 vs in-out property：
+//   - in-out property 是**数据**，MainWindow 可以读写 delegate 的属性（row_id、is_running...）
+//   - callback 是**行为**，delegate 在用户交互时触发，由 MainWindow 提供实现
+// ═══════════════════════════════════════════════════════════
+
+import { Button, HorizontalBox } from "std-widgets.slint";
+
+export component ContainerRowDelegate inherits HorizontalBox {
+    in-out property <string> row_id: "";
+    in-out property <string> short_id: "";
+    in-out property <string> name: "";
+    in-out property <string> image: "";
+    in-out property <string> status: "";
+    in-out property <bool> is_running: false;
+
+    callback toggle();
+    callback restart();
+    callback remove();
+
+    spacing: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.is_running ? "●" : "○";
+        color: root.is_running ? #00c853 : #888;
+        min-width: 16px;
+    }
+    Text {
+        text: root.short_id;
+        min-width: 96px;
+        color: #888;
+    }
+    Text {
+        text: root.name;
+        min-width: 140px;
+        overflow: elide;
+    }
+    Text {
+        text: root.image;
+        min-width: 120px;
+        overflow: elide;
+        color: #aaa;
+    }
+    HorizontalLayout { }
+    Text {
+        text: root.status;
+        min-width: 80px;
+        color: #bbb;
+    }
+    Button {
+        text: root.is_running ? "⏹" : "▶";
+        min-width: 32px;
+        clicked => { root.toggle(); }
+    }
+    Button {
+        text: "⟳";
+        min-width: 28px;
+        clicked => { root.restart(); }
+    }
+    Button {
+        text: "🗑";
+        min-width: 28px;
+        clicked => { root.remove(); }
+    }
+}
+
+export component ImageRowDelegate inherits HorizontalBox {
+    in-out property <string> row_id: "";
+    in-out property <string> short_id: "";
+    in-out property <string> name: "";
+    in-out property <string> tag: "";
+    in-out property <string> size: "";
+    in-out property <int> containers: 0;
+
+    callback remove();
+
+    spacing: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.short_id;
+        min-width: 96px;
+        color: #888;
+    }
+    Text {
+        text: root.name;
+        min-width: 200px;
+        overflow: elide;
+    }
+    Text {
+        text: ":" + root.tag;
+        color: #00bcd4;
+        min-width: 100px;
+    }
+    HorizontalLayout { }
+    Text {
+        text: root.containers > 0 ? (root.containers + " 容器") : "未使用";
+        min-width: 80px;
+        color: root.containers > 0 ? #00c853 : #ff9800;
+    }
+    Text {
+        text: root.size;
+        min-width: 70px;
+        color: #bbb;
+    }
+    Button {
+        text: "🗑";
+        min-width: 28px;
+        clicked => { root.remove(); }
+    }
+}

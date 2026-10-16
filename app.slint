@@ -1,7 +1,36 @@
+// ═══════════════════════════════════════════════════════════
+// app.slint — 应用入口，只放 MainWindow + AppActions global + 数据 struct
+//
+// 三文件拆分架构：
+//   app.slint          MainWindow（主窗口 + 顶栏 + Tab + 状态栏）
+//                      AppActions global（Rust 侧 callbacks.rs 绑定）
+//                      ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
+//   delegates.slint    ContainerRowDelegate / ImageRowDelegate（ListView 每行视图）
+//   dialogs.slint      PullDialog / CleanupDialog（遮罩弹窗）
+//
+// 为什么拆：
+//   delegates.slint 被 ListView 的 `for row in root.container_rows: ContainerRowDelegate` 引用，
+//   dialogs.slint 被 MainWindow 末尾 `if root.pull_open: PullDialog` 条件渲染引用。
+//   拆出去的文件都是"可被单独 import 的组件库"，app.slint 只做组装。
+//
+// 数据桥（ContainerRow / ImageRow）：
+//   这些 struct 定义在这里，`slint_gen.rs` 的 include_modules!() 会生成对应的 Rust 类型。
+//   Rust 侧把 Vec<ContainerRow> 通过 ModelRc::from() 塞进 Slint ListView，
+//   delegate 里通过 `row.field` 直接读属性，不需要手动同步。
+// ═══════════════════════════════════════════════════════════
+
 import { Button, LineEdit, ListView, VerticalBox, HorizontalBox,
          TabWidget, ScrollView, CheckBox } from "std-widgets.slint";
 
-// —— 全局 action 回调（delegate 通过 AppActions.xxx() 调用）——
+import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
+import { PullDialog, CleanupDialog } from "dialogs.slint";
+
+// ── AppActions global ──────────────────────────────────────
+// 全局 action 回调——Rust 侧 callbacks.rs 的 ui.global::<AppActions>() 绑定到这里。
+// delegate 组件内部**不**直接 import AppActions（见 delegates.slint 顶部注释），
+// 而是在 MainWindow 里把 `AppActions.container_toggle(row.id)` 作为回调属性注入。
+// 这样避免 Slint 的跨文件循环依赖（delegates.slint 被 app.slint import 后，
+// 如果 delegates 再 import AppActions 就变成了互相依赖）。
 export global AppActions {
     callback container_toggle(string);
     callback container_restart(string);
@@ -26,113 +55,6 @@ export struct ImageRow {
     tag: string,
     size: string,
     containers: int,
-}
-
-// —— 容器行 delegate ——
-component ContainerRowDelegate inherits HorizontalBox {
-    in-out property <string> row_id: "";
-    in-out property <string> short_id: "";
-    in-out property <string> name: "";
-    in-out property <string> image: "";
-    in-out property <string> status: "";
-    in-out property <bool> is_running: false;
-
-    spacing: 8px;
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-
-    Text {
-        text: root.is_running ? "●" : "○";
-        color: root.is_running ? #00c853 : #888;
-        min-width: 16px;
-    }
-    Text {
-        text: root.short_id;
-        min-width: 96px;
-        color: #888;
-    }
-    Text {
-        text: root.name;
-        min-width: 140px;
-        overflow: elide;
-    }
-    Text {
-        text: root.image;
-        min-width: 120px;
-        overflow: elide;
-        color: #aaa;
-    }
-    HorizontalLayout { }
-    Text {
-        text: root.status;
-        min-width: 80px;
-        color: #bbb;
-    }
-    Button {
-        text: root.is_running ? "⏹" : "▶";
-        min-width: 32px;
-        clicked => { AppActions.container_toggle(root.row_id); }
-    }
-    Button {
-        text: "⟳";
-        min-width: 28px;
-        clicked => { AppActions.container_restart(root.row_id); }
-    }
-    Button {
-        text: "🗑";
-        min-width: 28px;
-        clicked => { AppActions.container_remove(root.row_id); }
-    }
-}
-
-// —— 镜像行 delegate ——
-component ImageRowDelegate inherits HorizontalBox {
-    in-out property <string> row_id: "";
-    in-out property <string> short_id: "";
-    in-out property <string> name: "";
-    in-out property <string> tag: "";
-    in-out property <string> size: "";
-    in-out property <int> containers: 0;
-
-    spacing: 8px;
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-
-    Text {
-        text: root.short_id;
-        min-width: 96px;
-        color: #888;
-    }
-    Text {
-        text: root.name;
-        min-width: 200px;
-        overflow: elide;
-    }
-    Text {
-        text: ":" + root.tag;
-        color: #00bcd4;
-        min-width: 100px;
-    }
-    HorizontalLayout { }
-    Text {
-        text: root.containers > 0 ? (root.containers + " 容器") : "未使用";
-        min-width: 80px;
-        color: root.containers > 0 ? #00c853 : #ff9800;
-    }
-    Text {
-        text: root.size;
-        min-width: 70px;
-        color: #bbb;
-    }
-    Button {
-        text: "🗑";
-        min-width: 28px;
-        clicked => { AppActions.image_remove(root.row_id); }
-    }
 }
 
 // —— 主窗口 ——
@@ -219,6 +141,9 @@ export component MainWindow inherits Window {
                                     image: row.image;
                                     status: row.status;
                                     is_running: row.is_running;
+                                    toggle => { AppActions.container_toggle(row.id); }
+                                    restart => { AppActions.container_restart(row.id); }
+                                    remove => { AppActions.container_remove(row.id); }
                                 }
                             }
                         }
@@ -234,6 +159,7 @@ export component MainWindow inherits Window {
                                     tag: row.tag;
                                     size: row.size;
                                     containers: row.containers;
+                                    remove => { AppActions.image_remove(row.id); }
                                 }
                             }
                         }
@@ -279,109 +205,18 @@ export component MainWindow inherits Window {
         }
     }
 
-    // —— Pull 弹窗 ——
-    if root.pull_open: Rectangle {
-        background: rgba(0,0,0,0.5);
-        TouchArea {
-            width: 100%;
-            height: 100%;
-            clicked => { root.pull_close(); }
-        }
-        Rectangle {
-            x: (root.width - 360px) / 2;
-            y: (root.height - 160px) / 2;
-            width: 360px;
-            height: 160px;
-            background: #2a2a3a;
-        }
-        VerticalBox {
-            x: (root.width - 360px) / 2 + 16px;
-            y: (root.height - 160px) / 2 + 16px;
-            width: 328px;
-            spacing: 12px;
-
-            Text {
-                text: "拉取镜像";
-                font-size: 16px;
-                font-weight: 700;
-            }
-            LineEdit {
-                placeholder-text: "nginx:latest";
-                text <=> root.pull_input;
-                enabled: !root.pull_busy;
-                accepted => { root.pull_submit(root.pull_input); }
-            }
-            HorizontalBox {
-                Button {
-                    text: "取消";
-                    enabled: !root.pull_busy;
-                    clicked => { root.pull_close(); }
-                }
-                HorizontalLayout { }
-                Button {
-                    text: root.pull_busy ? "拉取中..." : "开始拉取";
-                    enabled: !root.pull_busy;
-                    clicked => { root.pull_submit(root.pull_input); }
-                }
-            }
-        }
+    // —— 弹窗层（条件渲染）——
+    if root.pull_open: PullDialog {
+        input <=> root.pull_input;
+        busy <=> root.pull_busy;
+        close => { root.pull_close(); }
+        submit(val) => { root.pull_submit(val); }
     }
-
-    // —— Cleanup 弹窗 ——
-    if root.cleanup_open: Rectangle {
-        background: rgba(0,0,0,0.5);
-        TouchArea {
-            width: 100%;
-            height: 100%;
-            clicked => { root.cleanup_close(); }
-        }
-        Rectangle {
-            x: (root.width - 320px) / 2;
-            y: (root.height - 200px) / 2;
-            width: 320px;
-            height: 200px;
-            background: #2a2a3a;
-        }
-        VerticalBox {
-            x: (root.width - 320px) / 2 + 16px;
-            y: (root.height - 200px) / 2 + 16px;
-            width: 288px;
-            spacing: 10px;
-
-            Text {
-                text: "清理未使用资源";
-                font-size: 16px;
-                font-weight: 700;
-            }
-            CheckBox {
-                text: "清理停止的容器";
-                checked <=> root.cleanup_stopped;
-            }
-            CheckBox {
-                text: "清理悬空镜像 (dangling)";
-                checked <=> root.cleanup_dangling;
-            }
-            CheckBox {
-                text: "清理所有未使用镜像 (危险!)";
-                checked <=> root.cleanup_unused;
-            }
-            HorizontalBox {
-                Button {
-                    text: "取消";
-                    clicked => { root.cleanup_close(); }
-                }
-                HorizontalLayout { }
-                Button {
-                    text: "执行清理";
-                    clicked => {
-                        root.cleanup_submit(
-                            root.cleanup_stopped,
-                            root.cleanup_dangling,
-                            root.cleanup_unused,
-                        );
-                    }
-                }
-            }
-        }
+    if root.cleanup_open: CleanupDialog {
+        stopped <=> root.cleanup_stopped;
+        dangling <=> root.cleanup_dangling;
+        unused <=> root.cleanup_unused;
+        close => { root.cleanup_close(); }
+        submit(s, d, u) => { root.cleanup_submit(s, d, u); }
     }
 }

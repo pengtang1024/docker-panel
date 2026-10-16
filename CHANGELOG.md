@@ -3,6 +3,12 @@
 本文件记录 Docker Panel 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **镜像详情面板**：点击镜像行 → `inspect_image` → 右侧面板切到第 3 Tab（镜像），显示 RepoTag / 创建时间 / 作者 / 大小 / 平台 / Entrypoint / Cmd / 工作目录 / 暴露端口 / Volumes / Labels / Env 共 14 字段。
+
 ## [0.2.1] - 2026-10-16
 
 ### 新增

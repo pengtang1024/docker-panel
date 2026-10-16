@@ -1,22 +1,10 @@
+// list-area.slint — ListArea（主列表区，不含 TabBar，主视图切换由 Activity Bar 驱动）
 import { Theme } from "theme.slint";
-// list-area.slint — TabBar + ListArea（不引用 app.slint 的任何 global）
 import { ListView, VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
-import { TabItem } from "components.slint";
 import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
 import { ContainerHeader, ImageHeader } from "headers.slint";
 import { NetworkHeader, NetworkRowDelegate, VolumeHeader, VolumeRowDelegate } from "network-views.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
-
-export component TabBar inherits HorizontalBox {
-    spacing: 0px; height: 36px;
-    in-out property <int> active_view: 0;
-
-    TabItem { label: "容器";    active: root.active_view == 0; clicked => { root.active_view = 0; } }
-    TabItem { label: "镜像";    active: root.active_view == 1; clicked => { root.active_view = 1; } }
-    TabItem { label: "网络";    active: root.active_view == 2; clicked => { root.active_view = 2; } }
-    TabItem { label: "卷";      active: root.active_view == 3; clicked => { root.active_view = 3; } }
-    HorizontalLayout { }
-}
 
 export component ListArea inherits Rectangle {
     in-out property <int> active_view: 0;
@@ -26,7 +14,7 @@ export component ListArea inherits Rectangle {
     in-out property <[VolumeRow]> volume_rows: [];
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: false;
-    // callback 注入点（由 app.slint 的 AppActions 实现）
+
     callback container_click(string);
     callback container_toggle(string);
     callback container_restart(string);
@@ -46,7 +34,7 @@ export component ListArea inherits Rectangle {
             sort_desc <=> root.sort_desc;
             sort(f) => { root.container_sort(f); }
         }
-        ScrollView { width: parent.width; height: parent.height - 36px;
+        ScrollView { width: parent.width; height: parent.height - 32px;
             ListView { width: parent.width;
                 for row in root.container_rows: ContainerRowDelegate {
                     width: parent.width; row_id: row.id; short_id: row.short_id;
@@ -70,7 +58,7 @@ export component ListArea inherits Rectangle {
     if active_view == 1: VerticalBox {
         width: parent.width; height: parent.height; spacing: 0px;
         ImageHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 36px;
+        ScrollView { width: parent.width; height: parent.height - 32px;
             ListView { width: parent.width;
                 for row in root.image_rows: ImageRowDelegate {
                     width: parent.width; row_id: row.id; short_id: row.short_id;
@@ -86,7 +74,7 @@ export component ListArea inherits Rectangle {
     if active_view == 2: VerticalBox {
         width: parent.width; height: parent.height; spacing: 0px;
         NetworkHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 36px;
+        ScrollView { width: parent.width; height: parent.height - 32px;
             ListView { width: parent.width;
                 for row in root.network_rows: NetworkRowDelegate {
                     width: parent.width; short_id: row.short_id; name: row.name;
@@ -99,8 +87,8 @@ export component ListArea inherits Rectangle {
     if active_view == 3: VerticalBox {
         width: parent.width; height: parent.height; spacing: 0px;
         VolumeHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 36px;
-            ListView { width: parent.width;
+        ScrollView { width: parent.width; height: parent.height - 32px;
+            ListView { width: parent.width; height: parent.height - 32px;
                 for row in root.volume_rows: VolumeRowDelegate {
                     width: parent.width; name: row.name; driver: row.driver;
                     mountpoint: row.mountpoint;

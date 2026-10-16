@@ -1,11 +1,12 @@
-// app.slint — Docker Panel 主骨架
+// app.slint — Docker Panel 主骨架 v2（Activity Bar 三栏布局）
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { TopBar, ToolBar, StatusBar } from "panes.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
 import { DetailLogPanel } from "detail-log-panel.slint";
 import { BatchBar } from "batch-bar.slint";
-import { TabBar, ListArea } from "list-area.slint";
+import { ListArea } from "list-area.slint";
+import { ActivityBar, FlatButton, IconButton, StatusChip, SearchInput, TabItem, SectionHeader } from "components.slint";
 import { ContainerRow, ImageRow, LogLineRow, NetworkRow, VolumeRow } from "models.slint";
 
 export global AppActions {
@@ -18,7 +19,6 @@ export global AppActions {
     callback container_toggle_select(string);
     callback image_select(string);
     callback image_remove(string);
-    // 批量操作（遍历 selected_ids）
     callback batch_start();
     callback batch_stop();
     callback batch_restart();
@@ -68,7 +68,6 @@ export component MainWindow inherits Window {
     in-out property <bool> cleanup_stopped: true;
     in-out property <bool> cleanup_dangling: true;
     in-out property <bool> cleanup_unused: false;
-    // —— 镜像详情属性 ——
     in-out property <string> i_short_id: "";
     in-out property <string> i_repo_tags: "";
     in-out property <string> i_created: "";
@@ -93,66 +92,89 @@ export component MainWindow inherits Window {
     callback cleanup_submit(bool, bool, bool);
     callback cleanup_close();
 
+    // —— 全屏背景 ——
     Rectangle { background: Theme.bg-root; width: parent.width; height: parent.height; }
 
-    Rectangle {
+    // —— 左侧 Activity Bar (48px) ——
+    ActivityBar {
         x: 0px; y: 0px;
-        width: parent.width - root.right_pane_width;
-        height: parent.height; background: Theme.bg-root;
-        VerticalBox { spacing: 0px; width: parent.width; height: parent.height;
-            Rectangle { background: Theme.bg-card; width: parent.width; height: 48px;
-                TopBar { docker_ok <=> root.docker_ok;
-                    refresh => { root.refresh_requested(); }
-                    search(val) => { root.search_accepted(val); } } }
-            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
-            TabBar { active_view <=> root.active_view; }
-            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
-            ListArea {
-                width: parent.width;
-                height: parent.height - 48px - 36px - 36px - 28px - 4px;
-                active_view <=> root.active_view;
-                sort_field <=> root.sort_field;
-                sort_desc <=> root.sort_desc;
-                container_rows <=> root.container_rows;
-                image_rows <=> root.image_rows;
-                network_rows <=> root.network_rows;
-                volume_rows <=> root.volume_rows;
-                container_click(id) => { AppActions.container_select(id); }
-                container_toggle(id) => { AppActions.container_toggle(id); }
-                container_restart(id) => { AppActions.container_restart(id); }
-                container_logs(id) => { AppActions.container_logs(id); }
-                container_remove(id) => { AppActions.container_remove(id); }
-                container_sort(f) => { AppActions.container_sort(f); }
-                container_toggle_select(id) => { AppActions.container_toggle_select(id); }
-                image_click(id) => { AppActions.image_select(id); }
-                image_remove(id) => { AppActions.image_remove(id); }
-            }
-            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
-            // —— 批量操作浮动栏（选了容器才显示，视觉与 ToolBar 一致）——
-            if root.active_view == 0 && root.batch_selected_count > 0: Rectangle {
-                background: Theme.bg-card; width: parent.width; height: 36px;
-                BatchBar {
-                    width: parent.width; height: parent.height;
-                    selected_count <=> root.batch_selected_count;
-                    batch_start => { AppActions.batch_start(); }
-                    batch_stop => { AppActions.batch_stop(); }
-                    batch_restart => { AppActions.batch_restart(); }
-                    batch_remove => { AppActions.batch_remove(); }
-                    batch_clear => { AppActions.batch_clear(); }
-                }
-            }
-            Rectangle { background: Theme.bg-card; width: parent.width; height: 40px;
-                ToolBar { stop_all => { root.stop_all_requested(); }
-                    pull_requested => { root.pull_requested(); }
-                    cleanup_requested => { root.cleanup_requested(); } } }
-            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
-            Rectangle { background: Theme.bg-root; width: parent.width; height: 28px;
-                StatusBar { status_text <=> root.status_text;
-                    container_count <=> root.container_count;
-                    image_count <=> root.image_count; } }
-        }
+        width: 48px; height: parent.height;
+        active_view <=> root.active_view;
+        clicked(idx) => { root.active_view = idx; }
     }
 
+    // —— 主区域：ActivityBar 右侧 | 右侧 Detail 面板左侧 ——
+    Rectangle {
+        x: 48px; y: 0px;
+        width: parent.width - 48px - root.right_pane_width;
+        height: parent.height; background: Theme.bg-root;
+
+        // TopBar (48px)
+        Rectangle { background: Theme.bg-card; width: parent.width; height: 48px;
+            TopBar { docker_ok <=> root.docker_ok;
+                refresh => { root.refresh_requested(); }
+                search(val) => { root.search_accepted(val); } } }
+        Rectangle { background: Theme.divider; width: parent.width; height: 1px;
+            y: 48px; }
+
+        // 列表 + ToolBar + StatusBar 垂直堆叠
+        // ListArea 高度 = parent.height - TopBar(48) - ToolBar(36) - BatchBar(36, 可选) - StatusBar(28) - divider(3)
+        ListArea {
+            x: 0; y: 49px;
+            width: parent.width;
+            height: parent.height - 49px - 36px - (root.active_view == 0 && root.batch_selected_count > 0 ? 36px : 0px) - 28px - 2px;
+            active_view <=> root.active_view;
+            sort_field <=> root.sort_field;
+            sort_desc <=> root.sort_desc;
+            container_rows <=> root.container_rows;
+            image_rows <=> root.image_rows;
+            network_rows <=> root.network_rows;
+            volume_rows <=> root.volume_rows;
+            container_click(id) => { AppActions.container_select(id); }
+            container_toggle(id) => { AppActions.container_toggle(id); }
+            container_restart(id) => { AppActions.container_restart(id); }
+            container_logs(id) => { AppActions.container_logs(id); }
+            container_remove(id) => { AppActions.container_remove(id); }
+            container_sort(f) => { AppActions.container_sort(f); }
+            container_toggle_select(id) => { AppActions.container_toggle_select(id); }
+            image_click(id) => { AppActions.image_select(id); }
+            image_remove(id) => { AppActions.image_remove(id); }
+        }
+
+        // BatchBar（选了容器 + 容器 Tab 才显示）
+        if root.active_view == 0 && root.batch_selected_count > 0: Rectangle {
+            background: Theme.bg-card;
+            width: parent.width; height: 36px;
+            y: parent.height - 28px - 36px - 2px;
+            BatchBar {
+                width: parent.width; height: parent.height;
+                selected_count <=> root.batch_selected_count;
+                batch_start => { AppActions.batch_start(); }
+                batch_stop => { AppActions.batch_stop(); }
+                batch_restart => { AppActions.batch_restart(); }
+                batch_remove => { AppActions.batch_remove(); }
+                batch_clear => { AppActions.batch_clear(); }
+            }
+        }
+
+        // ToolBar
+        Rectangle { background: Theme.bg-card; width: parent.width; height: 36px;
+            y: parent.height - 28px - 36px - 1px;
+            ToolBar { stop_all => { root.stop_all_requested(); }
+                pull_requested => { root.pull_requested(); }
+                cleanup_requested => { root.cleanup_requested(); } } }
+        Rectangle { background: Theme.divider; width: parent.width; height: 1px;
+            y: parent.height - 28px - 1px; }
+
+        // StatusBar
+        Rectangle { background: Theme.bg-root; width: parent.width; height: 28px;
+            y: parent.height - 28px;
+            StatusBar { status_text <=> root.status_text;
+                container_count <=> root.container_count;
+                image_count <=> root.image_count; } }
+    }
+
+    // —— 右侧 DetailLogPanel ——
     DetailLogPanel {
         x: parent.width - root.right_pane_width; y: 0px;
         width: root.right_pane_width; height: parent.height;
@@ -173,6 +195,7 @@ export component MainWindow inherits Window {
         log_lines <=> root.log_lines;
     }
 
+    // —— 弹窗 ——
     if root.pull_open: PullDialog {
         input <=> root.pull_input; busy <=> root.pull_busy;
         close => { root.pull_close(); } submit(val) => { root.pull_submit(val); } }

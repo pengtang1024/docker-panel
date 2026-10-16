@@ -1,6 +1,5 @@
-// components.slint — 统一现代组件皮肤
+// components.slint — 统一现代组件皮肤 v2
 // 所有组件用 Theme 令牌 + 一致的视觉规范
-// 被 panes.slint / list-area.slint / detail-panel.slint 引用
 import { Theme } from "theme.slint";
 import { HorizontalBox, VerticalBox, LineEdit } from "std-widgets.slint";
 
@@ -9,12 +8,13 @@ export component FlatButton inherits Rectangle {
     in-out property <string> text: "";
     in-out property <string> icon: "";
     in-out property <bool> hovered: false;
-
+    in-out property <color> fg_color: Theme.text-secondary;
+    in-out property <color> hover_bg: Theme.bg-hover;
     callback clicked();
 
-    height: 28px;
+    height: 32px;
     border-radius: 6px;
-    background: hovered ? Theme.bg-hover : transparent;
+    background: hovered ? hover_bg : transparent;
 
     TouchArea {
         x: 0; y: 0; width: parent.width; height: parent.height;
@@ -29,23 +29,47 @@ export component FlatButton inherits Rectangle {
         padding-right: Theme.space-2;
         HorizontalLayout { }
         if root.icon != "": Text {
-            text: root.icon; color: Theme.text-secondary; font-size: Theme.text-sm;
+            text: root.icon; color: root.fg_color; font-size: Theme.text-sm;
             height: parent.height; vertical-alignment: center;
         }
         Text {
-            text: root.text; color: Theme.text-secondary; font-size: Theme.text-sm;
+            text: root.text; color: root.fg_color; font-size: Theme.text-sm;
             height: parent.height; vertical-alignment: center;
         }
         HorizontalLayout { }
     }
 }
 
+// ============== IconButton（icon-only 小按钮，用于 ToolBar）==============
+export component IconButton inherits Rectangle {
+    in-out property <string> icon: "";
+    in-out property <bool> hovered: false;
+    callback clicked();
+
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: hovered ? Theme.bg-hover : transparent;
+
+    TouchArea {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        property <bool> h <=> parent.hovered;
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        text: root.icon;
+        color: hovered ? Theme.text-primary : Theme.text-secondary;
+        font-size: Theme.text-sm;
+        height: parent.height; width: parent.width;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+}
+
 // ============== StatusChip（连接状态徽章）==============
 export component StatusChip inherits Rectangle {
     in-out property <bool> online: true;
-    height: 22px;
-    border-radius: 11px;
-
+    height: 26px;
+    border-radius: 13px;
     background: root.online ? rgba(34,197,94,0.15) : rgba(239,68,68,0.15);
 
     HorizontalBox {
@@ -54,8 +78,7 @@ export component StatusChip inherits Rectangle {
         padding-left: Theme.space-2;
         padding-right: Theme.space-2;
         Rectangle {
-            width: 8px; height: 8px;
-            border-radius: 4px;
+            width: 8px; height: 8px; border-radius: 4px;
             background: root.online ? Theme.status-running : Theme.status-error;
         }
         Text {
@@ -72,7 +95,7 @@ export component SearchInput inherits Rectangle {
     in-out property <string> placeholder: "搜索...";
     callback accepted(string);
 
-    height: 30px;
+    height: 36px;
     border-radius: 6px;
     background: Theme.bg-card;
 
@@ -93,14 +116,64 @@ export component SearchInput inherits Rectangle {
     }
 }
 
-// ============== TabItem（自绘 TabBar 单项）==============
+// ============== ActivityItem（Activity Bar 单项 — 必须在 ActivityBar 之前定义）==============
+export component ActivityItem inherits Rectangle {
+    in-out property <string> icon: "";
+    in-out property <string> label: "";
+    in-out property <bool> active: false;
+    in-out property <bool> hovered: false;
+    callback clicked();
+
+    width: 48px; height: 48px;
+    background: active ? Theme.bg-hover : (hovered ? rgba(255,255,255,0.04) : transparent);
+
+    TouchArea {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        property <bool> h <=> parent.hovered;
+        clicked => { root.clicked(); }
+    }
+
+    // accent 左竖条（active 时显示）
+    Rectangle {
+        x: 0; y: 0; width: 2px; height: parent.height;
+        background: Theme.accent;
+        visible: root.active;
+    }
+
+    Text {
+        text: root.icon;
+        color: root.active ? Theme.accent-soft : (root.hovered ? Theme.text-primary : Theme.text-muted);
+        font-size: Theme.text-lg;
+        height: parent.height; width: parent.width;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+}
+
+// ============== ActivityBar（左侧 48px icon 竖排导航栏）==============
+export component ActivityBar inherits Rectangle {
+    in-out property <int> active_view: 0;
+    callback clicked(int);
+
+    width: 48px;
+    background: Theme.bg-card;
+
+    VerticalLayout { }
+
+    ActivityItem { icon: "🐳"; active: root.active_view == 0; clicked => { root.clicked(0); } }
+    ActivityItem { icon: "🖼"; active: root.active_view == 1; clicked => { root.clicked(1); } }
+    ActivityItem { icon: "🌐"; active: root.active_view == 2; clicked => { root.clicked(2); } }
+    ActivityItem { icon: "💾"; active: root.active_view == 3; clicked => { root.clicked(3); } }
+
+    VerticalLayout { }
+}
+
+// ============== TabItem（右侧内部 TabBar 单项 — 自绘 Tab）==============
 export component TabItem inherits Rectangle {
     in-out property <string> label: "";
     in-out property <bool> active: false;
-
     callback clicked();
 
-    height: 36px;
+    height: 32px;
 
     TouchArea {
         x: 0; y: 0; width: parent.width; height: parent.height;
@@ -109,16 +182,15 @@ export component TabItem inherits Rectangle {
 
     Text {
         text: root.label;
-        x: 12px;
         height: parent.height;
         vertical-alignment: center;
-        color: root.active ? Theme.text-primary : Theme.text-muted;
+        color: root.active ? Theme.accent : Theme.text-muted;
         font-weight: root.active ? 700 : 400;
     }
 
     Rectangle {
         background: Theme.accent;
-        width: parent.width; height: 2px;
+        height: 2px;
         y: parent.height - 2px;
         visible: root.active;
     }
@@ -127,18 +199,18 @@ export component TabItem inherits Rectangle {
 // ============== SectionHeader（详情面板分组标题）==============
 export component SectionHeader inherits Rectangle {
     in-out property <string> title: "";
-    height: 22px;
+    height: 20px;
 
     HorizontalBox {
         x: 0; y: 0; width: parent.width; height: parent.height;
         spacing: Theme.space-2;
-        padding-left: Theme.space-1;
-        Rectangle { width: 2px; height: 12px; background: Theme.accent; border-radius: 1px; }
+        padding-left: Theme.space-2;
+        Rectangle { width: 3px; height: 10px; background: Theme.accent; border-radius: 1px; }
         Text {
             text: root.title;
             color: Theme.accent;
             font-size: Theme.text-xs;
-            font-weight: 700;
+            font-weight: 600;
             height: parent.height; vertical-alignment: center;
         }
         HorizontalLayout { }

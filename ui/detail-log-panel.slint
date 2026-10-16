@@ -32,6 +32,7 @@ export component DetailLogPanel inherits Rectangle {
     in-out property <string> d_entry: "";
     in-out property <string> d_cmd: "";
     in-out property <string> d_workdir: "";
+    in-out property <string> d_labels: "";
 
     // —— 日志行 ——
     in-out property <[LogLineRow]> log_lines: [];
@@ -80,7 +81,7 @@ export component DetailLogPanel inherits Rectangle {
         d_exit <=> root.d_exit; d_created <=> root.d_created; d_started <=> root.d_started;
         d_restart <=> root.d_restart; d_netmode <=> root.d_netmode; d_ports <=> root.d_ports;
         d_mounts <=> root.d_mounts; d_networks <=> root.d_networks; d_entry <=> root.d_entry;
-        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir;
+        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir; d_labels <=> root.d_labels;
     }
     if root.active_view == 1: LogPanel {
         x: 0px; y: 37px; width: parent.width; height: parent.height - 37px;

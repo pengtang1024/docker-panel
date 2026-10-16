@@ -45,6 +45,7 @@ export component MainWindow inherits Window {
     in-out property <string> d_entry: "";
     in-out property <string> d_cmd: "";
     in-out property <string> d_workdir: "";
+    in-out property <string> d_labels: "";
     in-out property <[LogLineRow]> log_lines: [];
     in-out property <bool> pull_open: false;
     in-out property <string> pull_input: "";
@@ -114,7 +115,7 @@ export component MainWindow inherits Window {
         d_exit <=> root.d_exit; d_created <=> root.d_created; d_started <=> root.d_started;
         d_restart <=> root.d_restart; d_netmode <=> root.d_netmode; d_ports <=> root.d_ports;
         d_mounts <=> root.d_mounts; d_networks <=> root.d_networks; d_entry <=> root.d_entry;
-        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir;
+        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir; d_labels <=> root.d_labels;
         log_lines <=> root.log_lines;
     }
 

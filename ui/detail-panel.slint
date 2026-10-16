@@ -58,6 +58,9 @@ export component DetailPanel inherits Rectangle {
     in-out property <string> d_cmd: "";
     in-out property <string> d_workdir: "";
 
+    // —— Labels ——
+    in-out property <string> d_labels: "";
+
     VerticalBox {
         spacing: 0px;
         padding: 8px;
@@ -110,6 +113,10 @@ export component DetailPanel inherits Rectangle {
                 DetailRow { label: "入口点"; value: root.d_entry; }
                 DetailRow { label: "命令";   value: root.d_cmd; }
                 DetailRow { label: "工作目录"; value: root.d_workdir; }
+
+                // —— Labels ——
+                Text { text: "Labels"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                DetailRow { label: ""; value: root.d_labels; }
             }
         }
     }

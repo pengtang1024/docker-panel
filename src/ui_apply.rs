@@ -7,9 +7,9 @@ use crate::slint_gen::MainWindow;
 use crate::ui_state::DetailTuple;
 use slint::ModelRc;
 
-/// 把 17 字段元组灌入 DetailPanel
+/// 把 18 字段元组灌入 DetailPanel
 pub fn apply_detail(ui: &MainWindow, t: &DetailTuple) {
-    let (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q) = t;
+    let (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r) = t;
     ui.set_d_name(a.clone());
     ui.set_d_state(b.clone());
     ui.set_d_status(c.clone());
@@ -27,6 +27,7 @@ pub fn apply_detail(ui: &MainWindow, t: &DetailTuple) {
     ui.set_d_entry(o.clone());
     ui.set_d_cmd(p.clone());
     ui.set_d_workdir(q.clone());
+    ui.set_d_labels(r.clone());
 }
 
 /// 把 ModelRc 列表灌入窗口

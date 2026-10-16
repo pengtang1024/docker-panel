@@ -23,23 +23,24 @@ use slint::SharedString;
 
 /// 详情面板 17 个字段的 SharedString 元组
 pub type DetailTuple = (
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
+    SharedString, // d_name
+    SharedString, // d_state
+    SharedString, // d_status
+    SharedString, // d_image
+    SharedString, // d_id
+    SharedString, // d_pid
+    SharedString, // d_exit
+    SharedString, // d_created
+    SharedString, // d_started
+    SharedString, // d_restart
+    SharedString, // d_netmode
+    SharedString, // d_ports
+    SharedString, // d_mounts
+    SharedString, // d_networks
+    SharedString, // d_entry
+    SharedString, // d_cmd
+    SharedString, // d_workdir
+    SharedString, // d_labels
 );
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
@@ -146,11 +147,22 @@ impl AppState {
     /// 锁内调用：把 detail 格式化 17 个 SharedString
     pub fn build_detail_data(&self) -> Option<DetailTuple> {
         let d = self.detail.as_ref()?;
-        let fmt = |list: &[String]| -> String {
+        let fmt_list = |list: &[String]| -> String {
             if list.is_empty() {
                 "—".into()
             } else {
                 list.join(", ")
+            }
+        };
+        let fmt_labels = |labels: &[(String, String)]| -> String {
+            if labels.is_empty() {
+                "—".into()
+            } else {
+                labels
+                    .iter()
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             }
         };
         Some((
@@ -165,12 +177,13 @@ impl AppState {
             SharedString::from(d.started_at.clone()),
             SharedString::from(d.restart_policy.clone()),
             SharedString::from(d.network_mode.clone()),
-            SharedString::from(fmt(&d.ports)),
-            SharedString::from(fmt(&d.mounts)),
-            SharedString::from(fmt(&d.networks)),
+            SharedString::from(fmt_list(&d.ports)),
+            SharedString::from(fmt_list(&d.mounts)),
+            SharedString::from(fmt_list(&d.networks)),
             SharedString::from(d.entrypoint.clone()),
             SharedString::from(d.command.clone()),
             SharedString::from(d.working_dir.clone()),
+            SharedString::from(fmt_labels(&d.labels)),
         ))
     }
 

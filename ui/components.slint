@@ -105,7 +105,7 @@ export component SearchInput inherits Rectangle {
         padding-left: Theme.space-2;
         padding-right: Theme.space-2;
         Text {
-            text: "🔍"; font-size: Theme.text-sm; color: Theme.text-muted;
+            text: "⌕"; font-size: Theme.text-base; color: Theme.text-muted;
             height: parent.height; vertical-alignment: center;
         }
         LineEdit {
@@ -125,7 +125,7 @@ export component ActivityItem inherits Rectangle {
     callback clicked();
 
     width: 48px; height: 48px;
-    background: active ? Theme.bg-hover : (hovered ? rgba(255,255,255,0.04) : transparent);
+    background: active ? Theme.bg-hover : (hovered ? Theme.bg-hover-soft : transparent);
 
     TouchArea {
         x: 0; y: 0; width: parent.width; height: parent.height;
@@ -162,10 +162,10 @@ export component ActivityBar inherits Rectangle {
         spacing: 0px;
 
         VerticalLayout { }
-        ActivityItem { icon: "🐳"; active: root.active_view == 0; clicked => { root.clicked(0); } }
-        ActivityItem { icon: "🖼"; active: root.active_view == 1; clicked => { root.clicked(1); } }
-        ActivityItem { icon: "🌐"; active: root.active_view == 2; clicked => { root.clicked(2); } }
-        ActivityItem { icon: "💾"; active: root.active_view == 3; clicked => { root.clicked(3); } }
+        ActivityItem { icon: "■"; active: root.active_view == 0; clicked => { root.clicked(0); } }
+        ActivityItem { icon: "◆"; active: root.active_view == 1; clicked => { root.clicked(1); } }
+        ActivityItem { icon: "●"; active: root.active_view == 2; clicked => { root.clicked(2); } }
+        ActivityItem { icon: "▲"; active: root.active_view == 3; clicked => { root.clicked(3); } }
         VerticalLayout { }
     }
 }

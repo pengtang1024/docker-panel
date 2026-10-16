@@ -258,7 +258,27 @@ impl AppState {
             // 列表/Detail/Logs：立即更新 state
             match &msg {
                 Msg::Containers(Ok(list)) => {
+                    // ⚠️ 关键：保留旧容器的 stats 数据，避免 3s 列表刷新冲掉 6s stats 写入
+                    let mut old: std::collections::HashMap<String, (f64, u64, u64, u64, u64)> =
+                        self.containers
+                            .iter()
+                            .map(|c| {
+                                (
+                                    c.id.clone(),
+                                    (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx),
+                                )
+                            })
+                            .collect();
                     self.containers = list.clone();
+                    for c in &mut self.containers {
+                        if let Some((cpu, mu, ml, rx, tx)) = old.remove(&c.id) {
+                            c.cpu_percent = cpu;
+                            c.mem_usage = mu;
+                            c.mem_limit = ml;
+                            c.net_rx = rx;
+                            c.net_tx = tx;
+                        }
+                    }
                 }
                 Msg::Images(Ok(list)) => {
                     self.images = list.clone();

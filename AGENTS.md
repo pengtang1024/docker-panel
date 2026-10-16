@@ -26,9 +26,11 @@ dvkit/
 ├── build.rs                # slint_build::compile("app.slint")
 ├── app.slint               # Slint UI 声明（主窗口 + 行 delegate + 弹窗）
 ├── src/
-│   ├── main.rs             # 桥接层：consumer 线程 + 定时刷新 + 回调绑定（~440 行，下一步应拆分）
-│   ├── ui_state.rs         # AppState + SharedState + drain_messages + derive_update + format_bytes
-│   ├── models.rs           # ContainerInfo / ImageInfo / Msg / ResourceSample / ChartPoint / LogEvent
+│   ├── main.rs             # 桥接层：consumer 线程 + 定时刷新 + 入口
+│   ├── callbacks.rs        # UI 回调绑定（所有 Slint 事件 → Docker 操作）
+│   ├── ui_state.rs         # AppState + drain_messages + derive_update + format_bytes
+│   ├── models.rs           # ContainerInfo / ImageInfo / Msg
+│   ├── slint_gen.rs        # slint::include_modules!() 集中入口（避免多文件展开类型不兼容）
 │   └── docker/
 │       ├── mod.rs          # connect() + pub use 重导出
 │       ├── containers.rs   # list_containers / start / stop / restart / remove / sample_container
@@ -76,7 +78,7 @@ dvkit/
 
 ## 代码规范
 
-1. **单文件 ≤ 300 行**——超过必须按职责拆分。`main.rs` 当前 ~440 行，下一步应把回调绑定移到 `callbacks.rs`。
+1. **单文件 ≤ 300 行**——超过必须按职责拆分。main.rs 当前 ~205 行，已拆 callbacks.rs / slint_gen.rs。
 2. **Mutex 锁持有最小化**——任何阻塞操作、跨线程调用、`invoke_from_event_loop` 都必须在 drop lock 之后。
 3. **Receiver 不进 Mutex**——`mpsc::Receiver` 由 consumer 线程独占所有权，绝不能放回 `AppState`。
 4. **命名**：Rust 常规 snake_case / PascalCase；Slint 中全局函数用 `snake_case`，结构体用 `PascalCase`。
@@ -114,8 +116,7 @@ cargo check --all-targets
 - 无行内排序、多选批量、右键菜单
 - 搜索是即时本地过滤（好），但只对名称/ID/镜像/状态做粗粒度匹配
 - 消费者线程 `spawn loop` 无优雅退出通道（channel 关闭才 break，窗口关闭时依赖 OS 回收）
-- `main.rs` 超 300 行，待拆分
-- **README / architecture.md 仍描述 v0.1 egui 版本，必须重写**
+- `docker/images.rs` 内部有 `format_bytes` 函数与 `ui_state.rs` 重复（可考虑提公共 utils）
 
 ## 文档导航
 

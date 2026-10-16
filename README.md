@@ -111,8 +111,11 @@ cargo build --release
 dvkit/
 ├── Cargo.toml              # 依赖与 build profile
 ├── Cargo.lock
-├── build.rs                # slint_build::compile("app.slint")
-├── app.slint               # Slint UI 声明
+├── build.rs                # slint_build::compile("ui/app.slint")
+├── ui/                     # Slint UI 声明
+│   ├── app.slint           # 主骨架 + AppActions + MainWindow
+│   ├── delegates.slint     # 行 delegate（容器/镜像列表项）
+│   └── dialogs.slint       # 弹窗（Pull / Cleanup）
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
 ├── CHANGELOG.md            # 更新日志
 ├── docs/

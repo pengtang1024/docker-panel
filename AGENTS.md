@@ -23,8 +23,11 @@
 dvkit/
 ├── Cargo.toml              # 依赖 & release profile
 ├── Cargo.lock
-├── build.rs                # slint_build::compile("app.slint")
-├── app.slint               # Slint UI 声明（主窗口 + 行 delegate + 弹窗）
+├── build.rs                # slint_build::compile("ui/app.slint")
+├── ui/                     # Slint UI 声明（纯标记，Rust 侧统一通过 slint_gen 引入）
+│   ├── app.slint           # 主骨架：AppActions global + structs + MainWindow
+│   ├── delegates.slint     # ContainerRowDelegate / ImageRowDelegate（callback 属性注入）
+│   └── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
 ├── src/
 │   ├── main.rs             # 桥接层：consumer 线程 + 定时刷新 + 入口
 │   ├── callbacks.rs        # UI 回调绑定（所有 Slint 事件 → Docker 操作）

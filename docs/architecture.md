@@ -13,8 +13,11 @@ main.rs                         桥接层：consumer 线程 + 定时刷新 + 回
 │   ├── containers.rs           列表 / 启停重启删除 / 采样
 │   ├── images.rs               列表 / 拉取（含进度回调闭包）/ 删除
 │   └── system.rs               cleanup prune / follow_logs（v0.2 未暴露日志窗口）
-├── app.slint                   Slint UI 声明：MainWindow + ContainerRowDelegate + ImageRowDelegate + Pull/Cleanup 弹窗
-└── build.rs                    slint_build::compile("app.slint")
+├── ui/
+│   ├── app.slint               Slint 主骨架：AppActions global + structs + MainWindow + import 组装
+│   ├── delegates.slint         行 delegate（ContainerRowDelegate / ImageRowDelegate），callback 属性由 MainWindow 注入
+│   └── dialogs.slint           PullDialog + CleanupDialog 弹窗组件
+└── build.rs                    slint_build::compile("ui/app.slint")
 ```
 
 依赖单向：`main → ui_state / models / docker`；`ui_state` 依赖 `models` 和 `docker` 的列表函数（用于 refresh）；`docker` 是纯 async 层，不反依赖任何上层模块。

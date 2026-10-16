@@ -8,7 +8,6 @@ description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲�
 # Slint：关闭默认 backend，手动选 winit + 软件渲染器，极致轻量
 slint = { version = "1.18.1", default-features = false, features = [
     "std",
-    "compat-1-2",
     "compat-1-18",
     "backend-winit",
     "renderer-software",

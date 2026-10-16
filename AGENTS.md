@@ -18,7 +18,7 @@
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
 | Rust | stable | edition 2021 | — |
-| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
+| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见下方「bollard 0.21 易踩坑速查」 |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
@@ -46,13 +46,13 @@
 | **software-renderer-systemfonts 不打包字体** | 只从系统字体读取字形，没有内嵌 CJK fallback | 依赖系统装了 Noto CJK / 文泉驿 等中文字体 |
 | **`invoke_from_event_loop` 只能在主线程安全调用** | consumer 线程里用 `invoke_from_event_loop` 调度 UI 更新 | 闭包里**绝不**触碰 `Mutex<AppState>`，只读闭包外 clone 的参数 |
 
-#### 1.15+ 引入的严格语法规则（升级必须遵守，旧代码会报错）
+#### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
 
-| 规则 | 旧写法（禁止） | 正确写法 | 来源 |
-|------|---------------|---------|------|
-| **禁止 `!expr` 前缀否定运算符** | `!root.busy`、`if (!root.x)`、`if !root.y:` | `root.busy == false`、`if (root.x == false)`、`if root.y == false:` | 1.15+ 解析器升级（本次升级触发：dialogs.slint 3 处 + delegates.slint 1 处） |
-| **1.18 编译期检测布局循环绑定** | `HorizontalBox { Text { height: parent.height; vertical-alignment: center; } }` — HorizontalBox 高度依赖子元素高度，子元素又依赖父高度 → 隐式循环 | 去掉子元素的 `height: parent.height` + `vertical-alignment`，让 Slint 自动填充布局 | 1.18 changelog：「Binding loops... now detected at compile time instead of panicking at runtime」（本次升级触发：dialogs.slint 的 Header/Footer Row） |
-| **1.18 编译期检测两向绑定循环** | 双向绑定链路形成循环 → 之前运行时 panic | 检查 `<=>` 链路，避免 A `<=>` B `<=>` C `<=>` A | 同 1.18 changelog |
+| 规则 | 旧写法（禁止） | 正确写法 | 验证状态 |
+|------|---------------|---------|----------|
+| **禁止 `!expr` 前缀否定运算符** | `!root.busy`、`if (!root.x)`、`if !root.y:` | `root.busy == false`、`if (root.x == false)`、`if root.y == false:` | ✅ 已全部修复（grep 零匹配） |
+| **1.18 编译期检测布局循环绑定** | `HorizontalBox { Text { height: parent.height; vertical-alignment: center; } }` — 父 HorizontalBox 高度依赖子元素，子元素又 `height: parent.height` 依赖父 → 隐式循环 | 父容器必须有硬值 height，或去掉子元素的 `height: parent.height` + `vertical-alignment` 让 Slint 自动布局 | ✅ 已全部审查：所有 HorizontalBox/VerticalBox 有硬值或子元素不参与循环 |
+| **1.18 编译期检测两向绑定循环** | 双向绑定链路形成循环 → 之前运行时 panic | 检查 `<=>` 链路，避免 A `<=>` B `<=>` C `<=>` A | ✅ 已全部审查 |
 
 ### tokio 1.x 版本关键用法
 

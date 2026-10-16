@@ -26,72 +26,78 @@ export component ListArea inherits Rectangle {
     callback image_remove(string);
     clip: true;
 
-    if active_view == 0: VerticalBox {
-        width: parent.width; height: parent.height; spacing: 0px;
-        ContainerHeader {
-            width: parent.width;
-            sort_field <=> root.sort_field;
-            sort_desc <=> root.sort_desc;
-            sort(f) => { root.container_sort(f); }
-        }
-        ScrollView { width: parent.width; height: parent.height - 32px;
-            ListView { width: parent.width;
-                for row in root.container_rows: ContainerRowDelegate {
-                    width: parent.width; row_id: row.id; short_id: row.short_id;
-                    name: row.name; image: row.image; status: row.status;
-                    is_running: row.is_running; is_selected: row.is_selected;
-                    compose_project: row.compose_project; compose_service: row.compose_service;
-                    is_group_start: row.is_group_start;
-                    cpu_percent: row.cpu_percent; mem_usage: row.mem_usage;
-                    net_traffic: row.net_traffic;
-                    clicked => { root.container_click(row.id); }
-                    toggle => { root.container_toggle(row.id); }
-                    restart => { root.container_restart(row.id); }
-                    logs => { root.container_logs(row.id); }
-                    remove => { root.container_remove(row.id); }
-                    toggle_select => { root.container_toggle_select(row.id); }
+    // 单一直接子元素：VerticalBox 包住所有条件分支
+    VerticalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: 0px;
+
+        if active_view == 0: VerticalBox {
+            width: parent.width; height: parent.height; spacing: 0px;
+            ContainerHeader {
+                width: parent.width;
+                sort_field <=> root.sort_field;
+                sort_desc <=> root.sort_desc;
+                sort(f) => { root.container_sort(f); }
+            }
+            ScrollView { width: parent.width; height: parent.height - 32px;
+                ListView { width: parent.width;
+                    for row in root.container_rows: ContainerRowDelegate {
+                        width: parent.width; row_id: row.id; short_id: row.short_id;
+                        name: row.name; image: row.image; status: row.status;
+                        is_running: row.is_running; is_selected: row.is_selected;
+                        compose_project: row.compose_project; compose_service: row.compose_service;
+                        is_group_start: row.is_group_start;
+                        cpu_percent: row.cpu_percent; mem_usage: row.mem_usage;
+                        net_traffic: row.net_traffic;
+                        clicked => { root.container_click(row.id); }
+                        toggle => { root.container_toggle(row.id); }
+                        restart => { root.container_restart(row.id); }
+                        logs => { root.container_logs(row.id); }
+                        remove => { root.container_remove(row.id); }
+                        toggle_select => { root.container_toggle_select(row.id); }
+                    }
                 }
             }
         }
-    }
 
-    if active_view == 1: VerticalBox {
-        width: parent.width; height: parent.height; spacing: 0px;
-        ImageHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 32px;
-            ListView { width: parent.width;
-                for row in root.image_rows: ImageRowDelegate {
-                    width: parent.width; row_id: row.id; short_id: row.short_id;
-                    name: row.name; tag: row.tag; size: row.size;
-                    containers: row.containers;
-                    clicked => { root.image_click(row.id); }
-                    remove => { root.image_remove(row.id); }
+        if active_view == 1: VerticalBox {
+            width: parent.width; height: parent.height; spacing: 0px;
+            ImageHeader { width: parent.width; }
+            ScrollView { width: parent.width; height: parent.height - 32px;
+                ListView { width: parent.width;
+                    for row in root.image_rows: ImageRowDelegate {
+                        width: parent.width; row_id: row.id; short_id: row.short_id;
+                        name: row.name; tag: row.tag; size: row.size;
+                        containers: row.containers;
+                        clicked => { root.image_click(row.id); }
+                        remove => { root.image_remove(row.id); }
+                    }
                 }
             }
         }
-    }
 
-    if active_view == 2: VerticalBox {
-        width: parent.width; height: parent.height; spacing: 0px;
-        NetworkHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 32px;
-            ListView { width: parent.width;
-                for row in root.network_rows: NetworkRowDelegate {
-                    width: parent.width; short_id: row.short_id; name: row.name;
-                    driver: row.driver; scope: row.scope;
+        if active_view == 2: VerticalBox {
+            width: parent.width; height: parent.height; spacing: 0px;
+            NetworkHeader { width: parent.width; }
+            ScrollView { width: parent.width; height: parent.height - 32px;
+                ListView { width: parent.width;
+                    for row in root.network_rows: NetworkRowDelegate {
+                        width: parent.width; short_id: row.short_id; name: row.name;
+                        driver: row.driver; scope: row.scope;
+                    }
                 }
             }
         }
-    }
 
-    if active_view == 3: VerticalBox {
-        width: parent.width; height: parent.height; spacing: 0px;
-        VolumeHeader { width: parent.width; }
-        ScrollView { width: parent.width; height: parent.height - 32px;
-            ListView { width: parent.width; height: parent.height - 32px;
-                for row in root.volume_rows: VolumeRowDelegate {
-                    width: parent.width; name: row.name; driver: row.driver;
-                    mountpoint: row.mountpoint;
+        if active_view == 3: VerticalBox {
+            width: parent.width; height: parent.height; spacing: 0px;
+            VolumeHeader { width: parent.width; }
+            ScrollView { width: parent.width; height: parent.height - 32px;
+                ListView { width: parent.width; height: parent.height - 32px;
+                    for row in root.volume_rows: VolumeRowDelegate {
+                        width: parent.width; name: row.name; driver: row.driver;
+                        mountpoint: row.mountpoint;
+                    }
                 }
             }
         }

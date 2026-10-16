@@ -157,14 +157,17 @@ export component ActivityBar inherits Rectangle {
     width: 48px;
     background: Theme.bg-card;
 
-    VerticalLayout { }
+    VerticalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: 0px;
 
-    ActivityItem { icon: "🐳"; active: root.active_view == 0; clicked => { root.clicked(0); } }
-    ActivityItem { icon: "🖼"; active: root.active_view == 1; clicked => { root.clicked(1); } }
-    ActivityItem { icon: "🌐"; active: root.active_view == 2; clicked => { root.clicked(2); } }
-    ActivityItem { icon: "💾"; active: root.active_view == 3; clicked => { root.clicked(3); } }
-
-    VerticalLayout { }
+        VerticalLayout { }
+        ActivityItem { icon: "🐳"; active: root.active_view == 0; clicked => { root.clicked(0); } }
+        ActivityItem { icon: "🖼"; active: root.active_view == 1; clicked => { root.clicked(1); } }
+        ActivityItem { icon: "🌐"; active: root.active_view == 2; clicked => { root.clicked(2); } }
+        ActivityItem { icon: "💾"; active: root.active_view == 3; clicked => { root.clicked(3); } }
+        VerticalLayout { }
+    }
 }
 
 // ============== TabItem（右侧内部 TabBar 单项 — 自绘 Tab）==============

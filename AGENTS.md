@@ -250,13 +250,8 @@ rm -rf /tmp/docker-panel-wiki
 
 ## 当前已知限制
 
-- **Slint TabWidget 没有 current-tab property**——点日志按钮时没法编程式切 Tab（只能手动点），可考虑改成条件渲染 `if root.show_logs` 替代
-- **容器行 click callback**——Slint 1.14 delegate 没有内置 MouseArea，需要其他方式实现"点行触发明细"
-- **消费者线程 spawn loop 无优雅退出**——channel 关闭才 break，窗口关闭时依赖 OS 回收
-- **操作完成不立即刷新列表**——等下一个 3s Timer 周期（可接受的简化）
-- **详情面板 labels 没显示**——ContainerDetail.labels 是 `Vec<(String, String)>` 但 DetailPanel 没渲染
-- **无行内排序、多选批量、右键菜单**
-- **搜索只对名称/ID/镜像/状态做粗粒度匹配**
+- **无行内排序、多选批量、右键菜单**（v0.2.0 收敛的功能，后续 phase 再加）
+- **搜索只对名称/ID/镜像/状态做粗粒度匹配**（后续可加 Compose project / 端口）
 
 ## 文档导航
 

@@ -50,7 +50,7 @@ export component PullDialog inherits Rectangle {
                 x: 8px; y: 0; width: parent.width - 16px; height: parent.height;
                 placeholder-text: "镜像名:tag  （如 nginx:latest）";
                 text <=> root.input;
-                enabled: !root.busy;
+                enabled: root.busy == false;
                 accepted => { root.submit(root.input); }
             }
         }

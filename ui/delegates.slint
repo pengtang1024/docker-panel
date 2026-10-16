@@ -79,11 +79,11 @@ export component ContainerRowDelegate inherits Rectangle {
     // —— 分组标题行 ——
     if root.is_group_start: HorizontalBox {
         spacing: Theme.space-3;
-        padding-left: Theme.space-3;
+        padding-left: Theme.space-1;   // 与普通行保持一致起点
         padding-right: Theme.space-3;
         width: parent.width;
         height: parent.height;
-        Text { text: "📁"; font-size: 14px; }
+        Text { text: "📁"; font-size: Theme.text-sm; }
         Text {
             text: "Compose Project: " + root.compose_project;
             color: Theme.accent; font-size: Theme.text-base; font-weight: 700;
@@ -101,6 +101,7 @@ export component ContainerRowDelegate inherits Rectangle {
 
         // 1. CheckBox
         CheckBox {
+            min-width: Theme.col-checkbox;
             checked <=> root.is_selected;
             toggled => { root.toggle_select(); }
         }
@@ -238,8 +239,8 @@ export component ImageRowDelegate inherits Rectangle {
         width: parent.width;
         height: parent.height;
 
-        Text { text: root.short_id; min-width: Theme.col-id; color: Theme.text-faint; font-size: Theme.text-sm; }
-        Text { text: root.name; min-width: 200px; overflow: elide; color: Theme.text-normal; }
+        Text { text: root.short_id; min-width: Theme.col-id;   color: Theme.text-faint; font-size: Theme.text-sm; }
+        Text { text: root.name;     min-width: Theme.col-name; color: Theme.text-normal; overflow: elide; }
         Text { text: ":" + root.tag; color: Theme.accent; min-width: Theme.col-tag; font-size: Theme.text-sm; }
         HorizontalLayout { }
         Text {

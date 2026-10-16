@@ -8,14 +8,24 @@
 //! - consumer 线程：阻塞 recv() → 收到消息后 lock state → drain_messages → 构建 UI rows
 //!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
 
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tokio::runtime::Runtime;
 
 use crate::docker::{inspect_container, list_containers, list_images};
 use crate::models::{ContainerDetail, ContainerInfo, ImageInfo, Msg};
+use crate::slint_gen::MainWindow;
+use slint::SharedString;
+
+/// 详情面板 17 个字段的 SharedString 元组
+pub type DetailTuple = (
+    SharedString, SharedString, SharedString, SharedString, SharedString,
+    SharedString, SharedString, SharedString, SharedString, SharedString,
+    SharedString, SharedString, SharedString, SharedString, SharedString,
+    SharedString, SharedString,
+);
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
@@ -110,12 +120,35 @@ impl AppState {
         });
     }
 
-    pub fn handle_log_line(&mut self, line: String) {
-        self.logs.push(line);
-        if self.logs.len() > self.logs_cap {
-            let excess = self.logs.len() - self.logs_cap;
-            self.logs.drain(0..excess);
-        }
+    /// 锁内调用：把 detail 格式化 17 个 SharedString
+    pub fn build_detail_data(&self) -> Option<DetailTuple> {
+        let d = self.detail.as_ref()?;
+        let fmt = |list: &[String]| -> String {
+            if list.is_empty() {
+                "—".into()
+            } else {
+                list.join(", ")
+            }
+        };
+        Some((
+            SharedString::from(d.name.clone()),
+            SharedString::from(d.state.clone()),
+            SharedString::from(d.status.clone()),
+            SharedString::from(d.image.clone()),
+            SharedString::from(d.id.clone()),
+            SharedString::from(d.pid.to_string()),
+            SharedString::from(d.exit_code.to_string()),
+            SharedString::from(d.created.clone()),
+            SharedString::from(d.started_at.clone()),
+            SharedString::from(d.restart_policy.clone()),
+            SharedString::from(d.network_mode.clone()),
+            SharedString::from(fmt(&d.ports)),
+            SharedString::from(fmt(&d.mounts)),
+            SharedString::from(fmt(&d.networks)),
+            SharedString::from(d.entrypoint.clone()),
+            SharedString::from(d.command.clone()),
+            SharedString::from(d.working_dir.clone()),
+        ))
     }
 
     pub fn clear_logs(&mut self) {
@@ -134,19 +167,37 @@ impl AppState {
     /// 返回的 (need_ui_update, latest_msg) 交给 main.rs 的 pump_and_apply：
     ///   need_ui_update = false → 直接 return，跳过 build rows 和 invoke
     ///   latest_msg      → derive_update() 用它推导 UI 最新意图（状态文案、docker_ok 角标等）
-    pub fn drain_messages(&mut self, rx: &mpsc::Receiver<Msg>, first: Option<Msg>) -> (bool, Option<Msg>) {
+    pub fn drain_messages(
+        &mut self,
+        rx: &mpsc::Receiver<Msg>,
+        first: Option<Msg>,
+    ) -> (bool, Option<Msg>) {
         let mut need_ui_update = false;
         let mut latest_msg: Option<Msg> = None;
 
         if let Some(msg) = first {
-            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg,
-                             &mut self.containers, &mut self.images,
-                             &mut self.detail, &mut self.logs, self.logs_cap);
+            Self::handle_one(
+                msg,
+                &mut need_ui_update,
+                &mut latest_msg,
+                &mut self.containers,
+                &mut self.images,
+                &mut self.detail,
+                &mut self.logs,
+                self.logs_cap,
+            );
         }
         while let Ok(msg) = rx.try_recv() {
-            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg,
-                             &mut self.containers, &mut self.images,
-                             &mut self.detail, &mut self.logs, self.logs_cap);
+            Self::handle_one(
+                msg,
+                &mut need_ui_update,
+                &mut latest_msg,
+                &mut self.containers,
+                &mut self.images,
+                &mut self.detail,
+                &mut self.logs,
+                self.logs_cap,
+            );
         }
         (need_ui_update, latest_msg)
     }
@@ -155,9 +206,16 @@ impl AppState {
     ///
     /// 抽出去的好处：drain_messages 只管"从哪拿消息"，
     /// handle_one 只管"拿到一条怎么改状态"。以后加新 Msg 变体只改这里。
-    fn handle_one(msg: Msg, need_ui_update: &mut bool, latest_msg: &mut Option<Msg>,
-                  containers: &mut Vec<ContainerInfo>, images: &mut Vec<ImageInfo>,
-                  detail: &mut Option<ContainerDetail>, logs: &mut Vec<String>, logs_cap: usize) {
+    fn handle_one(
+        msg: Msg,
+        need_ui_update: &mut bool,
+        latest_msg: &mut Option<Msg>,
+        containers: &mut Vec<ContainerInfo>,
+        images: &mut Vec<ImageInfo>,
+        detail: &mut Option<ContainerDetail>,
+        logs: &mut Vec<String>,
+        logs_cap: usize,
+    ) {
         match &msg {
             Msg::Containers(Ok(list)) => {
                 *containers = list.clone();
@@ -176,7 +234,10 @@ impl AppState {
             Msg::Images(Err(e)) => {
                 *latest_msg = Some(Msg::Images(Err(e.clone())));
             }
-            Msg::ActionDone(_, _) | Msg::PullProgress(_) | Msg::PullDone(_) | Msg::CleanupDone(_) => {
+            Msg::ActionDone(_, _)
+            | Msg::PullProgress(_)
+            | Msg::PullDone(_)
+            | Msg::CleanupDone(_) => {
                 *latest_msg = Some(msg);
                 *need_ui_update = true;
             }
@@ -197,91 +258,6 @@ impl AppState {
                 *need_ui_update = true;
             }
         }
-    }
-}
-
-/// UI 更新意图（从最新消息推导，由 main 负责应用）
-pub struct UiUpdate {
-    pub docker_ok: bool,
-    pub status_text: String,
-    pub close_pull: bool,
-    pub reset_pull_busy: bool,
-}
-
-/// derive_update — 把"最后一条 Msg"翻译成 UI 想知道的状态
-///
-/// 它只看 latest_msg（而不是完整消息流），说明 UI 是"按最新状态渲染"，
-/// 不关心历史过程。ActionDone / PullDone / CleanupDone 的结果都通过
-/// 这里变成 status_text。返回的 UiUpdate 由 main.rs 的 pump_and_apply
-/// 在 invoke_from_event_loop 里一次性应用到 Slint Model。
-pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
-    match latest_msg {
-        Some(Msg::Containers(Ok(_))) => UiUpdate {
-            docker_ok: true,
-            status_text: format!("已加载 {containers_len} 个容器"),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::Containers(Err(e))) => UiUpdate {
-            docker_ok: false,
-            status_text: format!("容器刷新失败: {e}"),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::Images(Err(e))) => UiUpdate {
-            docker_ok: false,
-            status_text: format!("镜像刷新失败: {e}"),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::ActionDone(desc, Ok(_))) => UiUpdate {
-            docker_ok: true,
-            status_text: desc.clone(),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::ActionDone(desc, Err(e))) => UiUpdate {
-            docker_ok: true,
-            status_text: format!("{desc}: {e}"),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::PullProgress(t)) => UiUpdate {
-            docker_ok: true,
-            status_text: t.clone(),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::PullDone(Ok(succ))) => UiUpdate {
-            docker_ok: true,
-            status_text: succ.clone(),
-            close_pull: true,
-            reset_pull_busy: true,
-        },
-        Some(Msg::PullDone(Err(e))) => UiUpdate {
-            docker_ok: true,
-            status_text: format!("拉取失败: {e}"),
-            close_pull: false,
-            reset_pull_busy: true,
-        },
-        Some(Msg::CleanupDone(Ok(succ))) => UiUpdate {
-            docker_ok: true,
-            status_text: succ.clone(),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        Some(Msg::CleanupDone(Err(e))) => UiUpdate {
-            docker_ok: true,
-            status_text: format!("清理失败: {e}"),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
-        _ => UiUpdate {
-            docker_ok: true,
-            status_text: "就绪".into(),
-            close_pull: false,
-            reset_pull_busy: false,
-        },
     }
 }
 

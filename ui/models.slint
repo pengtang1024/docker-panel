@@ -1,6 +1,5 @@
 // —— 数据 struct：Rust ↔ Slint 桥接 ——
-// 这些 struct 定义后，slint_gen.rs 的 include_modules!() 会生成对应的 Rust 类型，
-// 所以不能随便改名或删字段——Rust 侧 main.rs 的 build_container_rows 直接构造它们。
+// 这些 struct 定义后，slint_gen.rs 的 include_modules!() 会生成对应的 Rust 类型。
 
 export struct ContainerRow {
     id: string,
@@ -18,4 +17,8 @@ export struct ImageRow {
     tag: string,
     size: string,
     containers: int,
+}
+
+export struct LogLineRow {
+    text: string,
 }

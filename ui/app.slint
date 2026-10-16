@@ -1,5 +1,5 @@
 // —— app.slint — 应用入口骨架 ——
-// 组装层：MainWindow + AppActions global，import 所有子组件。
+// 组装层：MainWindow + AppActions global + import 所有子组件。
 
 import { ListView, VerticalBox, TabWidget, ScrollView, HorizontalBox } from "std-widgets.slint";
 
@@ -7,7 +7,9 @@ import { TopBar, ToolBar, StatusBar } from "panes.slint";
 import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
 import { ContainerHeader, ImageHeader } from "headers.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow } from "models.slint";
+import { DetailPanel } from "detail-panel.slint";
+import { LogPanel } from "log-panel.slint";
+import { ContainerRow, ImageRow, LogLineRow } from "models.slint";
 
 // ── AppActions global ──────────────────────────────────────
 // 行 delegate 触发 → MainWindow 注入 → callbacks.rs 绑定实现 → Rust 异步
@@ -25,7 +27,7 @@ export component MainWindow inherits Window {
     width: 1100px;
     height: 680px;
 
-    // —— 属性 ——
+    // —— 列表属性 ——
     in-out property <bool> docker_ok: false;
     in-out property <string> status_text: "连接 Docker...";
     in-out property <string> container_count: "0";
@@ -33,7 +35,29 @@ export component MainWindow inherits Window {
     in-out property <[ContainerRow]> container_rows: [];
     in-out property <[ImageRow]> image_rows: [];
 
-    // 弹窗状态
+    // —— 详情面板属性（来自 ContainerDetail）——
+    in-out property <string> d_name: "";
+    in-out property <string> d_state: "";
+    in-out property <string> d_status: "";
+    in-out property <string> d_image: "";
+    in-out property <string> d_id: "";
+    in-out property <string> d_pid: "";
+    in-out property <string> d_exit: "";
+    in-out property <string> d_created: "";
+    in-out property <string> d_started: "";
+    in-out property <string> d_restart: "";
+    in-out property <string> d_netmode: "";
+    in-out property <string> d_ports: "";
+    in-out property <string> d_mounts: "";
+    in-out property <string> d_networks: "";
+    in-out property <string> d_entry: "";
+    in-out property <string> d_cmd: "";
+    in-out property <string> d_workdir: "";
+
+    // —— 日志行 ——
+    in-out property <[LogLineRow]> log_lines: [];
+
+    // —— 弹窗状态 ——
     in-out property <bool> pull_open: false;
     in-out property <string> pull_input: "";
     in-out property <bool> pull_busy: false;
@@ -56,95 +80,124 @@ export component MainWindow inherits Window {
     // —— 深色背景 ——
     Rectangle { background: #1e1e2e; x: 0; y: 0; width: root.width; height: root.height; }
 
-    // —— 主布局：顶栏 → [Tab+工具栏 | 详情面板] → 状态栏 ——
-    HorizontalBox {
+    // —— 左侧主区（Tab + 工具栏 + 状态栏）——
+    VerticalBox {
         spacing: 0px;
-        height: root.height;
+        x: 0px;
+        y: 0px;
+        width: 780px;
+        height: 680px;
 
-        // 左侧主区
         VerticalBox {
-            spacing: 0px;
-            width: root.width - 320px;
+            spacing: 6px;
+            padding: 8px;
+
+            TopBar {
+                docker_ok <=> root.docker_ok;
+                refresh => { root.refresh_requested(); }
+                search(val) => { root.search_accepted(val); }
+            }
 
             VerticalBox {
                 spacing: 6px;
-                padding: 8px;
 
-                // 顶栏
-                TopBar {
-                    docker_ok <=> root.docker_ok;
-                    refresh => { root.refresh_requested(); }
-                    search(val) => { root.search_accepted(val); }
-                }
-
-                VerticalBox {
-                    spacing: 6px;
-
-                    TabWidget {
-                        Tab {
-                            title: "容器";
-                            VerticalBox {
-                                ContainerHeader { }  // 表头
-                                ScrollView {
-                                    ListView {
-                                        for row in root.container_rows: ContainerRowDelegate {
-                                    row_id: row.id;
-                                    short_id: row.short_id;
-                                    name: row.name;
-                                    image: row.image;
-                                    status: row.status;
-                                    is_running: row.is_running;
-                                    toggle => { AppActions.container_toggle(row.id); }
-                                    restart => { AppActions.container_restart(row.id); }
-                                    logs => { AppActions.container_logs(row.id); }
-                                    remove => { AppActions.container_remove(row.id); }
-                                }
-                                    }
-                                }
-                            }
-                        }
-                        Tab {
-                            title: "镜像";
-                            VerticalBox {
-                                ImageHeader { }  // 表头
-                                ScrollView {
-                                    ListView {
-                                        for row in root.image_rows: ImageRowDelegate {
-                                            row_id: row.id;
-                                            short_id: row.short_id;
-                                            name: row.name;
-                                            tag: row.tag;
-                                            size: row.size;
-                                            containers: row.containers;
-                                            remove => { AppActions.image_remove(row.id); }
-                                        }
+                TabWidget {
+                    Tab {
+                        title: "容器";
+                        VerticalBox {
+                            ContainerHeader { }
+                            ScrollView {
+                                ListView {
+                                    for row in root.container_rows: ContainerRowDelegate {
+                                        row_id: row.id;
+                                        short_id: row.short_id;
+                                        name: row.name;
+                                        image: row.image;
+                                        status: row.status;
+                                        is_running: row.is_running;
+                                        toggle => { AppActions.container_toggle(row.id); }
+                                        restart => { AppActions.container_restart(row.id); }
+                                        logs => { AppActions.container_logs(row.id); }
+                                        remove => { AppActions.container_remove(row.id); }
                                     }
                                 }
                             }
                         }
                     }
-
-                    // Tab 下方工具栏
-                    ToolBar {
-                        stop_all => { root.stop_all_requested(); }
-                        pull_requested => { root.pull_requested(); }
-                        cleanup_requested => { root.cleanup_requested(); }
+                    Tab {
+                        title: "镜像";
+                        VerticalBox {
+                            ImageHeader { }
+                            ScrollView {
+                                ListView {
+                                    for row in root.image_rows: ImageRowDelegate {
+                                        row_id: row.id;
+                                        short_id: row.short_id;
+                                        name: row.name;
+                                        tag: row.tag;
+                                        size: row.size;
+                                        containers: row.containers;
+                                        remove => { AppActions.image_remove(row.id); }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
 
-            // 状态栏
-            StatusBar {
-                status_text <=> root.status_text;
-                container_count <=> root.container_count;
-                image_count <=> root.image_count;
+                ToolBar {
+                    stop_all => { root.stop_all_requested(); }
+                    pull_requested => { root.pull_requested(); }
+                    cleanup_requested => { root.cleanup_requested(); }
+                }
             }
         }
 
-        // —— 右侧详情面板占位（Phase 2 填充）——
-        Rectangle {
-            background: #252538;
-            width: 320px;
+        StatusBar {
+            status_text <=> root.status_text;
+            container_count <=> root.container_count;
+            image_count <=> root.image_count;
+        }
+    }
+
+    // —— 右侧：详情 + 日志 TabWidget ——
+    TabWidget {
+        x: 780px;
+        y: 0px;
+        width: 320px;
+        height: 680px;
+
+        Tab {
+            title: "详情";
+            DetailPanel {
+                width: 320px;
+                height: 600px;
+                d_name <=> root.d_name;
+                d_state <=> root.d_state;
+                d_status <=> root.d_status;
+                d_image <=> root.d_image;
+                d_id <=> root.d_id;
+                d_pid <=> root.d_pid;
+                d_exit <=> root.d_exit;
+                d_created <=> root.d_created;
+                d_started <=> root.d_started;
+                d_restart <=> root.d_restart;
+                d_netmode <=> root.d_netmode;
+                d_ports <=> root.d_ports;
+                d_mounts <=> root.d_mounts;
+                d_networks <=> root.d_networks;
+                d_entry <=> root.d_entry;
+                d_cmd <=> root.d_cmd;
+                d_workdir <=> root.d_workdir;
+            }
+        }
+        Tab {
+            title: "日志";
+            LogPanel {
+                width: 320px;
+                height: 600px;
+                log_lines <=> root.log_lines;
+            }
         }
     }
 

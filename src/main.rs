@@ -14,22 +14,25 @@
 //!   （锁持有时间 = drain + build rows，微秒级）
 
 mod callbacks;
+mod callbacks_container;
+mod callbacks_image;
 mod docker;
 mod models;
 mod slint_gen;
+mod ui_apply;
 mod ui_state;
+mod ui_update;
 
 use slint_gen::*;
 
 use std::sync::mpsc::{Receiver, RecvError};
 
-use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, invoke_from_event_loop};
+use slint::{invoke_from_event_loop, ComponentHandle, ModelRc, SharedString, Timer, TimerMode};
 
 use crate::docker::{connect, list_containers, list_images};
 use crate::models::Msg;
-use crate::ui_state::{
-    AppState, SharedState, derive_update, format_bytes, REFRESH_INTERVAL,
-};
+use crate::ui_state::{format_bytes, AppState, SharedState, REFRESH_INTERVAL};
+use crate::ui_update::derive_update;
 
 fn main() {
     // ═══════════════════════════════════════════════════════
@@ -125,7 +128,9 @@ fn main() {
     let pump_and_apply = move |state: &SharedState, rx: &Receiver<Msg>, first: Option<Msg>| {
         let Ok(mut s) = state.lock() else { return };
         let (need_update, latest_msg) = s.drain_messages(rx, first);
-        if !need_update { return; }
+        if !need_update {
+            return;
+        }
 
         // 锁内：构建 rows + 读字段
         let container_rows = build_container_rows(&s);
@@ -135,6 +140,17 @@ fn main() {
         let image_total = s.images.len().to_string();
         let containers_len = s.containers.len();
         let update = derive_update(containers_len, &latest_msg);
+        let detail_data = s.build_detail_data();
+
+        // —— 日志搬运 ——
+        let log_lines: Vec<LogLineRow> = s
+            .logs
+            .iter()
+            .map(|l| LogLineRow {
+                text: SharedString::from(l),
+            })
+            .collect();
+
         drop(s); // ⚠️ 关键：必须在 invoke_from_event_loop 之前释放锁
 
         let ui_w = ui_w_pump.clone();
@@ -142,14 +158,17 @@ fn main() {
             let Some(ui) = ui_w.upgrade() else { return };
             let cm: ModelRc<ContainerRow> = ModelRc::from(container_rows.as_slice());
             let im: ModelRc<ImageRow> = ModelRc::from(image_rows.as_slice());
-            ui.set_container_rows(cm);
-            ui.set_image_rows(im);
+            let lm: ModelRc<LogLineRow> = ModelRc::from(log_lines.as_slice());
+            ui_apply::apply_lists(&ui, cm, im, lm);
             ui.set_container_count(SharedString::from(running_total));
             ui.set_image_count(SharedString::from(image_total));
             ui.set_docker_ok(update.docker_ok);
             ui.set_status_text(SharedString::from(update.status_text));
             if update.reset_pull_busy { ui.set_pull_busy(false); }
             if update.close_pull { ui.set_pull_open(false); }
+            if let Some(ref d) = detail_data {
+                ui_apply::apply_detail(&ui, d);
+            }
         }).ok();
     };
 
@@ -215,10 +234,7 @@ fn main() {
         });
     }
 
-    // Step 4: 初始连接 + 首屏列表
-    //
-    // 锁内取 tx + rt handle → 立刻 drop → spawn 两个并行列表请求
-    // 结果通过 tx.send 送回，consumer 线程稍后会 pump 出来。
+    // Step 4: 初始连接 + 首屏列表 + inspect 第一个容器填充详情面板
     {
         let Ok(s) = state.lock() else {
             return;
@@ -230,8 +246,18 @@ fn main() {
             let _ = connect();
             let c_res = list_containers(true).await;
             let i_res = list_images().await;
+            let first_id = c_res
+                .as_ref()
+                .ok()
+                .and_then(|list| list.first().map(|c| c.id.clone()));
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
+            // 首屏列表到齐后自动 inspect 第一个容器
+            if let Some(id) = first_id {
+                if let Ok(detail) = crate::docker::inspect_container(&id).await {
+                    let _ = tx.send(Msg::ContainerDetail(Ok(detail)));
+                }
+            }
         });
     }
 

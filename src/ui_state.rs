@@ -9,6 +9,7 @@
 //!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -85,6 +86,9 @@ pub struct AppState {
 
     // —— Phase 4 stats 双采样缓冲 ——
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
+
+    // —— 优雅退出 —— consumer 线程定期检查这个 flag
+    pub shutdown: AtomicBool,
 }
 
 impl AppState {
@@ -114,6 +118,7 @@ impl AppState {
             logs: Vec::new(),
             logs_cap: 500,
             stats_prev: HashMap::new(),
+            shutdown: AtomicBool::new(false),
         }));
         (state, rx)
     }

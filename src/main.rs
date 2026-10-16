@@ -26,7 +26,9 @@ mod ui_update;
 
 use slint_gen::*;
 
-use std::sync::mpsc::{Receiver, RecvError};
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use slint::{invoke_from_event_loop, ComponentHandle, ModelRc, SharedString};
@@ -137,12 +139,13 @@ fn main() {
     // ═══════════════════════════════════════════════════════
     // Step 2: 启动 consumer 线程（架构中枢）
     //
-    // 线程循环：
+    // 线程循环（优雅退出版）：
     //   loop {
-    //     pump_c(&state_c, &rx_c, None);      // 先扫积压（锁外）
-    //     match rx_c.recv() {                 // ⚠️ 锁外阻塞！
+    //     pump_c(&state_c, &rx_c, None);              // 扫积压
+    //     match rx_c.recv_timeout(200ms) {            // 定期检查 shutdown
     //       Ok(msg) => pump_c(&state_c, &rx_c, Some(msg));
-    //       Err(RecvError) => break;          // channel 关
+    //       Err(Timeout) => if shutdown.load() { break; }
+    //       Err(Disconnected) => break;               // channel 关
     //     }
     //   }
     //
@@ -150,33 +153,36 @@ fn main() {
     // 从此 main 再也碰不到它——consumer 独占。
     // 这样 consumer 持不持锁永远不影响主线程。
     // ═══════════════════════════════════════════════════════
-    {
+    let consumer_handle: JoinHandle<()> = {
         let state_c = state.clone();
         let rx_c = rx; // 独占所有权，从此再也不进 Mutex
         let pump_c = pump_and_apply.clone();
         std::thread::spawn(move || {
-            let mut first = true;
             loop {
                 // 先扫一次积压（非阻塞，无 first msg）
-                if first {
-                    first = false;
-                }
                 pump_c(&state_c, &rx_c, None);
 
-                // ⚠️ 锁外阻塞！主线程拿 state 锁永远不被这条 recv 卡住
-                match rx_c.recv() {
+                // ⚠️ 锁外阻塞！200ms 超时后检查 shutdown flag
+                match rx_c.recv_timeout(Duration::from_millis(200)) {
                     Ok(msg) => {
                         // 关键：把 recv() 消费走的 msg 作为 first 传下去
                         // drain_messages 会先处理它，再 try_recv 扫剩余积压
                         pump_c(&state_c, &rx_c, Some(msg));
                     }
-                    Err(RecvError) => {
+                    Err(RecvTimeoutError::Timeout) => {
+                        // 定期检查优雅退出 flag
+                        let Ok(s) = state_c.lock() else { break };
+                        if s.shutdown.load(Ordering::Relaxed) {
+                            break;
+                        }
+                    }
+                    Err(RecvTimeoutError::Disconnected) => {
                         break;
                     }
                 }
             }
-        });
-    }
+        })
+    };
 
     // Step 3: 定时刷新 —— 用 tokio interval（比 Slint Timer 更可靠，软件渲染器下也能工作）
     {
@@ -277,4 +283,14 @@ fn main() {
 
     // —— 进入 Slint 主循环 ——
     let _ = ui.run();
+
+    // ═══════════════════════════════════════════════════════
+    // Step 6: 优雅退出
+    //   shutdown flag → consumer 线程的 200ms 超时循环检测到 break
+    //   join consumer（~250ms）→ drop state → Runtime drop（tokio 自动 shutdown）
+    // ═══════════════════════════════════════════════════════
+    if let Ok(s) = state.lock() {
+        s.shutdown.store(true, Ordering::Relaxed);
+    }
+    let _ = consumer_handle.join();
 }

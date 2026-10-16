@@ -5,6 +5,18 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **多选批量操作**：容器列表最左侧加 CheckBox 列，点击切换选中；底部浮动批量栏（选中 >0 时显示）提供"全部启动 / 停止 / 重启 / 删除 / 清除"按钮，视觉与 ToolBar 统一（#1e293b 背景 + std-widgets Button）。
+- **Slint 升级 1.14 → 1.18.1**：slint + slint-build 同步升级到 1.18.1，编译零 breaking change，所有 API 兼容。
+
+### 变更
+
+- **新增 src/batch.rs**：BatchState { selected_ids: HashSet<String> } + purge_dead（清理已删除容器 id 并返回选中数）+ spawn_container_op（批量操作 spawn helper）。
+- **新增 ui/batch-bar.slint**：BatchBar 独立组件，42 行；视觉规范与 ToolBar 完全一致。
+- **AppState 新增 `pub batch: BatchState`**：单字段承载多选状态，避免 ui_state.rs 爆 300 行硬限。
+- **Delegate 视觉调整**：选中行背景 #1e3a5f，未改 Compose 分组行。
+
 ## [0.2.3] - 2026-10-17
 
 ### 新增

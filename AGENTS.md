@@ -18,8 +18,8 @@
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
 | Rust | stable | edition 2021 | — |
-| Slint | **1.14** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.14 版本特有限制」 |
-| slint-build | **1.14** | build-dependency | `slint_build::compile("ui/app.slint")` |
+| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.14 版本特有限制」 |
+| slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见下方「bollard 0.21 易踩坑速查」 |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
@@ -29,9 +29,9 @@
 | 渲染 | — | 纯软件渲染 | 无 Vulkan/GL/WGPU 依赖，deb 包 **不依赖 libgl1** |
 | 构建优化 | — | release profile | `opt-level="z"` + LTO + `codegen-units=1` + `panic="abort"` + strip |
 
-### Slint 1.14 版本特有限制
+### Slint 1.18 已验证的限制
 
-> 这些是 Slint 1.14 版本**实际存在**的 API 缺失 / 行为限制，写 UI 代码时必须绕开，不能假设未来版本有。升级 Slint 版本后重新核对本节。
+> 这些是 Slint 1.18.1 版本已验证仍然存在的 API 缺失 / 行为限制，写 UI 代码时必须绕开。升级 Slint 版本后重新核对本节。
 
 | 限制 | 实际行为 | 必须的替代方案 |
 |------|----------|----------------|
@@ -269,7 +269,8 @@ rm -rf /tmp/docker-panel-wiki
 
 ## 当前已知限制
 
-- **无行内排序、多选批量、右键菜单**（v0.2.0 收敛的功能，后续 phase 再加）
+- **无快捷键、无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
+- **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
 
 ## 文档导航
 

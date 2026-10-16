@@ -1,6 +1,6 @@
 # Git Flow 协作规范
 
-Docker Panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching-model/) 分支模型。
+dvkit 采用 [git flow](https://nvie.com/posts/a-successful-git-branching-model/) 分支模型。
 本文档记录具体约定，任何改动分支拓扑的操作都以此为准。
 
 ## 分支模型

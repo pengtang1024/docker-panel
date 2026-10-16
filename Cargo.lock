@@ -865,19 +865,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "docker-panel"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "bollard",
- "futures",
- "serde_json",
- "slint",
- "slint-build",
- "tokio",
-]
-
-[[package]]
 name = "document-features"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -943,6 +930,19 @@ name = "dtor"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edf234dd1594d6dd434a8fb8cada51ddbbc593e40e4a01556a0b31c62da2775b"
+
+[[package]]
+name = "dvkit"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "bollard",
+ "futures",
+ "serde_json",
+ "slint",
+ "slint-build",
+ "tokio",
+]
 
 [[package]]
 name = "either"

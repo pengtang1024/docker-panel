@@ -92,11 +92,13 @@ fn main() {
     let pump_and_apply = move |state: &SharedState, rx: &Receiver<Msg>| {
         let Ok(mut s) = state.lock() else { return };
         let (need_update, latest_msg) = s.drain_messages(rx);
+        eprintln!("[pump] need_update={need_update} latest={:?}", latest_msg.as_ref().map(|m| format!("{:?}", std::mem::discriminant(m))));
         if !need_update { return; }
 
         // 锁内：构建 rows + 读字段
         let container_rows = build_container_rows(&s);
         let image_rows = build_image_rows(&s);
+        eprintln!("[pump] built rows: containers={} images={}", container_rows.len(), image_rows.len());
         let running = s.containers.iter().filter(|c| c.is_running()).count();
         let running_total = format!("{}/{}", running, s.containers.len());
         let image_total = s.images.len().to_string();
@@ -105,8 +107,10 @@ fn main() {
         drop(s); // ⚠️ 关键：必须在 invoke_from_event_loop 之前释放锁
 
         let ui_w = ui_w_pump.clone();
-        invoke_from_event_loop(move || {
-            let Some(ui) = ui_w.upgrade() else { return };
+        let inv = invoke_from_event_loop(move || {
+            let Some(ui) = ui_w.upgrade() else { eprintln!("[pump] upgrade failed!"); return };
+            eprintln!("[pump] invoke UI set: containers={} images={} docker_ok={}", 
+                container_rows.len(), image_rows.len(), update.docker_ok);
             let cm: ModelRc<ContainerRow> = ModelRc::from(container_rows.as_slice());
             let im: ModelRc<ImageRow> = ModelRc::from(image_rows.as_slice());
             ui.set_container_rows(cm);
@@ -117,7 +121,10 @@ fn main() {
             ui.set_status_text(SharedString::from(update.status_text));
             if update.reset_pull_busy { ui.set_pull_busy(false); }
             if update.close_pull { ui.set_pull_open(false); }
-        }).ok();
+        });
+        if let Err(e) = inv {
+            eprintln!("[pump] invoke_from_event_loop failed: {e}");
+        }
     };
 
     // —— consumer 线程：独占 rx，**锁外** 阻塞 recv ——
@@ -125,17 +132,26 @@ fn main() {
         let state_c = state.clone();
         let rx_c = rx; // 独占所有权，从此再也不进 Mutex
         let pump_c = pump_and_apply.clone();
-        std::thread::spawn(move || loop {
-            // 先扫一次积压（非阻塞）
-            let _ = pump_c(&state_c, &rx_c);
-
-            // ⚠️ 锁外阻塞！主线程拿 state 锁永远不被这条 recv 卡住
-            match rx_c.recv() {
-                Ok(_msg) => {
-                    pump_c(&state_c, &rx_c);
+        std::thread::spawn(move || {
+            let mut first = true;
+            loop {
+                // 先扫一次积压（非阻塞）
+                if first {
+                    eprintln!("[consumer] 启动，初始 drain");
+                    first = false;
                 }
-                Err(RecvError) => {
-                    break; // channel 关闭
+                let _ = pump_c(&state_c, &rx_c);
+
+                // ⚠️ 锁外阻塞！主线程拿 state 锁永远不被这条 recv 卡住
+                match rx_c.recv() {
+                    Ok(_msg) => {
+                        eprintln!("[consumer] 收到一条消息");
+                        pump_c(&state_c, &rx_c);
+                    }
+                    Err(RecvError) => {
+                        eprintln!("[consumer] channel 关闭，退出");
+                        break;
+                    }
                 }
             }
         });
@@ -167,18 +183,12 @@ fn main() {
         let tx = s.tx.clone();
         let rt = s.rt.handle().clone();
         drop(s);
-        eprintln!("[docker-panel] 初始任务提交到 tokio...");
         rt.spawn(async move {
-            eprintln!("[docker-panel] tokio 任务开始执行");
             let _ = connect();
-            eprintln!("[docker-panel] connect() 完成");
             let c_res = list_containers(true).await;
-            eprintln!("[docker-panel] list_containers: {}", c_res.as_ref().map(|l| l.len()).unwrap_or(0));
             let i_res = list_images().await;
-            eprintln!("[docker-panel] list_images: {}", i_res.as_ref().map(|l| l.len()).unwrap_or(0));
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
-            eprintln!("[docker-panel] 初始数据已 send → consumer rx");
         });
     }
 

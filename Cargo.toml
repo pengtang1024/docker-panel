@@ -1,5 +1,5 @@
 [package]
-name = "docker-panel"
+name = "dvkit"
 version = "0.2.0"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
@@ -21,7 +21,7 @@ serde_json = "1"
 anyhow = "1"
 
 # 极简 tokio：单线程运行时（current_thread）减少资源占用
-tokio = { version = "1", default-features = false, features = ["rt", "macros", "time", "sync"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "rt"] }
 
 [build-dependencies]
 slint-build = "1.14"

@@ -1,31 +1,32 @@
 import { Theme } from "theme.slint";
-// —— 详情面板 ——
-// 展示 AppState.detail（ContainerDetail）的所有字段。
-// 每次 inspect 结果到达 → pump_and_apply 更新 in-out 属性 → 面板刷新。
-
+import { SectionHeader } from "components.slint";
 import { VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
 
-export component DetailRow inherits HorizontalBox {
+// —— 详情面板 ——
+
+export component DetailRow inherits Rectangle {
     in-out property <string> label: "";
     in-out property <string> value: "";
+    height: 20px;
 
-    spacing: Theme.space-3;
-    padding-left: Theme.space-1;
-    padding-right: Theme.space-1;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    HorizontalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-3;
+        padding: Theme.space-1;
 
-    Text {
-        text: root.label;
-        min-width: 88px;
-        color: #888;
-        font-size: Theme.text-sm;
-    }
-    Text {
-        text: root.value;
-        color: #ddd;
-        font-size: Theme.text-sm;
-        overflow: elide;
+        Text {
+            text: root.label;
+            min-width: 72px;
+            color: Theme.text-faint;
+            font-size: Theme.text-xs;
+            horizontal-alignment: right;
+        }
+        Text {
+            text: root.value;
+            color: Theme.text-normal;
+            font-size: Theme.text-sm;
+            overflow: elide;
+        }
     }
 }
 
@@ -68,53 +69,49 @@ export component DetailPanel inherits Rectangle {
         width: parent.width;
         height: parent.height;
 
+        // 主标题
         Text {
             text: "容器详情";
-            font-size: 14px;
+            font-size: Theme.text-lg;
             font-weight: 700;
-            color: #eee;
+            color: Theme.text-primary;
         }
         VerticalBox {
-            padding-bottom: Theme.space-2;
-            Text { text: root.d_name; font-size: Theme.text-xs; color: Theme.text-muted; }
+            padding-top: Theme.space-1;
+            Text { text: root.d_name; font-size: Theme.text-xs; color: Theme.accent; font-weight: 600; }
         }
-        Rectangle { height: 1px; background: Theme.bg-card; width: parent.width; }
+        Rectangle { height: 1px; background: Theme.divider; width: parent.width; }
 
         ScrollView {
             VerticalBox {
                 spacing: 0px;
                 width: parent.width;
 
-                // —— 基本 ——
-                VerticalBox { padding-top: Theme.space-3; padding-bottom: Theme.space-1; Text { text: "基本信息"; color: Theme.text-secondary; font-size: Theme.text-xs; } }
-                DetailRow { label: "状态";    value: root.d_state; }
-                DetailRow { label: "状态描述"; value: root.d_status; }
-                DetailRow { label: "PID";      value: root.d_pid; }
-                DetailRow { label: "退出码";   value: root.d_exit; }
-                DetailRow { label: "镜像";     value: root.d_image; }
-                DetailRow { label: "ID";       value: root.d_id; }
-                DetailRow { label: "创建时间"; value: root.d_created; }
-                DetailRow { label: "启动时间"; value: root.d_started; }
-                DetailRow { label: "重启策略"; value: root.d_restart; }
-                DetailRow { label: "网络模式"; value: root.d_netmode; }
+                SectionHeader { title: "基本信息"; }
+                DetailRow { label: "状态";       value: root.d_state; }
+                DetailRow { label: "描述";       value: root.d_status; }
+                DetailRow { label: "PID";        value: root.d_pid; }
+                DetailRow { label: "退出码";     value: root.d_exit; }
+                DetailRow { label: "镜像";       value: root.d_image; }
+                DetailRow { label: "ID";         value: root.d_id; }
+                DetailRow { label: "创建";       value: root.d_created; }
+                DetailRow { label: "启动";       value: root.d_started; }
+                DetailRow { label: "重启策略";   value: root.d_restart; }
+                DetailRow { label: "网络模式";   value: root.d_netmode; }
 
-                // —— 网络 ——
-                VerticalBox { padding-top: Theme.space-3; padding-bottom: Theme.space-1; Text { text: "网络 / 端口"; color: Theme.text-secondary; font-size: Theme.text-xs; } }
-                DetailRow { label: "端口";   value: root.d_ports; }
-                DetailRow { label: "网络";   value: root.d_networks; }
+                SectionHeader { title: "网络"; }
+                DetailRow { label: "端口"; value: root.d_ports; }
+                DetailRow { label: "网络"; value: root.d_networks; }
 
-                // —— 挂载 ——
-                VerticalBox { padding-top: Theme.space-3; padding-bottom: Theme.space-1; Text { text: "挂载卷"; color: Theme.text-secondary; font-size: Theme.text-xs; } }
+                SectionHeader { title: "挂载卷"; }
                 DetailRow { label: "挂载"; value: root.d_mounts; }
 
-                // —— 运行 ——
-                VerticalBox { padding-top: Theme.space-3; padding-bottom: Theme.space-1; Text { text: "运行配置"; color: Theme.text-secondary; font-size: Theme.text-xs; } }
+                SectionHeader { title: "运行配置"; }
                 DetailRow { label: "入口点"; value: root.d_entry; }
                 DetailRow { label: "命令";   value: root.d_cmd; }
                 DetailRow { label: "工作目录"; value: root.d_workdir; }
 
-                // —— Labels ——
-                VerticalBox { padding-top: Theme.space-3; padding-bottom: Theme.space-1; Text { text: "Labels"; color: Theme.text-secondary; font-size: Theme.text-xs; } }
+                SectionHeader { title: "Labels"; }
                 DetailRow { label: ""; value: root.d_labels; }
             }
         }

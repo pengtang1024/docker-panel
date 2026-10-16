@@ -1,35 +1,48 @@
 // —— Slint UI 面板组件（顶栏 / 工具栏 / 状态栏）——
-// 每个组件都只声明自己的 in-out 属性 + 回调，不直接依赖 AppActions global。
-// MainWindow 负责把 root.xxx <=> component.xxx 连起来。
-
-import { Button, LineEdit, HorizontalBox } from "std-widgets.slint";
+// 统一使用 components.slint 的现代皮肤组件
+import { SearchInput, FlatButton, StatusChip } from "components.slint";
+import { HorizontalBox } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 
-// —— 顶栏：Logo + Docker 连接状态 + 搜索 + 刷新 ——
+// —— 顶栏：Logo chip + Docker 连接状态 chip + 搜索框 + 刷新按钮 ——
 export component TopBar inherits HorizontalBox {
     in-out property <bool> docker_ok: false;
 
     callback refresh();
     callback search(string);
 
-    spacing: Theme.space-4;
+    spacing: Theme.space-3;
 
-    Text {
-        text: "Docker Panel";
-        font-size: Theme.text-lg;
-        font-weight: 700;
+    // Logo 区（圆角胶囊）
+    Rectangle {
+        height: 32px; border-radius: 6px;
+        background: Theme.bg-card;
+        HorizontalBox {
+            x: 0; y: 0; width: parent.width; height: parent.height;
+            padding-left: Theme.space-3; padding-right: Theme.space-3;
+            Text {
+                text: "🐳 Docker Panel";
+                height: parent.height; vertical-alignment: center;
+                font-size: Theme.text-base; font-weight: 700;
+                color: Theme.text-primary;
+            }
+        }
     }
-    Text {
-        text: root.docker_ok ? "● 已连接" : "○ 未连接";
-        color: root.docker_ok ? Theme.status-running : Theme.status-error;
-    }
+
+    // Docker 连接状态 pill
+    StatusChip { online <=> root.docker_ok; }
+
     HorizontalLayout { }
-    LineEdit {
-        placeholder-text: "搜索...";
-        accepted => { root.search(self.text); }
+
+    // 搜索框（带 🔍 图标前缀 + 圆角）
+    SearchInput {
+        accepted(s) => { root.search(s); }
+        min-width: 200px;
     }
-    Button {
-        text: "↻ 刷新";
+
+    // 刷新按钮
+    FlatButton {
+        text: "刷新"; icon: "↻";
         clicked => { root.refresh(); }
     }
 }
@@ -40,19 +53,19 @@ export component ToolBar inherits HorizontalBox {
     callback pull_requested();
     callback cleanup_requested();
 
-    spacing: Theme.space-3;
+    spacing: Theme.space-2;
     padding-top: Theme.space-1;
 
-    Button {
-        text: "停止全部运行中容器";
+    FlatButton {
+        text: "停止全部"; icon: "⏹";
         clicked => { root.stop_all(); }
     }
-    Button {
-        text: "拉取镜像";
+    FlatButton {
+        text: "拉取镜像"; icon: "⬇";
         clicked => { root.pull_requested(); }
     }
-    Button {
-        text: "清理未使用资源";
+    FlatButton {
+        text: "清理资源"; icon: "🧹";
         clicked => { root.cleanup_requested(); }
     }
     HorizontalLayout { }
@@ -70,12 +83,10 @@ export component StatusBar inherits HorizontalBox {
     padding-top: Theme.space-1;
     padding-bottom: Theme.space-1;
 
-    Text {
-        text: root.status_text;
-    }
+    Text { text: root.status_text; }
     HorizontalLayout { }
     Text {
         text: root.container_count + " 容器  ·  " + root.image_count + " 镜像";
-        color: Theme.text-faint;
+        color: Theme.text-faint; font-size: Theme.text-xs;
     }
 }

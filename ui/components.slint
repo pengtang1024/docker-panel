@@ -1,0 +1,146 @@
+// components.slint — 统一现代组件皮肤
+// 所有组件用 Theme 令牌 + 一致的视觉规范
+// 被 panes.slint / list-area.slint / detail-panel.slint 引用
+import { Theme } from "theme.slint";
+import { HorizontalBox, VerticalBox, LineEdit } from "std-widgets.slint";
+
+// ============== FlatButton（替代 std-widgets Button）==============
+export component FlatButton inherits Rectangle {
+    in-out property <string> text: "";
+    in-out property <string> icon: "";
+    in-out property <bool> hovered: false;
+
+    callback clicked();
+
+    height: 28px;
+    border-radius: 6px;
+    background: hovered ? Theme.bg-hover : transparent;
+
+    TouchArea {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        property <bool> h <=> parent.hovered;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-1;
+        padding-left: Theme.space-2;
+        padding-right: Theme.space-2;
+        HorizontalLayout { }
+        if root.icon != "": Text {
+            text: root.icon; color: Theme.text-secondary; font-size: Theme.text-sm;
+            height: parent.height; vertical-alignment: center;
+        }
+        Text {
+            text: root.text; color: Theme.text-secondary; font-size: Theme.text-sm;
+            height: parent.height; vertical-alignment: center;
+        }
+        HorizontalLayout { }
+    }
+}
+
+// ============== StatusChip（连接状态徽章）==============
+export component StatusChip inherits Rectangle {
+    in-out property <bool> online: true;
+    height: 22px;
+    border-radius: 11px;
+
+    background: root.online ? rgba(34,197,94,0.15) : rgba(239,68,68,0.15);
+
+    HorizontalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-1;
+        padding-left: Theme.space-2;
+        padding-right: Theme.space-2;
+        Rectangle {
+            width: 8px; height: 8px;
+            border-radius: 4px;
+            background: root.online ? Theme.status-running : Theme.status-error;
+        }
+        Text {
+            text: root.online ? "已连接" : "未连接";
+            color: root.online ? Theme.status-running : Theme.status-error;
+            font-size: Theme.text-xs; font-weight: 600;
+            height: parent.height; vertical-alignment: center;
+        }
+    }
+}
+
+// ============== SearchInput（带 🔍 前缀的搜索框）==============
+export component SearchInput inherits Rectangle {
+    in-out property <string> placeholder: "搜索...";
+    callback accepted(string);
+
+    height: 30px;
+    border-radius: 6px;
+    background: Theme.bg-card;
+
+    HorizontalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-1;
+        padding-left: Theme.space-2;
+        padding-right: Theme.space-2;
+        Text {
+            text: "🔍"; font-size: Theme.text-sm; color: Theme.text-muted;
+            height: parent.height; vertical-alignment: center;
+        }
+        LineEdit {
+            width: parent.width - 30px; height: parent.height;
+            placeholder-text: root.placeholder;
+            accepted => { root.accepted(self.text); }
+        }
+    }
+}
+
+// ============== TabItem（自绘 TabBar 单项）==============
+export component TabItem inherits Rectangle {
+    in-out property <string> label: "";
+    in-out property <bool> active: false;
+
+    callback clicked();
+
+    height: 36px;
+
+    TouchArea {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        text: root.label;
+        x: 12px;
+        height: parent.height;
+        vertical-alignment: center;
+        color: root.active ? Theme.text-primary : Theme.text-muted;
+        font-weight: root.active ? 700 : 400;
+    }
+
+    Rectangle {
+        background: Theme.accent;
+        width: parent.width; height: 2px;
+        y: parent.height - 2px;
+        visible: root.active;
+    }
+}
+
+// ============== SectionHeader（详情面板分组标题）==============
+export component SectionHeader inherits Rectangle {
+    in-out property <string> title: "";
+    height: 22px;
+
+    HorizontalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-2;
+        padding-left: Theme.space-1;
+        Rectangle { width: 2px; height: 12px; background: Theme.accent; border-radius: 1px; }
+        Text {
+            text: root.title;
+            color: Theme.accent;
+            font-size: Theme.text-xs;
+            font-weight: 700;
+            height: parent.height; vertical-alignment: center;
+        }
+        HorizontalLayout { }
+    }
+}

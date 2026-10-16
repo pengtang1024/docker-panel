@@ -33,7 +33,7 @@ export component ImageDetailPanel inherits Rectangle {
             width: parent.width - 24px;
 
             // —— 基本信息 ——
-            Text { text: "镜像信息"; color: #aaa; font-size: 11px; padding-top: 4px; padding-bottom: 4px; }
+            VerticalBox { padding-top: 4px; padding-bottom: 4px; Text { text: "镜像信息"; color: #aaa; font-size: 11px; } }
             DetailRow { label: "ID";       value: root.i_short_id; }
             DetailRow { label: "RepoTag";  value: root.i_repo_tags; }
             DetailRow { label: "创建时间"; value: root.i_created; }
@@ -42,7 +42,7 @@ export component ImageDetailPanel inherits Rectangle {
             DetailRow { label: "平台";     value: root.i_platform; }
 
             // —— 运行配置 ——
-            Text { text: "运行配置"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+            VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "运行配置"; color: #aaa; font-size: 11px; } }
             DetailRow { label: "Entrypoint"; value: root.i_entrypoint; }
             DetailRow { label: "Cmd";        value: root.i_cmd; }
             DetailRow { label: "工作目录";   value: root.i_workdir; }
@@ -50,7 +50,7 @@ export component ImageDetailPanel inherits Rectangle {
             DetailRow { label: "Volumes";    value: root.i_volumes; }
 
             // —— 元数据 ——
-            Text { text: "元数据"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+            VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "元数据"; color: #aaa; font-size: 11px; } }
             DetailRow { label: "Labels"; value: root.i_labels; }
             DetailRow { label: "Env";    value: root.i_env; }
         }

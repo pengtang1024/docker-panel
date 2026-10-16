@@ -37,12 +37,16 @@ export component LogPanel inherits Rectangle {
         Rectangle {
             background: #2a2a3a;
             height: 22px;
-            Text {
-                text: "实时日志";
-                font-size: 11px;
-                color: #aaa;
+            HorizontalBox {
                 padding-left: 8px;
-                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+                Text {
+                    text: "实时日志";
+                    font-size: 11px;
+                    color: #aaa;
+                    vertical-alignment: center;
+                }
             }
         }
 

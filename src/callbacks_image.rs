@@ -10,7 +10,22 @@ use crate::ui_state::SharedState;
 pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
 
-    // 镜像删除
+    // —— 镜像行点击 → inspect + 切镜像详情面板 ——
+    {
+        let ui_a = ui.as_weak();
+        let s = state.clone();
+        actions.on_image_select(move |row_id: SharedString| {
+            let name = row_id.to_string();
+            let Some(ui) = ui_a.upgrade() else { return };
+            ui.set_active_view(2); // 切到详情/日志面板的"镜像" Tab
+            ui.set_status_text(SharedString::from(format!("查看镜像 {name}")));
+            if let Ok(mut st) = s.lock() {
+                st.request_image_detail(name);
+            }
+        });
+    }
+
+    // —— 镜像删除 ——
     {
         let ui_a = ui.as_weak();
         let s = state.clone();

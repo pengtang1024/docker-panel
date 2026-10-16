@@ -68,6 +68,7 @@ export component ListArea inherits Rectangle {
     callback container_restart(string);
     callback container_logs(string);
     callback container_remove(string);
+    callback image_click(string);
     callback image_remove(string);
     clip: true;
 
@@ -103,6 +104,7 @@ export component ListArea inherits Rectangle {
                     width: parent.width; row_id: row.id; short_id: row.short_id;
                     name: row.name; tag: row.tag; size: row.size;
                     containers: row.containers;
+                    clicked => { root.image_click(row.id); }
                     remove => { root.image_remove(row.id); }
                 }
             }

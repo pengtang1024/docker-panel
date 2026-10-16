@@ -72,6 +72,9 @@ docker-panel/
 │   ├── detail-panel.slint  # DetailRow + DetailPanel（18 个 in-out 属性 + Labels section）
 │   ├── log-panel.slint     # LogLineDelegate + LogPanel（ListView 滚动）
 │   ├── list-area.slint     # TabBar + ListArea（4 Tab：容器/镜像/网络/卷，callback 注入 AppActions）
+│   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示，视觉与 ToolBar 一致）
+│   ├── theme.slint         # 全局设计令牌（颜色/字号/间距 Slint global out property）
+│   ├── image-detail-panel.slint  # 镜像详情面板（复用 DetailRow）
 │   └── detail-log-panel.slint  # 右侧详情/日志面板（自绘 Tab + 条件渲染）
 │
 ├── src/

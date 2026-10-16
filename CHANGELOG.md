@@ -7,11 +7,13 @@
 
 ### 新增
 
-- **多选批量操作**：容器列表最左侧加 CheckBox 列，点击切换选中；底部浮动批量栏（选中 >0 时显示）提供"全部启动 / 停止 / 重启 / 删除 / 清除"按钮，视觉与 ToolBar 统一（#1e293b 背景 + std-widgets Button）。
-- **Slint 升级 1.14 → 1.18.1**：slint + slint-build 同步升级到 1.18.1，编译零 breaking change，所有 API 兼容。
+- **多选批量操作**：容器列表最左侧加 CheckBox 列，点击切换选中；底部浮动批量栏（选中 >0 时显示）提供"全部启动 / 停止 / 重启 / 删除 / 清除"按钮，视觉与 ToolBar 统一。
+- **Slint 升级 1.14 → 1.18.1**：slint + slint-build 同步升级到 1.18.1，编译零 breaking change，跨文件 global（Theme）可见性修复。
+- **ui/theme.slint 设计令牌系统**：22 种语义色（背景层级 / 文字 / accent / 状态色）+ 4 级字号 + 4 级间距的 Slint global out property，**全项目 10 个 .slint 文件、176 处 Theme.xxx 引用、23 种硬编码颜色清零**。改一处主题全局生效。
 
 ### 变更
 
+- **视觉系统完全统一**：所有颜色/字号/间距引用 Theme 令牌，消除散落硬编码。状态栏 `#888` → `Theme.text-faint`、TopBar 连接状态 `#00c853/#ff5252` → `Theme.status-running/error`。
 - **新增 src/batch.rs**：BatchState { selected_ids: HashSet<String> } + purge_dead（清理已删除容器 id 并返回选中数）+ spawn_container_op（批量操作 spawn helper）。
 - **新增 ui/batch-bar.slint**：BatchBar 独立组件，42 行；视觉规范与 ToolBar 完全一致。
 - **AppState 新增 `pub batch: BatchState`**：单字段承载多选状态，避免 ui_state.rs 爆 300 行硬限。

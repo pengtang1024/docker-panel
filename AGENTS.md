@@ -18,7 +18,7 @@
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
 | Rust | stable | edition 2021 | — |
-| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.14 版本特有限制」 |
+| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见下方「bollard 0.21 易踩坑速查」 |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
@@ -31,18 +31,28 @@
 
 ### Slint 1.18 已验证的限制
 
-> 这些是 Slint 1.18.1 版本已验证仍然存在的 API 缺失 / 行为限制，写 UI 代码时必须绕开。升级 Slint 版本后重新核对本节。
+> 这些是 Slint 1.18.1 版本已验证**仍然存在**的 API 缺失 / 行为限制 / 严格语法规则。
+> 写 Slint 代码时必须遵守，不能假设旧版本兼容。升级 Slint 后重新核对本节。
+
+#### 已知 API 缺失（版本间未修复）
 
 | 限制 | 实际行为 | 必须的替代方案 |
 |------|----------|----------------|
-| **TabWidget 没有 `current-tab` property** | 无法通过 `ui.set_current_tab_index(1)` 编程式切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代 |
+| **TabWidget 没有 `current-tab` property** | 无法通过编程式方法切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代（本项目 `detail-log-panel.slint` 已用自绘 TabBar） |
 | **ListView delegate 没有内置 MouseArea** | 直接点 delegate 的空白区域不会触发点击事件 | 行点击需要在 delegate 内部**手动声明 `callback` 属性** + 在 app.slint 注入实现 |
 | **delegate 不能直接 import AppActions global** | Slint 跨文件 global 可见性有坑，Rust 侧 glob import 兼容性问题 | delegate 只声明 `callback xxx(string);`，由 app.slint 的 ListView 循环里 `xxx => { AppActions.container_toggle(row.id); }` 注入实现 |
 | **TabWidget 子组件不继承 parent 尺寸** | Tab 容器不给子组件自动传 width/height | 实例化处**硬设** `width: 320px; height: 600px;` |
-| **`include_modules!()` 用法** | 在一个 .rs 文件（`slint_gen.rs`）里统一展开一次，其他模块 `use crate::slint_gen::*` | 不要在多个 .rs 里重复写 `include_modules!()` |
+| **`include_modules!()` 用法** | 在一个 .rs 文件（`slint_gen.rs`）里统一展开一次 | 不要在多个 .rs 里重复写 `include_modules!()` |
 | **software-renderer-systemfonts 不打包字体** | 只从系统字体读取字形，没有内嵌 CJK fallback | 依赖系统装了 Noto CJK / 文泉驿 等中文字体 |
-| **不支持 `TextInput` 的光标定位** | Slint 1.14 的 TextInput 是简化版，不支持编程式光标移动 | 只读展示用普通 `Text`，需要编辑时才用 `TextInput` |
 | **`invoke_from_event_loop` 只能在主线程安全调用** | consumer 线程里用 `invoke_from_event_loop` 调度 UI 更新 | 闭包里**绝不**触碰 `Mutex<AppState>`，只读闭包外 clone 的参数 |
+
+#### 1.15+ 引入的严格语法规则（升级必须遵守，旧代码会报错）
+
+| 规则 | 旧写法（禁止） | 正确写法 | 来源 |
+|------|---------------|---------|------|
+| **禁止 `!expr` 前缀否定运算符** | `!root.busy`、`if (!root.x)`、`if !root.y:` | `root.busy == false`、`if (root.x == false)`、`if root.y == false:` | 1.15+ 解析器升级（本次升级触发：dialogs.slint 3 处 + delegates.slint 1 处） |
+| **1.18 编译期检测布局循环绑定** | `HorizontalBox { Text { height: parent.height; vertical-alignment: center; } }` — HorizontalBox 高度依赖子元素高度，子元素又依赖父高度 → 隐式循环 | 去掉子元素的 `height: parent.height` + `vertical-alignment`，让 Slint 自动填充布局 | 1.18 changelog：「Binding loops... now detected at compile time instead of panicking at runtime」（本次升级触发：dialogs.slint 的 Header/Footer Row） |
+| **1.18 编译期检测两向绑定循环** | 双向绑定链路形成循环 → 之前运行时 panic | 检查 `<=>` 链路，避免 A `<=>` B `<=>` C `<=>` A | 同 1.18 changelog |
 
 ### tokio 1.x 版本关键用法
 

@@ -92,7 +92,7 @@ export component ContainerRowDelegate inherits Rectangle {
     }
 
     // —— 普通容器行（10 列与 header 严格对齐）——
-    if !root.is_group_start: HorizontalBox {
+    if root.is_group_start == false: HorizontalBox {
         spacing: Theme.space-3;
         padding-left: Theme.space-1;    // 与 header padding-left: space-1 对齐
         padding-right: Theme.space-3;

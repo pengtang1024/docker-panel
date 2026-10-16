@@ -1,9 +1,9 @@
+// detail-panel.slint — 右侧详情面板（卡片化分组）
 import { Theme } from "theme.slint";
 import { SectionHeader } from "components.slint";
 import { VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
 
-// —— 详情面板 ——
-
+// —— 详情行：label + value ——
 export component DetailRow inherits Rectangle {
     in-out property <string> label: "";
     in-out property <string> value: "";
@@ -12,11 +12,11 @@ export component DetailRow inherits Rectangle {
     HorizontalBox {
         x: 0; y: 0; width: parent.width; height: parent.height;
         spacing: Theme.space-3;
-        padding: Theme.space-1;
-
+        padding-left: Theme.space-2;
+        padding-right: Theme.space-2;
         Text {
             text: root.label;
-            min-width: 72px;
+            min-width: 64px;
             color: Theme.text-faint;
             font-size: Theme.text-xs;
             horizontal-alignment: right;
@@ -24,9 +24,30 @@ export component DetailRow inherits Rectangle {
         Text {
             text: root.value;
             color: Theme.text-normal;
-            font-size: Theme.text-sm;
+            font-size: Theme.text-xs;
             overflow: elide;
         }
+    }
+}
+
+// —— 详情分组卡片：SectionHeader + DetailRow 列表 ——
+export component DetailSection inherits Rectangle {
+    in-out property <string> title: "";
+    in-out property <int> num_rows: 0;
+
+    height: 100px; // 占位，实际由内部 ScrollView 撑满
+
+    background: Theme.bg-card;
+    border-radius: 8px;
+
+    VerticalBox {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        spacing: Theme.space-1;
+        padding-left: Theme.space-2;
+        padding-right: Theme.space-2;
+        padding-top: Theme.space-2;
+        padding-bottom: Theme.space-2;
+        SectionHeader { title: root.title; width: parent.width; }
     }
 }
 
@@ -69,50 +90,115 @@ export component DetailPanel inherits Rectangle {
         width: parent.width;
         height: parent.height;
 
-        // 主标题
-        Text {
-            text: "容器详情";
-            font-size: Theme.text-lg;
-            font-weight: 700;
-            color: Theme.text-primary;
-        }
+        // 主标题区
         VerticalBox {
-            padding-top: Theme.space-1;
-            Text { text: root.d_name; font-size: Theme.text-xs; color: Theme.accent; font-weight: 600; }
+            spacing: 0px;
+            width: parent.width;
+
+            Text {
+                text: "容器详情";
+                font-size: Theme.text-lg;
+                font-weight: 700;
+                color: Theme.text-primary;
+            }
+            Text {
+                text: root.d_name;
+                font-size: Theme.text-xs;
+                color: Theme.accent;
+                font-weight: 600;
+            }
         }
-        Rectangle { height: 1px; background: Theme.divider; width: parent.width; }
 
         ScrollView {
+            width: parent.width;
+            height: parent.height - 52px;
             VerticalBox {
-                spacing: 0px;
+                spacing: Theme.space-2;
                 width: parent.width;
 
-                SectionHeader { title: "基本信息"; }
-                DetailRow { label: "状态";       value: root.d_state; }
-                DetailRow { label: "描述";       value: root.d_status; }
-                DetailRow { label: "PID";        value: root.d_pid; }
-                DetailRow { label: "退出码";     value: root.d_exit; }
-                DetailRow { label: "镜像";       value: root.d_image; }
-                DetailRow { label: "ID";         value: root.d_id; }
-                DetailRow { label: "创建";       value: root.d_created; }
-                DetailRow { label: "启动";       value: root.d_started; }
-                DetailRow { label: "重启策略";   value: root.d_restart; }
-                DetailRow { label: "网络模式";   value: root.d_netmode; }
+                // —— 卡片 1：基本信息 ——
+                Rectangle {
+                    width: parent.width;
+                    background: Theme.bg-card;
+                    border-radius: 8px;
+                    VerticalBox {
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+                        spacing: 0px;
+                        padding: Theme.space-2;
+                        SectionHeader { title: "基本信息"; width: parent.width; }
+                        DetailRow { label: "状态";     value: root.d_state; }
+                        DetailRow { label: "描述";     value: root.d_status; }
+                        DetailRow { label: "PID";      value: root.d_pid; }
+                        DetailRow { label: "退出码";   value: root.d_exit; }
+                        DetailRow { label: "镜像";     value: root.d_image; }
+                        DetailRow { label: "ID";       value: root.d_id; }
+                        DetailRow { label: "创建";     value: root.d_created; }
+                        DetailRow { label: "启动";     value: root.d_started; }
+                        DetailRow { label: "重启";     value: root.d_restart; }
+                        DetailRow { label: "网络模式"; value: root.d_netmode; }
+                    }
+                }
 
-                SectionHeader { title: "网络"; }
-                DetailRow { label: "端口"; value: root.d_ports; }
-                DetailRow { label: "网络"; value: root.d_networks; }
+                // —— 卡片 2：网络 ——
+                Rectangle {
+                    width: parent.width;
+                    background: Theme.bg-card;
+                    border-radius: 8px;
+                    VerticalBox {
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+                        spacing: 0px;
+                        padding: Theme.space-2;
+                        SectionHeader { title: "网络"; width: parent.width; }
+                        DetailRow { label: "端口"; value: root.d_ports; }
+                        DetailRow { label: "网络"; value: root.d_networks; }
+                    }
+                }
 
-                SectionHeader { title: "挂载卷"; }
-                DetailRow { label: "挂载"; value: root.d_mounts; }
+                // —— 卡片 3：挂载卷 ——
+                Rectangle {
+                    width: parent.width;
+                    background: Theme.bg-card;
+                    border-radius: 8px;
+                    VerticalBox {
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+                        spacing: 0px;
+                        padding: Theme.space-2;
+                        SectionHeader { title: "挂载卷"; width: parent.width; }
+                        DetailRow { label: "挂载"; value: root.d_mounts; }
+                    }
+                }
 
-                SectionHeader { title: "运行配置"; }
-                DetailRow { label: "入口点"; value: root.d_entry; }
-                DetailRow { label: "命令";   value: root.d_cmd; }
-                DetailRow { label: "工作目录"; value: root.d_workdir; }
+                // —— 卡片 4：运行配置 ——
+                Rectangle {
+                    width: parent.width;
+                    background: Theme.bg-card;
+                    border-radius: 8px;
+                    VerticalBox {
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+                        spacing: 0px;
+                        padding: Theme.space-2;
+                        SectionHeader { title: "运行配置"; width: parent.width; }
+                        DetailRow { label: "入口点";   value: root.d_entry; }
+                        DetailRow { label: "命令";     value: root.d_cmd; }
+                        DetailRow { label: "工作目录"; value: root.d_workdir; }
+                    }
+                }
 
-                SectionHeader { title: "Labels"; }
-                DetailRow { label: ""; value: root.d_labels; }
+                // —— 卡片 5：Labels ——
+                Rectangle {
+                    width: parent.width;
+                    background: Theme.bg-card;
+                    border-radius: 8px;
+                    VerticalBox {
+                        x: 0; y: 0; width: parent.width; height: parent.height;
+                        spacing: 0px;
+                        padding: Theme.space-2;
+                        SectionHeader { title: "Labels"; width: parent.width; }
+                        DetailRow { label: ""; value: root.d_labels; }
+                    }
+                }
+
+                VerticalLayout { }
             }
         }
     }

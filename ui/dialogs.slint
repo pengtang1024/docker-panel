@@ -1,92 +1,72 @@
+// dialogs.slint — 自绘弹窗（遮罩 + 居中卡片 + 标题区 + 内容区 + footer 按钮区）
 import { Theme } from "theme.slint";
-// ═══════════════════════════════════════════════════════════
-// dialogs.slint — 遮罩弹窗组件
-//
-// 两个核心设计模式：
-//
-// 1. 条件渲染控制开关（在 MainWindow 底部）
-//
-//      if root.pull_open: PullDialog { ... }
-//
-//    Slint 的 if-instance 条件渲染 = 组件整个节点树创建/销毁，
-//    不是简单的 visible=false。好处：关闭弹窗时内存完全释放；
-//    坏处：重新打开时组件会重建（state 重置）。
-//    所以弹窗状态（pull_input、pull_busy、三个 checkbox）存在 MainWindow 的 property 上，
-//    通过 `<=>` 双向绑定同步，而不是存在 PullDialog 内部——否则组件销毁重建就丢了。
-//
-// 2. TouchArea 全屏拦截层（⚠️ 必须有）
-//
-//      PullDialog inherits Rectangle {
-//          background: rgba(0,0,0,0.5);
-//          TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
-//          Rectangle { ... 真正的弹窗卡片 ... }
-//      }
-//
-//    弹窗需要一层半透明遮罩 + 点遮罩关闭。但关键点不止于此——
-//    TouchArea 同时**拦截了鼠标事件穿透**。如果不加这层，
-//    弹窗卡片下方的 MainWindow 子组件（ListView、按钮）会继续收到 hover / click，
-//    视觉上弹窗盖着但用户还能操作底下的容器行。TouchArea 全屏铺在最上方，
-//    把所有鼠标事件吃掉（除了它覆盖不到的弹窗卡片区域）。
-//    卡片在 TouchArea 之后声明，z 层级更高，所以卡片上的 Button 正常响应。
-//
-// 这个 TouchArea 模式来自 docker-panel v0.1 的踩坑：曾经用 Rectangle 做遮罩
-// 但不加 TouchArea，结果点击弹窗卡片外的区域穿透到了 ListView，
-// 导致容器行 toggle 被误触发。
-// ═══════════════════════════════════════════════════════════
-
-import { Button, LineEdit, HorizontalBox, VerticalBox, CheckBox } from "std-widgets.slint";
+import { FlatButton } from "components.slint";
+import { LineEdit, HorizontalBox, VerticalBox, CheckBox } from "std-widgets.slint";
 
 // —— 拉取镜像弹窗 ——
 export component PullDialog inherits Rectangle {
     in-out property <string> input: "";
     in-out property <bool> busy: false;
-
     callback close();
     callback submit(string);
 
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.45);
 
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.close(); }
-    }
+    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
 
     Rectangle {
-        x: (root.width - 360px) / 2;
-        y: (root.height - 160px) / 2;
-        width: 360px;
-        height: 160px;
+        x: (root.width - 380px) / 2;
+        y: (root.height - 180px) / 2;
+        width: 380px; height: 180px;
         background: Theme.bg-surface;
+        border-radius: 10px;
     }
 
     VerticalBox {
-        x: (root.width - 360px) / 2 + 16px;
-        y: (root.height - 160px) / 2 + 16px;
-        width: 328px;
-        spacing: Theme.space-4;
+        x: (root.width - 380px) / 2 + 20px;
+        y: (root.height - 180px) / 2 + 16px;
+        width: 340px; height: 148px;
+        spacing: Theme.space-3;
 
-        Text {
-            text: "拉取镜像";
-            font-size: Theme.text-lg;
-            font-weight: 700;
-        }
-        LineEdit {
-            placeholder-text: "nginx:latest";
-            text <=> root.input;
-            enabled: !root.busy;
-            accepted => { root.submit(root.input); }
-        }
         HorizontalBox {
-            Button {
-                text: "取消";
-                enabled: !root.busy;
-                clicked => { root.close(); }
+            width: parent.width; height: 28px;
+            Text {
+                text: "拉取镜像";
+                font-size: Theme.text-lg; font-weight: 700;
+                color: Theme.text-primary;
+                height: parent.height; vertical-alignment: center;
             }
             HorizontalLayout { }
-            Button {
-                text: root.busy ? "拉取中..." : "开始拉取";
+            FlatButton {
+                text: "✕"; height: 24px; width: 28px; fg_color: Theme.text-muted;
+                clicked => { root.close(); }
+            }
+        }
+
+        Rectangle {
+            width: parent.width; height: 40px;
+            background: Theme.bg-card; border-radius: 6px;
+            LineEdit {
+                x: 8px; y: 0; width: parent.width - 16px; height: parent.height;
+                placeholder-text: "镜像名:tag  （如 nginx:latest）";
+                text <=> root.input;
                 enabled: !root.busy;
+                accepted => { root.submit(root.input); }
+            }
+        }
+
+        HorizontalBox {
+            width: parent.width; height: 32px; spacing: Theme.space-2;
+            HorizontalLayout { }
+            FlatButton {
+                text: "取消"; height: 30px; width: 80px;
+                fg_color: Theme.text-muted;
+                clicked => { root.close(); }
+            }
+            FlatButton {
+                text: root.busy ? "拉取中..." : "开始拉取";
+                height: 30px; width: 100px;
+                hover_bg: Theme.accent; fg_color: Theme.bg-root;
                 clicked => { root.submit(root.input); }
             }
         }
@@ -98,60 +78,82 @@ export component CleanupDialog inherits Rectangle {
     in-out property <bool> stopped: true;
     in-out property <bool> dangling: true;
     in-out property <bool> unused: false;
-
     callback close();
     callback submit(bool, bool, bool);
 
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.45);
 
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.close(); }
-    }
+    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
 
     Rectangle {
-        x: (root.width - 320px) / 2;
-        y: (root.height - 200px) / 2;
-        width: 320px;
-        height: 200px;
+        x: (root.width - 380px) / 2;
+        y: (root.height - 240px) / 2;
+        width: 380px; height: 240px;
         background: Theme.bg-surface;
+        border-radius: 10px;
     }
 
     VerticalBox {
-        x: (root.width - 320px) / 2 + 16px;
-        y: (root.height - 200px) / 2 + 16px;
-        width: 288px;
-        spacing: 10px;
+        x: (root.width - 380px) / 2 + 20px;
+        y: (root.height - 240px) / 2 + 16px;
+        width: 340px; height: 208px;
+        spacing: Theme.space-2;
 
-        Text {
-            text: "清理未使用资源";
-            font-size: Theme.text-lg;
-            font-weight: 700;
-        }
-        CheckBox {
-            text: "清理停止的容器";
-            checked <=> root.stopped;
-        }
-        CheckBox {
-            text: "清理悬空镜像 (dangling)";
-            checked <=> root.dangling;
-        }
-        CheckBox {
-            text: "清理所有未使用镜像 (危险!)";
-            checked <=> root.unused;
-        }
         HorizontalBox {
-            Button {
-                text: "取消";
-                clicked => { root.close(); }
+            width: parent.width; height: 28px;
+            Text {
+                text: "清理未使用资源";
+                font-size: Theme.text-lg; font-weight: 700;
+                color: Theme.text-primary;
+                height: parent.height; vertical-alignment: center;
             }
             HorizontalLayout { }
-            Button {
+            FlatButton {
+                text: "✕"; height: 24px; width: 28px; fg_color: Theme.text-muted;
+                clicked => { root.close(); }
+            }
+        }
+
+        Rectangle {
+            width: parent.width; height: 36px;
+            background: Theme.bg-card; border-radius: 6px;
+            CheckBox {
+                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
+                text: "清理停止的容器";
+                checked <=> root.stopped;
+            }
+        }
+        Rectangle {
+            width: parent.width; height: 36px;
+            background: Theme.bg-card; border-radius: 6px;
+            CheckBox {
+                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
+                text: "清理悬空镜像 (dangling)";
+                checked <=> root.dangling;
+            }
+        }
+        Rectangle {
+            width: parent.width; height: 36px;
+            background: Theme.bg-card; border-radius: 6px;
+            CheckBox {
+                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
+                text: "清理所有未使用镜像 (危险!)";
+                checked <=> root.unused;
+            }
+        }
+
+        HorizontalBox {
+            width: parent.width; height: 32px; spacing: Theme.space-2;
+            HorizontalLayout { }
+            FlatButton {
+                text: "取消"; height: 30px; width: 80px; fg_color: Theme.text-muted;
+                clicked => { root.close(); }
+            }
+            FlatButton {
                 text: "执行清理";
-                clicked => {
-                    root.submit(root.stopped, root.dangling, root.unused);
-                }
+                height: 30px; width: 100px;
+                hover_bg: Theme.status-error; fg_color: Theme.bg-root;
+                clicked => { root.submit(root.stopped, root.dangling, root.unused); }
             }
         }
     }

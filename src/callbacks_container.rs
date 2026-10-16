@@ -115,11 +115,28 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         }
     };
 
-    // 容器日志按钮 → inspect + follow_logs
+    // —— 整行点击 → inspect + 切详情面板 ——
     {
+        let ui_a = ui.as_weak();
+        let s = state.clone();
+        actions.on_container_select(move |row_id: SharedString| {
+            let id = row_id.to_string();
+            let Some(ui) = ui_a.upgrade() else { return };
+            // Rust 侧直接切面板 —— 行点击必然看详情
+            ui.set_active_view(0);
+            ui.set_status_text(SharedString::from(format!("查看 {id}")));
+            bind_inspect(&s, id);
+        });
+    }
+
+    // —— 日志按钮 → inspect + follow_logs + 切日志面板 ——
+    {
+        let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_container_logs(move |row_id: SharedString| {
             let id = row_id.to_string();
+            let Some(ui) = ui_a.upgrade() else { return };
+            ui.set_active_view(1); // 🆕 自动切到日志面板
             bind_inspect(&s, id.clone());
             let (rt_handle, tx) = {
                 let Ok(st) = s.lock() else { return };

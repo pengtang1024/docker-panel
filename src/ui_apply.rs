@@ -5,7 +5,7 @@
 
 use crate::slint_gen::MainWindow;
 use crate::ui_state::DetailTuple;
-use slint::{ComponentHandle, ModelRc};
+use slint::ModelRc;
 
 /// 把 17 字段元组灌入 DetailPanel
 pub fn apply_detail(ui: &MainWindow, t: &DetailTuple) {
@@ -34,9 +34,13 @@ pub fn apply_lists(
     ui: &MainWindow,
     cm: ModelRc<crate::slint_gen::ContainerRow>,
     im: ModelRc<crate::slint_gen::ImageRow>,
+    nm: ModelRc<crate::slint_gen::NetworkRow>,
+    vm: ModelRc<crate::slint_gen::VolumeRow>,
     lm: ModelRc<crate::slint_gen::LogLineRow>,
 ) {
     ui.set_container_rows(cm);
     ui.set_image_rows(im);
+    ui.set_network_rows(nm);
+    ui.set_volume_rows(vm);
     ui.set_log_lines(lm);
 }

@@ -114,7 +114,8 @@ impl ImageInfo {
 }
 
 /// 后台任务回传给 GUI 的消息
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Msg {
     /// 容器列表刷新结果
     Containers(Result<Vec<ContainerInfo>, String>),
@@ -132,6 +133,12 @@ pub enum Msg {
     ContainerDetail(Result<ContainerDetail, String>),
     /// 日志流的一行（详情面板日志页签）
     LogLine(String),
+    /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
+    Stats(String, crate::docker::ContainerStatsSnapshot),
+    /// 网络列表
+    Networks(Result<Vec<NetworkInfo>, String>),
+    /// 卷列表
+    Volumes(Result<Vec<VolumeInfo>, String>),
 }
 
 /// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
@@ -160,4 +167,24 @@ pub struct ContainerDetail {
     pub log_path: String,
     pub network_mode: String,
     pub networks: Vec<String>,
+}
+
+/// 网络列表简化视图（网络 Tab 用）
+#[derive(Debug, Clone)]
+pub struct NetworkInfo {
+    pub id: String,
+    pub short_id: String,
+    pub name: String,
+    pub driver: String,
+    pub scope: String,
+    pub containers: usize,
+}
+
+/// 卷列表简化视图（卷 Tab 用）
+#[derive(Debug, Clone)]
+pub struct VolumeInfo {
+    pub name: String,
+    pub driver: String,
+    pub mountpoint: String,
+    pub size: String,
 }

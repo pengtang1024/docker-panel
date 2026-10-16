@@ -79,7 +79,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let labels: Vec<(String, String)> = cfg
         .as_ref()
         .and_then(|c| c.labels.clone())
-        .map(|h| h.into_iter().map(|(k, v)| (k, v)).collect())
+        .map(|h| h.into_iter().collect())
         .unwrap_or_default();
 
     let command = cfg

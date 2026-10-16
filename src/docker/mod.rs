@@ -15,6 +15,8 @@ use bollard::Docker;
 mod containers;
 mod images;
 mod logs;
+mod netvol;
+mod stats;
 mod system;
 
 pub use containers::{
@@ -22,6 +24,8 @@ pub use containers::{
 };
 pub use images::{list_images, pull_image, remove_image};
 pub use logs::{follow_logs, inspect_container};
+pub use netvol::{list_networks, list_volumes};
+pub use stats::{compute_cpu_delta, fetch_stats, ContainerStatsSnapshot};
 pub use system::cleanup;
 
 /// 建立本机 Docker 连接

@@ -8,23 +8,38 @@
 //! - consumer 线程：阻塞 recv() → 收到消息后 lock state → drain_messages → 构建 UI rows
 //!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
 
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tokio::runtime::Runtime;
 
-use crate::docker::{inspect_container, list_containers, list_images};
-use crate::models::{ContainerDetail, ContainerInfo, ImageInfo, Msg};
-use crate::slint_gen::MainWindow;
+use crate::docker::{
+    compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
+};
+use crate::models::{ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, VolumeInfo};
 use slint::SharedString;
 
 /// 详情面板 17 个字段的 SharedString 元组
 pub type DetailTuple = (
-    SharedString, SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
 );
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
@@ -53,6 +68,8 @@ pub struct AppState {
 
     pub containers: Vec<ContainerInfo>,
     pub images: Vec<ImageInfo>,
+    pub networks: Vec<NetworkInfo>,
+    pub volumes: Vec<VolumeInfo>,
 
     pub last_refresh: Instant,
     pub container_query: String,
@@ -64,6 +81,9 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
+
+    // —— Phase 4 stats 双采样缓冲 ——
+    pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 }
 
 impl AppState {
@@ -84,12 +104,15 @@ impl AppState {
             tx,
             containers: Vec::new(),
             images: Vec::new(),
+            networks: Vec::new(),
+            volumes: Vec::new(),
             last_refresh: Instant::now() - Duration::from_secs(10),
             container_query: String::new(),
             image_query: String::new(),
             detail: None,
             logs: Vec::new(),
             logs_cap: 500,
+            stats_prev: HashMap::new(),
         }));
         (state, rx)
     }
@@ -175,89 +198,55 @@ impl AppState {
         let mut need_ui_update = false;
         let mut latest_msg: Option<Msg> = None;
 
+        let mut handle_one = |msg: Msg| {
+            // Stats：每条都写回 containers（累加）
+            if let Msg::Stats(id, curr) = &msg {
+                let cpu = compute_cpu_delta(self.stats_prev.get(id), curr);
+                self.stats_prev.insert(id.clone(), curr.clone());
+                if let Some(c) = self.containers.iter_mut().find(|c| c.id == *id) {
+                    c.cpu_percent = cpu;
+                    c.mem_usage = curr.mem_usage;
+                    c.mem_limit = curr.mem_limit;
+                    c.net_rx = curr.net_rx;
+                    c.net_tx = curr.net_tx;
+                }
+            }
+            // 列表/Detail/Logs：立即更新 state
+            match &msg {
+                Msg::Containers(Ok(list)) => {
+                    self.containers = list.clone();
+                }
+                Msg::Images(Ok(list)) => {
+                    self.images = list.clone();
+                }
+                Msg::Networks(Ok(list)) => {
+                    self.networks = list.clone();
+                }
+                Msg::Volumes(Ok(list)) => {
+                    self.volumes = list.clone();
+                }
+                Msg::ContainerDetail(Ok(d)) => {
+                    self.detail = Some(d.clone());
+                }
+                Msg::LogLine(line) => {
+                    self.logs.push(line.clone());
+                    if self.logs.len() > self.logs_cap {
+                        self.logs.drain(0..self.logs.len() - self.logs_cap);
+                    }
+                }
+                _ => {}
+            }
+            latest_msg = Some(msg);
+            need_ui_update = true;
+        };
+
         if let Some(msg) = first {
-            Self::handle_one(
-                msg,
-                &mut need_ui_update,
-                &mut latest_msg,
-                &mut self.containers,
-                &mut self.images,
-                &mut self.detail,
-                &mut self.logs,
-                self.logs_cap,
-            );
+            handle_one(msg);
         }
         while let Ok(msg) = rx.try_recv() {
-            Self::handle_one(
-                msg,
-                &mut need_ui_update,
-                &mut latest_msg,
-                &mut self.containers,
-                &mut self.images,
-                &mut self.detail,
-                &mut self.logs,
-                self.logs_cap,
-            );
+            handle_one(msg);
         }
         (need_ui_update, latest_msg)
-    }
-
-    /// 单条消息处理逻辑——从 drain_messages 抽出来的纯函数化小步骤
-    ///
-    /// 抽出去的好处：drain_messages 只管"从哪拿消息"，
-    /// handle_one 只管"拿到一条怎么改状态"。以后加新 Msg 变体只改这里。
-    fn handle_one(
-        msg: Msg,
-        need_ui_update: &mut bool,
-        latest_msg: &mut Option<Msg>,
-        containers: &mut Vec<ContainerInfo>,
-        images: &mut Vec<ImageInfo>,
-        detail: &mut Option<ContainerDetail>,
-        logs: &mut Vec<String>,
-        logs_cap: usize,
-    ) {
-        match &msg {
-            Msg::Containers(Ok(list)) => {
-                *containers = list.clone();
-                *need_ui_update = true;
-                *latest_msg = Some(msg);
-            }
-            Msg::Containers(Err(e)) => {
-                *latest_msg = Some(Msg::Containers(Err(e.clone())));
-                *need_ui_update = true;
-            }
-            Msg::Images(Ok(list)) => {
-                *images = list.clone();
-                *need_ui_update = true;
-                *latest_msg = Some(msg);
-            }
-            Msg::Images(Err(e)) => {
-                *latest_msg = Some(Msg::Images(Err(e.clone())));
-            }
-            Msg::ActionDone(_, _)
-            | Msg::PullProgress(_)
-            | Msg::PullDone(_)
-            | Msg::CleanupDone(_) => {
-                *latest_msg = Some(msg);
-                *need_ui_update = true;
-            }
-            Msg::ContainerDetail(res) => {
-                if let Ok(d) = res {
-                    *detail = Some(d.clone());
-                }
-                *latest_msg = Some(msg);
-                *need_ui_update = true;
-            }
-            Msg::LogLine(line) => {
-                logs.push(line.clone());
-                if logs.len() > logs_cap {
-                    let excess = logs.len() - logs_cap;
-                    logs.drain(0..excess);
-                }
-                // 日志高频到达但只在有窗口闲置时才做 UI 更新
-                *need_ui_update = true;
-            }
-        }
     }
 }
 

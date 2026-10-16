@@ -20,18 +20,22 @@ mod docker;
 mod models;
 mod slint_gen;
 mod ui_apply;
+mod ui_rows;
 mod ui_state;
 mod ui_update;
 
 use slint_gen::*;
 
 use std::sync::mpsc::{Receiver, RecvError};
+use std::time::Duration;
 
-use slint::{invoke_from_event_loop, ComponentHandle, ModelRc, SharedString, Timer, TimerMode};
+use slint::{invoke_from_event_loop, ComponentHandle, ModelRc, SharedString};
 
-use crate::docker::{connect, list_containers, list_images};
+use crate::docker::{
+    connect, fetch_stats, list_containers, list_images, list_networks, list_volumes,
+};
 use crate::models::Msg;
-use crate::ui_state::{format_bytes, AppState, SharedState, REFRESH_INTERVAL};
+use crate::ui_state::{AppState, SharedState, REFRESH_INTERVAL};
 use crate::ui_update::derive_update;
 
 fn main() {
@@ -48,67 +52,6 @@ fn main() {
 
     let ui = MainWindow::new().expect("create window");
     let ui_weak = ui.as_weak();
-
-    // —— 构建 Slint rows ——
-    // 纯读取闭包：只消费 AppState，不持有锁、不做 IO
-    // 每次 pump_and_apply 在**持有 state 锁期间**调用它们，
-    // 构建出 Vec<ContainerRow> / Vec<ImageRow> 后 drop 锁，
-    // 再由 invoke_from_event_loop 把这些数据塞进 Slint Model。
-    //
-    // 为什么分两阶段？
-    //   Slint 的 Model 变更必须在主线程事件循环里（invoke_from_event_loop）。
-    //   如果 pump_and_apply 全程持有 Mutex 等 invoke 消费完，
-    //   主线程 Timer/回调在处理事件时若要再 lock state 就会卡住——
-    //   因为 consumer 持有锁等主线程，主线程处理事件又要锁。
-    //   → 经典"consumer 等主线程消费事件，主线程处理事件等 consumer 放锁"互锁。
-    //   所以锁持有时间 = drain + build rows（微秒级），然后立即 drop。
-    let build_container_rows = |s: &AppState| -> Vec<ContainerRow> {
-        s.containers
-            .iter()
-            .filter(|c| {
-                if s.container_query.is_empty() {
-                    true
-                } else {
-                    let q = s.container_query.to_lowercase();
-                    c.name.to_lowercase().contains(&q)
-                        || c.short_id().contains(&q)
-                        || c.image.to_lowercase().contains(&q)
-                        || c.state.to_lowercase().contains(&q)
-                }
-            })
-            .map(|c| ContainerRow {
-                id: SharedString::from(c.id.clone()),
-                short_id: SharedString::from(c.short_id()),
-                name: SharedString::from(c.name.clone()),
-                image: SharedString::from(c.image.clone()),
-                status: SharedString::from(c.status.clone()),
-                is_running: c.is_running(),
-            })
-            .collect()
-    };
-    let build_image_rows = |s: &AppState| -> Vec<ImageRow> {
-        s.images
-            .iter()
-            .filter(|img| {
-                if s.image_query.is_empty() {
-                    true
-                } else {
-                    let q = s.image_query.to_lowercase();
-                    img.name.to_lowercase().contains(&q)
-                        || img.tag.to_lowercase().contains(&q)
-                        || img.short_id().contains(&q)
-                }
-            })
-            .map(|img| ImageRow {
-                id: SharedString::from(img.key()),
-                short_id: SharedString::from(img.short_id()),
-                name: SharedString::from(img.name.clone()),
-                tag: SharedString::from(img.tag.clone()),
-                size: SharedString::from(format_bytes(img.size as u64)),
-                containers: img.containers as i32,
-            })
-            .collect()
-    };
 
     // ═══════════════════════════════════════════════════════
     // pump_and_apply — consumer 线程的"UI 更新泵"
@@ -133,8 +76,10 @@ fn main() {
         }
 
         // 锁内：构建 rows + 读字段
-        let container_rows = build_container_rows(&s);
-        let image_rows = build_image_rows(&s);
+        let container_rows = ui_rows::build_container_rows(&s);
+        let image_rows = ui_rows::build_image_rows(&s);
+        let network_rows = ui_rows::build_network_rows(&s);
+        let volume_rows = ui_rows::build_volume_rows(&s);
         let running = s.containers.iter().filter(|c| c.is_running()).count();
         let running_total = format!("{}/{}", running, s.containers.len());
         let image_total = s.images.len().to_string();
@@ -158,18 +103,25 @@ fn main() {
             let Some(ui) = ui_w.upgrade() else { return };
             let cm: ModelRc<ContainerRow> = ModelRc::from(container_rows.as_slice());
             let im: ModelRc<ImageRow> = ModelRc::from(image_rows.as_slice());
+            let nm: ModelRc<crate::slint_gen::NetworkRow> = ModelRc::from(network_rows.as_slice());
+            let vm: ModelRc<crate::slint_gen::VolumeRow> = ModelRc::from(volume_rows.as_slice());
             let lm: ModelRc<LogLineRow> = ModelRc::from(log_lines.as_slice());
-            ui_apply::apply_lists(&ui, cm, im, lm);
+            ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
             ui.set_container_count(SharedString::from(running_total));
             ui.set_image_count(SharedString::from(image_total));
             ui.set_docker_ok(update.docker_ok);
             ui.set_status_text(SharedString::from(update.status_text));
-            if update.reset_pull_busy { ui.set_pull_busy(false); }
-            if update.close_pull { ui.set_pull_open(false); }
+            if update.reset_pull_busy {
+                ui.set_pull_busy(false);
+            }
+            if update.close_pull {
+                ui.set_pull_open(false);
+            }
             if let Some(ref d) = detail_data {
                 ui_apply::apply_detail(&ui, d);
             }
-        }).ok();
+        })
+        .ok();
     };
 
     // ═══════════════════════════════════════════════════════
@@ -216,21 +168,64 @@ fn main() {
         });
     }
 
-    // Step 3: 定时刷新（主线程 Slint Timer）
-    //
-    // 只做一件事：spawn 异步任务 → 列表 → tx.send(Msg)
-    // 不直接碰 Slint Model——那样在主线程回调里改 Model 没问题，
-    // 但每次刷新都会阻塞 Slint 事件循环（bollard 是 async，但 spawn 本身有开销）。
-    // 统一交给 consumer 线程调 invoke_from_event_loop 更新，
-    // 保持主线程回调薄、快。
+    // Step 3: 定时刷新 —— 用 tokio interval（比 Slint Timer 更可靠，软件渲染器下也能工作）
     {
         let state_t = state.clone();
-        Timer::default().start(TimerMode::Repeated, REFRESH_INTERVAL, move || {
-            if let Ok(mut s) = state_t.lock() {
-                s.refresh();
+        let rt_h = {
+            let Ok(s) = state.lock() else {
+                return;
+            };
+            s.rt.handle().clone()
+        };
+        rt_h.spawn(async move {
+            let mut tick = tokio::time::interval(REFRESH_INTERVAL);
+            loop {
+                tick.tick().await;
+                if let Ok(mut s) = state_t.lock() {
+                    s.refresh();
+                }
             }
-            // refresh() 已经 spawn 了 tokio 异步任务，完成后 tx.send(Msg)
-            // consumer 线程正在 recv() 阻塞，收到新 Msg 自动被唤醒 pump
+        });
+    }
+
+    // Step 3b: stats 采样（6s interval）
+    {
+        let state_s = state.clone();
+        let rt_h = {
+            let Ok(s) = state_s.lock() else {
+                return;
+            };
+            s.rt.handle().clone()
+        };
+        rt_h.spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(6));
+            tick.tick().await; // 跳过首次立即触发
+            loop {
+                tick.tick().await;
+                let (tx, ids): (_, Vec<String>) = {
+                    let Ok(s) = state_s.lock() else { continue };
+                    (
+                        s.tx.clone(),
+                        s.containers
+                            .iter()
+                            .filter(|c| c.is_running())
+                            .map(|c| c.id.clone())
+                            .collect(),
+                    )
+                };
+                let futs: Vec<_> = ids
+                    .into_iter()
+                    .map(|id| {
+                        let tx = tx.clone();
+                        async move {
+                            if let Ok(snap) = fetch_stats(&id).await {
+                                let _ = tx.send(Msg::Stats(id, snap));
+                            }
+                        }
+                    })
+                    .collect();
+                futures::future::join_all(futs).await;
+            }
         });
     }
 
@@ -244,14 +239,20 @@ fn main() {
         drop(s); // 先放锁再 spawn，保证不堵 Timer/回调
         rt.spawn(async move {
             let _ = connect();
-            let c_res = list_containers(true).await;
-            let i_res = list_images().await;
+            let (c_res, i_res, n_res, v_res) = futures::join!(
+                list_containers(true),
+                list_images(),
+                list_networks(),
+                list_volumes(),
+            );
             let first_id = c_res
                 .as_ref()
                 .ok()
                 .and_then(|list| list.first().map(|c| c.id.clone()));
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
+            let _ = tx.send(Msg::Networks(n_res));
+            let _ = tx.send(Msg::Volumes(v_res));
             // 首屏列表到齐后自动 inspect 第一个容器
             if let Some(id) = first_id {
                 if let Ok(detail) = crate::docker::inspect_container(&id).await {

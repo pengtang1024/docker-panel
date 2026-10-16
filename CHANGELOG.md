@@ -3,7 +3,7 @@
 本文件记录 Docker Panel 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased] — 待发版
+## [0.2.1] - 2026-10-16
 
 ### 新增
 
@@ -78,6 +78,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.2.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.1
 [0.2.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.0
 [0.1.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.1
 [0.1.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.0

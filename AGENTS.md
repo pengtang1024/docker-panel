@@ -62,30 +62,36 @@ docker-panel/
 ├── build.rs                # slint_build::compile("ui/app.slint")
 │
 ├── ui/                     # Slint UI 声明（纯标记，Rust 侧统一通过 slint_gen 引入）
-│   ├── app.slint           # 主骨架：MainWindow + AppActions global + 布局（FixedLayout 绝对定位左右分栏）
-│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow struct（Rust ↔ Slint 数据桥）
-│   ├── delegates.slint     # 行 delegate（ContainerRowDelegate 含日志按钮 callback logs）
+│   ├── app.slint           # 主骨架：MainWindow + AppActions global + 左右分栏布局
+│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
+│   ├── delegates.slint     # 行 delegate（ContainerRowDelegate / ImageRowDelegate 含按钮 callbacks）
+│   ├── network-views.slint # NetworkRowDelegate + VolumeRowDelegate + 对应 Headers
 │   ├── headers.slint       # ContainerHeader / ImageHeader（列宽严格对齐 delegates）
 │   ├── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip 组件
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
-│   ├── detail-panel.slint  # DetailRow + DetailPanel（17 个 in-out 属性，右侧 TabWidget 第一页）
-│   └── log-panel.slint     # LogLineDelegate + LogPanel（ListView 滚动，右侧 TabWidget 第二页）
+│   ├── detail-panel.slint  # DetailRow + DetailPanel（18 个 in-out 属性 + Labels section）
+│   ├── log-panel.slint     # LogLineDelegate + LogPanel（ListView 滚动）
+│   ├── list-area.slint     # TabBar + ListArea（4 Tab：容器/镜像/网络/卷，callback 注入 AppActions）
+│   └── detail-log-panel.slint  # 右侧详情/日志面板（自绘 Tab + 条件渲染）
 │
 ├── src/
-│   ├── main.rs             # 桥接中枢：consumer 线程 + 定时刷新 + pump_and_apply + 初始 spawn
+│   ├── main.rs             # 桥接中枢：consumer 线程（recv_timeout + 优雅退出）+ 2 tokio intervals + pump_and_apply
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口（仅 7 行）
-│   ├── models.rs           # Msg / ContainerInfo / ImageInfo / ContainerDetail
-│   ├── ui_state.rs         # AppState + drain_messages + handle_one + build_detail_data
+│   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo
+│   ├── ui_state.rs         # AppState(shutdown: AtomicBool, stats_prev: HashMap) + drain_messages + build_detail_data(fmt_labels)
 │   ├── ui_update.rs        # derive_update(Msg → UiUpdate) + UiUpdate 结构体
-│   ├── ui_apply.rs         # apply_detail(&ui, &DetailTuple) + apply_lists — 把 set_d_xxx 和 set_xxx 抽出来避免 main.rs 膨胀
+│   ├── ui_apply.rs         # apply_detail(18-tuple) + apply_lists(5 ModelRc)
+│   ├── ui_rows.rs          # 4 种 Slint 行构建 + Compose 分组排序
 │   ├── callbacks.rs        # 顶栏按钮 + PullDialog + CleanupDialog 回调绑定
-│   ├── callbacks_container.rs  # AppActions container_* 回调（toggle/restart/remove/logs）
+│   ├── callbacks_container.rs  # AppActions container_* 回调（toggle/restart/remove/logs/select）
 │   ├── callbacks_image.rs     # AppActions image_remove 回调
 │   └── docker/
 │       ├── mod.rs          # connect() + pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度回调）/ remove
 │       ├── logs.rs         # inspect_container + follow_logs（Stream → tx.send）
+│       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU% 算法）
+│       ├── netvol.rs       # list_networks + list_volumes（bollard 0.21 API）
 │       └── system.rs       # cleanup prune
 │
 ├── docs/
@@ -98,45 +104,51 @@ docker-panel/
 └── CHANGELOG.md
 ```
 
-## 线程模型（三线程架构）
+## 线程模型（三线程架构，已实现优雅退出）
 
 ```
-主线程 (ui.run() 阻塞)          consumer 线程               tokio runtime
-┌───────────────────┐       ┌────────────────────┐       ┌──────────────────┐
-│ Slint Timer 3s ── ┼──lock─▶│ recv() 阻塞（锁外） ┼──────▶│ spawn 异步任务     │
-│ UI 回调 ──────────┼──lock─▶│ drain_messages()   │       │ bollard API 调用   │
-│                   │       │ build rows          │       │ tx.send(Msg)       │
-│                   │       │ build_detail_data   │       │ follow_logs 流     │
-│                   │       │ build_log_lines     │       │ inspect_container  │
-│                   │       │ drop lock ──────────┼─invoke─▶│                    │
-│                   │       │   _from_event_loop  │       │                    │
-└───────────────────┘       └────────────────────┘       └──────────────────┘
-     Mutex<AppState>               mpsc::Receiver<Msg>（独占，不进 Mutex）
+主线程 (ui.run() 阻塞)       consumer 线程               tokio runtime (multi-thread)
+┌───────────────────┐      ┌────────────────────┐      ┌──────────────────┐
+│ 3s tokio interval ┼──lock▶│ recv_timeout(200ms)┼─────▶│ 3s refresh join!  │
+│ 6s stats interval ┼──lock▶│ (Timeout 检查 flag) │      │ 6s stats join_all │
+│ UI 回调 ───────────┼──lock▶│ drain_messages()   │      │ bollard API 调用   │
+│                     │      │ pump_and_apply      │      │ tx.send(Msg)       │
+│                     │      │ 操作完成立即 s.refresh()│    │ follow_logs 流     │
+│                     │      │ drop lock ──────────┼─invoke▶│                    │
+│                     │      │   _from_event_loop  │      │                    │
+└───────────────────┘      └────────────────────┘      └──────────────────┘
+     Mutex<AppState>              mpsc::Receiver<Msg>（独占，不进 Mutex）
+     + shutdown: AtomicBool
 ```
 
-**关键设计**：`mpsc::Receiver<Msg>` 不在 Mutex 内部，由 consumer 线程独占。这样 `rx.recv()` 永远不会阻塞主线程拿 state 锁，彻底避免死锁。
+**关键设计**：`mpsc::Receiver<Msg>` 不在 Mutex 内部，由 consumer 线程独占。`rx.recv_timeout(200ms)` 替代阻塞 `recv()`，每次 timeout 检查 `AppState.shutdown` flag。窗口关闭 → flag=true → consumer ~250ms 内 break → join → state/runtime 自然 drop。
+
+**Slint Timer 已废弃**：软件渲染器 + MCP 模式下 Slint Timer 不触发（连 debug eprintln 都没有），全部改用 `rt.handle().clone(); rt_h.spawn(async { tokio::time::interval(...); loop { tick().await; } })`。
 
 **pump_and_apply 两阶段铁律**：
-1. 锁内：`drain_messages` + `build rows` + `build_detail_data` + 读字段（微秒级）
+1. 锁内：`drain_messages` + `build rows` + `build_detail_data` + 读字段 + 操作完成时 `s.refresh()`
 2. `drop(state)`
-3. `invoke_from_event_loop` 闭包里调 `ui_apply::apply_lists(&ui, cm, im, lm)` / `ui_apply::apply_detail(&ui, &detail)` / 其他 `ui.set_*` — **闭包里绝不碰 state**
+3. `invoke_from_event_loop` 闭包里调 `ui_apply::apply_lists(...)` / `ui_apply::apply_detail(...)` / 其他 `ui.set_*` — **闭包里绝不碰 state**
 
 ## 消息类型（`models::Msg`）
 
 | 变体 | 来源 | UI 行为 |
 |------|------|---------|
-| `Containers(Result<Vec>)` | Timer / 手动刷新 | 替换容器列表 + 剪失效选择 |
-| `Images(Result<Vec>)` | Timer / 手动刷新 | 替换镜像列表 + 剪失效选择 |
+| `Containers(Result<Vec>)` | 3s tokio interval / 手动刷新 | 替换容器列表 + 剪失效选择 |
+| `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 剪失效选择 |
+| **`Networks(Result<Vec>)`** | 3s interval | 替换网络列表（网络 Tab） |
+| **`Volumes(Result<Vec>)`** | 3s interval | 替换卷列表（卷 Tab） |
 | `PullProgress(String)` | pull_image 进度闭包 | 状态文本更新 |
-| `PullDone(Result)` | pull_image 结束 | 关弹窗 + 刷新镜像列表 |
-| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本（下次 Timer 自动刷新列表） |
-| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 |
-| **`ContainerDetail(Result<ContainerDetail>)`** | inspect_container | 替换 `AppState.detail` → DetailPanel 17 字段灌入 |
-| **`LogLine(String)`** | follow_logs Stream | 推入 `AppState.logs`（环形缓冲 cap=500）→ LogPanel ListView |
+| `PullDone(Result)` | pull_image 结束 | 关弹窗 + 立即刷新镜像列表 |
+| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + **立即触发 s.refresh()** 刷新列表 |
+| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 立即刷新 |
+| `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → DetailPanel 18 字段（含 Labels）灌入 |
+| `LogLine(String)` | follow_logs Stream | 推入 `AppState.logs`（环形缓冲 cap=500）→ LogPanel ListView |
+| **`Stats(String id, ContainerStatsSnapshot)`** | 6s tokio interval | 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列 |
 
 ## 代码规范
 
-1. **单文件 ≤ 300 行**——超过必须按职责拆分。当前所有文件均 ≤ 300 行（最大 main.rs 269 / ui_state.rs 264 / docker/logs.rs 177）。
+1. **单文件 ≤ 300 行**——超过必须按职责拆分。当前所有文件均 ≤ 300 行（最大 main.rs 296 / ui_state.rs 271）。
 2. **Mutex 锁持有最小化**——锁内**绝不**做任何可能耗时的操作（await、invoke_from_event_loop、长时间迭代）。锁内只做 clone / 取字段 / spawn 启动。
 3. **Receiver 不进 Mutex**——`mpsc::Receiver` 由 consumer 线程独占所有权，绝不能放回 `AppState`。
 4. **所有 spawn 都走 state.rt**——`let (rt, tx) = { let Ok(s) = state.lock() else { return }; (s.rt.handle().clone(), s.tx.clone()) }; drop(s); rt.spawn(async move { ... });`
@@ -155,7 +167,13 @@ docker-panel/
 | `NetworkSettings.ports` | `Option<HashMap<String, Option<Vec<PortBinding>>>>` | 双层 Option |
 | `PortBinding.host_port` | `Option<String>` | 不是 u16 |
 | `LogsOptionsBuilder.tail` | 收 `&str` | 不是 `String` |
-| 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` 调 `.next().await` |
+| `StatsOptionsBuilder` 路径 | `bollard::query_parameters::StatsOptionsBuilder` | **不是** `bollard::stats::*` |
+| `list_networks` | 不用泛型参数 | `Some(ListNetworksOptionsBuilder::default().build())` |
+| `list_volumes` | 需要 type annotation | `list_volumes(None::<ListVolumesOptions>)` |
+| `Network` struct 字段 | 没有 `containers` 映射 | driver/scope/name/id 都是 `Option<String>` |
+| `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
+| `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |
+| 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` / `join_all` |
 
 ## 构建命令
 

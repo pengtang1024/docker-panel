@@ -92,6 +92,7 @@ docker-panel/
 │       ├── logs.rs         # inspect_container + follow_logs（Stream → tx.send）
 │       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU% 算法）
 │       ├── netvol.rs       # list_networks + list_volumes（bollard 0.21 API）
+│       ├── image_details.rs # inspect_image → ImageDetail（镜像详情 14 字段）
 │       └── system.rs       # cleanup prune
 │
 ├── docs/

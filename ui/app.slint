@@ -12,6 +12,7 @@ export global AppActions {
     callback container_remove(string);
     callback container_logs(string);
     callback container_select(string);
+    callback container_sort(int);
     callback image_select(string);
     callback image_remove(string);
 }
@@ -25,6 +26,8 @@ export component MainWindow inherits Window {
     in-out property <string> status_text: "连接 Docker...";
     in-out property <string> container_count: "0";
     in-out property <string> image_count: "0";
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: false;
     in-out property <[ContainerRow]> container_rows: [];
     in-out property <[ImageRow]> image_rows: [];
     in-out property <[NetworkRow]> network_rows: [];
@@ -98,6 +101,8 @@ export component MainWindow inherits Window {
                 width: parent.width;
                 height: parent.height - 48px - 36px - 36px - 28px - 4px;
                 active_view <=> root.active_view;
+                sort_field <=> root.sort_field;
+                sort_desc <=> root.sort_desc;
                 container_rows <=> root.container_rows;
                 image_rows <=> root.image_rows;
                 network_rows <=> root.network_rows;
@@ -107,6 +112,7 @@ export component MainWindow inherits Window {
                 container_restart(id) => { AppActions.container_restart(id); }
                 container_logs(id) => { AppActions.container_logs(id); }
                 container_remove(id) => { AppActions.container_remove(id); }
+                container_sort(f) => { AppActions.container_sort(f); }
                 image_click(id) => { AppActions.image_select(id); }
                 image_remove(id) => { AppActions.image_remove(id); }
             }

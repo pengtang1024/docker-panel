@@ -3,12 +3,35 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
-use crate::models::Msg;
+use crate::models::{Msg, SortField};
 use crate::slint_gen::*;
 use crate::ui_state::SharedState;
 
 pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
+
+    // —— 表头点击排序 ——
+    {
+        let s = state.clone();
+        actions.on_container_sort(move |field: i32| {
+            let sf = match field {
+                0 => SortField::Group,
+                1 => SortField::Name,
+                2 => SortField::Status,
+                3 => SortField::Cpu,
+                4 => SortField::Mem,
+                _ => return,
+            };
+            if let Ok(mut st) = s.lock() {
+                if st.sort_field == sf {
+                    st.sort_desc = !st.sort_desc;
+                } else {
+                    st.sort_field = sf;
+                    st.sort_desc = false;
+                }
+            }
+        });
+    }
 
     // 容器启停切换
     {

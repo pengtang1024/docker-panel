@@ -213,3 +213,19 @@ pub struct ImageDetail {
     pub exposed_ports: String, // join(", ")
     pub volumes: String,       // join(", ")
 }
+
+/// 容器列表排序字段——点击表头切换
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortField {
+    #[default]
+    /// 按 compose_project → compose_service 分组排序（默认）
+    Group,
+    /// 按名称
+    Name,
+    /// 按运行状态（running 在前）
+    Status,
+    /// 按 CPU 使用率
+    Cpu,
+    /// 按内存使用
+    Mem,
+}

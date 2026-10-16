@@ -1,0 +1,111 @@
+// sub-bar.slint — 筛选栏
+import { Theme } from "theme.slint";
+
+component Chip inherits Rectangle {
+    in property <string> label: "";
+    in property <int> n: 0;
+    in property <bool> active: false;
+    in property <string> key: "";
+    callback clicked(string);
+    height: 26px;
+    border-radius: 13px;
+    background: root.active ? Theme.pill_on_bg : Theme.bg;
+    border-width: 1px;
+    border-color: root.active ? Theme.ok : Theme.line;
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: Theme.s2;
+        padding-left: Theme.s3;
+        padding-right: Theme.s3;
+        Text { text: root.label; font-size: Theme.fs_xs; font-weight: 600; color: root.active ? Theme.ok : Theme.ink_2; }
+        Text { text: root.n; font-size: Theme.fs_xs; color: root.active ? Theme.ok : Theme.ink_3; }
+    }
+    TouchArea { clicked => { root.clicked(root.key); } }
+}
+
+component ViewTab inherits Rectangle {
+    in property <string> label: "";
+    in property <int> n: 0;
+    in property <bool> active: false;
+    in property <int> idx: 0;
+    callback clicked(int);
+    height: 100%;
+    // 底部高亮条
+    Rectangle {
+        y: parent.height - 2px;
+        width: 100%;
+        height: 2px;
+        background: root.active ? Theme.ink : transparent;
+    }
+    Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
+    TouchArea { clicked => { root.clicked(root.idx); } }
+}
+
+export component SubBar inherits Rectangle {
+    height: Theme.sub_h;
+    background: Theme.card;
+    Rectangle {
+        y: parent.height - 1px;
+        width: 100%;
+        height: 1px;
+        background: Theme.line;
+    }
+
+    in-out property <int> view: 0;
+    in-out property <string> filter: "all";
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: true;
+    in-out property <int> total_containers: 0;
+    in-out property <int> running_containers: 0;
+    in-out property <int> total_images: 0;
+    in-out property <int> total_networks: 0;
+    in-out property <int> total_volumes: 0;
+
+    callback set_view(int);
+    callback set_filter(string);
+    callback set_sort(int);
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: Theme.s4;
+        padding-left: Theme.s5;
+        padding-right: Theme.s5;
+
+        Chip { label: "All"; n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: "Running"; n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: "Stopped"; n: root.total_containers - root.running_containers; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // 排序按钮
+        Rectangle {
+            height: 28px;
+            padding-left: Theme.s3;
+            padding-right: Theme.s3;
+            border-radius: Theme.r_sm;
+            background: Theme.bg;
+            border-width: 1px;
+            border-color: Theme.line;
+            HorizontalLayout {
+                width: 100%;
+                height: 100%;
+                spacing: Theme.s2;
+                Text { text: "↕"; color: Theme.ink_3; font-size: 12px; }
+                Text {
+                    text: ["Name","CPU","Memory","Disk","Status"][root.sort_field];
+                    font-size: Theme.fs_xs;
+                    color: Theme.ink_2;
+                }
+                Text { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; }
+            }
+            TouchArea { clicked => { root.set_sort(root.sort_field); } }
+        }
+
+        ViewTab { label: "Containers"; n: root.total_containers; active: root.view == 0; idx: 0; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: "Images"; n: root.total_images; active: root.view == 1; idx: 1; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: "Networks"; n: root.total_networks; active: root.view == 2; idx: 2; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: "Volumes"; n: root.total_volumes; active: root.view == 3; idx: 3; clicked(i) => { root.set_view(i); } }
+    }
+}

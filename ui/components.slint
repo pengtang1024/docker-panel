@@ -37,16 +37,14 @@ export component Button inherits Rectangle {
                 font-size: Theme.fs;
                 color: root.primary ? Theme.bg-root : (root.danger ? Theme.err : Theme.fg-2);
                 visible: root.glyph != "";
-                vertical-alignment: center;
-            }
+                }
             if root.glyph != "": Rectangle { width: 3px; height: 1px; }
             Text {
                 text: root.text;
                 font-size: Theme.fs;
                 font-weight: 600;
                 color: root.primary ? Theme.bg-root : (root.danger ? Theme.err : Theme.fg-2);
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -71,8 +69,7 @@ export component IconBtn inherits Rectangle {
         font-size: Theme.fs-md;
         color: touch.has-hover ? (root.danger ? Theme.err : Theme.fg) : Theme.fg-3;
         width: 100%; height: 100%;
-        horizontal-alignment: center; vertical-alignment: center;
-    }
+        }
 }
 
 // ============ 状态圆点 ============
@@ -106,8 +103,7 @@ export component ConnBadge inherits Rectangle {
                 font-size: Theme.fs-sm;
                 font-weight: 600;
                 color: root.online ? Theme.ok : Theme.err;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -131,12 +127,11 @@ export component SearchBox inherits Rectangle {
             text: "⌕";
             font-size: Theme.fs-md;
             color: Theme.fg-4;
-            vertical-alignment: center;
-        }
+            }
         LineEdit {
             vertical-stretch: 1;
             font-size: Theme.fs;
-            placeholder-text: root.placeholder;
+            placeholder: root.placeholder;
             accepted => { root.accepted(self.text); }
         }
     }
@@ -168,8 +163,7 @@ export component CheckCell inherits Rectangle {
         font-weight: 700;
         color: Theme.bg-root;
         width: 100%; height: 100%;
-        horizontal-alignment: center; vertical-alignment: center;
-    }
+        }
 }
 
 // ============ 左侧导航项 ============
@@ -210,23 +204,20 @@ export component NavItem inherits Rectangle {
                     font-size: Theme.fs-md;
                     color: root.active ? Theme.accent : Theme.fg-3;
                     width: 100%; height: 100%;
-                    horizontal-alignment: center; vertical-alignment: center;
-                }
+                    }
             }
             Text {
                 text: root.label;
                 font-size: Theme.fs-md;
                 font-weight: root.active ? 700 : 400;
                 color: root.active ? Theme.fg : Theme.fg-3;
-                vertical-alignment: center;
-            }
+                }
             Rectangle { horizontal-stretch: 1; }
             if root.count > 0: Text {
                 text: root.count;
                 font-size: Theme.fs-sm;
                 color: root.active ? Theme.accent : Theme.fg-4;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -251,8 +242,7 @@ export component TabItem inherits Rectangle {
         font-weight: root.active ? 700 : 400;
         color: root.active ? Theme.accent : Theme.fg-3;
         width: 100%; height: 100%;
-        horizontal-alignment: center; vertical-alignment: center;
-    }
+        }
 
     Rectangle {
         x: 0; y: parent.height - 2px;
@@ -292,14 +282,12 @@ export component SortCell inherits Rectangle {
                 font-size: Theme.fs-xs;
                 font-weight: 700;
                 color: root.sort_field == root.field ? Theme.accent : Theme.fg-3;
-                vertical-alignment: center;
-            }
+                }
             if root.sort_field == root.field: Text {
                 text: root.sort_desc ? "▾" : "▴";
                 font-size: 9px;
                 color: Theme.accent;
-                vertical-alignment: center;
-            }
+                }
             if root.align-right == false: Rectangle { horizontal-stretch: 1; }
         }
     }

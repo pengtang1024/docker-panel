@@ -1,75 +1,78 @@
-// theme.slint — 设计令牌 + 网格常量（唯一真相源）
-// 布局纪律：只用 HorizontalLayout / VerticalLayout（无隐式 padding）。
-// Box = Layout + 隐式 5px padding，是错位根源，禁止使用。
+// theme.slint — 设计令牌（唯一真相源）
+// 三态主题：auto(跟随系统) / light / dark
+// 所有组件引用 Theme.* 属性，切换 theme_mode 时自动更新。
 
 export global Theme {
-    // ============ 色彩 ============
-    out property <color> bg-root: #0b1220;
-    out property <color> bg-side: #101b2d;      // 左导航 / 右面板 / 顶底栏
-    out property <color> bg-main: #16233a;      // 主列表区
-    out property <color> bg-card: #1d2c45;      // 卡片 / 控件底
-    out property <color> bg-row-hover: #1f3350;
-    out property <color> bg-row-sel: #1d4a6b;
-    out property <color> bg-group: #131f33;
+    // ===== 主题模式 =====
+    in-out property <int> theme_mode: 0;   // 0=auto, 1=light, 2=dark
+    in-out property <bool> system_dark: false; // Rust 侧检测系统主题后设置
 
-    out property <color> line: #24344d;         // 分隔线 / 边框
+    private property <bool> is_dark: theme_mode == 2 || (theme_mode == 0 && system_dark);
 
-    out property <color> fg: #f1f5f9;           // 主文字
-    out property <color> fg-2: #c3d0e0;         // 次文字
-    out property <color> fg-3: #8296b0;         // 弱文字
-    out property <color> fg-4: #5b6b82;         // 占位符
+    // ===== 色彩：浅色 / 深色 =====
+    out property <color> bg: is_dark ? #0c0c0e : #f7f7f8;
+    out property <color> card: is_dark ? #18181b : #ffffff;
+    out property <color> line: is_dark ? #27272a : #ebeaee;
+    out property <color> line_2: is_dark ? #1f1f23 : #f4f4f5;
 
-    out property <color> accent: #38bdf8;
-    out property <color> ok: #34d399;
-    out property <color> off: #64748b;
-    out property <color> warn: #fbbf24;
-    out property <color> err: #f87171;
+    out property <color> ink: is_dark ? #fafafa : #0e0e11;
+    out property <color> ink_2: is_dark ? #a1a1aa : #52525b;
+    out property <color> ink_3: is_dark ? #71717a : #a1a1aa;
+    out property <color> ink_4: is_dark ? #3f3f46 : #d4d4d8;
 
-    // ============ 字号 ============
-    out property <length> fs-xs: 10px;
-    out property <length> fs-sm: 11px;
+    out property <color> ok: is_dark ? #4ade80 : #16a34a;
+    out property <color> stop: is_dark ? #71717a : #a1a1aa;
+    out property <color> warn: is_dark ? #fbbf24 : #d97706;
+    out property <color> err: is_dark ? #f87171 : #dc2626;
+    out property <color> accent: is_dark ? #fafafa : #0e0e11;
+
+    out property <color> pill_on_bg: is_dark ? rgba(74,222,128,0.14) : rgba(22,163,74,0.10);
+    out property <color> pill_off_bg: is_dark ? rgba(113,113,122,0.18) : rgba(161,161,170,0.14);
+
+    out property <color> bar_bg: is_dark ? #27272a : #f0f0f3;
+    out property <color> bar_cpu: is_dark ? #60a5fa : #3b82f6;
+    out property <color> bar_mem: is_dark ? #a78bfa : #8b5cf6;
+
+    out property <color> overlay: is_dark ? rgba(0,0,0,0.55) : rgba(14,14,17,0.4);
+    out property <color> skel: is_dark ? #1f1f23 : #ebeaee;
+    out property <color> skel_hi: is_dark ? #27272a : #f4f4f5;
+
+    out property <color> log_bg: is_dark ? #000000 : #f4f4f5;
+    out property <color> log_ink: is_dark ? #e4e4e7 : #0e0e11;
+    out property <color> log_dim: is_dark ? #52525b : #a1a1aa;
+
+    out property <color> tip_bg: is_dark ? #18181b : #ffffff;
+    out property <color> tip_ink: is_dark ? #fafafa : #0e0e11;
+
+    // ===== 字号 =====
+    out property <length> fs_xs: 10px;
+    out property <length> fs_sm: 11px;
     out property <length> fs: 12px;
-    out property <length> fs-md: 13px;
-    out property <length> fs-lg: 16px;
+    out property <length> fs_md: 13px;
+    out property <length> fs_lg: 16px;
+    out property <length> fs_xl: 18px;
 
-    // ============ 间距 ============
+    // ===== 圆角 =====
+    out property <length> r_xs: 4px;
+    out property <length> r_sm: 6px;
+    out property <length> r_md: 8px;
+    out property <length> r: 14px;
+
+    // ===== 间距 =====
     out property <length> s1: 4px;
     out property <length> s2: 6px;
     out property <length> s3: 8px;
     out property <length> s4: 12px;
     out property <length> s5: 16px;
+    out property <length> s6: 20px;
 
-    // ============ 结构尺寸 ============
-    out property <length> nav-w: 200px;
-    out property <length> side-w: 360px;
-    out property <length> top-h: 48px;
-    out property <length> tab-h: 34px;
-    out property <length> head-h: 30px;
-    out property <length> row-h: 32px;
-    out property <length> group-h: 28px;
-    out property <length> tool-h: 40px;
-    out property <length> foot-h: 24px;
-    out property <length> batch-h: 42px;
+    // ===== 结构尺寸 =====
+    out property <length> top_h: 52px;
+    out property <length> sub_h: 40px;
+    out property <length> batch_h: 42px;
+    out property <length> foot_h: 40px;
+    out property <length> drawer_w: 400px;
 
-    // ============ 网格：容器列表 ============
-    // 表头与数据行使用完全相同的单元格序列。
-    // 固定列合计 = 32+12+150+88+56+86+120 = 544
-    // 名称列占据剩余空间（flex）
-    out property <length> c-check: 32px;
-    out property <length> c-dot: 12px;
-    out property <length> c-image: 150px;
-    out property <length> c-state: 88px;
-    out property <length> c-cpu: 56px;
-    out property <length> c-mem: 86px;
-    out property <length> c-act: 120px;
-
-    // ============ 网格：镜像列表 ============
-    out property <length> i-tag: 130px;
-    out property <length> i-use: 70px;
-    out property <length> i-size: 80px;
-
-    // ============ 网格：网络 / 卷 ============
-    out property <length> n-driver: 110px;
-    out property <length> n-scope: 80px;
-    out property <length> n-count: 60px;
+    // ===== 阴影 =====
+    out property <color> shadow: is_dark ? rgba(0,0,0,0.25) : rgba(14,14,17,0.05);
 }

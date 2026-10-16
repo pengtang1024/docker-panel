@@ -17,12 +17,10 @@ export component Blank inherits Rectangle {
         Text {
             text: root.title;
             font-size: Theme.fs-lg; color: Theme.fg-3;
-            horizontal-alignment: center;
-        }
+            }
         Text {
             text: root.hint;
             font-size: Theme.fs; color: Theme.fg-4;
-            horizontal-alignment: center;
             visible: root.hint != "";
         }
     }

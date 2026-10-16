@@ -1,0 +1,123 @@
+// top-bar.slint — 顶栏
+import { Theme } from "theme.slint";
+
+export component TopBar inherits Rectangle {
+    height: Theme.top_h;
+    background: Theme.card;
+
+    // 底部边框
+    Rectangle {
+        y: parent.height - 1px;
+        width: 100%;
+        height: 1px;
+        background: Theme.line;
+    }
+
+    in-out property <bool> docker_ok: false;
+    in-out property <string> search_q: "";
+    callback theme_click();
+    callback refresh_click();
+    callback cleanup_click();
+    callback pull_click();
+    callback search(string);
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: Theme.s4;
+        padding-left: Theme.s5;
+        padding-right: Theme.s5;
+
+        Text {
+            text: "Docker Panel";
+            font-size: Theme.fs_md;
+            font-weight: 700;
+            color: Theme.ink;
+        }
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.docker_ok ? Theme.ok : Theme.stop;
+        }
+        Text {
+            text: root.docker_ok ? "Connected" : "Disconnected";
+            font-size: Theme.fs_sm;
+            color: Theme.ink_3;
+        }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.line; }
+
+        // 搜索框
+        Rectangle {
+            height: 32px;
+            border-radius: Theme.r_md;
+            background: Theme.bg;
+            border-width: 1px;
+            border-color: Theme.line;
+            horizontal-stretch: 1;
+            HorizontalLayout {
+                width: 100%;
+                height: 100%;
+                spacing: Theme.s2;
+                padding-left: Theme.s3;
+                padding-right: Theme.s3;
+                Text {
+                    text: "⌕";
+                    color: Theme.ink_3;
+                    font-size: Theme.fs_md;
+                }
+                TextInput {
+                    horizontal-stretch: 1;
+                    text <=> root.search_q;
+                    color: Theme.ink;
+                    font-size: Theme.fs_sm;
+                    accepted() => { root.search(root.search_q); }
+                    edited() => { root.search(root.search_q); }
+                }
+                Text {
+                    text: "Ctrl+K";
+                    color: Theme.ink_4;
+                    font-size: Theme.fs_xs;
+                }
+            }
+        }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.line; }
+
+        // 主题按钮
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: Theme.r_sm;
+            background: Theme.bg;
+            Text { text: "◐"; color: Theme.ink_2; font-size: 16px; }
+            TouchArea { clicked => { root.theme_click(); } }
+        }
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: Theme.r_sm;
+            background: Theme.bg;
+            Text { text: "↻"; color: Theme.ink_2; font-size: 16px; }
+            TouchArea { clicked => { root.refresh_click(); } }
+        }
+        Rectangle {
+            width: 32px;
+            height: 32px;
+            border-radius: Theme.r_sm;
+            background: Theme.bg;
+            Text { text: "🗑"; color: Theme.ink_2; font-size: 14px; }
+            TouchArea { clicked => { root.cleanup_click(); } }
+        }
+        Rectangle {
+            width: 80px;
+            height: 32px;
+            border-radius: Theme.r_sm;
+            background: Theme.ink;
+            Text { text: "Pull"; color: Theme.card; font-size: Theme.fs_sm; font-weight: 600; }
+            TouchArea { clicked => { root.pull_click(); } }
+        }
+    }
+}

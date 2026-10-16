@@ -145,10 +145,8 @@ fn main() {
             ui.set_total_images(images_len as i32);
             ui.set_total_networks(networks_len as i32);
             ui.set_total_volumes(volumes_len as i32);
-            ui.set_has_detail(has_detail);
             ui.set_docker_ok(update.docker_ok);
             ui.set_status_text(SharedString::from(update.status_text.as_str()));
-            ui.set_summary_text(SharedString::from(summary.as_str()));
             if update.reset_pull_busy {
                 ui.set_pull_busy(false);
             }

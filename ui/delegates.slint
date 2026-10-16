@@ -22,19 +22,16 @@ export component RowGroup inherits Rectangle {
             Text {
                 text: "▾";
                 font-size: 9px; color: Theme.accent;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 text: root.project;
                 font-size: Theme.fs-sm; font-weight: 700; color: Theme.accent;
-                vertical-alignment: center;
-            }
+                }
             Rectangle { horizontal-stretch: 1; }
             Text {
                 text: root.count + " 个容器";
                 font-size: Theme.fs-xs; color: Theme.fg-4;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -115,15 +112,13 @@ export component RowContainer inherits Rectangle {
                     font-size: Theme.fs-xs; font-weight: 700; color: Theme.accent;
                     max-width: 100px;
                     overflow: elide;
-                    vertical-alignment: center;
-                }
+                    }
                 Text {
                     horizontal-stretch: 1;
                     text: root.name;
                     font-size: Theme.fs-md; color: Theme.fg-2;
                     overflow: elide;
-                    vertical-alignment: center;
-                }
+                    }
             }
             // 4 image
             Text {
@@ -131,8 +126,7 @@ export component RowContainer inherits Rectangle {
                 text: root.image;
                 font-size: Theme.fs; color: Theme.fg-3;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             // 5 state
             Text {
                 width: Theme.c-state;
@@ -140,8 +134,7 @@ export component RowContainer inherits Rectangle {
                 font-size: Theme.fs;
                 color: root.running ? Theme.ok : Theme.fg-4;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             // 6 cpu
             Text {
                 width: Theme.c-cpu;
@@ -149,8 +142,7 @@ export component RowContainer inherits Rectangle {
                 font-size: Theme.fs-sm;
                 color: root.cpu == "" || root.cpu == "0.00%" ? Theme.fg-4 : Theme.warn;
                 horizontal-alignment: right;
-                vertical-alignment: center;
-            }
+                }
             // 7 mem
             Text {
                 width: Theme.c-mem;
@@ -158,8 +150,7 @@ export component RowContainer inherits Rectangle {
                 font-size: Theme.fs-sm; color: Theme.fg-3;
                 horizontal-alignment: right;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             // 8 actions
             HorizontalLayout {
                 width: Theme.c-act; height: 100%;
@@ -208,29 +199,25 @@ export component RowImage inherits Rectangle {
                 text: root.repo;
                 font-size: Theme.fs-md; color: Theme.fg-2;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.i-tag;
                 text: root.tag;
                 font-size: Theme.fs; color: Theme.accent;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.i-use;
                 text: root.used > 0 ? (root.used + " 个") : "未使用";
                 font-size: Theme.fs-sm;
                 color: root.used > 0 ? Theme.ok : Theme.fg-4;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.i-size;
                 text: root.size;
                 font-size: Theme.fs-sm; color: Theme.fg-3;
                 horizontal-alignment: right;
-                vertical-alignment: center;
-            }
+                }
             IconBtn { glyph: "✕"; danger: true; clicked => { root.remove(); } }
         }
     }
@@ -261,29 +248,25 @@ export component RowNetwork inherits Rectangle {
                 text: root.name;
                 font-size: Theme.fs-md; color: Theme.fg-2;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.n-driver;
                 text: root.driver;
                 font-size: Theme.fs; color: Theme.accent;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.n-scope;
                 text: root.scope;
                 font-size: Theme.fs; color: Theme.fg-3;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.n-count;
                 text: root.used > 0 ? root.used : "0";
                 font-size: Theme.fs-sm; color: Theme.fg-4;
                 horizontal-alignment: right;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -312,22 +295,19 @@ export component RowVolume inherits Rectangle {
                 text: root.name;
                 font-size: Theme.fs-md; color: Theme.fg-2;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 width: Theme.n-driver;
                 text: root.driver;
                 font-size: Theme.fs; color: Theme.accent;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 horizontal-stretch: 1;
                 text: root.mountpoint;
                 font-size: Theme.fs-sm; color: Theme.fg-4;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }

@@ -1,0 +1,217 @@
+// drawer.slint — 右侧抽屉
+import { Theme } from "theme.slint";
+import { LogLineRow } from "models.slint";
+import { ScrollView } from "std-widgets.slint";
+
+component DTab inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+    in property <int> idx: 0;
+    callback clicked(int);
+    Rectangle {
+        y: parent.height - 2px;
+        width: 100%;
+        height: 2px;
+        background: root.active ? Theme.ink : transparent;
+    }
+    Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
+    TouchArea { clicked => { root.clicked(root.idx); } }
+}
+
+component KvRow inherits Rectangle {
+    in property <string> k: "";
+    in property <string> v: "";
+    VerticalLayout {
+        width: 100%;
+        spacing: 2px;
+        Text { text: root.k; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: root.v; font-size: Theme.fs_sm; color: Theme.ink; }
+    }
+}
+
+export component Drawer inherits Rectangle {
+    in-out property <bool> open: false;
+    in-out property <int> tab: 0;
+    in-out property <bool> log_follow: true;
+    in-out property <[LogLineRow]> log_lines: [];
+
+    in-out property <string> d_name: ""; in-out property <string> d_state: "";
+    in-out property <string> d_status: ""; in-out property <string> d_image: "";
+    in-out property <string> d_id: ""; in-out property <string> d_pid: "";
+    in-out property <string> d_disk: ""; in-out property <string> d_cpu: "";
+    in-out property <string> d_mem: ""; in-out property <string> d_restart: "";
+    in-out property <string> d_created: ""; in-out property <string> d_started: "";
+    in-out property <string> d_netmode: ""; in-out property <string> d_ports: "";
+    in-out property <string> d_mounts: ""; in-out property <string> d_networks: "";
+    in-out property <string> d_entry: ""; in-out property <string> d_cmd: "";
+    in-out property <string> d_labels: ""; in-out property <string> d_env: "";
+    in-out property <string> i_repo: ""; in-out property <string> i_size: "";
+    in-out property <string> i_layers: ""; in-out property <string> i_created: "";
+    in-out property <string> i_entry: ""; in-out property <string> i_cmd: "";
+
+    callback close();
+    callback set_tab(int);
+    callback log_follow_click();
+    callback log_copy_click();
+    callback log_clear_click();
+
+    width: Theme.drawer_w;
+    height: 100%;
+    background: Theme.card;
+    Rectangle {
+        width: 1px;
+        height: 100%;
+        background: Theme.line;
+    }
+
+    if root.open : VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        // 头部
+        Rectangle {
+            height: 56px;
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%;
+                height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: Theme.s3;
+                padding-left: Theme.s4;
+                padding-right: Theme.s4;
+                Text { text: root.d_name; font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; horizontal-stretch: 1; }
+                Rectangle {
+                    width: 28px; height: 28px; border-radius: Theme.r_sm;
+                    background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                    Text { text: "✕"; color: Theme.ink_2; font-size: 12px; }
+                    TouchArea { clicked => { root.close(); } }
+                }
+            }
+        }
+
+        // Tab 栏
+        Rectangle {
+            height: 40px;
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%;
+                height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 0px;
+                DTab { label: "Details"; active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
+                DTab { label: "Logs"; active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
+                DTab { label: "Environment"; active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
+            }
+        }
+
+        // 详情
+        if root.tab == 0 : ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                width: 100%;
+                spacing: Theme.s4;
+                padding: Theme.s4;
+                Text { text: "Overview"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                KvRow { k: "Status"; v: root.d_state; }
+                KvRow { k: "Image"; v: root.d_image; }
+                KvRow { k: "PID"; v: root.d_pid; }
+                Text { text: "Resources"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                KvRow { k: "CPU"; v: root.d_cpu; }
+                KvRow { k: "Memory"; v: root.d_mem; }
+                KvRow { k: "Disk"; v: root.d_disk; }
+                Text { text: "Time"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                KvRow { k: "Created"; v: root.d_created; }
+                KvRow { k: "Started"; v: root.d_started; }
+                KvRow { k: "Restart Policy"; v: root.d_restart; }
+                Text { text: "Network"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                KvRow { k: "Mode"; v: root.d_netmode; }
+                KvRow { k: "Ports"; v: root.d_ports; }
+                KvRow { k: "Networks"; v: root.d_networks; }
+            }
+        }
+
+        // 日志
+        if root.tab == 1 : VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 0px;
+            Rectangle {
+                height: 40px;
+                Rectangle {
+                    y: parent.height - 1px;
+                    width: 100%;
+                    height: 1px;
+                    background: Theme.line;
+                }
+                HorizontalLayout {
+                    width: 100%; height: 100%;
+                    spacing: Theme.s2;
+                    padding-left: Theme.s3;
+                    padding-right: Theme.s3;
+                    Rectangle {
+                        width: 28px; height: 28px; border-radius: Theme.r_sm;
+                        background: root.log_follow ? Theme.pill_on_bg : Theme.bg;
+                        border-width: 1px; border-color: Theme.line;
+                        Text { text: root.log_follow ? "⏸" : "▶"; color: root.log_follow ? Theme.ok : Theme.ink_2; font-size: 11px; }
+                        TouchArea { clicked => { root.log_follow_click(); } }
+                    }
+                    Rectangle {
+                        width: 28px; height: 28px; border-radius: Theme.r_sm;
+                        background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                        Text { text: "⧉"; color: Theme.ink_2; font-size: 12px; }
+                        TouchArea { clicked => { root.log_copy_click(); } }
+                    }
+                    Rectangle {
+                        width: 28px; height: 28px; border-radius: Theme.r_sm;
+                        background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                        Text { text: "🗑"; color: Theme.ink_2; font-size: 11px; }
+                        TouchArea { clicked => { root.log_clear_click(); } }
+                    }
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.log_bg;
+                VerticalLayout {
+                    width: 100%; height: 100%;
+                    for line in root.log_lines : Text {
+                        text: line.text;
+                        font-size: Theme.fs_xs;
+                        color: Theme.log_ink;
+                    }
+                }
+            }
+        }
+
+        // 环境
+        if root.tab == 2 : ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                width: 100%;
+                spacing: Theme.s3;
+                padding: Theme.s4;
+                Text { text: "Environment Variables"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                Text { text: root.d_env; font-size: Theme.fs_xs; color: Theme.ink; }
+                Text { text: "Port Mappings"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                Text { text: root.d_ports; font-size: Theme.fs_xs; color: Theme.ink; }
+                Text { text: "Networks"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                Text { text: root.d_networks; font-size: Theme.fs_xs; color: Theme.ink; }
+                Text { text: "Mounts"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: 1px; background: Theme.line_2; }
+                Text { text: root.d_mounts; font-size: Theme.fs_xs; color: Theme.ink; }
+            }
+        }
+    }
+}

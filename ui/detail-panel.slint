@@ -20,8 +20,7 @@ export component SecTitle inherits Rectangle {
                 text: root.text;
                 font-size: Theme.fs-xs; font-weight: 700;
                 color: Theme.fg-4;
-                vertical-alignment: center;
-            }
+                }
             Rectangle { horizontal-stretch: 1; }
         }
     }
@@ -45,16 +44,14 @@ export component Field inherits Rectangle {
                 text: root.k;
                 font-size: Theme.fs-sm; color: Theme.fg-4;
                 horizontal-alignment: right;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 horizontal-stretch: 1;
                 text: root.v == "" ? "—" : root.v;
                 font-size: Theme.fs-sm;
                 color: root.v == "" ? Theme.fg-4 : Theme.fg-2;
                 overflow: elide;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }
@@ -81,14 +78,12 @@ export component FieldBlock inherits Rectangle {
                     text: root.k;
                     font-size: Theme.fs-sm; color: Theme.fg-4;
                     horizontal-alignment: right;
-                    vertical-alignment: center;
-                }
+                    }
                 Text {
                     horizontal-stretch: 1;
                     text: "—";
                     font-size: Theme.fs-sm; color: Theme.fg-4;
-                    vertical-alignment: center;
-                }
+                    }
             }
         }
 

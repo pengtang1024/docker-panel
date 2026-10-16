@@ -95,6 +95,7 @@ pub struct AppState {
 
     pub sort_field: SortField,
     pub sort_desc: bool,
+    pub filter: String,
     pub batch: BatchState,
 }
 
@@ -129,6 +130,7 @@ impl AppState {
             shutdown: AtomicBool::new(false),
             sort_field: SortField::Group,
             sort_desc: false,
+            filter: String::from("all"),
             batch: BatchState::default(),
         }));
         (state, rx)
@@ -186,6 +188,18 @@ impl AppState {
                     .join("\n")
             }
         };
+        let cpu = self
+            .containers
+            .iter()
+            .find(|c| c.id == d.id)
+            .map(|c| format!("{:.1}%", c.cpu_percent))
+            .unwrap_or_default();
+        let mem = self
+            .containers
+            .iter()
+            .find(|c| c.id == d.id)
+            .map(|c| format!("{} / {}", format_bytes(c.mem_usage), format_bytes(c.mem_limit)))
+            .unwrap_or_default();
         Some((
             SharedString::from(d.name.clone()),
             SharedString::from(d.state.clone()),
@@ -193,39 +207,31 @@ impl AppState {
             SharedString::from(d.image.clone()),
             SharedString::from(d.id.clone()),
             SharedString::from(d.pid.to_string()),
-            SharedString::from(d.exit_code.to_string()),
+            SharedString::from("—"),
+            SharedString::from(cpu),
+            SharedString::from(mem),
+            SharedString::from(d.restart_policy.clone()),
             SharedString::from(d.created.clone()),
             SharedString::from(d.started_at.clone()),
-            SharedString::from(d.restart_policy.clone()),
             SharedString::from(d.network_mode.clone()),
             SharedString::from(fmt_list(&d.ports)),
             SharedString::from(fmt_list(&d.mounts)),
             SharedString::from(fmt_list(&d.networks)),
             SharedString::from(d.entrypoint.clone()),
             SharedString::from(d.command.clone()),
-            SharedString::from(d.working_dir.clone()),
-            SharedString::from(fmt_labels(&d.labels)),
         ))
     }
 
-    /// 锁内调用：把镜像详情格式化（14 字段 SharedString 列表）
+    /// 锁内调用：把镜像详情格式化（6 字段 SharedString 列表）
     pub fn build_image_detail_data(&self) -> Option<Vec<SharedString>> {
         let d = self.image_detail.as_ref()?;
         Some(vec![
-            SharedString::from(d.short_id.clone()),
             SharedString::from(d.repo_tags.clone()),
-            SharedString::from(d.created.clone()),
-            SharedString::from(d.author.clone()),
             SharedString::from(d.size.clone()),
             SharedString::from(format!("{}/{}", d.os, d.architecture)),
+            SharedString::from(d.created.clone()),
             SharedString::from(d.entrypoint.clone()),
             SharedString::from(d.cmd.clone()),
-            SharedString::from(d.working_dir.clone()),
-            SharedString::from(d.exposed_ports.clone()),
-            SharedString::from(d.volumes.clone()),
-            SharedString::from(d.labels.clone()),
-            SharedString::from(d.env.clone()),
-            SharedString::from(d.id.clone()),
         ])
     }
 

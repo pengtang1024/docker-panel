@@ -1,34 +1,29 @@
 // app.slint — 主窗口骨架
-//
-// 布局（唯一两层 Layout 树，深层全绝对定位）：
-//   VerticalLayout
-//   ├── TopBar        48px
-//   ├── HorizontalLayout (stretch)
-//   │   ├── Sidebar      200px
-//   │   ├── VerticalLayout (stretch)  ← 中栏
-//   │   │   ├── ToolBar   40px
-//   │   │   ├── BatchBar? 42px
-//   │   │   └── ListArea  (stretch)
-//   │   └── DetailPanel  360px
-//   └── FootBar       24px
-//
-// 状态分离：nav-tab（左侧导航）/ side-tab（右侧面板）完全独立。
+// 布局：VerticalLayout(TopBar, SubBar, BatchBar?, GridArea, FootBar) + Drawer
 import { Theme } from "theme.slint";
-import { TopBar, ToolBar, FootBar } from "panes.slint";
-import { Sidebar } from "sidebar.slint";
-import { ListArea } from "list-area.slint";
+import { TopBar } from "top-bar.slint";
+import { SubBar } from "sub-bar.slint";
 import { BatchBar } from "batch-bar.slint";
-import { DetailLogPanel } from "detail-log-panel.slint";
+import { CardsArea } from "cards.slint";
+import { FootBar } from "foot-bar.slint";
+import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, LogLineRow, NetworkRow, VolumeRow } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LogLineRow } from "models.slint";
 
 export global AppActions {
+    callback toggle_theme();
+    callback refresh();
+    callback cleanup();
+    callback pull();
+    callback set_view(int);
+    callback set_filter(string);
+    callback set_sort(int);
+    callback search(string);
     callback container_toggle(string);
     callback container_restart(string);
     callback container_remove(string);
     callback container_logs(string);
     callback container_select(string);
-    callback container_sort(int);
     callback container_toggle_select(string);
     callback image_select(string);
     callback image_remove(string);
@@ -37,30 +32,44 @@ export global AppActions {
     callback batch_restart();
     callback batch_remove();
     callback batch_clear();
+    callback drawer_close();
+    callback drawer_tab(int);
+    callback log_toggle_follow();
+    callback log_copy();
+    callback log_clear();
+    callback pull_submit(string);
+    callback pull_close();
+    callback cleanup_submit(bool, bool, bool, bool);
+    callback cleanup_close();
 }
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
     width: 1280px; height: 760px;
-    background: Theme.bg-root;
+    background: Theme.bg;
 
-    // —— 导航状态（左右独立）——
-    in-out property <int> nav_tab: 0;
-    in-out property <int> side_tab: 0;
+    // —— 视图与筛选 ——
+    in-out property <int> view: 0;          // 0=容器 1=镜像 2=网络 3=卷
+    in-out property <string> filter: "all";
+    in-out property <int> sort_field: 0;    // 0=name 1=cpu 2=mem 3=disk 4=status
+    in-out property <bool> sort_desc: true;
+    in-out property <string> search_q: "";
+    in-out property <int> theme_mode <=> Theme.theme_mode;
 
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
-    in-out property <string> status_text: "正在连接 Docker...";
-    in-out property <string> summary_text: "";
+    in-out property <string> status_text: "Connecting...";
+    in-out property <int> batch_count: 0;
+
+    // —— 统计 ——
     in-out property <int> total_containers: 0;
     in-out property <int> running_containers: 0;
     in-out property <int> total_images: 0;
     in-out property <int> total_networks: 0;
     in-out property <int> total_volumes: 0;
-    in-out property <int> sort_field: 0;
-    in-out property <bool> sort_desc: false;
-    in-out property <int> batch_count: 0;
-    in-out property <bool> has_detail: false;
+    in-out property <string> cpu_total: "0%";
+    in-out property <string> mem_total: "0MB";
+    in-out property <string> disk_total: "0MB";
 
     // —— 数据 ——
     in-out property <[ContainerRow]> container_rows: [];
@@ -69,156 +78,145 @@ export component MainWindow inherits Window {
     in-out property <[VolumeRow]> volume_rows: [];
     in-out property <[LogLineRow]> log_lines: [];
 
-    // —— 容器详情 ——
+    // —— 抽屉 ——
+    in-out property <bool> drawer_open: false;
+    in-out property <int> drawer_tab: 0;    // 0=详情 1=日志 2=环境
+    in-out property <bool> log_follow: true;
     in-out property <string> d_name: ""; in-out property <string> d_state: "";
     in-out property <string> d_status: ""; in-out property <string> d_image: "";
     in-out property <string> d_id: ""; in-out property <string> d_pid: "";
-    in-out property <string> d_exit: ""; in-out property <string> d_created: "";
-    in-out property <string> d_started: ""; in-out property <string> d_restart: "";
+    in-out property <string> d_disk: ""; in-out property <string> d_cpu: "";
+    in-out property <string> d_mem: ""; in-out property <string> d_restart: "";
+    in-out property <string> d_created: ""; in-out property <string> d_started: "";
     in-out property <string> d_netmode: ""; in-out property <string> d_ports: "";
     in-out property <string> d_mounts: ""; in-out property <string> d_networks: "";
     in-out property <string> d_entry: ""; in-out property <string> d_cmd: "";
-    in-out property <string> d_workdir: ""; in-out property <string> d_labels: "";
-
-    // —— 镜像详情 ——
-    in-out property <string> i_repo: ""; in-out property <string> i_short: "";
-    in-out property <string> i_created: ""; in-out property <string> i_author: "";
-    in-out property <string> i_size: ""; in-out property <string> i_platform: "";
+    in-out property <string> d_labels: ""; in-out property <string> d_env: "";
+    in-out property <string> i_repo: ""; in-out property <string> i_size: "";
+    in-out property <string> i_layers: ""; in-out property <string> i_created: "";
     in-out property <string> i_entry: ""; in-out property <string> i_cmd: "";
-    in-out property <string> i_workdir: ""; in-out property <string> i_ports: "";
-    in-out property <string> i_volumes: ""; in-out property <string> i_labels: "";
-    in-out property <string> i_env: ""; in-out property <string> i_id: "";
 
     // —— 弹窗 ——
     in-out property <bool> pull_open: false;
     in-out property <string> pull_input: "";
     in-out property <bool> pull_busy: false;
+    in-out property <int> pull_progress: 0;
+    in-out property <string> pull_status: "";
     in-out property <bool> cleanup_open: false;
     in-out property <bool> cleanup_stopped: true;
     in-out property <bool> cleanup_dangling: true;
-    in-out property <bool> cleanup_unused: false;
-
-    // —— 回调 ——
-    callback refresh_requested();
-    callback search_accepted(string);
-    callback stop_all_requested();
-    callback pull_requested();
-    callback cleanup_requested();
-    callback pull_submit(string);
-    callback pull_close();
-    callback cleanup_submit(bool, bool, bool);
-    callback cleanup_close();
+    in-out property <bool> cleanup_unused_net: false;
+    in-out property <bool> cleanup_unused_vol: false;
 
     VerticalLayout {
         width: 100%; height: 100%;
         spacing: 0px;
 
-        // ===== 顶栏 =====
         TopBar {
-            width: 100%;
-            online <=> root.docker_ok;
-            refresh => { root.refresh_requested(); }
-            search(val) => { root.search_accepted(val); }
+            height: Theme.top_h;
+            docker_ok <=> root.docker_ok;
+            search_q <=> root.search_q;
+            theme_click => { AppActions.toggle_theme(); }
+            refresh_click => { AppActions.refresh(); }
+            cleanup_click => { AppActions.cleanup(); }
+            pull_click => { AppActions.pull(); }
+            search(val) => { AppActions.search(val); }
         }
 
-        // ===== 主体三栏 =====
-        HorizontalLayout {
-            width: 100%; vertical-stretch: 1;
-            spacing: 0px;
-
-            Sidebar {
-                width: Theme.nav-w;
-                tab <=> root.nav_tab;
-                n-container <=> root.total_containers;
-                n-image <=> root.total_images;
-                n-network <=> root.total_networks;
-                n-volume <=> root.total_volumes;
-                n-running <=> root.running_containers;
-            }
-
-            VerticalLayout {
-                vertical-stretch: 1;
-                spacing: 0px;
-
-                ToolBar {
-                    width: 100%;
-                    running <=> root.running_containers;
-                    stop_all => { root.stop_all_requested(); }
-                    pull => { root.pull_requested(); }
-                    cleanup => { root.cleanup_requested(); }
-                }
-
-                if root.nav_tab == 0 && root.batch_count > 0: BatchBar {
-                    width: 100%;
-                    count <=> root.batch_count;
-                    b-start => { AppActions.batch_start(); }
-                    b-stop => { AppActions.batch_stop(); }
-                    b-restart => { AppActions.batch_restart(); }
-                    b-remove => { AppActions.batch_remove(); }
-                    b-clear => { AppActions.batch_clear(); }
-                }
-
-                ListArea {
-                    width: 100%; vertical-stretch: 1;
-                    tab <=> root.nav_tab;
-                    sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
-                    containers <=> root.container_rows;
-                    images <=> root.image_rows;
-                    networks <=> root.network_rows;
-                    volumes <=> root.volume_rows;
-                    c-pick(id) => { AppActions.container_select(id); }
-                    c-toggle(id) => { AppActions.container_toggle(id); }
-                    c-restart(id) => { AppActions.container_restart(id); }
-                    c-logs(id) => { AppActions.container_logs(id); }
-                    c-remove(id) => { AppActions.container_remove(id); }
-                    c-sort(f) => { AppActions.container_sort(f); }
-                    c-box(id) => { AppActions.container_toggle_select(id); }
-                    i-pick(id) => { AppActions.image_select(id); }
-                    i-remove(id) => { AppActions.image_remove(id); }
-                }
-            }
-
-            DetailLogPanel {
-                width: Theme.side-w;
-                tab <=> root.side_tab;
-                log_lines <=> root.log_lines;
-                has_detail <=> root.has_detail;
-                d_name <=> root.d_name; d_state <=> root.d_state; d_status <=> root.d_status;
-                d_image <=> root.d_image; d_id <=> root.d_id; d_pid <=> root.d_pid;
-                d_exit <=> root.d_exit; d_created <=> root.d_created; d_started <=> root.d_started;
-                d_restart <=> root.d_restart; d_netmode <=> root.d_netmode;
-                d_ports <=> root.d_ports; d_mounts <=> root.d_mounts; d_networks <=> root.d_networks;
-                d_entry <=> root.d_entry; d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir;
-                d_labels <=> root.d_labels;
-                i_repo <=> root.i_repo; i_short <=> root.i_short;
-                i_created <=> root.i_created; i_author <=> root.i_author;
-                i_size <=> root.i_size; i_platform <=> root.i_platform;
-                i_entry <=> root.i_entry; i_cmd <=> root.i_cmd;
-                i_workdir <=> root.i_workdir; i_ports <=> root.i_ports;
-                i_volumes <=> root.i_volumes; i_labels <=> root.i_labels;
-                i_env <=> root.i_env; i_id <=> root.i_id;
-            }
+        SubBar {
+            height: Theme.sub_h;
+            view <=> root.view;
+            filter <=> root.filter;
+            sort_field <=> root.sort_field;
+            sort_desc <=> root.sort_desc;
+            total_containers <=> root.total_containers;
+            running_containers <=> root.running_containers;
+            total_images <=> root.total_images;
+            total_networks <=> root.total_networks;
+            total_volumes <=> root.total_volumes;
+            set_view(v) => { AppActions.set_view(v); }
+            set_filter(f) => { AppActions.set_filter(f); }
+            set_sort(f) => { AppActions.set_sort(f); }
         }
 
-        // ===== 状态栏 =====
+        if root.batch_count > 0: BatchBar {
+            height: Theme.batch_h;
+            count <=> root.batch_count;
+            start => { AppActions.batch_start(); }
+            stop => { AppActions.batch_stop(); }
+            restart => { AppActions.batch_restart(); }
+            remove => { AppActions.batch_remove(); }
+            clear => { AppActions.batch_clear(); }
+        }
+
+        CardsArea {
+            vertical-stretch: 1;
+            view <=> root.view;
+            search_q <=> root.search_q;
+            containers <=> root.container_rows;
+            images <=> root.image_rows;
+            networks <=> root.network_rows;
+            volumes <=> root.volume_rows;
+            c_select(id) => { AppActions.container_select(id); }
+            c_toggle(id) => { AppActions.container_toggle(id); }
+            c_restart(id) => { AppActions.container_restart(id); }
+            c_logs(id) => { AppActions.container_logs(id); }
+            c_remove(id) => { AppActions.container_remove(id); }
+            c_box(id) => { AppActions.container_toggle_select(id); }
+            i_select(id) => { AppActions.image_select(id); }
+            i_remove(id) => { AppActions.image_remove(id); }
+        }
+
         FootBar {
-            width: 100%;
+            height: Theme.foot_h;
+            docker_ok <=> root.docker_ok;
             status <=> root.status_text;
-            summary <=> root.summary_text;
+            total_containers <=> root.total_containers;
+            running_containers <=> root.running_containers;
+            total_images <=> root.total_images;
+            total_networks <=> root.total_networks;
+            total_volumes <=> root.total_volumes;
+            cpu_total <=> root.cpu_total;
+            mem_total <=> root.mem_total;
+            disk_total <=> root.disk_total;
         }
     }
 
-    // ===== 弹窗层 =====
+    Drawer {
+        open <=> root.drawer_open;
+        tab <=> root.drawer_tab;
+        log_follow <=> root.log_follow;
+        log_lines <=> root.log_lines;
+        d_name <=> root.d_name; d_state <=> root.d_state; d_status <=> root.d_status;
+        d_image <=> root.d_image; d_id <=> root.d_id; d_pid <=> root.d_pid;
+        d_disk <=> root.d_disk; d_cpu <=> root.d_cpu; d_mem <=> root.d_mem;
+        d_restart <=> root.d_restart; d_created <=> root.d_created; d_started <=> root.d_started;
+        d_netmode <=> root.d_netmode; d_ports <=> root.d_ports; d_mounts <=> root.d_mounts;
+        d_networks <=> root.d_networks; d_entry <=> root.d_entry; d_cmd <=> root.d_cmd;
+        d_labels <=> root.d_labels; d_env <=> root.d_env;
+        i_repo <=> root.i_repo; i_size <=> root.i_size; i_layers <=> root.i_layers;
+        i_created <=> root.i_created; i_entry <=> root.i_entry; i_cmd <=> root.i_cmd;
+        close => { AppActions.drawer_close(); }
+        set_tab(t) => { AppActions.drawer_tab(t); }
+        log_follow_click => { AppActions.log_toggle_follow(); }
+        log_copy_click => { AppActions.log_copy(); }
+        log_clear_click => { AppActions.log_clear(); }
+    }
+
     if root.pull_open: PullDialog {
-        input <=> root.pull_input; busy <=> root.pull_busy;
-        close => { root.pull_close(); }
-        submit(v) => { root.pull_submit(v); }
+        input <=> root.pull_input;
+        busy <=> root.pull_busy;
+        progress <=> root.pull_progress;
+        status <=> root.pull_status;
+        close => { AppActions.pull_close(); }
+        submit(v) => { AppActions.pull_submit(v); }
     }
     if root.cleanup_open: CleanupDialog {
         stopped <=> root.cleanup_stopped;
         dangling <=> root.cleanup_dangling;
-        unused <=> root.cleanup_unused;
-        close => { root.cleanup_close(); }
-        submit(a, b, c) => { root.cleanup_submit(a, b, c); }
+        unused_net <=> root.cleanup_unused_net;
+        unused_vol <=> root.cleanup_unused_vol;
+        close => { AppActions.cleanup_close(); }
+        submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
     }
 }

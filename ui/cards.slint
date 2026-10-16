@@ -1,0 +1,180 @@
+// cards.slint — 卡片网格区域
+import { Theme } from "theme.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
+
+component ContainerCard inherits Rectangle {
+    in property <ContainerRow> data;
+    callback select(string);
+    callback toggle(string);
+    callback logs(string);
+    callback remove(string);
+    width: 280px;
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s2;
+        padding: Theme.s4;
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
+        Text { text: data.image; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        HorizontalLayout {
+            width: 100%;
+            spacing: Theme.s3;
+            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: data.is_running ? Theme.ok : Theme.stop; }
+            Text { text: data.cpu_percent; font-size: Theme.fs_xs; color: Theme.ink_2; }
+            Text { text: data.mem_usage; font-size: Theme.fs_xs; color: Theme.ink_2; }
+            Text { text: data.net_traffic; font-size: Theme.fs_xs; color: Theme.ink_2; }
+            Rectangle { horizontal-stretch: 1; }
+            if data.compose_project != "" : Text {
+                text: data.compose_project;
+                font-size: Theme.fs_xs;
+                color: Theme.bar_cpu;
+            }
+        }
+        HorizontalLayout {
+            width: 100%;
+            spacing: Theme.s2;
+            padding-top: Theme.s2;
+            Rectangle {
+                width: 28px; height: 28px; border-radius: Theme.r_sm;
+                background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                Text { text: data.is_running ? "↻" : "▶"; color: Theme.ink_2; font-size: 12px; }
+                TouchArea { clicked => { root.toggle(data.id); } }
+            }
+            Rectangle {
+                width: 28px; height: 28px; border-radius: Theme.r_sm;
+                background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                Text { text: "≡"; color: Theme.ink_2; font-size: 14px; }
+                TouchArea { clicked => { root.logs(data.id); } }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Rectangle {
+                width: 28px; height: 28px; border-radius: Theme.r_sm;
+                background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                Text { text: "✕"; color: Theme.err; font-size: 12px; }
+                TouchArea { clicked => { root.remove(data.id); } }
+            }
+        }
+    }
+    TouchArea { clicked => { root.select(data.id); } }
+}
+
+component ImageCard inherits Rectangle {
+    in property <ImageRow> data;
+    callback select(string);
+    callback remove(string);
+    width: 280px;
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s2;
+        padding: Theme.s4;
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
+        Text { text: data.tag; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        HorizontalLayout {
+            spacing: Theme.s4;
+            Text { text: data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
+            Text { text: data.containers + " used"; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        }
+        HorizontalLayout {
+            padding-top: Theme.s2;
+            Rectangle {
+                width: 28px; height: 28px; border-radius: Theme.r_sm;
+                background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                Text { text: "▶"; color: Theme.ink_2; font-size: 12px; }
+                TouchArea { clicked => { root.select(data.id); } }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Rectangle {
+                width: 28px; height: 28px; border-radius: Theme.r_sm;
+                background: Theme.bg; border-width: 1px; border-color: Theme.line;
+                Text { text: "✕"; color: Theme.err; font-size: 12px; }
+                TouchArea { clicked => { root.remove(data.id); } }
+            }
+        }
+    }
+    TouchArea { clicked => { root.select(data.id); } }
+}
+
+component NetworkCard inherits Rectangle {
+    in property <NetworkRow> data;
+    width: 280px;
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s2;
+        padding: Theme.s4;
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
+        Text { text: data.driver + " · " + data.scope; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: data.containers + " containers"; font-size: Theme.fs_xs; color: Theme.ink_2; }
+    }
+}
+
+component VolumeCard inherits Rectangle {
+    in property <VolumeRow> data;
+    width: 280px;
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s2;
+        padding: Theme.s4;
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
+        Text { text: data.mountpoint; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: data.driver + " · " + data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
+    }
+}
+
+export component CardsArea inherits Rectangle {
+    in-out property <int> view: 0;
+    in-out property <string> search_q: "";
+    in-out property <[ContainerRow]> containers: [];
+    in-out property <[ImageRow]> images: [];
+    in-out property <[NetworkRow]> networks: [];
+    in-out property <[VolumeRow]> volumes: [];
+    callback c_select(string);
+    callback c_toggle(string);
+    callback c_restart(string);
+    callback c_logs(string);
+    callback c_remove(string);
+    callback c_box(string);
+    callback i_select(string);
+    callback i_remove(string);
+
+    if root.view == 0 : VerticalLayout {
+        width: 100%; height: 100%;
+        for row in root.containers : ContainerCard {
+            data <=> row;
+            select(id) => { root.c_select(id); }
+            toggle(id) => { root.c_toggle(id); }
+            logs(id) => { root.c_logs(id); }
+            remove(id) => { root.c_remove(id); }
+        }
+    }
+    if root.view == 1 : VerticalLayout {
+        width: 100%; height: 100%;
+        for row in root.images : ImageCard {
+            data <=> row;
+            select(id) => { root.i_select(id); }
+            remove(id) => { root.i_remove(id); }
+        }
+    }
+    if root.view == 2 : VerticalLayout {
+        width: 100%; height: 100%;
+        for row in root.networks : NetworkCard { data <=> row; }
+    }
+    if root.view == 3 : VerticalLayout {
+        width: 100%; height: 100%;
+        for row in root.volumes : VolumeCard { data <=> row; }
+    }
+}

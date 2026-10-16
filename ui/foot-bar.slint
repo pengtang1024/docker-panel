@@ -1,0 +1,74 @@
+// foot-bar.slint — 底栏
+import { Theme } from "theme.slint";
+
+component OvItem inherits Rectangle {
+    in property <string> label: "";
+    in property <string> val: "";
+    in property <string> ic: "";
+    in property <bool> show_border: true;
+    if root.show_border : Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: 16px;
+        background: Theme.line_2;
+    }
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s2;
+        padding-left: Theme.s3;
+        padding-right: Theme.s3;
+        Text { text: root.ic; color: Theme.ink_3; font-size: Theme.fs_sm; }
+        Text { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
+        Text { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
+    }
+}
+
+export component FootBar inherits Rectangle {
+    height: Theme.foot_h;
+    background: Theme.card;
+
+    in-out property <bool> docker_ok: false;
+    in-out property <string> status: "";
+    in-out property <int> total_containers: 0;
+    in-out property <int> running_containers: 0;
+    in-out property <int> total_images: 0;
+    in-out property <int> total_networks: 0;
+    in-out property <int> total_volumes: 0;
+    in-out property <string> cpu_total: "0%";
+    in-out property <string> mem_total: "0MB";
+    in-out property <string> disk_total: "0MB";
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+        padding-left: Theme.s4;
+        padding-right: Theme.s4;
+
+        Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.docker_ok ? Theme.ok : Theme.stop; }
+        Text {
+            text: root.status;
+            font-size: Theme.fs_xs;
+            color: Theme.ink_3;
+            padding-left: Theme.s2;
+        }
+
+        Rectangle { width: 1px; height: 16px; background: Theme.line_2; }
+
+        OvItem { label: "Docker"; val: "v26.1"; ic: "▣"; }
+        OvItem { label: "Containers"; val: root.running_containers + "/" + root.total_containers; ic: "▢"; }
+        OvItem { label: "Images"; val: root.total_images; ic: "▤"; }
+        OvItem { label: "Networks"; val: root.total_networks; ic: "⬡"; }
+        OvItem { label: "Volumes"; val: root.total_volumes; ic: "▦"; }
+        OvItem { label: "CPU"; val: root.cpu_total; ic: "◐"; }
+        OvItem { label: "Memory"; val: root.mem_total; ic: "▥"; }
+        OvItem { label: "Disk"; val: root.disk_total; ic: "▣"; show_border: false; }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        Text {
+            text: root.total_containers + " containers · " + root.total_images + " images · " + root.total_networks + " nets · " + root.total_volumes + " vols";
+            font-size: Theme.fs_xs;
+            color: Theme.ink_3;
+        }
+    }
+}

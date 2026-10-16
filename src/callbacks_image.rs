@@ -1,4 +1,4 @@
-//! 镜像操作回调（AppActions global）
+//! 镜像操作回调
 
 use slint::{ComponentHandle, SharedString};
 
@@ -9,15 +9,15 @@ use crate::ui_state::SharedState;
 
 pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
-
-    // —— 镜像行点击 → inspect + 切镜像详情面板 ——
+    // 镜像卡片点击 → 打开抽屉 + inspect
     {
         let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_image_select(move |row_id: SharedString| {
             let name = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_side_tab(2); // 切到右侧面板的"镜像" Tab
+            ui.set_drawer_open(true);
+            ui.set_drawer_tab(0);
             ui.set_status_text(SharedString::from(format!("查看镜像 {name}")));
             if let Ok(mut st) = s.lock() {
                 st.request_image_detail(name);
@@ -25,15 +25,11 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
         });
     }
 
-    // —— 镜像删除 ——
+    // 镜像删除
     {
-        let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_image_remove(move |row_id: SharedString| {
             let full_id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("删除镜像..."));
-
             let (name, tag) = match full_id.rsplit_once(':') {
                 Some((n, t)) if !n.is_empty() && !t.contains('/') => (n.to_string(), t.to_string()),
                 _ => (full_id, "".to_string()),

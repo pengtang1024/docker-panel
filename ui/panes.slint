@@ -23,22 +23,20 @@ export component TopBar inherits Rectangle {
                 text: "▣";
                 font-size: Theme.fs-lg;
                 color: Theme.accent;
-                vertical-alignment: center;
-            }
+                }
             Text {
                 text: "Docker Panel";
                 font-size: Theme.fs-lg;
                 font-weight: 700;
                 color: Theme.fg;
-                vertical-alignment: center;
-            }
+                }
             Rectangle { width: Theme.s2; height: 1px; }
             ConnBadge { online <=> root.online; }
             Rectangle { horizontal-stretch: 1; }
 
             SearchBox {
                 width: 260px;
-                accepted(s) => { root.search(s); }
+                accepted() => { root.search(s); }
             }
             Rectangle { width: Theme.s1; height: 1px; }
             Button { text: "刷新"; glyph: "↻"; clicked => { root.refresh(); } }
@@ -101,15 +99,13 @@ export component FootBar inherits Rectangle {
                 text: root.status;
                 font-size: Theme.fs-sm;
                 color: Theme.fg-3;
-                vertical-alignment: center;
-            }
+                }
             Rectangle { horizontal-stretch: 1; }
             Text {
                 text: root.summary;
                 font-size: Theme.fs-sm;
                 color: Theme.fg-4;
-                vertical-alignment: center;
-            }
+                }
         }
     }
 }

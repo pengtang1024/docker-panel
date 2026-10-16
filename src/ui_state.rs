@@ -75,6 +75,10 @@ impl AppState {
     }
 
     /// 触发一次 Docker 列表刷新（在 Mutex 锁内调用，立刻释放）
+    ///
+    /// 为什么锁内调用安全：
+    ///   refresh() 不做任何 IO——只是 spawn 两个 tokio 异步任务就返回了。
+    ///   spawn 出来的任务会在**锁外**执行，真正的 Docker API 调用不会卡住主线程。
     pub fn refresh(&mut self) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
@@ -87,29 +91,37 @@ impl AppState {
         self.last_refresh = Instant::now();
     }
 
-    /// 处理消息：先处理一条刚 recv() 取到的（if any），再 try_recv 扫积压
-    /// 这样 recv() 消费走的那条不会被丢
+    /// 消费一批 Msg，更新 containers / images 并返回 (need_ui_update, latest_msg)
+    ///
+    /// 两阶段设计：
+    ///   1. 先处理 `first` —— consumer.recv() 消费掉的那一条。
+    ///      必须立即交给 drain，因为 recv() 之后它就不属于 channel 了，
+    ///      try_recv() 再也看不到它。丢了 = 操作结果不回显。
+    ///   2. 再 try_recv 扫 channel 里剩余的积压消息。
+    ///      多条消息按 FIFO 顺序依次 handle_one。
+    ///
+    /// 返回的 (need_ui_update, latest_msg) 交给 main.rs 的 pump_and_apply：
+    ///   need_ui_update = false → 直接 return，跳过 build rows 和 invoke
+    ///   latest_msg      → derive_update() 用它推导 UI 最新意图（状态文案、docker_ok 角标等）
     pub fn drain_messages(&mut self, rx: &mpsc::Receiver<Msg>, first: Option<Msg>) -> (bool, Option<Msg>) {
         let mut need_ui_update = false;
         let mut latest_msg: Option<Msg> = None;
-        let mut count = 0usize;
 
         // 1. 先处理 recv() 消费走的那条（try_recv 再也看不到它了）
         if let Some(msg) = first {
-            count += 1;
-            eprintln!("[drain] msg #{count}(recv): variant={:?}", std::mem::discriminant(&msg));
             Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
         }
         // 2. 再扫 try_recv 积压
         while let Ok(msg) = rx.try_recv() {
-            count += 1;
-            eprintln!("[drain] msg #{count}(try): variant={:?}", std::mem::discriminant(&msg));
             Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
         }
-        eprintln!("[drain] total={count} containers={} images={} need={need_ui_update}", self.containers.len(), self.images.len());
         (need_ui_update, latest_msg)
     }
 
+    /// 单条消息处理逻辑——从 drain_messages 抽出来的纯函数化小步骤
+    ///
+    /// 抽出去的好处：drain_messages 只管"从哪拿消息"，
+    /// handle_one 只管"拿到一条怎么改状态"。以后加新 Msg 变体只改这里。
     fn handle_one(
         msg: Msg,
         need_ui_update: &mut bool,
@@ -119,24 +131,20 @@ impl AppState {
     ) {
         match &msg {
             Msg::Containers(Ok(list)) => {
-                eprintln!("[drain] → Containers(Ok) len={}", list.len());
                 *containers = list.clone();
                 *need_ui_update = true;
                 *latest_msg = Some(msg);
             }
             Msg::Containers(Err(e)) => {
-                eprintln!("[drain] → Containers(Err) {e}");
                 *latest_msg = Some(Msg::Containers(Err(e.clone())));
                 *need_ui_update = true;
             }
             Msg::Images(Ok(list)) => {
-                eprintln!("[drain] → Images(Ok) len={}", list.len());
                 *images = list.clone();
                 *need_ui_update = true;
                 *latest_msg = Some(msg);
             }
             Msg::Images(Err(e)) => {
-                eprintln!("[drain] → Images(Err) {e}");
                 *latest_msg = Some(Msg::Images(Err(e.clone())));
             }
             Msg::ActionDone(_, _)
@@ -158,6 +166,12 @@ pub struct UiUpdate {
     pub reset_pull_busy: bool,
 }
 
+/// derive_update — 把"最后一条 Msg"翻译成 UI 想知道的状态
+///
+/// 它只看 latest_msg（而不是完整消息流），说明 UI 是"按最新状态渲染"，
+/// 不关心历史过程。ActionDone / PullDone / CleanupDone 的结果都通过
+/// 这里变成 status_text。返回的 UiUpdate 由 main.rs 的 pump_and_apply
+/// 在 invoke_from_event_loop 里一次性应用到 Slint Model。
 pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
     match latest_msg {
         Some(Msg::Containers(Ok(_))) => UiUpdate {

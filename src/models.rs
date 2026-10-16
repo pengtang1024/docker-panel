@@ -1,4 +1,17 @@
-//! 数据结构体定义：容器、镜像、消息枚举等
+//! 数据结构体 + channel 消息枚举
+//!
+//! Msg 枚举是三线程架构里唯一跨线程传递的数据类型：
+//!   tokio spawn 的异步任务 → tx.send(Msg) → mpsc channel →
+//!   consumer 线程 recv()/try_recv() → drain_messages 更新 AppState →
+//!   consumer drop 锁 → invoke_from_event_loop 更新 Slint Model
+//!
+//! 各变体发送者一览：
+//!   Containers/Images     ← ui_state::refresh() spawn 的列表任务
+//!                          main.rs 初始加载 spawn 的列表任务
+//!   PullProgress          ← docker::pull_image 的 on_progress 闭包
+//!   PullDone              ← docker::pull_image 结束时 tx.send
+//!   ActionDone            ← callbacks.rs 所有操作回调 spawn 的任务
+//!   CleanupDone           ← callbacks.rs cleanup_submit spawn 的任务
 
 /// 容器信息（表格一行的数据）
 #[derive(Debug, Clone)]

@@ -1,4 +1,19 @@
 //! 系统级 API：清理（prune）
+//!
+//! cleanup(stopped, dangling, unused) 三个 bool 可以任意组合：
+//!   - stopped  → prune_containers（删所有停止的容器）
+//!   - dangling → prune_images(dangling=true)
+//!   - unused   → prune_images(dangling=false)，等价 `docker image prune -a`
+//!     勾选 unused 时 dangling 自动被包含（因为 unused 范围更大）
+//!     所以有 `if dangling && !unused` 的判断——避免对 dangling 做两次 prune
+//!
+//! 为啥不直接把三个全跑一遍：
+//! 因为 dangling 是 unused 的子集。全跑会导致 dangling 已删完，
+//! 再跑 unused 时 dangling 那部分就变成了"删没东西的空操作"。
+//! 结果一样但效率低。
+//!
+//! 错误处理：每项独立 try，失败不中断其他项（Docker API 独立）。
+//! 如果三项全勾都没效果 → 返回 Err("请至少勾选一项清理内容")。
 
 use std::collections::HashMap;
 

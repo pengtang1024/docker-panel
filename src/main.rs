@@ -32,13 +32,33 @@ use crate::ui_state::{
 };
 
 fn main() {
-    // —— 创建：state + rx 分离，rx 交给 consumer 独占 ——
+    // ═══════════════════════════════════════════════════════
+    // Step 1: 建立状态 + channel
+    //   AppState::new() 返回 (SharedState, Receiver<Msg>)
+    //   — SharedState = Arc<Mutex<AppState>>   主线程、Timer 回调都碰它
+    //   — Receiver<Msg>  交给 consumer 线程**独占**所有权，绝不进 Mutex
+    //                      这是整个架构防死锁的关键：
+    //                      consumer 的 rx.recv() 在锁外阻塞
+    //                      主线程拿 state 锁永远不会被它卡住
+    // ═══════════════════════════════════════════════════════
     let (state, rx): (SharedState, Receiver<Msg>) = AppState::new();
 
     let ui = MainWindow::new().expect("create window");
     let ui_weak = ui.as_weak();
 
-    // —— 构建 Slint rows（锁内构建，锁外应用）——
+    // —— 构建 Slint rows ——
+    // 纯读取闭包：只消费 AppState，不持有锁、不做 IO
+    // 每次 pump_and_apply 在**持有 state 锁期间**调用它们，
+    // 构建出 Vec<ContainerRow> / Vec<ImageRow> 后 drop 锁，
+    // 再由 invoke_from_event_loop 把这些数据塞进 Slint Model。
+    //
+    // 为什么分两阶段？
+    //   Slint 的 Model 变更必须在主线程事件循环里（invoke_from_event_loop）。
+    //   如果 pump_and_apply 全程持有 Mutex 等 invoke 消费完，
+    //   主线程 Timer/回调在处理事件时若要再 lock state 就会卡住——
+    //   因为 consumer 持有锁等主线程，主线程处理事件又要锁。
+    //   → 经典"consumer 等主线程消费事件，主线程处理事件等 consumer 放锁"互锁。
+    //   所以锁持有时间 = drain + build rows（微秒级），然后立即 drop。
     let build_container_rows = |s: &AppState| -> Vec<ContainerRow> {
         s.containers
             .iter()
@@ -87,18 +107,29 @@ fn main() {
             .collect()
     };
 
-    // —— UI 更新泵 ——
+    // ═══════════════════════════════════════════════════════
+    // pump_and_apply — consumer 线程的"UI 更新泵"
+    //
+    // 职责：收一批 Msg → 更新 AppState → 构建 Slint rows →
+    //       派发 invoke_from_event_loop 让主线程更新 Slint Model
+    //
+    // 时序约束（⚠️ 违反就死锁）：
+    //   1. lock state    → drain_messages → build rows
+    //   2. drop(state)   ←— 锁必须在 invoke_from_event_loop 之前释放
+    //   3. invoke_from_event_loop(move || { ui.set_*()... })
+    //
+    // first 参数：consumer.recv() 消费掉的那一条 Msg 立刻交给 drain，
+    // 因为 rx.try_recv() 再也看不到它了。
+    // ═══════════════════════════════════════════════════════
     let ui_w_pump = ui_weak.clone();
     let pump_and_apply = move |state: &SharedState, rx: &Receiver<Msg>, first: Option<Msg>| {
         let Ok(mut s) = state.lock() else { return };
         let (need_update, latest_msg) = s.drain_messages(rx, first);
-        eprintln!("[pump] need_update={need_update} latest={:?}", latest_msg.as_ref().map(|m| format!("{:?}", std::mem::discriminant(m))));
         if !need_update { return; }
 
         // 锁内：构建 rows + 读字段
         let container_rows = build_container_rows(&s);
         let image_rows = build_image_rows(&s);
-        eprintln!("[pump] built rows: containers={} images={}", container_rows.len(), image_rows.len());
         let running = s.containers.iter().filter(|c| c.is_running()).count();
         let running_total = format!("{}/{}", running, s.containers.len());
         let image_total = s.images.len().to_string();
@@ -107,10 +138,8 @@ fn main() {
         drop(s); // ⚠️ 关键：必须在 invoke_from_event_loop 之前释放锁
 
         let ui_w = ui_w_pump.clone();
-        let inv = invoke_from_event_loop(move || {
-            let Some(ui) = ui_w.upgrade() else { eprintln!("[pump] upgrade failed!"); return };
-            eprintln!("[pump] invoke UI set: containers={} images={} docker_ok={}", 
-                container_rows.len(), image_rows.len(), update.docker_ok);
+        invoke_from_event_loop(move || {
+            let Some(ui) = ui_w.upgrade() else { return };
             let cm: ModelRc<ContainerRow> = ModelRc::from(container_rows.as_slice());
             let im: ModelRc<ImageRow> = ModelRc::from(image_rows.as_slice());
             ui.set_container_rows(cm);
@@ -121,13 +150,25 @@ fn main() {
             ui.set_status_text(SharedString::from(update.status_text));
             if update.reset_pull_busy { ui.set_pull_busy(false); }
             if update.close_pull { ui.set_pull_open(false); }
-        });
-        if let Err(e) = inv {
-            eprintln!("[pump] invoke_from_event_loop failed: {e}");
-        }
+        }).ok();
     };
 
-    // —— consumer 线程：独占 rx，**锁外** 阻塞 recv ——
+    // ═══════════════════════════════════════════════════════
+    // Step 2: 启动 consumer 线程（架构中枢）
+    //
+    // 线程循环：
+    //   loop {
+    //     pump_c(&state_c, &rx_c, None);      // 先扫积压（锁外）
+    //     match rx_c.recv() {                 // ⚠️ 锁外阻塞！
+    //       Ok(msg) => pump_c(&state_c, &rx_c, Some(msg));
+    //       Err(RecvError) => break;          // channel 关
+    //     }
+    //   }
+    //
+    // 所有权声明：rx_c 是 main 线程的 rx move 进来的，
+    // 从此 main 再也碰不到它——consumer 独占。
+    // 这样 consumer 持不持锁永远不影响主线程。
+    // ═══════════════════════════════════════════════════════
     {
         let state_c = state.clone();
         let rx_c = rx; // 独占所有权，从此再也不进 Mutex
@@ -137,7 +178,6 @@ fn main() {
             loop {
                 // 先扫一次积压（非阻塞，无 first msg）
                 if first {
-                    eprintln!("[consumer] 启动，初始 drain");
                     first = false;
                 }
                 pump_c(&state_c, &rx_c, None);
@@ -145,12 +185,11 @@ fn main() {
                 // ⚠️ 锁外阻塞！主线程拿 state 锁永远不被这条 recv 卡住
                 match rx_c.recv() {
                     Ok(msg) => {
-                        eprintln!("[consumer] 收到一条消息: {:?}", std::mem::discriminant(&msg));
-                        // 关键：把 recv() 消费走的 msg 传给 pump_c 处理！
+                        // 关键：把 recv() 消费走的 msg 作为 first 传下去
+                        // drain_messages 会先处理它，再 try_recv 扫剩余积压
                         pump_c(&state_c, &rx_c, Some(msg));
                     }
                     Err(RecvError) => {
-                        eprintln!("[consumer] channel 关闭，退出");
                         break;
                     }
                 }
@@ -158,47 +197,45 @@ fn main() {
         });
     }
 
-    // —— 定时刷新（主线程 Timer，3s）——
+    // Step 3: 定时刷新（主线程 Slint Timer）
+    //
+    // 只做一件事：spawn 异步任务 → 列表 → tx.send(Msg)
+    // 不直接碰 Slint Model——那样在主线程回调里改 Model 没问题，
+    // 但每次刷新都会阻塞 Slint 事件循环（bollard 是 async，但 spawn 本身有开销）。
+    // 统一交给 consumer 线程调 invoke_from_event_loop 更新，
+    // 保持主线程回调薄、快。
     {
         let state_t = state.clone();
-        let pump_t = pump_and_apply.clone();
         Timer::default().start(TimerMode::Repeated, REFRESH_INTERVAL, move || {
-            // 主线程触发 refresh → tokio 异步发 Msg → consumer 收
             if let Ok(mut s) = state_t.lock() {
                 s.refresh();
             }
-            // 让 consumer 线程立刻 drain（不用等下一条 recv）
-            // 这里 rx 不在 state 里了，传一个 dummy receiver 给 drain 没用
-            // 但 refresh() 已经 spawn 了异步任务发送 Msg
-            // consumer 线程正在 recv() 阻塞，收到新 Msg 会被唤醒并 pump
-            // 所以这里直接 return，等 consumer 处理
-            let _ = pump_t; // 让 pump_t 活过闭包作用域
+            // refresh() 已经 spawn 了 tokio 异步任务，完成后 tx.send(Msg)
+            // consumer 线程正在 recv() 阻塞，收到新 Msg 自动被唤醒 pump
         });
     }
 
-    // —— 初始 Docker 连接 + 列表加载 ——
+    // Step 4: 初始连接 + 首屏列表
+    //
+    // 锁内取 tx + rt handle → 立刻 drop → spawn 两个并行列表请求
+    // 结果通过 tx.send 送回，consumer 线程稍后会 pump 出来。
     {
         let Ok(s) = state.lock() else {
             return;
         };
         let tx = s.tx.clone();
         let rt = s.rt.handle().clone();
-        drop(s);
+        drop(s); // 先放锁再 spawn，保证不堵 Timer/回调
         rt.spawn(async move {
             let _ = connect();
-            eprintln!("[init] connect done");
             let c_res = list_containers(true).await;
-            eprintln!("[init] list_containers done: is_ok={} len={}", c_res.is_ok(), c_res.as_ref().map(|l| l.len()).unwrap_or(0));
             let i_res = list_images().await;
-            eprintln!("[init] list_images done: is_ok={} len={}", i_res.is_ok(), i_res.as_ref().map(|l| l.len()).unwrap_or(0));
-            let sc = tx.send(Msg::Containers(c_res));
-            eprintln!("[init] send Containers: {:?}", sc.err());
-            let si = tx.send(Msg::Images(i_res));
-            eprintln!("[init] send Images: {:?}", si.err());
+            let _ = tx.send(Msg::Containers(c_res));
+            let _ = tx.send(Msg::Images(i_res));
         });
     }
 
-    // —— 回调绑定 ——
+    // Step 5: 绑定 UI 回调 → 进入 Slint 主循环
     callbacks::bind_callbacks(&ui, &state);
 
     // —— 进入 Slint 主循环 ——

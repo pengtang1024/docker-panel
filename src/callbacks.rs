@@ -1,10 +1,35 @@
 //! UI 回调绑定：所有 Slint UI 事件 → Docker 操作的桥接
 //!
-//! 每个回调闭包遵循统一模式：
-//! 1. ui.upgrade() 拿 UI 句柄
-//! 2. 从 state 取 rt handle + tx
-//! 3. spawn 异步任务 → 调 docker API → tx.send(Msg::ActionDone 等)
-//! 4. consumer 线程收到 Msg → invoke_from_event_loop 更新 Slint Model
+//! 统一的回调套路（所有 on_xxx_requested 闭包都一样）：
+//!
+//!     // 1. 主线程 UI 回调触发（快进快出，不能阻塞事件循环）
+//!     {
+//!         let (rt_handle, tx) = {
+//!             let Ok(st) = s.lock() else { return };   // 锁内：取 handle + tx clone
+//!             (st.rt.handle().clone(), st.tx.clone())
+//!         };                                           // ← 立即 drop Mutex
+//!
+//!         // 2. 锁外 spawn 异步任务做真正的 Docker 操作
+//!         rt_handle.spawn(async move {
+//!             let result = docker::do_thing().await;
+//!             let _ = tx.send(Msg::ActionDone(..., result));  // 结果送回 channel
+//!         });
+//!     }
+//!     // 3. consumer 线程稍后收到 Msg → invoke_from_event_loop 更新 Slint Model
+//!
+//! 为什么"锁内只取 handle，锁外 spawn"：
+//!   Mutex 的目的是保护容器/镜像列表、query 等可共享数据。
+//!   锁内取 tx 和 rt handle 只是 clone Arc/Sender，微秒级。
+//!   如果在锁内 spawn 就立刻做 Docker API 调用——bollard 本身是 async
+//!   但 spawn 闭包里的 await 不会阻塞 spawn 那一刻的调用栈，
+//!   不过真正要小心的是：**锁内不能做任何可能长时间占着 Mutex 的事**。
+//!   规范简化：任何涉及"spawn 后要等结果"的，都先 drop 锁再 spawn。
+//!
+//! 为什么不直接在 UI 回调里改 Slint Model：
+//!   技术上主线程改自己的 Model 完全合法。
+//!   但如果以后某个 UI 回调需要等一个 async 结果再决定改什么，
+//!   直接写就会阻塞 Slint 事件循环。统一走 channel → consumer，
+//!   每个操作都变成"spawn + 等回调"的一致模型。
 
 use slint::{ComponentHandle, SharedString};
 
@@ -48,6 +73,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
         ui.on_stop_all_requested(move || {
             let Some(ui) = ui_s.upgrade() else { return };
             ui.set_status_text(SharedString::from("正在停止全部..."));
+            // —— 两段式锁：锁内只收集 id 列表 + clone handle/tx → 立即 drop ——
             let (rt_handle, ids, tx) = {
                 let Ok(st) = s.lock() else { return };
                 let ids: Vec<String> = st
@@ -61,6 +87,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
             if ids.is_empty() {
                 return;
             }
+            // 锁外 spawn 真正的批量操作
             rt_handle.spawn(async move {
                 let mut ok = 0;
                 let mut fail = 0;
@@ -159,7 +186,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     }
 
     // —— AppActions global（delegate 按钮触发）——
-    let actions = ui.global::<AppActions>();
+    let actions = ui.global::<crate::slint_gen::AppActions>();
 
     // 容器启停切换
     {
@@ -170,6 +197,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_status_text(SharedString::from("切换容器状态..."));
 
+            // 锁内判断 is_running + clone handle/tx → drop
             let is_running = {
                 let Ok(st) = s.lock() else { return };
                 st.containers
@@ -182,6 +210,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
                 let Ok(st) = s.lock() else { return };
                 (st.rt.handle().clone(), st.tx.clone())
             };
+            // 锁外 spawn
             if is_running {
                 rt_handle.spawn(async move {
                     match docker::stop_container(&id).await {

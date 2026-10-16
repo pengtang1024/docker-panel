@@ -32,7 +32,14 @@ fn format_ports(ports: Option<&Vec<bollard::models::PortSummary>>) -> String {
     items.join(", ")
 }
 
-/// 拉取容器列表（all=true 时包含已停止容器）
+/// 拉取容器列表
+///
+/// - `all=true` 时包含已停止容器
+/// - `size=true` 让 Docker 返回 SizeRw / SizeRootFs（略慢，遍历文件系统）
+/// - compose label 提取：`com.docker.compose.project` / `com.docker.compose.service`
+///   用于 v0.1 的 Compose 分组功能，v0.2 UI 不展示但数据仍保留（v0.3 计划加回分组）
+/// - 资源字段（cpu_percent、mem_usage 等）这里填 0——资源实时采集（stats）
+///   在 v0.1 有、v0.2 移除以简化功能，UI 直接展示 0
 pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
     let docker = connect()?;
     // size=true 让 Docker 返回 SizeRw/SizeRootFs（遍历文件系统，容器多时略慢）

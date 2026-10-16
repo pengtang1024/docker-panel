@@ -9,7 +9,14 @@ use crate::models::ImageInfo;
 
 use super::{connect, list_containers};
 
-/// 拉取镜像列表，同时统计每个镜像关联的容器数量
+/// 拉取镜像列表 + 关联容器数量
+///
+/// 为什么 list_images 还要偷偷调一遍 list_containers：
+///   Docker API 的 list_images 不返回"这个镜像被几个容器引用"。
+///   所以我们额外调 list_containers(true)，然后：
+///     1. 优先按 image_id 精确匹配（sha256: 前缀可选）
+///     2. 匹配不到时按"镜像名:tag"字符串匹配兜底
+///   这样能给 UI 展示"未使用镜像"黄色高亮提示。
 pub async fn list_images() -> Result<Vec<ImageInfo>, String> {
     let docker = connect()?;
     let options = ListImagesOptionsBuilder::new().all(true).build();

@@ -12,9 +12,19 @@
 
 - 容器列表：运行状态指示灯、短 ID、名称、镜像、状态文本
 - 即时搜索过滤（名称 / ID / 镜像 / 状态）
-- 行内操作按钮：启停（▶/⏹）、重启（⟳）、删除（🗑）
+- 行内操作按钮：启停（▶/⏹）、重启（⟳）、删除（🗑）、查看日志（📜）
 - 一键停止全部运行中容器
 - 3 秒自动刷新 + 手动刷新按钮
+
+### 详情面板（右侧 TabWidget 第一页）
+
+- 点击容器行自动 inspect，展示 17 个字段：ID、名称、状态、镜像、命令、创建时间、运行时长、端口映射、挂载、环境变量、工作目录、重启次数、网络模式、资源限制、健康检查、标签、驱动
+- 数据随容器切换实时更新
+
+### 日志面板（右侧 TabWidget 第二页）
+
+- 点行内 📜 按钮或直接触发 follow_logs，Docker API 实时流
+- 环形缓冲 500 行
 
 ### 镜像 Tab
 
@@ -77,31 +87,38 @@ cargo build --release
 
 1. 启动后默认显示容器列表，Docker 连接成功会自动加载。
 2. 顶栏搜索框输入关键词即时过滤；回车或点刷新按钮手动刷新。
-3. 每个容器行右侧按钮：▶/⏹ 切换状态、⟳ 重启、🗑 删除。
-4. 切到镜像 Tab 查看和管理镜像。
-5. 工具栏：停止全部运行中容器 / 拉取镜像 / 清理未使用资源。
-6. 底部状态栏显示最近操作结果。
+3. 每个容器行右侧按钮：▶/⏹ 切换状态、⟳ 重启、🗑 删除、📜 查看日志。
+4. 选中容器后右侧 TabWidget 显示**详情面板**（inspect 结果）和**日志面板**（实时 follow）。
+5. 切到镜像 Tab 查看和管理镜像。
+6. 工具栏：停止全部运行中容器 / 拉取镜像 / 清理未使用资源。
+7. 底部状态栏显示最近操作结果。
 
 ## 架构概览
 
 **三线程架构**：主线程（Slint 事件循环）+ consumer 线程（消息泵 + `invoke_from_event_loop`）+ tokio runtime（bollard async）。
 
 ```
-主线程 ui.run()          consumer 线程              tokio runtime
-┌────────────┐          ┌──────────────┐          ┌──────────────┐
-│ Timer 3s   │ lock state│ recv() 阻塞   │          │ spawn 异步任务│
-│ UI 回调    │─────────▶│ drain_messages│          │ bollard API   │
-│            │          │ build rows    │          │ tx.send(Msg)  │
-│            │          │ drop lock     │          └──────────────┘
-│            │          │ invoke_from    │              ▲
-│            │          │ _event_loop   │              │
-│            │          └──────┬───────┘              │
-│            │                 │ 更新 Slint Model ──────┘
-└────────────┘
-       Mutex<AppState>         mpsc::Receiver<Msg>（独占，不进 Mutex）
+主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
+┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
+│ Slint Timer 3s ──lock─▶│ recv() 阻塞（锁外）           │       │ spawn 异步任务      │
+│ 手动刷新 ───────lock─▶│ drain_messages            │       │ bollard API 调用    │
+│ UI 回调 ────────lock─▶│ build_container_rows      │◀──────│ follow_logs 流      │
+│                        │ build_image_rows          │       │ inspect_container   │
+│                        │ build_detail_data          │       │                     │
+│                        │ build_log_lines            │       │                     │
+│                        │ drop state ────────────────lock release
+│                        │ invoke_from_event_loop     │       │                     │
+│                        │   apply_lists / apply_detail       │                     │
+│                        │   set_log_lines / set_...  │       │                     │
+└──────────────────────┘       └────────────────────────┘       └───────────────────┘
+     Mutex<AppState>                 mpsc::Receiver<Msg>          spawn(async { ... })
+                                     （consumer 独占，不进 Mutex）
 ```
 
-关键设计：`Receiver<Msg>` 由 consumer 独占所有权，**不**放进 Mutex。这样 `rx.recv()` 永远不阻塞主线程拿 state 锁。锁持有时间 = drain + build rows（微秒级），`invoke_from_event_loop` 必须在 drop lock 之后调用。
+**关键设计**：
+- `Receiver<Msg>` 由 consumer 独占所有权，**不**放进 Mutex。这样 `rx.recv()` 永远不阻塞主线程拿 state 锁。
+- **pump_and_apply 两阶段铁律**：锁内只做 drain + build（微秒级）→ drop lock → 锁外 `invoke_from_event_loop` 更新 Slint Model。闭包里绝不碰 state。
+- **所有 Docker 结果走 `tx.send(Msg)`**——不直接碰 Slint Model，统一由 consumer pump 更新。
 
 详见 [docs/architecture.md](docs/architecture.md)。
 
@@ -109,43 +126,63 @@ cargo build --release
 
 ```
 docker-panel/
-├── Cargo.toml              # 依赖与 build profile
+├── Cargo.toml              # 依赖：slint 1.14 / bollard 0.21 / tokio / futures
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile("ui/app.slint")
-├── ui/                     # Slint UI 声明（5 文件按职责拆分）
-│   ├── app.slint           # 主骨架：MainWindow + AppActions global，import 组装其余 4 个文件
-│   ├── models.slint        # ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
-│   ├── delegates.slint     # 行 delegate（ListView 每行视图），callback 属性由 MainWindow 注入
-│   ├── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip 组件
-│   └── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
-├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
-├── CHANGELOG.md            # 更新日志
+│
+├── ui/                     # Slint UI 声明（8 文件按职责拆分，app.slint 唯一组装入口）
+│   ├── app.slint           # 主骨架：MainWindow + AppActions global + 布局（FixedLayout 左右分栏）
+│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow struct（Rust ↔ Slint 数据桥）
+│   ├── delegates.slint     # 行 delegate（ContainerRowDelegate 含日志按钮 callback）
+│   ├── headers.slint       # ContainerHeader / ImageHeader（列宽严格对齐 delegates）
+│   ├── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip
+│   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
+│   ├── detail-panel.slint  # DetailRow + DetailPanel（17 字段 in-out 属性，右侧 Tab 第一页）
+│   └── log-panel.slint     # LogLineDelegate + LogPanel（ListView 滚动，右侧 Tab 第二页）
+│
+├── src/                    # Rust 层（所有 ≤ 300 行）
+│   ├── main.rs             # 桥接中枢：consumer 线程 + 定时刷新 + pump_and_apply
+│   ├── slint_gen.rs        # slint::include_modules!() 集中入口（仅 7 行）
+│   ├── models.rs           # Msg / ContainerInfo / ImageInfo / ContainerDetail
+│   ├── ui_state.rs         # AppState + drain_messages + handle_one + build_detail_data
+│   ├── ui_update.rs        # derive_update(Msg → UiUpdate) + UiUpdate 结构体
+│   ├── ui_apply.rs         # apply_detail / apply_lists — set_d_xxx 和 set_xxx 抽离
+│   ├── callbacks.rs        # 顶栏按钮 + PullDialog + CleanupDialog 回调绑定
+│   ├── callbacks_container.rs  # AppActions container_* 回调（toggle/restart/remove/logs）
+│   ├── callbacks_image.rs      # AppActions image_remove 回调
+│   └── docker/
+│       ├── mod.rs          # connect() + pub use 重导出
+│       ├── containers.rs   # list / start / stop / restart / remove
+│       ├── images.rs       # list / pull（含进度闭包）/ remove
+│       ├── logs.rs         # inspect_container + follow_logs（Stream → tx.send）
+│       └── system.rs       # cleanup prune
+│
 ├── docs/
-│   ├── architecture.md     # 架构设计（线程模型 + Slint 交互图 + 文件规范）
+│   ├── architecture.md     # 架构设计（线程模型 + Slint 交互图 + 文件规范 + bollard 坑条）
 │   └── git-flow.md         # Git Flow 分支与发版规范
-├── packaging/              # deb 打包文件
+├── packaging/
 │   ├── debian/control
 │   ├── docker-panel.desktop
 │   └── docker-panel.svg
-└── src/
-    ├── main.rs             # 桥接层（consumer 线程 + 定时刷新 + 回调绑定）
-    ├── ui_state.rs         # AppState + 消息处理 + 格式化工具
-    ├── models.rs           # 纯数据结构（容器、镜像、消息枚举）
-    └── docker/
-        ├── mod.rs          # connect() + pub use
-        ├── containers.rs   # 容器 CRUD + 资源采样
-        ├── images.rs       # 镜像列表 / 拉取 / 删除
-        └── system.rs       # prune 清理 / follow_logs
+├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
+├── CHANGELOG.md            # 更新日志
+└── README.md
 ```
 
-## 主要依赖
+## 主要依赖（精确版本）
 
-| crate | 用途 |
-|-------|------|
-| slint 1.14 | 原生 GUI（`backend-winit` + `renderer-software`） |
-| bollard 0.21 | Docker Engine API 客户端 |
-| tokio | 异步运行时（多线程 + macros + time + sync） |
-| futures | 流式处理 + `join!` |
+| crate | 精确版本 | Feature / 用途 |
+|-------|----------|----------------|
+| slint | **1.14** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` |
+| slint-build | **1.14** | build-dependency，`slint_build::compile("ui/app.slint")` |
+| bollard | **0.21** | Docker Engine API 纯 async 客户端 |
+| tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features=false） |
+| futures | **0.3** | — |
+| futures-util | **0.3** | 提供 `StreamExt`（`.next().await`） |
+| serde_json | **1.x** | bollard 内部序列化 |
+| anyhow | **1.x** | — |
+
+> 完整技术栈精确版本和版本特有 API 限制见 `AGENTS.md`。
 
 ## 许可证
 

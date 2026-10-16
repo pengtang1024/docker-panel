@@ -277,7 +277,39 @@
 
 ---
 
-## 7. 已知限制
+## 7. 配置持久化
+
+所有用户操作和配置状态通过 `localStorage` 持久化，下次进入自动恢复。
+
+### 7.1 持久化项
+
+| 键 | 含义 | 取值 | 默认 |
+|----|------|------|------|
+| `dp-theme` | 主题模式 | auto / light / dark | auto |
+| `dp-view` | 当前视图 | c / i / n / v | c |
+| `dp-filter` | 筛选 chip | all / running / stopped / compose名 | all |
+| `dp-sort-field` | 排序字段 | name / cpu / mem / disk / on | name |
+| `dp-sort-desc` | 排序方向 | 1(降序) / 0(升序) | 1 |
+| `dp-search` | 搜索关键词 | 任意字符串 | 空 |
+| `dp-log-follow` | 日志自动跟随 | 1(开) / 0(关) | 1 |
+
+### 7.2 实现方式
+
+- `saveConfig()`：状态变更时统一写入 localStorage
+- `loadConfig()`：初始化时读取并校验合法性（枚举值白名单校验）
+- 触发保存的函数：`setView` / `setChip` / `doSearch` / `setSortField` / `toggleLogFollow` / `toggleTheme`
+- 语言不持久化，每次跟随系统语言
+
+### 7.3 不持久化的内容
+
+- 批量选择状态（临时操作）
+- 对话框开关状态
+- 抽屉打开状态
+- 折叠分组（动态数据）
+
+---
+
+## 8. 已知限制
 
 - 无快捷键自定义
 - 无 Docker Compose 导入导出
@@ -286,7 +318,7 @@
 
 ---
 
-## 8. 落地到 Slint 的映射要点
+## 9. 落地到 Slint 的映射要点
 
 | HTML 原型 | Slint 实现 |
 |-----------|-----------|
@@ -297,3 +329,4 @@
 | 主题切换 | `AppActions.set_theme()` + 全局 property |
 | 系统主题 | Slint 暂无原生 API，需 Rust 侧 `dark-light` crate 检测 |
 | 抽屉动画 | `animate` transition |
+| localStorage | Rust 侧 `confy` / `directories` crate 读写配置文件 |

@@ -509,6 +509,31 @@ let sortField='name', sortDesc=true;
 const collapsedGroups=new Set();
 let logFollow=true;
 
+// ===== Persistence (localStorage) =====
+const CFG_KEYS=['dp-view','dp-filter','dp-sort-field','dp-sort-desc','dp-search','dp-log-follow'];
+function saveConfig(){
+  localStorage.setItem('dp-view',currentView);
+  localStorage.setItem('dp-filter',currentFilter);
+  localStorage.setItem('dp-sort-field',sortField);
+  localStorage.setItem('dp-sort-desc',sortDesc?'1':'0');
+  localStorage.setItem('dp-search',searchQ);
+  localStorage.setItem('dp-log-follow',logFollow?'1':'0');
+}
+function loadConfig(){
+  const v=localStorage.getItem('dp-view');
+  if(v&&['c','i','n','v'].includes(v)){currentView=v}
+  const f=localStorage.getItem('dp-filter');
+  if(f){currentFilter=f}
+  const sf=localStorage.getItem('dp-sort-field');
+  if(sf&&['name','cpu','mem','disk','on'].includes(sf)){sortField=sf}
+  const sd=localStorage.getItem('dp-sort-desc');
+  if(sd!==null){sortDesc=sd==='1'}
+  const sq=localStorage.getItem('dp-search');
+  if(sq!==null){searchQ=sq;const inp=document.getElementById('search-input');if(inp)inp.value=sq}
+  const lf=localStorage.getItem('dp-log-follow');
+  if(lf!==null){logFollow=lf==='1'}
+}
+
 // ===== Render =====
 function hl(s){return searchQ?String(s).replace(new RegExp('('+searchQ.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>'):s}
 
@@ -653,6 +678,7 @@ function skeletonHTML(){
 // ===== Interactions =====
 function setView(v){
   currentView=v;
+  saveConfig();
   document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   document.querySelectorAll('.view-tab').forEach(e=>e.classList.toggle('active',e.dataset.v===v));
@@ -664,9 +690,10 @@ function setChip(el){
   document.querySelectorAll('#chips .chip').forEach(e=>e.classList.remove('active'));
   el.classList.add('active');
   currentFilter=el.dataset.filter||'all';
+  saveConfig();
   renderContainers();
 }
-function doSearch(q){searchQ=q.trim();renderAll()}
+function doSearch(q){searchQ=q.trim();saveConfig();renderAll()}
 function sortLabel(f){return {name:t('name'),cpu:'CPU',mem:t('memory'),disk:t('disk'),on:t('status')}[f]||f};
 function toggleSortMenu(e){
   e.stopPropagation();
@@ -676,6 +703,7 @@ function toggleSortMenu(e){
 function setSortField(field){
   if(field===sortField){sortDesc=!sortDesc}
   else{sortField=field;sortDesc=true}
+  saveConfig();
   updateSortUI();
   renderContainers();
   document.getElementById('sort-btn').classList.remove('open');
@@ -864,6 +892,7 @@ function renderLogs(){
 }
 function toggleLogFollow(){
   logFollow=!logFollow;
+  saveConfig();
   const btn=document.getElementById('log-follow');
   btn.classList.toggle('active',logFollow);
   btn.innerHTML=logFollow?icon('play',12):icon('pause',12);
@@ -1118,6 +1147,7 @@ function refresh(){
 // ---- Init ----
 initTheme();
 applyLang();
+loadConfig();
 document.getElementById('search-ic').innerHTML=icon('search',13);
 document.getElementById('refresh-btn').innerHTML=icon('refresh',15);
 document.getElementById('cleanup-btn').innerHTML=icon('trash',13);
@@ -1128,9 +1158,14 @@ document.getElementById('batch-start').innerHTML=icon('play',13);
 document.getElementById('batch-stop').innerHTML=icon('stop',13);
 document.getElementById('batch-restart').innerHTML=icon('restart',13);
 document.getElementById('batch-remove').innerHTML=icon('trash',13);
-document.getElementById('log-follow').innerHTML=icon('play',12);
+document.getElementById('log-follow').innerHTML=icon(logFollow?'play':'pause',12);
+document.getElementById('log-follow').classList.toggle('active',logFollow);
 document.querySelectorAll('.log-toolbar .lt-btn')[1].innerHTML=icon('copy',12);
 document.querySelectorAll('.log-toolbar .lt-btn')[2].innerHTML=icon('trash',12);
+// restore view tab + container active state
+document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active',e.id==='view-'+currentView));
+document.querySelectorAll('.view-tab').forEach(e=>e.classList.toggle('active',e.dataset.v===currentView));
+document.querySelectorAll('#chips .chip').forEach(e=>e.classList.toggle('active',(e.dataset.filter||'all')===currentFilter));
 updateThemeIcon();
 updateSortUI();
 renderAll();

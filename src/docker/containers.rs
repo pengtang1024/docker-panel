@@ -148,12 +148,14 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
 
     let name = raw.name.clone().unwrap_or_default();
     let name = name.trim_start_matches('/').to_string();
-    let state = raw.state.clone().and_then(|s| s.status).unwrap_or_default();
-    let (status, pid, exit_code, started_at, finished_at) = raw
+
+    let (state, status, pid, exit_code, started_at, finished_at) = raw
         .state
         .map(|s| {
+            let st = s.status.as_ref().map(|e| e.to_string()).unwrap_or_default();
             (
-                s.status.clone().unwrap_or_default(),
+                st.clone(),
+                st,
                 s.pid.unwrap_or(0),
                 s.exit_code.unwrap_or(0),
                 s.started_at.unwrap_or_default(),
@@ -167,14 +169,19 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let net = raw.network_settings.clone();
 
     let ports: Vec<String> = net
-        .ports
+        .as_ref()
+        .and_then(|n| n.ports.clone())
         .unwrap_or_default()
         .into_iter()
         .map(|(k, v)| {
             let inner: String = v
                 .map(|ps| {
                     ps.iter()
-                        .map(|p| format!("{}:{}", p.host_ip.as_deref().unwrap_or("0.0.0.0"), p.host_port.as_deref().unwrap_or("?")))
+                        .map(|p| {
+                            let ip = p.host_ip.as_deref().unwrap_or("0.0.0.0");
+                            let port = p.host_port.as_deref().unwrap_or("?");
+                            format!("{ip}:{port}")
+                        })
                         .collect::<Vec<_>>()
                         .join(",")
                 })
@@ -201,7 +208,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let labels: Vec<(String, String)> = cfg
         .as_ref()
         .and_then(|c| c.labels.clone())
-        .map(|h| h.into_iter().map(|(k, v)| (k, v.unwrap_or_default())).collect())
+        .map(|h| h.into_iter().map(|(k, v)| (k, v)).collect())
         .unwrap_or_default();
 
     let command = cfg
@@ -228,7 +235,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let log_path = raw.log_path.clone().unwrap_or_default();
 
     let networks: Vec<String> = net
-        .networks
+        .and_then(|n| n.networks)
         .unwrap_or_default()
         .into_keys()
         .collect();
@@ -260,15 +267,12 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
 }
 
 /// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine) 推给 consumer
-///
-/// - `tail_lines`: 启动时先拉的历史行（-1 = 全部）
-/// - 返回值是一个 stream，但在函数内部就循环消费并 send，
-///   调用方只需要 await 它在后台运行，不需要再自己 poll
 pub async fn follow_logs(
     id: &str,
     tx: std::sync::mpsc::Sender<crate::models::Msg>,
     tail_lines: i64,
 ) -> Result<(), String> {
+    use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
     use futures_util::StreamExt;
 
@@ -277,25 +281,19 @@ pub async fn follow_logs(
         .follow(true)
         .stdout(true)
         .stderr(true)
-        .tail(tail_lines.to_string())
+        .tail(&tail_lines.to_string())
         .build();
 
     let mut stream = docker.logs(id, Some(options));
 
     while let Some(Ok(msg)) = stream.next().await {
-        // 丢弃 header 字节（1 字节 stream type + 3 字节 padding + 4 字节 length）
-        let data = &msg[..];
-        let mut pos = 0;
-        while pos + 8 <= data.len() {
-            let length =
-                u32::from_be_bytes(data[pos + 4..pos + 8].try_into().unwrap_or([0; 4])) as usize;
-            pos += 8;
-            let end = (pos + length).min(data.len());
-            let line = String::from_utf8_lossy(&data[pos..end]).trim().to_string();
-            if !line.is_empty() {
-                let _ = tx.send(crate::models::Msg::LogLine(line));
-            }
-            pos = end;
+        let data = match msg {
+            LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
+            _ => continue,
+        };
+        let line = String::from_utf8_lossy(&data).trim().to_string();
+        if !line.is_empty() {
+            let _ = tx.send(crate::models::Msg::LogLine(line));
         }
     }
     Ok(())

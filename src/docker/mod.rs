@@ -17,7 +17,8 @@ mod images;
 mod system;
 
 pub use containers::{
-    list_containers, remove_container, restart_container, start_container, stop_container,
+    follow_logs, inspect_container, list_containers, remove_container, restart_container,
+    start_container, stop_container,
 };
 pub use images::{list_images, pull_image, remove_image};
 pub use system::cleanup;

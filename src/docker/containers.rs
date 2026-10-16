@@ -1,8 +1,8 @@
-//! 容器相关 API：列表、启停重启删除
+//! 容器相关 API：列表、启停重启删除、inspect、日志流
 
 use bollard::query_parameters::ListContainersOptionsBuilder;
 
-use crate::models::ContainerInfo;
+use crate::models::{ContainerDetail, ContainerInfo};
 
 use super::connect;
 
@@ -136,4 +136,167 @@ pub async fn remove_container(id: &str) -> Result<String, String> {
         .await
         .map_err(|e| format!("删除容器失败: {e}"))?;
     Ok("容器已删除".into())
+}
+
+/// inspect_container → 精简 ContainerDetail
+pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
+    let docker = connect()?;
+    let raw = docker
+        .inspect_container(id, None)
+        .await
+        .map_err(|e| format!("inspect 容器失败: {e}"))?;
+
+    let name = raw.name.clone().unwrap_or_default();
+    let name = name.trim_start_matches('/').to_string();
+    let state = raw.state.clone().and_then(|s| s.status).unwrap_or_default();
+    let (status, pid, exit_code, started_at, finished_at) = raw
+        .state
+        .map(|s| {
+            (
+                s.status.clone().unwrap_or_default(),
+                s.pid.unwrap_or(0),
+                s.exit_code.unwrap_or(0),
+                s.started_at.unwrap_or_default(),
+                s.finished_at.unwrap_or_default(),
+            )
+        })
+        .unwrap_or_default();
+
+    let cfg = raw.config.clone();
+    let host_cfg = raw.host_config.clone();
+    let net = raw.network_settings.clone();
+
+    let ports: Vec<String> = net
+        .ports
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(k, v)| {
+            let inner: String = v
+                .map(|ps| {
+                    ps.iter()
+                        .map(|p| format!("{}:{}", p.host_ip.as_deref().unwrap_or("0.0.0.0"), p.host_port.as_deref().unwrap_or("?")))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                })
+                .unwrap_or_default();
+            if inner.is_empty() { k } else { format!("{inner}->{k}") }
+        })
+        .collect();
+
+    let mounts: Vec<String> = raw
+        .mounts
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| {
+            format!(
+                "{}:{}{}",
+                m.source.unwrap_or_default(),
+                m.destination.unwrap_or_default(),
+                if m.rw.unwrap_or(false) { "" } else { ":ro" }
+            )
+        })
+        .collect();
+
+    let env: Vec<String> = cfg.as_ref().and_then(|c| c.env.clone()).unwrap_or_default();
+    let labels: Vec<(String, String)> = cfg
+        .as_ref()
+        .and_then(|c| c.labels.clone())
+        .map(|h| h.into_iter().map(|(k, v)| (k, v.unwrap_or_default())).collect())
+        .unwrap_or_default();
+
+    let command = cfg
+        .as_ref()
+        .and_then(|c| c.cmd.clone())
+        .map(|v| v.join(" "))
+        .unwrap_or_default();
+    let working_dir = cfg.as_ref().and_then(|c| c.working_dir.clone()).unwrap_or_default();
+    let entrypoint = cfg
+        .as_ref()
+        .and_then(|c| c.entrypoint.clone())
+        .map(|v| v.join(" "))
+        .unwrap_or_default();
+    let restart_policy = host_cfg
+        .as_ref()
+        .and_then(|h| h.restart_policy.clone())
+        .and_then(|r| r.name)
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    let network_mode = host_cfg
+        .as_ref()
+        .and_then(|h| h.network_mode.clone())
+        .unwrap_or_default();
+    let log_path = raw.log_path.clone().unwrap_or_default();
+
+    let networks: Vec<String> = net
+        .networks
+        .unwrap_or_default()
+        .into_keys()
+        .collect();
+
+    Ok(ContainerDetail {
+        id: raw.id.clone().unwrap_or_default(),
+        name,
+        image: cfg.as_ref().and_then(|c| c.image.clone()).unwrap_or_default(),
+        image_id: raw.image.clone().unwrap_or_default(),
+        created: raw.created.clone().unwrap_or_default(),
+        state,
+        status,
+        pid,
+        exit_code,
+        started_at,
+        finished_at,
+        ports,
+        mounts,
+        env,
+        labels,
+        command,
+        working_dir,
+        entrypoint,
+        restart_policy,
+        log_path,
+        network_mode,
+        networks,
+    })
+}
+
+/// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine) 推给 consumer
+///
+/// - `tail_lines`: 启动时先拉的历史行（-1 = 全部）
+/// - 返回值是一个 stream，但在函数内部就循环消费并 send，
+///   调用方只需要 await 它在后台运行，不需要再自己 poll
+pub async fn follow_logs(
+    id: &str,
+    tx: std::sync::mpsc::Sender<crate::models::Msg>,
+    tail_lines: i64,
+) -> Result<(), String> {
+    use bollard::query_parameters::LogsOptionsBuilder;
+    use futures_util::StreamExt;
+
+    let docker = connect()?;
+    let options = LogsOptionsBuilder::new()
+        .follow(true)
+        .stdout(true)
+        .stderr(true)
+        .tail(tail_lines.to_string())
+        .build();
+
+    let mut stream = docker.logs(id, Some(options));
+
+    while let Some(Ok(msg)) = stream.next().await {
+        // 丢弃 header 字节（1 字节 stream type + 3 字节 padding + 4 字节 length）
+        let data = &msg[..];
+        let mut pos = 0;
+        while pos + 8 <= data.len() {
+            let length =
+                u32::from_be_bytes(data[pos + 4..pos + 8].try_into().unwrap_or([0; 4])) as usize;
+            pos += 8;
+            let end = (pos + length).min(data.len());
+            let line = String::from_utf8_lossy(&data[pos..end]).trim().to_string();
+            if !line.is_empty() {
+                let _ = tx.send(crate::models::Msg::LogLine(line));
+            }
+            pos = end;
+        }
+    }
+    Ok(())
 }

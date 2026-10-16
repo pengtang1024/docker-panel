@@ -1,10 +1,14 @@
-# AGENTS.md — dvkit 开发协作入口
+# AGENTS.md — docker-panel 开发协作入口
 
 > 给 AI 编码助手看的项目速查手册。首次进入仓库请先读此文件。
 
+## ⚠️ 硬约束：项目名称禁止出现 dvkit
+
+本项目唯一正确的名称是 **docker-panel**（品牌名 Docker Panel）。`dvkit` 是已废弃的旧名，**任何文件、注释、字符串、日志前缀、包名、二进制名、desktop 入口中禁止出现 dvkit 字样**。提交前必须 `grep -ri dvkit .` 确认零残留。
+
 ## 项目是什么
 
-**dvkit**（原 docker-panel）是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.0。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.0。
 
 ## 技术栈
 
@@ -20,14 +24,16 @@
 ## 模块地图
 
 ```
-dvkit/
+docker-panel/
 ├── Cargo.toml              # 依赖 & release profile
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile("ui/app.slint")
 ├── ui/                     # Slint UI 声明（纯标记，Rust 侧统一通过 slint_gen 引入）
-│   ├── app.slint           # 主骨架：AppActions global + structs + MainWindow
-│   ├── delegates.slint     # ContainerRowDelegate / ImageRowDelegate（callback 属性注入）
-│   └── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
+│   ├── app.slint           # 主骨架：MainWindow + AppActions global，import 组装所有子组件
+│   ├── models.slint        # ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
+│   ├── delegates.slint     # 行 delegate（ContainerRowDelegate / ImageRowDelegate），callback 属性注入
+│   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
+│   └── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip 组件
 ├── src/
 │   ├── main.rs             # 桥接层：consumer 线程 + 定时刷新 + 入口
 │   ├── callbacks.rs        # UI 回调绑定（所有 Slint 事件 → Docker 操作）
@@ -95,7 +101,7 @@ cargo run
 
 # 发布构建（体积最小化 profile）
 cargo build --release
-./target/release/dvkit
+./target/release/docker-panel
 
 # 代码检查
 cargo fmt --all -- --check

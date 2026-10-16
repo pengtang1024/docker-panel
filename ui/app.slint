@@ -1,67 +1,29 @@
-// ═══════════════════════════════════════════════════════════
-// app.slint — 应用入口，只放 MainWindow + AppActions global + 数据 struct
-//
-// 三文件拆分架构：
-//   app.slint          MainWindow（主窗口 + 顶栏 + Tab + 状态栏）
-//                      AppActions global（Rust 侧 callbacks.rs 绑定）
-//                      ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
-//   delegates.slint    ContainerRowDelegate / ImageRowDelegate（ListView 每行视图）
-//   dialogs.slint      PullDialog / CleanupDialog（遮罩弹窗）
-//
-// 为什么拆：
-//   delegates.slint 被 ListView 的 `for row in root.container_rows: ContainerRowDelegate` 引用，
-//   dialogs.slint 被 MainWindow 末尾 `if root.pull_open: PullDialog` 条件渲染引用。
-//   拆出去的文件都是"可被单独 import 的组件库"，app.slint 只做组装。
-//
-// 数据桥（ContainerRow / ImageRow）：
-//   这些 struct 定义在这里，`slint_gen.rs` 的 include_modules!() 会生成对应的 Rust 类型。
-//   Rust 侧把 Vec<ContainerRow> 通过 ModelRc::from() 塞进 Slint ListView，
-//   delegate 里通过 `row.field` 直接读属性，不需要手动同步。
-// ═══════════════════════════════════════════════════════════
+// —— app.slint — 应用入口骨架 ——
+// 组装层：MainWindow + AppActions global，import 所有子组件。
 
-import { Button, LineEdit, ListView, VerticalBox, HorizontalBox,
-         TabWidget, ScrollView, CheckBox } from "std-widgets.slint";
+import { ListView, VerticalBox, TabWidget, ScrollView, HorizontalBox } from "std-widgets.slint";
 
+import { TopBar, ToolBar, StatusBar } from "panes.slint";
 import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
+import { ContainerHeader, ImageHeader } from "headers.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
+import { ContainerRow, ImageRow } from "models.slint";
 
 // ── AppActions global ──────────────────────────────────────
-// 全局 action 回调——Rust 侧 callbacks.rs 的 ui.global::<AppActions>() 绑定到这里。
-// delegate 组件内部**不**直接 import AppActions（见 delegates.slint 顶部注释），
-// 而是在 MainWindow 里把 `AppActions.container_toggle(row.id)` 作为回调属性注入。
-// 这样避免 Slint 的跨文件循环依赖（delegates.slint 被 app.slint import 后，
-// 如果 delegates 再 import AppActions 就变成了互相依赖）。
+// 行 delegate 触发 → MainWindow 注入 → callbacks.rs 绑定实现 → Rust 异步
 export global AppActions {
     callback container_toggle(string);
     callback container_restart(string);
     callback container_remove(string);
+    callback container_logs(string);
     callback image_remove(string);
-}
-
-// —— 数据 struct ——
-export struct ContainerRow {
-    id: string,
-    short_id: string,
-    name: string,
-    image: string,
-    status: string,
-    is_running: bool,
-}
-
-export struct ImageRow {
-    id: string,
-    short_id: string,
-    name: string,
-    tag: string,
-    size: string,
-    containers: int,
 }
 
 // —— 主窗口 ——
 export component MainWindow inherits Window {
-    title: "dvkit";
-    width: 960px;
-    height: 640px;
+    title: "Docker Panel";
+    width: 1100px;
+    height: 680px;
 
     // —— 属性 ——
     in-out property <bool> docker_ok: false;
@@ -91,50 +53,41 @@ export component MainWindow inherits Window {
     callback cleanup_submit(bool, bool, bool);
     callback cleanup_close();
 
-    // —— 深色背景铺满整个窗口 ——
+    // —— 深色背景 ——
     Rectangle { background: #1e1e2e; x: 0; y: 0; width: root.width; height: root.height; }
 
-    // —— 主布局 ——
-    VerticalBox {
+    // —— 主布局：顶栏 → [Tab+工具栏 | 详情面板] → 状态栏 ——
+    HorizontalBox {
         spacing: 0px;
+        height: root.height;
 
-        // 顶栏
+        // 左侧主区
         VerticalBox {
-            spacing: 6px;
-            padding: 8px;
+            spacing: 0px;
+            width: root.width - 320px;
 
-            HorizontalBox {
-                spacing: 12px;
-                Text {
-                    text: "dvkit";
-                    font-size: 16px;
-                    font-weight: 700;
-                }
-                Text {
-                    text: root.docker_ok ? "● 已连接" : "○ 未连接";
-                    color: root.docker_ok ? #00c853 : #ff5252;
-                }
-                HorizontalLayout { }
-                LineEdit {
-                    placeholder-text: "搜索...";
-                    accepted => { root.search_accepted(self.text); }
-                }
-                Button {
-                    text: "↻ 刷新";
-                    clicked => { root.refresh_requested(); }
-                }
-            }
-
-            // Tab 区域：TabWidget 在上，工具栏在 TabWidget 下方横排
             VerticalBox {
                 spacing: 6px;
+                padding: 8px;
 
-                TabWidget {
-                    Tab {
-                        title: "容器";
-                        ScrollView {
-                            ListView {
-                                for row in root.container_rows: ContainerRowDelegate {
+                // 顶栏
+                TopBar {
+                    docker_ok <=> root.docker_ok;
+                    refresh => { root.refresh_requested(); }
+                    search(val) => { root.search_accepted(val); }
+                }
+
+                VerticalBox {
+                    spacing: 6px;
+
+                    TabWidget {
+                        Tab {
+                            title: "容器";
+                            VerticalBox {
+                                ContainerHeader { }  // 表头
+                                ScrollView {
+                                    ListView {
+                                        for row in root.container_rows: ContainerRowDelegate {
                                     row_id: row.id;
                                     short_id: row.short_id;
                                     name: row.name;
@@ -143,69 +96,59 @@ export component MainWindow inherits Window {
                                     is_running: row.is_running;
                                     toggle => { AppActions.container_toggle(row.id); }
                                     restart => { AppActions.container_restart(row.id); }
+                                    logs => { AppActions.container_logs(row.id); }
                                     remove => { AppActions.container_remove(row.id); }
                                 }
+                                    }
+                                }
                             }
                         }
-                    }
-                    Tab {
-                        title: "镜像";
-                        ScrollView {
-                            ListView {
-                                for row in root.image_rows: ImageRowDelegate {
-                                    row_id: row.id;
-                                    short_id: row.short_id;
-                                    name: row.name;
-                                    tag: row.tag;
-                                    size: row.size;
-                                    containers: row.containers;
-                                    remove => { AppActions.image_remove(row.id); }
+                        Tab {
+                            title: "镜像";
+                            VerticalBox {
+                                ImageHeader { }  // 表头
+                                ScrollView {
+                                    ListView {
+                                        for row in root.image_rows: ImageRowDelegate {
+                                            row_id: row.id;
+                                            short_id: row.short_id;
+                                            name: row.name;
+                                            tag: row.tag;
+                                            size: row.size;
+                                            containers: row.containers;
+                                            remove => { AppActions.image_remove(row.id); }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // 工具栏独立一行，在 Tab 下方
-                HorizontalBox {
-                    spacing: 8px;
-                    padding-top: 4px;
-                    Button {
-                        text: "停止全部运行中容器";
-                        clicked => { root.stop_all_requested(); }
+                    // Tab 下方工具栏
+                    ToolBar {
+                        stop_all => { root.stop_all_requested(); }
+                        pull_requested => { root.pull_requested(); }
+                        cleanup_requested => { root.cleanup_requested(); }
                     }
-                    Button {
-                        text: "拉取镜像";
-                        clicked => { root.pull_requested(); }
-                    }
-                    Button {
-                        text: "清理未使用资源";
-                        clicked => { root.cleanup_requested(); }
-                    }
-                    HorizontalLayout { }
                 }
+            }
+
+            // 状态栏
+            StatusBar {
+                status_text <=> root.status_text;
+                container_count <=> root.container_count;
+                image_count <=> root.image_count;
             }
         }
 
-        // 状态栏
-        HorizontalBox {
-            spacing: 12px;
-            padding-left: 8px;
-            padding-right: 8px;
-            padding-top: 4px;
-            padding-bottom: 4px;
-            Text {
-                text: root.status_text;
-            }
-            HorizontalLayout { }
-            Text {
-                text: root.container_count + " 容器  ·  " + root.image_count + " 镜像";
-                color: #888888;
-            }
+        // —— 右侧详情面板占位（Phase 2 填充）——
+        Rectangle {
+            background: #252538;
+            width: 320px;
         }
     }
 
-    // —— 弹窗层（条件渲染）——
+    // —— 弹窗层 ——
     if root.pull_open: PullDialog {
         input <=> root.pull_input;
         busy <=> root.pull_busy;

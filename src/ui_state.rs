@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 
 use tokio::runtime::Runtime;
 
-use crate::docker::{list_containers, list_images};
-use crate::models::{ContainerInfo, ImageInfo, Msg};
+use crate::docker::{inspect_container, list_containers, list_images};
+use crate::models::{ContainerDetail, ContainerInfo, ImageInfo, Msg};
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
@@ -47,6 +47,13 @@ pub struct AppState {
     pub last_refresh: Instant,
     pub container_query: String,
     pub image_query: String,
+
+    // —— Phase 2 详情面板 ——
+    pub detail: Option<ContainerDetail>,
+
+    // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
+    pub logs: Vec<String>,
+    pub logs_cap: usize,
 }
 
 impl AppState {
@@ -70,6 +77,9 @@ impl AppState {
             last_refresh: Instant::now() - Duration::from_secs(10),
             container_query: String::new(),
             image_query: String::new(),
+            detail: None,
+            logs: Vec::new(),
+            logs_cap: 500,
         }));
         (state, rx)
     }
@@ -91,6 +101,27 @@ impl AppState {
         self.last_refresh = Instant::now();
     }
 
+    /// 请求 inspect 一个容器（供 callbacks.rs 在锁内 spawn）
+    pub fn request_detail(&mut self, id: String) {
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let res = inspect_container(&id).await;
+            let _ = tx.send(Msg::ContainerDetail(res));
+        });
+    }
+
+    pub fn handle_log_line(&mut self, line: String) {
+        self.logs.push(line);
+        if self.logs.len() > self.logs_cap {
+            let excess = self.logs.len() - self.logs_cap;
+            self.logs.drain(0..excess);
+        }
+    }
+
+    pub fn clear_logs(&mut self) {
+        self.logs.clear();
+    }
+
     /// 消费一批 Msg，更新 containers / images 并返回 (need_ui_update, latest_msg)
     ///
     /// 两阶段设计：
@@ -107,13 +138,15 @@ impl AppState {
         let mut need_ui_update = false;
         let mut latest_msg: Option<Msg> = None;
 
-        // 1. 先处理 recv() 消费走的那条（try_recv 再也看不到它了）
         if let Some(msg) = first {
-            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
+            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg,
+                             &mut self.containers, &mut self.images,
+                             &mut self.detail, &mut self.logs, self.logs_cap);
         }
-        // 2. 再扫 try_recv 积压
         while let Ok(msg) = rx.try_recv() {
-            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
+            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg,
+                             &mut self.containers, &mut self.images,
+                             &mut self.detail, &mut self.logs, self.logs_cap);
         }
         (need_ui_update, latest_msg)
     }
@@ -122,13 +155,9 @@ impl AppState {
     ///
     /// 抽出去的好处：drain_messages 只管"从哪拿消息"，
     /// handle_one 只管"拿到一条怎么改状态"。以后加新 Msg 变体只改这里。
-    fn handle_one(
-        msg: Msg,
-        need_ui_update: &mut bool,
-        latest_msg: &mut Option<Msg>,
-        containers: &mut Vec<ContainerInfo>,
-        images: &mut Vec<ImageInfo>,
-    ) {
+    fn handle_one(msg: Msg, need_ui_update: &mut bool, latest_msg: &mut Option<Msg>,
+                  containers: &mut Vec<ContainerInfo>, images: &mut Vec<ImageInfo>,
+                  detail: &mut Option<ContainerDetail>, logs: &mut Vec<String>, logs_cap: usize) {
         match &msg {
             Msg::Containers(Ok(list)) => {
                 *containers = list.clone();
@@ -147,11 +176,24 @@ impl AppState {
             Msg::Images(Err(e)) => {
                 *latest_msg = Some(Msg::Images(Err(e.clone())));
             }
-            Msg::ActionDone(_, _)
-            | Msg::PullProgress(_)
-            | Msg::PullDone(_)
-            | Msg::CleanupDone(_) => {
+            Msg::ActionDone(_, _) | Msg::PullProgress(_) | Msg::PullDone(_) | Msg::CleanupDone(_) => {
                 *latest_msg = Some(msg);
+                *need_ui_update = true;
+            }
+            Msg::ContainerDetail(res) => {
+                if let Ok(d) = res {
+                    *detail = Some(d.clone());
+                }
+                *latest_msg = Some(msg);
+                *need_ui_update = true;
+            }
+            Msg::LogLine(line) => {
+                logs.push(line.clone());
+                if logs.len() > logs_cap {
+                    let excess = logs.len() - logs_cap;
+                    logs.drain(0..excess);
+                }
+                // 日志高频到达但只在有窗口闲置时才做 UI 更新
                 *need_ui_update = true;
             }
         }

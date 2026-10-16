@@ -28,7 +28,7 @@
 //    把所有鼠标事件吃掉（除了它覆盖不到的弹窗卡片区域）。
 //    卡片在 TouchArea 之后声明，z 层级更高，所以卡片上的 Button 正常响应。
 //
-// 这个 TouchArea 模式来自 dvkit v0.1 的踩坑：曾经用 Rectangle 做遮罩
+// 这个 TouchArea 模式来自 docker-panel v0.1 的踩坑：曾经用 Rectangle 做遮罩
 // 但不加 TouchArea，结果点击弹窗卡片外的区域穿透到了 ListView，
 // 导致容器行 toggle 被误触发。
 // ═══════════════════════════════════════════════════════════

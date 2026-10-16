@@ -296,4 +296,28 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
             });
         });
     }
+
+    // 容器 inspect（点详情按钮或点容器行时调用）
+    let bind_container_inspect = |s: &SharedState, id: String| {
+        if let Ok(mut st) = s.lock() {
+            st.request_detail(id);
+            st.clear_logs();
+        }
+    };
+
+    // 容器日志按钮 → inspect + follow_logs（锁外 spawn）
+    {
+        let s = state.clone();
+        actions.on_container_logs(move |row_id: SharedString| {
+            let id = row_id.to_string();
+            bind_container_inspect(&s, id.clone());
+            let (rt_handle, tx) = {
+                let Ok(st) = s.lock() else { return };
+                (st.rt.handle().clone(), st.tx.clone())
+            };
+            rt_handle.spawn(async move {
+                let _ = docker::follow_logs(&id, tx, 200).await;
+            });
+        });
+    }
 }

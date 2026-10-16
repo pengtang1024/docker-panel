@@ -1,4 +1,4 @@
-# dvkit
+# Docker Panel
 
 极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、**纯软件渲染器**——零 GPU 依赖、零 Electron、零运行时。
 
@@ -48,13 +48,13 @@
 
 ### Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `dvkit_<版本>_amd64.deb`：
+从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`：
 
 ```bash
-sudo dpkg -i dvkit_<版本>_amd64.deb
+sudo dpkg -i docker-panel_<版本>_amd64.deb
 ```
 
-安装后在应用菜单中找到 dvkit；若点了没反应，多半是当前用户没有 Docker socket 权限：
+安装后在应用菜单中找到 Docker Panel；若点了没反应，多半是当前用户没有 Docker socket 权限：
 
 ```bash
 sudo usermod -aG docker $USER
@@ -70,7 +70,7 @@ cargo run
 
 # 发布构建（体积最小化 profile：opt-level=z + LTO + strip + panic=abort）
 cargo build --release
-./target/release/dvkit
+./target/release/docker-panel
 ```
 
 ## 使用说明
@@ -108,18 +108,20 @@ cargo build --release
 ## 项目结构
 
 ```
-dvkit/
+docker-panel/
 ├── Cargo.toml              # 依赖与 build profile
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile("ui/app.slint")
-├── ui/                     # Slint UI 声明
-│   ├── app.slint           # 主骨架 + AppActions + MainWindow
-│   ├── delegates.slint     # 行 delegate（容器/镜像列表项）
-│   └── dialogs.slint       # 弹窗（Pull / Cleanup）
+├── ui/                     # Slint UI 声明（5 文件按职责拆分）
+│   ├── app.slint           # 主骨架：MainWindow + AppActions global，import 组装其余 4 个文件
+│   ├── models.slint        # ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
+│   ├── delegates.slint     # 行 delegate（ListView 每行视图），callback 属性由 MainWindow 注入
+│   ├── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip 组件
+│   └── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
 ├── CHANGELOG.md            # 更新日志
 ├── docs/
-│   ├── architecture.md     # 架构设计
+│   ├── architecture.md     # 架构设计（线程模型 + Slint 交互图 + 文件规范）
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/              # deb 打包文件
 │   ├── debian/control

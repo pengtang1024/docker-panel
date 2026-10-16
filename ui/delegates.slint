@@ -1,26 +1,5 @@
-// ═══════════════════════════════════════════════════════════
 // delegates.slint — ListView 的行视图组件
-//
-// 设计约束：
-//   ⚠️ 本文件**不** import AppActions global——因为 AppActions 定义在 app.slint，
-//   而 app.slint 已经 import 了本文件的 delegate。如果这里再 import AppActions
-//   就变成 Slint 的循环依赖（app.slint ↔ delegates.slint），Slint 编译器会拒绝。
-//
-//   解法：delegate 只声明 callback 属性（callback toggle() / restart() / remove()），
-//   然后由 MainWindow（app.slint）在 for 循环里把 AppActions 的全局回调作为属性注入：
-//
-//     for row in root.container_rows: ContainerRowDelegate {
-//         ...
-//         toggle => { AppActions.container_toggle(row.id); }   // 注入回调体
-//     }
-//
-//   这样 delegates.slint 就变成"纯展示组件"——不依赖任何全局、不做业务派发，
-//   谁用谁把回调体塞进来。
-//
-// callback 属性 vs in-out property：
-//   - in-out property 是**数据**，MainWindow 可以读写 delegate 的属性（row_id、is_running...）
-//   - callback 是**行为**，delegate 在用户交互时触发，由 MainWindow 提供实现
-// ═══════════════════════════════════════════════════════════
+// 只声明 callback 属性，MainWindow 在 for 循环里把 AppActions 回调注入。
 
 import { Button, HorizontalBox } from "std-widgets.slint";
 
@@ -34,6 +13,7 @@ export component ContainerRowDelegate inherits HorizontalBox {
 
     callback toggle();
     callback restart();
+    callback logs();
     callback remove();
 
     spacing: 8px;
@@ -78,6 +58,11 @@ export component ContainerRowDelegate inherits HorizontalBox {
         text: "⟳";
         min-width: 28px;
         clicked => { root.restart(); }
+    }
+    Button {
+        text: "📋";
+        min-width: 28px;
+        clicked => { root.logs(); }
     }
     Button {
         text: "🗑";

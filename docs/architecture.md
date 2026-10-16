@@ -1,4 +1,4 @@
-# dvkit 架构设计
+# Docker Panel 架构设计
 
 v0.2.0 完全重写版：Slint 原生 GUI + 纯软件渲染器。本文档随仓库版本管理，描述当前实际架构。
 
@@ -14,8 +14,10 @@ main.rs                         桥接层：consumer 线程 + 定时刷新 + 回
 │   ├── images.rs               列表 / 拉取（含进度回调闭包）/ 删除
 │   └── system.rs               cleanup prune / follow_logs（v0.2 未暴露日志窗口）
 ├── ui/
-│   ├── app.slint               Slint 主骨架：AppActions global + structs + MainWindow + import 组装
-│   ├── delegates.slint         行 delegate（ContainerRowDelegate / ImageRowDelegate），callback 属性由 MainWindow 注入
+│   ├── app.slint               Slint 主骨架：AppActions global + MainWindow + import 组装其余 4 文件
+│   ├── models.slint            ContainerRow / ImageRow struct（Rust ↔ Slint 数据桥）
+│   ├── delegates.slint         行 delegate（ContainerRowDelegate / ImageRowDelegate），callback 属性注入
+│   ├── panes.slint             TopBar / ToolBar / StatusBar 横向 strip 组件
 │   └── dialogs.slint           PullDialog + CleanupDialog 弹窗组件
 └── build.rs                    slint_build::compile("ui/app.slint")
 ```
@@ -109,33 +111,173 @@ Timer 回调本身**不**直接碰 Slint Model——它只负责"发任务"，co
 
 > 注意：当前版本操作完成后**不立即刷新列表**，等下一个 3s Timer 周期。这是可接受的简化，后续如果操作后需要立即可见，可以在 ActionDone/CleanupDone 分支里同步 spawn 一次列表刷新。
 
-## 4. Slint UI 声明
+## 4. Slint UI 模块交互
 
-### 数据绑定
+5 个 `.slint` 文件按职责拆分，依赖单向：**app.slint 是唯一的组装入口**，它 import 其余 4 个文件；子文件之间**不互相 import**（避免循环依赖和跨文件 global 可见性问题）。
 
-```slint
-export struct ContainerRow { id, short_id, name, image, status, is_running }
-export struct ImageRow { id, short_id, name, tag, size, containers }
+### 交互总图
+
+```
+                           app.slint（组装层）
+                          ╱  ╲   ╱  ╲   ╲
+                         ╱    ╲ ╱    ╲   ╲
+            models.slint  delegates.slint  panes.slint  dialogs.slint
+            (数据桥)        (行视图)         (横向 strip)   (弹窗)
+                 │              │              │              │
+                 │              │              │              │
+                 ▼              ▼              ▼              ▼
+          Rust main.rs    Rust callbacks.rs  Rust 回调绑定    Rust 回调绑定
+         build_*_rows()   ui.global::<AppActions>()
+         ModelRc::from()   actions.on_xxx(...)
 ```
 
-Rust 侧通过 `slint::include_modules!()` 生成 `ContainerRow` / `ImageRow` / `MainWindow` 的 Rust 类型。更新列表时用 `ModelRc::from(container_rows.as_slice())` 创建只读 Model 注入。
+### 四种交互模式
 
-### 全局 Action 回调
+#### ① models.slint → Rust main.rs：property 数据注入
 
-```slint
+```
+models.slint 定义 struct：          Rust 侧构造 → ModelRc 注入：
+┌──────────────────────┐          ┌─────────────────────────┐
+│ struct ContainerRow {│          │ let rows = state.lock() │
+│   id, name, image,   │          │   .containers.iter()    │
+│   status, is_running │          │   .map(build_row)       │
+│ }                    │          │   .collect::<Vec<_>>(); │
+│ struct ImageRow {    │          │ ui.set_container_rows(  │
+│   id, name, tag,     │          │   ModelRc::from(&rows)  │
+│   size, containers   │          │ );                      │
+│ }                    │          └─────────────────────────┘
+└──────────────────────┘
+         │
+         │ include_modules!() 生成 Rust 类型
+         ▼
+   main.rs 直接 new ContainerRow { ... }
+```
+
+**关键点**：struct 字段不能随便改名——Rust 侧 `build_container_rows` 直接构造它们。`models.slint` 存在的唯一意义就是把数据桥声明抽离出来，让 app.slint 只管布局。
+
+#### ② delegates.slint ← app.slint：callback 属性注入
+
+```
+delegates.slint 声明接口：            app.slint 的 ListView 循环里注入实现：
+┌─────────────────────────┐        ┌────────────────────────────────────┐
+│ component ContainerRow  │        │ for row in root.container_rows:    │
+│   Delegate {            │        │   ContainerRowDelegate {           │
+│     callback toggle();  │        │     row_id: row.id;               │
+│     callback restart(); │        │     toggle => {                    │
+│     callback remove();  │        │       AppActions.container_toggle  │
+│   }                     │        │         (row.id);                  │
+│   Button {              │        │     }                              │
+│     clicked => {        │        │     restart => { ... };            │
+│       root.toggle();    │        │     remove => { ... };             │
+│     }                   │        │   }                                │
+│   }                     │        └────────────────────────────────────┘
+└─────────────────────────┘
+```
+
+**为什么 delegates 不直接 import AppActions global？** 因为 Slint 跨文件 import 的 global 在 Rust 侧 `include_modules!()` 展开后类型不兼容。改成 callback 属性注入后，delegates 完全独立——它只声明"我需要 toggle/remove"，谁来实现是 app.slint 的事。
+
+#### ③ panes.slint ↔ app.slint：in-out 属性双向绑定 `<=>`
+
+```
+panes.slint 声明组件：                 app.slint 组装：
+┌────────────────────────┐           ┌───────────────────────────────┐
+│ component TopBar {     │           │ TopBar {                       │
+│   in-out property      │  <=>      │   docker_ok <=> root.docker_ok;│
+│     <bool> docker_ok;  │──────────▶│   refresh => {                 │
+│   callback refresh();  │  callback │     root.refresh_requested(); │
+│   callback search(s);  │           │   }                            │
+│ }                      │           │   search(val) => {             │
+│                        │           │     root.search_accepted(val);│
+│ component ToolBar {    │           │   }                            │
+│   callback stop_all(); │           │ }                              │
+│   callback pull_...(); │           └───────────────────────────────┘
+│   callback cleanup_..();│
+│ }
+│                        │
+│ component StatusBar {  │
+│   in-out property      │
+│     <string> status_.. │
+│     <string> container │
+│     <string> image_... │
+│ }
+└────────────────────────┘
+```
+
+**`<=>` 双向绑定**：`StatusBar.status_text <=> root.status_text` 意味着 panes 里任何属性变更都会同步到 MainWindow 的 root 属性，反之亦然。callback 是单向的——panes 触发，MainWindow 实现并转发到 Rust 回调。
+
+#### ④ dialogs.slint ← app.slint：条件渲染 + in-out 双向绑定
+
+```
+dialogs.slint 声明组件：               app.slint 条件渲染：
+┌─────────────────────────┐          ┌──────────────────────────────────┐
+│ component PullDialog {  │          │ if root.pull_open: PullDialog { │
+│   in-out property      │          │   input <=> root.pull_input;   │
+│     <string> input;    │          │   busy <=> root.pull_busy;     │
+│   in-out property      │  <=>     │   close => { root.pull_close(); }│
+│     <bool> busy;       │          │   submit(val) => {              │
+│   callback close();    │          │     root.pull_submit(val);      │
+│   callback submit(s);  │          │   }                            │
+│ }                      │          │ }                              │
+│                        │          │ if root.cleanup_open:           │
+│ component CleanupDialog│          │   CleanupDialog { ... }        │
+│   in-out property      │          └──────────────────────────────────┘
+│     <bool> stopped;    │
+│   in-out property      │
+│     <bool> dangling;   │   条件由 Rust 侧 ui.set_pull_open(true/false) 控制
+│   in-out property      │
+│     <bool> unused;     │
+│   callback close();    │
+│   callback submit(..); │
+│ }
+└─────────────────────────┘
+```
+
+**条件渲染 + 双向绑定**是标准弹窗模式：`if root.pull_open:` 控制遮罩层显示/隐藏，`<=>` 双向绑定把弹窗内的 LineEdit、CheckBox 值同步回 MainWindow 的 root 属性（Rust 侧通过 `ui.set_pull_input()` 预填）。
+
+#### Rust 侧绑定 AppActions global
+
+```
+app.slint:                    Rust callbacks.rs:
 export global AppActions {
-    callback container_toggle(string);
-    callback container_restart(string);
-    callback container_remove(string);
-    callback image_remove(string);
-}
+  callback container_toggle(string);  │  let actions = ui.global::<AppActions>();
+  callback container_restart(string); │  actions.on_container_toggle(|id| {
+  callback container_remove(string);  │    // spawn stop/start → tx.send(Msg::ActionDone)
+  callback image_remove(string);      │  });
+}                                     │  actions.on_image_remove(|id| {
+                                     │    // spawn remove_image → tx.send(...)
+                                     │  });
 ```
 
-delegate 组件内通过 `AppActions.container_toggle(root.row_id)` 委托给 Rust 侧。Rust 侧 `actions.on_container_toggle(...)` 绑定 handler。
+`AppActions` 是 app.slint 里**唯一的 global**，只在 app.slint 声明、只在 callbacks.rs 绑定。delegates.slint 通过 callback 属性间接调用它，而不是直接 import——这是跨文件安全绑定的关键设计。
 
-### 弹窗状态
+### 文件清单速查
 
-Pull 和 Cleanup 弹窗都是 `if root.pull_open:` / `if root.cleanup_open:` 条件渲染的全屏遮罩。关闭触发：点遮罩区域或点取消按钮。
+| 文件 | 行数 | 职责 | import 谁 | 被谁 import |
+|------|------|------|-----------|-------------|
+| `app.slint` | ~148 | MainWindow 骨架 + AppActions global | models / delegates / panes / dialogs | （build.rs 入口文件） |
+| `models.slint` | ~21 | ContainerRow / ImageRow struct | 无 | app.slint |
+| `delegates.slint` | ~136 | ListView 每行视图 + callback 属性 | 无 | app.slint |
+| `panes.slint` | ~80 | TopBar / ToolBar / StatusBar | 无 | app.slint |
+| `dialogs.slint` | ~157 | PullDialog / CleanupDialog | 无 | app.slint |
+
+### 数据桥 struct（来自 models.slint）
+
+```rust
+// Rust 侧 slint_gen.rs 的 include_modules!() 自动生成：
+// crate::slint_gen::ContainerRow { id, short_id, name, image, status, is_running }
+// crate::slint_gen::ImageRow { id, short_id, name, tag, size, containers }
+```
+
+### AppActions global（来自 app.slint）
+
+```rust
+// crate::slint_gen::AppActions {
+//   on_container_toggle(impl FnMut(SharedString)),
+//   on_container_restart(impl FnMut(SharedString)),
+//   on_container_remove(impl FnMut(SharedString)),
+//   on_image_remove(impl FnMut(SharedString)),
+// }
+```
 
 ## 5. Docker 接入约定
 
@@ -151,6 +293,14 @@ Pull 和 Cleanup 弹窗都是 `if root.pull_open:` / `if root.cleanup_open:` 条
 
 ## 6. 文件规范
 
-单文件超过 300 行必须按职责拆分。当前 `main.rs` 约 440 行（含回调绑定），下一步应拆出 `callbacks.rs` 把 `bind_callbacks` 独立出去。
+单文件超过 300 行必须按职责拆分。当前所有文件均 ≤ 300 行：main.rs ~243、callbacks.rs ~299、ui_state.rs ~249、delegates.slint ~136、dialogs.slint ~157、panes.slint ~80。
 
-> 历史：v0.1 的 egui 架构有 `app/`、`widgets/`、`utils/` 三个模块目录，v0.2 重写时全部删除，功能收敛到最少必要文件。
+拆分原则（Slint 侧）：
+- **app.slint 做组装层**——只放 MainWindow 骨架 + AppActions global + import 语句，**不**堆内联 markup
+- **子文件之间不互相 import**——避免循环依赖和跨文件 global 可见性问题
+- **delegates 用 callback 属性注入**代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
+- **panes/dialogs 用 in-out 属性 `<=>` 双向绑定**——数据流向一眼可见
+
+拆分原则（Rust 侧）：
+- **桥接层分离**：main.rs（consumer 线程 + pump + 入口）与 callbacks.rs（UI 回调绑定到 AppActions）分离
+- **类型集中入口**：`slint_gen.rs` 只做 `include_modules!()` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入，避免多文件独立展开导致类型不兼容

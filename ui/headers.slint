@@ -1,0 +1,51 @@
+// —— 表头组件 ——
+// 列宽严格对齐 delegates.slint 的 min-width。
+// 用 width: 100% 撑满父容器，HorizontalLayout { } 吸剩余空间。
+
+import { HorizontalBox } from "std-widgets.slint";
+
+export component ContainerHeader inherits Rectangle {
+    height: 28px;
+    background: #2a2a3a;
+
+    HorizontalBox {
+        spacing: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        y: 2px;
+        width: parent.width;
+        height: parent.height - 4px;
+
+        Text { text: "";        min-width: 16px; color: #666; }
+        Text { text: "ID";      min-width: 96px; color: #888; font-size: 12px; font-weight: 600; }
+        Text { text: "名称";    min-width: 140px; color: #888; font-size: 12px; font-weight: 600; }
+        Text { text: "镜像";    min-width: 120px; color: #888; font-size: 12px; font-weight: 600; }
+        HorizontalLayout { }
+        Text { text: "状态";    min-width: 80px; color: #888; font-size: 12px; font-weight: 600; }
+        // 操作列对齐 4 按钮：⏹(32) + ⟳(28) + 📋(28) + 🗑(28)
+        Text { text: "操作";    min-width: 116px; color: #888; font-size: 12px; font-weight: 600; }
+    }
+}
+
+export component ImageHeader inherits Rectangle {
+    height: 28px;
+    background: #2a2a3a;
+
+    HorizontalBox {
+        spacing: 8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        y: 2px;
+        width: parent.width;
+        height: parent.height - 4px;
+
+        Text { text: "ID";      min-width: 96px;  color: #888; font-size: 12px; font-weight: 600; }
+        Text { text: "名称";    min-width: 200px; color: #888; font-size: 12px; font-weight: 600; }
+        Text { text: "标签";    min-width: 100px; color: #888; font-size: 12px; font-weight: 600; }
+        HorizontalLayout { }
+        Text { text: "使用";    min-width: 80px;  color: #888; font-size: 12px; font-weight: 600; }
+        Text { text: "大小";    min-width: 70px;  color: #888; font-size: 12px; font-weight: 600; }
+        HorizontalLayout { }
+        Text { text: "";        min-width: 28px;  color: #666; }
+    }
+}

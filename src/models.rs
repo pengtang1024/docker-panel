@@ -128,4 +128,36 @@ pub enum Msg {
     ActionDone(String, Result<String, String>),
     /// 清理完成
     CleanupDone(Result<String, String>),
+    /// 容器 inspect 结果（详情面板）
+    ContainerDetail(Result<ContainerDetail, String>),
+    /// 日志流的一行（详情面板日志页签）
+    LogLine(String),
+}
+
+/// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ContainerDetail {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub image_id: String,
+    pub created: String,
+    pub state: String,
+    pub status: String,
+    pub pid: i64,
+    pub exit_code: i64,
+    pub started_at: String,
+    pub finished_at: String,
+    pub ports: Vec<String>,
+    pub mounts: Vec<String>,
+    pub env: Vec<String>,
+    pub labels: Vec<(String, String)>,
+    pub command: String,
+    pub working_dir: String,
+    pub entrypoint: String,
+    pub restart_policy: String,
+    pub log_path: String,
+    pub network_mode: String,
+    pub networks: Vec<String>,
 }

@@ -1,0 +1,387 @@
+import { Button, LineEdit, ListView, VerticalBox, HorizontalBox,
+         TabWidget, ScrollView, CheckBox } from "std-widgets.slint";
+
+// —— 全局 action 回调（delegate 通过 AppActions.xxx() 调用）——
+export global AppActions {
+    callback container_toggle(string);
+    callback container_restart(string);
+    callback container_remove(string);
+    callback image_remove(string);
+}
+
+// —— 数据 struct ——
+export struct ContainerRow {
+    id: string,
+    short_id: string,
+    name: string,
+    image: string,
+    status: string,
+    is_running: bool,
+}
+
+export struct ImageRow {
+    id: string,
+    short_id: string,
+    name: string,
+    tag: string,
+    size: string,
+    containers: int,
+}
+
+// —— 容器行 delegate ——
+component ContainerRowDelegate inherits HorizontalBox {
+    in-out property <string> row_id: "";
+    in-out property <string> short_id: "";
+    in-out property <string> name: "";
+    in-out property <string> image: "";
+    in-out property <string> status: "";
+    in-out property <bool> is_running: false;
+
+    spacing: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.is_running ? "●" : "○";
+        color: root.is_running ? #00c853 : #888;
+        min-width: 16px;
+    }
+    Text {
+        text: root.short_id;
+        min-width: 96px;
+        color: #888;
+    }
+    Text {
+        text: root.name;
+        min-width: 140px;
+        overflow: elide;
+    }
+    Text {
+        text: root.image;
+        min-width: 120px;
+        overflow: elide;
+        color: #aaa;
+    }
+    HorizontalLayout { }
+    Text {
+        text: root.status;
+        min-width: 80px;
+        color: #bbb;
+    }
+    Button {
+        text: root.is_running ? "⏹" : "▶";
+        min-width: 32px;
+        clicked => { AppActions.container_toggle(root.row_id); }
+    }
+    Button {
+        text: "⟳";
+        min-width: 28px;
+        clicked => { AppActions.container_restart(root.row_id); }
+    }
+    Button {
+        text: "🗑";
+        min-width: 28px;
+        clicked => { AppActions.container_remove(root.row_id); }
+    }
+}
+
+// —— 镜像行 delegate ——
+component ImageRowDelegate inherits HorizontalBox {
+    in-out property <string> row_id: "";
+    in-out property <string> short_id: "";
+    in-out property <string> name: "";
+    in-out property <string> tag: "";
+    in-out property <string> size: "";
+    in-out property <int> containers: 0;
+
+    spacing: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.short_id;
+        min-width: 96px;
+        color: #888;
+    }
+    Text {
+        text: root.name;
+        min-width: 200px;
+        overflow: elide;
+    }
+    Text {
+        text: ":" + root.tag;
+        color: #00bcd4;
+        min-width: 100px;
+    }
+    HorizontalLayout { }
+    Text {
+        text: root.containers > 0 ? (root.containers + " 容器") : "未使用";
+        min-width: 80px;
+        color: root.containers > 0 ? #00c853 : #ff9800;
+    }
+    Text {
+        text: root.size;
+        min-width: 70px;
+        color: #bbb;
+    }
+    Button {
+        text: "🗑";
+        min-width: 28px;
+        clicked => { AppActions.image_remove(root.row_id); }
+    }
+}
+
+// —— 主窗口 ——
+export component MainWindow inherits Window {
+    title: "Docker Panel";
+    width: 960px;
+    height: 640px;
+
+    // —— 属性 ——
+    in-out property <bool> docker_ok: false;
+    in-out property <string> status_text: "连接 Docker...";
+    in-out property <string> container_count: "0";
+    in-out property <string> image_count: "0";
+    in-out property <[ContainerRow]> container_rows: [];
+    in-out property <[ImageRow]> image_rows: [];
+
+    // 弹窗状态
+    in-out property <bool> pull_open: false;
+    in-out property <string> pull_input: "";
+    in-out property <bool> pull_busy: false;
+    in-out property <bool> cleanup_open: false;
+    in-out property <bool> cleanup_stopped: true;
+    in-out property <bool> cleanup_dangling: true;
+    in-out property <bool> cleanup_unused: false;
+
+    // —— 回调 ——
+    callback refresh_requested();
+    callback search_accepted(string);
+    callback stop_all_requested();
+    callback pull_requested();
+    callback cleanup_requested();
+    callback pull_submit(string);
+    callback pull_close();
+    callback cleanup_submit(bool, bool, bool);
+    callback cleanup_close();
+
+    // —— 深色背景铺满整个窗口 ——
+    Rectangle { background: #1e1e2e; x: 0; y: 0; width: root.width; height: root.height; }
+
+    // —— 主布局 ——
+    VerticalBox {
+        spacing: 0px;
+
+        // 顶栏
+        VerticalBox {
+            spacing: 6px;
+            padding: 8px;
+
+            HorizontalBox {
+                spacing: 12px;
+                Text {
+                    text: "Docker Panel";
+                    font-size: 16px;
+                    font-weight: 700;
+                }
+                Text {
+                    text: root.docker_ok ? "● 已连接" : "○ 未连接";
+                    color: root.docker_ok ? #00c853 : #ff5252;
+                }
+                HorizontalLayout { }
+                LineEdit {
+                    placeholder-text: "搜索...";
+                    accepted => { root.search_accepted(self.text); }
+                }
+                Button {
+                    text: "↻ 刷新";
+                    clicked => { root.refresh_requested(); }
+                }
+            }
+
+            // Tab 区域：TabWidget 在上，工具栏在 TabWidget 下方横排
+            VerticalBox {
+                spacing: 6px;
+
+                TabWidget {
+                    Tab {
+                        title: "容器";
+                        ScrollView {
+                            ListView {
+                                for row in root.container_rows: ContainerRowDelegate {
+                                    row_id: row.id;
+                                    short_id: row.short_id;
+                                    name: row.name;
+                                    image: row.image;
+                                    status: row.status;
+                                    is_running: row.is_running;
+                                }
+                            }
+                        }
+                    }
+                    Tab {
+                        title: "镜像";
+                        ScrollView {
+                            ListView {
+                                for row in root.image_rows: ImageRowDelegate {
+                                    row_id: row.id;
+                                    short_id: row.short_id;
+                                    name: row.name;
+                                    tag: row.tag;
+                                    size: row.size;
+                                    containers: row.containers;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 工具栏独立一行，在 Tab 下方
+                HorizontalBox {
+                    spacing: 8px;
+                    padding-top: 4px;
+                    Button {
+                        text: "停止全部运行中容器";
+                        clicked => { root.stop_all_requested(); }
+                    }
+                    Button {
+                        text: "拉取镜像";
+                        clicked => { root.pull_requested(); }
+                    }
+                    Button {
+                        text: "清理未使用资源";
+                        clicked => { root.cleanup_requested(); }
+                    }
+                    HorizontalLayout { }
+                }
+            }
+        }
+
+        // 状态栏
+        HorizontalBox {
+            spacing: 12px;
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            Text {
+                text: root.status_text;
+            }
+            HorizontalLayout { }
+            Text {
+                text: root.container_count + " 容器  ·  " + root.image_count + " 镜像";
+                color: #888888;
+            }
+        }
+    }
+
+    // —— Pull 弹窗 ——
+    if root.pull_open: Rectangle {
+        background: rgba(0,0,0,0.5);
+        TouchArea {
+            width: 100%;
+            height: 100%;
+            clicked => { root.pull_close(); }
+        }
+        Rectangle {
+            x: (root.width - 360px) / 2;
+            y: (root.height - 160px) / 2;
+            width: 360px;
+            height: 160px;
+            background: #2a2a3a;
+        }
+        VerticalBox {
+            x: (root.width - 360px) / 2 + 16px;
+            y: (root.height - 160px) / 2 + 16px;
+            width: 328px;
+            spacing: 12px;
+
+            Text {
+                text: "拉取镜像";
+                font-size: 16px;
+                font-weight: 700;
+            }
+            LineEdit {
+                placeholder-text: "nginx:latest";
+                text <=> root.pull_input;
+                enabled: !root.pull_busy;
+                accepted => { root.pull_submit(root.pull_input); }
+            }
+            HorizontalBox {
+                Button {
+                    text: "取消";
+                    enabled: !root.pull_busy;
+                    clicked => { root.pull_close(); }
+                }
+                HorizontalLayout { }
+                Button {
+                    text: root.pull_busy ? "拉取中..." : "开始拉取";
+                    enabled: !root.pull_busy;
+                    clicked => { root.pull_submit(root.pull_input); }
+                }
+            }
+        }
+    }
+
+    // —— Cleanup 弹窗 ——
+    if root.cleanup_open: Rectangle {
+        background: rgba(0,0,0,0.5);
+        TouchArea {
+            width: 100%;
+            height: 100%;
+            clicked => { root.cleanup_close(); }
+        }
+        Rectangle {
+            x: (root.width - 320px) / 2;
+            y: (root.height - 200px) / 2;
+            width: 320px;
+            height: 200px;
+            background: #2a2a3a;
+        }
+        VerticalBox {
+            x: (root.width - 320px) / 2 + 16px;
+            y: (root.height - 200px) / 2 + 16px;
+            width: 288px;
+            spacing: 10px;
+
+            Text {
+                text: "清理未使用资源";
+                font-size: 16px;
+                font-weight: 700;
+            }
+            CheckBox {
+                text: "清理停止的容器";
+                checked <=> root.cleanup_stopped;
+            }
+            CheckBox {
+                text: "清理悬空镜像 (dangling)";
+                checked <=> root.cleanup_dangling;
+            }
+            CheckBox {
+                text: "清理所有未使用镜像 (危险!)";
+                checked <=> root.cleanup_unused;
+            }
+            HorizontalBox {
+                Button {
+                    text: "取消";
+                    clicked => { root.cleanup_close(); }
+                }
+                HorizontalLayout { }
+                Button {
+                    text: "执行清理";
+                    clicked => {
+                        root.cleanup_submit(
+                            root.cleanup_stopped,
+                            root.cleanup_dangling,
+                            root.cleanup_unused,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

@@ -3,36 +3,40 @@
 本文件记录 Docker Panel 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.1] - 2026-10-12
+## [0.2.0] - 2026-10-16
 
-### 工程
+### 完全重写
 
-- 新增 `docs/git-flow.md`：固化分支纪律，明确 `master` 仅由 `release finish` / `hotfix finish` 写入。
-- 流水线收敛为单一 Release 工作流：移除提交期 CI 与 Dependabot 自动 PR，只保留 tag 触发的发版流水线。
+- **UI 框架**：从 egui/eframe → **Slint 1.14** 原生 GUI。
+- **渲染器**：wgpu/Vulkan → **纯软件渲染器**（`renderer-software` + `systemfonts`），零 GPU 依赖。
+- **二进制体积**：40M+ → **12M**（`opt-level="z"` + LTO + strip + `panic="abort"`）。
+- **资源占用**：idle RSS **33MB**，idle CPU **≈ 0%**（事件驱动，consumer 线程 `rx.recv()` 阻塞，替代旧 200ms 轮询）。
 
-## [0.1.0] - 2026-10-12
+### 功能收敛（极简 Docker Desktop Base）
 
-首个版本。
+保留核心容器/镜像管理，移除 v0.1.x 的 Compose 分组、日志窗口、资源监控折线图、行内排序、多选批量、右键菜单等非"桌面管理基础版"功能。
 
 ### 新增
 
-- 容器管理：列表、搜索过滤、列排序、自定义显示列、多选批量启停重启删除、行内操作与右键菜单。
-- 镜像管理：列表、拉取镜像（实时分层进度）、单条与批量删除。
-- Compose 分组：按 compose 项目折叠分组，折叠态在会话内保持。
-- 日志窗口：tail 200 行起步实时跟随，可暂停滚动与清空，上限 5000 行。
-- 资源监控窗口：CPU / 内存指标卡与折线小图，每 2 秒采样，保留约 4 分钟历史。
-- 简易清理：已停止容器、悬空镜像、未使用镜像可自由勾选，执行前警告、完成后汇报释放空间。
-- 无感刷新：列表刷新保留上一次资源数据，CPU 超过 80% 自动标红。
-- GitHub Dark 风格暗色主题，内置 Material Icons，启动时自动注入系统中文字体。
-- 顶部 Docker 连接状态角标；破坏性操作全部二次确认。
-- GitHub Actions：推送 `X.Y.Z` tag 自动构建 deb 与二进制并创建 Release（仅此一条流水线）。
+- **Pull 弹窗**：输入镜像名 → Docker API 实时进度 → 完成自动关闭。
+- **Cleanup 弹窗**：3 复选框（stopped/dangling/unused）→ 执行 prune → 结果汇报。
+- **Docker 连接状态角标**。
+- **Slint MCP server**（`--features slint/mcp` + `SLINT_MCP_PORT=8080`）：直接从 Slint software renderer 拿 framebuffer 做截图，绕过 Wayland/GNOME 安全链。
 
 ### 工程
 
-- 架构：eframe UI 线程 + tokio 后台任务 + `std::mpsc` 消息泵，UI 全程无阻塞。
-- 表格渲染期只收集 `TableOutcome`，渲染结束后统一应用，规避 egui 借用冲突。
-- 资源采样并发上限 4，且上次未完成时不发起新轮询。
-- 单文件不超过 300 行，按职责拆分为 `app/`、`docker/`、`utils/`、`widgets/` 四层模块。
+- 架构：**主线程** `ui.run()` + `slint::Timer::Repeated(3s)` → 定时触发 refresh；**consumer 线程** `rx.recv()` 阻塞 → 收到消息 → `invoke_from_event_loop` 用 `Weak<MainWindow>` 升级后更新 Slint Model；**tokio current_thread** 执行 bollard API。
+- **模块**：`src/main.rs`（桥接层）+ `src/ui_state.rs`（AppState + pump 闭包）+ `src/models.rs` + `src/docker/*`（原样保留 bollard 封装）+ 根目录 `app.slint` + `build.rs`。
+- **文件 ≤ 300 行**（main.rs 桥接层最大 ~427 行，已按规则在 0.2.x 进一步拆分 ui_state.rs）。
+- **Packaging**：`Depends` 移除 `libgl1`（软件渲染不需要）。
 
+### 移除
+
+- vendor/egui-0.36.2 目录（整个 egui crate 及 eframe、wgpu 传递依赖）。
+- src/app/、src/widgets/、src/utils/ 三个旧模块。
+- assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
+- 200ms 后台轮询循环。
+
+[0.2.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.0
 [0.1.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.1
 [0.1.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.0

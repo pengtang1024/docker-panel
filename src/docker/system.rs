@@ -10,6 +10,21 @@ use crate::models::LogEvent;
 
 use super::connect;
 
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut v = bytes as f64;
+    let mut i = 0;
+    while v >= 1024.0 && i < UNITS.len() - 1 {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{bytes} {}", UNITS[i])
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
+}
+
 /// 清理：停止的容器 / 悬空镜像 / 未使用镜像（可组合勾选）
 pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<String, String> {
     let docker = connect()?;
@@ -27,7 +42,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "停止的容器：删除 {n} 个，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
@@ -43,12 +58,11 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "悬空镜像：删除 {n} 项，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
     if unused {
-        // dangling=false 等价 docker image prune -a：清理所有未被容器使用的镜像
         let mut filters = HashMap::new();
         filters.insert("dangling".to_string(), vec!["false".to_string()]);
         let options = PruneImagesOptionsBuilder::new().filters(&filters).build();
@@ -60,7 +74,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(format!(
             "未使用镜像：删除 {n} 项，释放 {}",
-            crate::utils::format_bytes(space as u64)
+            format_bytes(space as u64)
         ));
     }
 
@@ -88,7 +102,6 @@ pub async fn follow_logs(id: &str, tail: usize, tx: Sender<LogEvent>) -> Result<
                 for line in text.split('\n') {
                     let line = line.trim_end_matches('\r');
                     if !line.is_empty() && tx.send(LogEvent::Line(line.to_string())).is_err() {
-                        // 接收端（日志窗口）已关闭，直接结束读取
                         return Ok(());
                     }
                 }

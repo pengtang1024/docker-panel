@@ -2,7 +2,7 @@
 Type=Application
 Name=Docker Panel
 GenericName=Docker Manager
-Comment=极简 Docker 桌面管理工具
+Comment=极简 Docker 桌面管理工具（Slint 原生，软件渲染无 GPU 依赖）
 Exec=docker-panel
 Icon=docker-panel
 Terminal=false

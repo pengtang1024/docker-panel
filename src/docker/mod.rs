@@ -12,11 +12,10 @@ mod images;
 mod system;
 
 pub use containers::{
-    list_containers, remove_container, restart_container, sample_container, start_container,
-    stop_container,
+    list_containers, remove_container, restart_container, start_container, stop_container,
 };
 pub use images::{list_images, pull_image, remove_image};
-pub use system::{cleanup, follow_logs};
+pub use system::cleanup;
 
 /// 建立本机 Docker 连接
 pub fn connect() -> Result<Docker, String> {

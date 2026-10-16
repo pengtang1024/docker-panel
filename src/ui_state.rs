@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use slint::SharedString;
 use tokio::runtime::Runtime;
 
 use crate::docker::{list_containers, list_images};
@@ -88,39 +87,66 @@ impl AppState {
         self.last_refresh = Instant::now();
     }
 
-    /// 取 receiver 的积压消息，更新 containers/images
-    /// 调用者必须自己持有 rx
-    pub fn drain_messages(&mut self, rx: &mpsc::Receiver<Msg>) -> (bool, Option<Msg>) {
+    /// 处理消息：先处理一条刚 recv() 取到的（if any），再 try_recv 扫积压
+    /// 这样 recv() 消费走的那条不会被丢
+    pub fn drain_messages(&mut self, rx: &mpsc::Receiver<Msg>, first: Option<Msg>) -> (bool, Option<Msg>) {
         let mut need_ui_update = false;
         let mut latest_msg: Option<Msg> = None;
+        let mut count = 0usize;
+
+        // 1. 先处理 recv() 消费走的那条（try_recv 再也看不到它了）
+        if let Some(msg) = first {
+            count += 1;
+            eprintln!("[drain] msg #{count}(recv): variant={:?}", std::mem::discriminant(&msg));
+            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
+        }
+        // 2. 再扫 try_recv 积压
         while let Ok(msg) = rx.try_recv() {
-            match &msg {
-                Msg::Containers(Ok(list)) => {
-                    self.containers = list.clone();
-                    need_ui_update = true;
-                }
-                Msg::Containers(Err(e)) => {
-                    latest_msg = Some(Msg::Containers(Err(e.clone())));
-                    need_ui_update = true;
-                }
-                Msg::Images(Ok(list)) => {
-                    self.images = list.clone();
-                    need_ui_update = true;
-                }
-                Msg::Images(Err(e)) => {
-                    latest_msg = Some(Msg::Images(Err(e.clone())));
-                }
-                Msg::ActionDone(_, _)
-                | Msg::PullProgress(_)
-                | Msg::PullDone(_)
-                | Msg::CleanupDone(_) => {
-                    latest_msg = Some(msg);
-                    need_ui_update = true;
-                }
-                _ => {}
+            count += 1;
+            eprintln!("[drain] msg #{count}(try): variant={:?}", std::mem::discriminant(&msg));
+            Self::handle_one(msg, &mut need_ui_update, &mut latest_msg, &mut self.containers, &mut self.images);
+        }
+        eprintln!("[drain] total={count} containers={} images={} need={need_ui_update}", self.containers.len(), self.images.len());
+        (need_ui_update, latest_msg)
+    }
+
+    fn handle_one(
+        msg: Msg,
+        need_ui_update: &mut bool,
+        latest_msg: &mut Option<Msg>,
+        containers: &mut Vec<ContainerInfo>,
+        images: &mut Vec<ImageInfo>,
+    ) {
+        match &msg {
+            Msg::Containers(Ok(list)) => {
+                eprintln!("[drain] → Containers(Ok) len={}", list.len());
+                *containers = list.clone();
+                *need_ui_update = true;
+                *latest_msg = Some(msg);
+            }
+            Msg::Containers(Err(e)) => {
+                eprintln!("[drain] → Containers(Err) {e}");
+                *latest_msg = Some(Msg::Containers(Err(e.clone())));
+                *need_ui_update = true;
+            }
+            Msg::Images(Ok(list)) => {
+                eprintln!("[drain] → Images(Ok) len={}", list.len());
+                *images = list.clone();
+                *need_ui_update = true;
+                *latest_msg = Some(msg);
+            }
+            Msg::Images(Err(e)) => {
+                eprintln!("[drain] → Images(Err) {e}");
+                *latest_msg = Some(Msg::Images(Err(e.clone())));
+            }
+            Msg::ActionDone(_, _)
+            | Msg::PullProgress(_)
+            | Msg::PullDone(_)
+            | Msg::CleanupDone(_) => {
+                *latest_msg = Some(msg);
+                *need_ui_update = true;
             }
         }
-        (need_ui_update, latest_msg)
     }
 }
 

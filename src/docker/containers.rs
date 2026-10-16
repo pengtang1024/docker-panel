@@ -1,9 +1,8 @@
-//! 容器相关 API：列表、资源采样、启停重启删除
+//! 容器相关 API：列表、启停重启删除
 
-use bollard::query_parameters::{ListContainersOptionsBuilder, StatsOptionsBuilder};
-use futures::TryStreamExt;
+use bollard::query_parameters::ListContainersOptionsBuilder;
 
-use crate::models::{ContainerInfo, ResourceSample};
+use crate::models::ContainerInfo;
 
 use super::connect;
 
@@ -87,95 +86,6 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
             }
         })
         .collect())
-}
-
-/// 一次性采样容器资源（CPU / 内存 / 磁盘 IO / 网络 IO）
-pub async fn sample_container(id: &str) -> Result<ResourceSample, String> {
-    let docker = connect()?;
-    // stream=false：只取一次采样后断开
-    let options = StatsOptionsBuilder::new().stream(false).build();
-    let stats = docker
-        .stats(id, Some(options))
-        .try_next()
-        .await
-        .map_err(|e| format!("获取资源统计失败: {e}"))?
-        .ok_or_else(|| "资源统计返回为空".to_string())?;
-
-    let cpu = stats.cpu_stats.as_ref();
-    let precpu = stats.precpu_stats.as_ref();
-    let mut cpu_percent = 0.0;
-    if let (Some(cpu), Some(precpu)) = (cpu, precpu) {
-        let cpu_total = cpu
-            .cpu_usage
-            .as_ref()
-            .and_then(|u| u.total_usage)
-            .unwrap_or(0);
-        let precpu_total = precpu
-            .cpu_usage
-            .as_ref()
-            .and_then(|u| u.total_usage)
-            .unwrap_or(0);
-        let system = cpu.system_cpu_usage.unwrap_or(0);
-        let presystem = precpu.system_cpu_usage.unwrap_or(0);
-        let online = f64::from(cpu.online_cpus.unwrap_or(0));
-        let online = if online > 0.0 { online } else { 1.0 };
-        if system > presystem && cpu_total >= precpu_total {
-            cpu_percent =
-                (cpu_total - precpu_total) as f64 / (system - presystem) as f64 * online * 100.0;
-        }
-    }
-
-    // 内存：扣除缓存文件（兼容 cgroup v1 / v2 的不同键名）
-    let mut mem_usage = 0u64;
-    let mut mem_limit = 0u64;
-    if let Some(mem) = stats.memory_stats.as_ref() {
-        mem_usage = mem.usage.unwrap_or(0);
-        mem_limit = mem.limit.unwrap_or(0);
-        if let Some(map) = mem.stats.as_ref() {
-            let cache = map
-                .get("inactive_file")
-                .or_else(|| map.get("total_inactive_file"))
-                .copied()
-                .unwrap_or(0);
-            mem_usage = mem_usage.saturating_sub(cache);
-        }
-    }
-
-    // 磁盘读写（cgroup v1 才有明细，cgroup v2 下为 None，显示 0 与 docker stats 一致）
-    let (mut block_read, mut block_write) = (0u64, 0u64);
-    if let Some(entries) = stats
-        .blkio_stats
-        .as_ref()
-        .and_then(|b| b.io_service_bytes_recursive.as_ref())
-    {
-        for e in entries {
-            let value = e.value.unwrap_or(0);
-            match e.op.as_deref() {
-                Some("Read") => block_read += value,
-                Some("Write") => block_write += value,
-                _ => {}
-            }
-        }
-    }
-
-    // 网络 IO：汇总所有网卡
-    let (mut net_rx, mut net_tx) = (0u64, 0u64);
-    if let Some(networks) = stats.networks.as_ref() {
-        for n in networks.values() {
-            net_rx += n.rx_bytes.unwrap_or(0);
-            net_tx += n.tx_bytes.unwrap_or(0);
-        }
-    }
-
-    Ok(ResourceSample {
-        cpu_percent,
-        mem_usage,
-        mem_limit,
-        block_read,
-        block_write,
-        net_rx,
-        net_tx,
-    })
 }
 
 /// 启动容器

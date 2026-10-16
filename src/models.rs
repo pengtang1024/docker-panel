@@ -1,7 +1,8 @@
-//! 数据结构体定义：容器、镜像、资源采样点等
+//! 数据结构体定义：容器、镜像、消息枚举等
 
 /// 容器信息（表格一行的数据）
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ContainerInfo {
     /// 完整容器 ID
     pub id: String,
@@ -43,6 +44,7 @@ pub struct ContainerInfo {
     pub compose_service: Option<String>,
 }
 
+#[allow(dead_code)]
 impl ContainerInfo {
     /// 是否正在运行
     pub fn is_running(&self) -> bool {
@@ -67,6 +69,7 @@ impl ContainerInfo {
 
 /// 镜像信息（表格一行的数据）
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ImageInfo {
     /// 镜像 ID
     pub id: String,
@@ -97,26 +100,6 @@ impl ImageInfo {
     }
 }
 
-/// 资源历史采样点（用于折线小图）
-#[derive(Debug, Clone, Copy)]
-pub struct ChartPoint {
-    /// CPU 使用率（%）
-    pub cpu: f64,
-    /// 内存使用量（字节）
-    pub mem_usage: u64,
-    /// 内存上限（字节）
-    pub mem_limit: u64,
-}
-
-/// 日志流事件
-#[derive(Debug, Clone)]
-pub enum LogEvent {
-    /// 一行日志文本
-    Line(String),
-    /// 日志流结束
-    Closed,
-}
-
 /// 后台任务回传给 GUI 的消息
 #[derive(Debug)]
 pub enum Msg {
@@ -124,8 +107,6 @@ pub enum Msg {
     Containers(Result<Vec<ContainerInfo>, String>),
     /// 镜像列表刷新结果
     Images(Result<Vec<ImageInfo>, String>),
-    /// 一次性资源采样结果（容器 ID, 采样结果）
-    Sample(String, Result<ResourceSample, String>),
     /// 拉取镜像进度文本
     PullProgress(String),
     /// 拉取镜像完成
@@ -134,23 +115,4 @@ pub enum Msg {
     ActionDone(String, Result<String, String>),
     /// 清理完成
     CleanupDone(Result<String, String>),
-}
-
-/// 单次资源采样结果（一次性 stats 请求的返回）
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ResourceSample {
-    /// CPU 使用率（%）
-    pub cpu_percent: f64,
-    /// 内存使用量（字节）
-    pub mem_usage: u64,
-    /// 内存上限（字节）
-    pub mem_limit: u64,
-    /// 磁盘读累计（字节）
-    pub block_read: u64,
-    /// 磁盘写累计（字节）
-    pub block_write: u64,
-    /// 网络接收累计（字节）
-    pub net_rx: u64,
-    /// 网络发送累计（字节）
-    pub net_tx: u64,
 }

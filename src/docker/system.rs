@@ -1,12 +1,8 @@
-//! 系统级 API：清理（prune）与日志流
+//! 系统级 API：清理（prune）
 
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
 
-use bollard::query_parameters::{LogsOptionsBuilder, PruneImagesOptionsBuilder};
-use futures::StreamExt;
-
-use crate::models::LogEvent;
+use bollard::query_parameters::PruneImagesOptionsBuilder;
 
 use super::connect;
 
@@ -82,36 +78,4 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         return Err("请至少勾选一项清理内容".into());
     }
     Ok(lines.join("\n"))
-}
-
-/// 持续读取容器日志流，逐行回传；流结束时发送 `LogEvent::Closed`
-pub async fn follow_logs(id: &str, tail: usize, tx: Sender<LogEvent>) -> Result<(), String> {
-    let docker = connect()?;
-    let options = LogsOptionsBuilder::new()
-        .follow(true)
-        .stdout(true)
-        .stderr(true)
-        .tail(&tail.to_string())
-        .build();
-    let mut stream = docker.logs(id, Some(options));
-
-    while let Some(item) = stream.next().await {
-        match item {
-            Ok(out) => {
-                let text = out.to_string();
-                for line in text.split('\n') {
-                    let line = line.trim_end_matches('\r');
-                    if !line.is_empty() && tx.send(LogEvent::Line(line.to_string())).is_err() {
-                        return Ok(());
-                    }
-                }
-            }
-            Err(e) => {
-                let _ = tx.send(LogEvent::Line(format!("[日志读取错误] {e}")));
-                break;
-            }
-        }
-    }
-    let _ = tx.send(LogEvent::Closed);
-    Ok(())
 }

@@ -13,15 +13,15 @@
 //!   recv 到 → lock state → drain_messages → drop lock → invoke_from_event_loop 更新 Slint
 //!   （锁持有时间 = drain + build rows，微秒级）
 
+mod callbacks;
 mod docker;
 mod models;
+mod slint_gen;
 mod ui_state;
 
-slint::include_modules!();
+use slint_gen::*;
 
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::mpsc::{self, Receiver, RecvError};
+use std::sync::mpsc::{Receiver, RecvError};
 
 use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, invoke_from_event_loop};
 
@@ -89,9 +89,9 @@ fn main() {
 
     // —— UI 更新泵 ——
     let ui_w_pump = ui_weak.clone();
-    let pump_and_apply = move |state: &SharedState, rx: &Receiver<Msg>| {
+    let pump_and_apply = move |state: &SharedState, rx: &Receiver<Msg>, first: Option<Msg>| {
         let Ok(mut s) = state.lock() else { return };
-        let (need_update, latest_msg) = s.drain_messages(rx);
+        let (need_update, latest_msg) = s.drain_messages(rx, first);
         eprintln!("[pump] need_update={need_update} latest={:?}", latest_msg.as_ref().map(|m| format!("{:?}", std::mem::discriminant(m))));
         if !need_update { return; }
 
@@ -135,18 +135,19 @@ fn main() {
         std::thread::spawn(move || {
             let mut first = true;
             loop {
-                // 先扫一次积压（非阻塞）
+                // 先扫一次积压（非阻塞，无 first msg）
                 if first {
                     eprintln!("[consumer] 启动，初始 drain");
                     first = false;
                 }
-                let _ = pump_c(&state_c, &rx_c);
+                pump_c(&state_c, &rx_c, None);
 
                 // ⚠️ 锁外阻塞！主线程拿 state 锁永远不被这条 recv 卡住
                 match rx_c.recv() {
-                    Ok(_msg) => {
-                        eprintln!("[consumer] 收到一条消息");
-                        pump_c(&state_c, &rx_c);
+                    Ok(msg) => {
+                        eprintln!("[consumer] 收到一条消息: {:?}", std::mem::discriminant(&msg));
+                        // 关键：把 recv() 消费走的 msg 传给 pump_c 处理！
+                        pump_c(&state_c, &rx_c, Some(msg));
                     }
                     Err(RecvError) => {
                         eprintln!("[consumer] channel 关闭，退出");
@@ -177,7 +178,7 @@ fn main() {
 
     // —— 初始 Docker 连接 + 列表加载 ——
     {
-        let Ok(mut s) = state.lock() else {
+        let Ok(s) = state.lock() else {
             return;
         };
         let tx = s.tx.clone();
@@ -185,270 +186,21 @@ fn main() {
         drop(s);
         rt.spawn(async move {
             let _ = connect();
+            eprintln!("[init] connect done");
             let c_res = list_containers(true).await;
+            eprintln!("[init] list_containers done: is_ok={} len={}", c_res.is_ok(), c_res.as_ref().map(|l| l.len()).unwrap_or(0));
             let i_res = list_images().await;
-            let _ = tx.send(Msg::Containers(c_res));
-            let _ = tx.send(Msg::Images(i_res));
+            eprintln!("[init] list_images done: is_ok={} len={}", i_res.is_ok(), i_res.as_ref().map(|l| l.len()).unwrap_or(0));
+            let sc = tx.send(Msg::Containers(c_res));
+            eprintln!("[init] send Containers: {:?}", sc.err());
+            let si = tx.send(Msg::Images(i_res));
+            eprintln!("[init] send Images: {:?}", si.err());
         });
     }
 
     // —— 回调绑定 ——
-    bind_callbacks(&ui, &state);
+    callbacks::bind_callbacks(&ui, &state);
 
     // —— 进入 Slint 主循环 ——
     let _ = ui.run();
-}
-
-fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
-    // 手动刷新
-    {
-        let ui_r = ui.as_weak();
-        let s = state.clone();
-        ui.on_refresh_requested(move || {
-            let Some(ui) = ui_r.upgrade() else { return };
-            ui.set_status_text(SharedString::from("手动刷新中..."));
-            if let Ok(mut st) = s.lock() {
-                st.refresh();
-            }
-        });
-    }
-
-    // 搜索（立即应用：直接 pump，但 pump 需要 rx —— 这里简化，存 query 就够了，下次 consumer 触发会重算）
-    {
-        let s = state.clone();
-        ui.on_search_accepted(move |text| {
-            if let Ok(mut st) = s.lock() {
-                let q = text.to_string();
-                st.container_query = q.clone();
-                st.image_query = q;
-            }
-        });
-    }
-
-    // 停止全部
-    {
-        let ui_s = ui.as_weak();
-        let s = state.clone();
-        ui.on_stop_all_requested(move || {
-            let Some(ui) = ui_s.upgrade() else { return };
-            ui.set_status_text(SharedString::from("正在停止全部..."));
-            let (rt_handle, ids, tx) = {
-                let Ok(st) = s.lock() else { return };
-                let ids: Vec<String> = st
-                    .containers
-                    .iter()
-                    .filter(|c| c.is_running())
-                    .map(|c| c.id.clone())
-                    .collect();
-                (st.rt.handle().clone(), ids, st.tx.clone())
-            };
-            if ids.is_empty() {
-                return;
-            }
-            rt_handle.spawn(async move {
-                let mut ok = 0;
-                let mut fail = 0;
-                for id in ids {
-                    match docker::stop_container(&id).await {
-                        Ok(_) => ok += 1,
-                        Err(_) => fail += 1,
-                    }
-                }
-                let desc = format!("停止 {ok} 个容器，失败 {fail} 个");
-                let _ = tx.send(Msg::ActionDone(desc, Ok("ok".into())));
-            });
-        });
-    }
-
-    // Pull 弹窗
-    {
-        let ui_p = ui.as_weak();
-        ui.on_pull_requested(move || {
-            let Some(ui) = ui_p.upgrade() else { return };
-            ui.set_pull_open(true);
-            ui.set_pull_input(SharedString::from(""));
-            ui.set_pull_busy(false);
-        });
-    }
-    {
-        let ui_p = ui.as_weak();
-        ui.on_pull_close(move || {
-            let Some(ui) = ui_p.upgrade() else { return };
-            ui.set_pull_open(false);
-        });
-    }
-    {
-        let ui_p = ui.as_weak();
-        let s = state.clone();
-        ui.on_pull_submit(move |spec: SharedString| {
-            let Some(ui) = ui_p.upgrade() else { return };
-            let text = spec.to_string();
-            if text.trim().is_empty() {
-                ui.set_status_text(SharedString::from("请输入镜像名，例如 nginx:latest"));
-                return;
-            }
-            ui.set_pull_busy(true);
-            ui.set_status_text(SharedString::from(format!("开始拉取 {text}...")));
-
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                let tx_clone = tx.clone();
-                let result = docker::pull_image(&text, move |progress| {
-                    let _ = tx_clone.send(Msg::PullProgress(progress));
-                })
-                .await;
-                let _ = tx.send(Msg::PullDone(result));
-            });
-        });
-    }
-
-    // Cleanup 弹窗
-    {
-        let ui_c = ui.as_weak();
-        ui.on_cleanup_requested(move || {
-            let Some(ui) = ui_c.upgrade() else { return };
-            ui.set_cleanup_open(true);
-        });
-    }
-    {
-        let ui_c = ui.as_weak();
-        ui.on_cleanup_close(move || {
-            let Some(ui) = ui_c.upgrade() else { return };
-            ui.set_cleanup_open(false);
-        });
-    }
-    {
-        let ui_c = ui.as_weak();
-        let s = state.clone();
-        ui.on_cleanup_submit(move |stopped: bool, dangling: bool, unused: bool| {
-            let Some(ui) = ui_c.upgrade() else { return };
-            ui.set_cleanup_open(false);
-            if !stopped && !dangling && !unused {
-                ui.set_status_text(SharedString::from("请至少勾选一项"));
-                return;
-            }
-            ui.set_status_text(SharedString::from("执行清理..."));
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                let result = docker::cleanup(stopped, dangling, unused).await;
-                let _ = tx.send(Msg::CleanupDone(result));
-            });
-        });
-    }
-
-    // —— AppActions global（delegate 按钮触发）——
-    let actions = ui.global::<AppActions>();
-
-    // 容器启停切换
-    {
-        let ui_a = ui.as_weak();
-        let s = state.clone();
-        actions.on_container_toggle(move |row_id: SharedString| {
-            let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("切换容器状态..."));
-
-            let is_running = {
-                let Ok(st) = s.lock() else { return };
-                st.containers
-                    .iter()
-                    .find(|c| c.id == id)
-                    .map(|c| c.is_running())
-                    .unwrap_or(false)
-            };
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            if is_running {
-                rt_handle.spawn(async move {
-                    match docker::stop_container(&id).await {
-                        Ok(_) => { let _ = tx.send(Msg::ActionDone("容器已停止".into(), Ok("ok".into()))); }
-                        Err(e) => { let _ = tx.send(Msg::ActionDone("停止失败".into(), Err(e))); }
-                    }
-                });
-            } else {
-                rt_handle.spawn(async move {
-                    match docker::start_container(&id).await {
-                        Ok(_) => { let _ = tx.send(Msg::ActionDone("容器已启动".into(), Ok("ok".into()))); }
-                        Err(e) => { let _ = tx.send(Msg::ActionDone("启动失败".into(), Err(e))); }
-                    }
-                });
-            }
-        });
-    }
-
-    // 容器重启
-    {
-        let ui_a = ui.as_weak();
-        let s = state.clone();
-        actions.on_container_restart(move |row_id: SharedString| {
-            let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("重启容器..."));
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                match docker::restart_container(&id).await {
-                    Ok(_) => { let _ = tx.send(Msg::ActionDone("容器已重启".into(), Ok("ok".into()))); }
-                    Err(e) => { let _ = tx.send(Msg::ActionDone("重启失败".into(), Err(e))); }
-                }
-            });
-        });
-    }
-
-    // 容器删除
-    {
-        let ui_a = ui.as_weak();
-        let s = state.clone();
-        actions.on_container_remove(move |row_id: SharedString| {
-            let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("删除容器..."));
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                match docker::remove_container(&id).await {
-                    Ok(_) => { let _ = tx.send(Msg::ActionDone("容器已删除".into(), Ok("ok".into()))); }
-                    Err(e) => { let _ = tx.send(Msg::ActionDone("删除失败".into(), Err(e))); }
-                }
-            });
-        });
-    }
-
-    // 镜像删除
-    {
-        let ui_a = ui.as_weak();
-        let s = state.clone();
-        actions.on_image_remove(move |row_id: SharedString| {
-            let full_id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("删除镜像..."));
-
-            let (name, tag) = match full_id.rsplit_once(':') {
-                Some((n, t)) if !n.is_empty() && !t.contains('/') => (n.to_string(), t.to_string()),
-                _ => (full_id, "".to_string()),
-            };
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                match docker::remove_image(&name, &tag).await {
-                    Ok(_) => { let _ = tx.send(Msg::ActionDone("镜像已删除".into(), Ok("ok".into()))); }
-                    Err(e) => { let _ = tx.send(Msg::ActionDone("删除镜像失败".into(), Err(e))); }
-                }
-            });
-        });
-    }
 }

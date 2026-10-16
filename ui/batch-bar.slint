@@ -1,0 +1,45 @@
+// batch-bar.slint — 多选批量操作浮动栏（仅容器 Tab 选中时显示）
+// 视觉规范与 ToolBar 完全一致：Button 组件、spacing 8px、#1e293b 背景
+import { Button, HorizontalBox } from "std-widgets.slint";
+
+export component BatchBar inherits HorizontalBox {
+    in-out property <int> selected_count: 0;
+
+    callback batch_start();
+    callback batch_stop();
+    callback batch_restart();
+    callback batch_remove();
+    callback batch_clear();
+
+    spacing: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 12px;
+    padding-right: 12px;
+
+    Text {
+        text: "已选中 " + root.selected_count + " 个容器";
+        color: #22d3ee; font-weight: 600;
+    }
+    HorizontalLayout { }
+    Button {
+        text: "▶ 全部启动";
+        clicked => { root.batch_start(); }
+    }
+    Button {
+        text: "⏸ 全部停止";
+        clicked => { root.batch_stop(); }
+    }
+    Button {
+        text: "⟳ 全部重启";
+        clicked => { root.batch_restart(); }
+    }
+    Button {
+        text: "🗑 全部删除";
+        clicked => { root.batch_remove(); }
+    }
+    Button {
+        text: "✕ 清除选中";
+        clicked => { root.batch_clear(); }
+    }
+}

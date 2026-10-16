@@ -1,8 +1,9 @@
 // app.slint — Docker Panel 主骨架
-import { VerticalBox } from "std-widgets.slint";
+import { VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { TopBar, ToolBar, StatusBar } from "panes.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
 import { DetailLogPanel } from "detail-log-panel.slint";
+import { BatchBar } from "batch-bar.slint";
 import { TabBar, ListArea } from "list-area.slint";
 import { ContainerRow, ImageRow, LogLineRow, NetworkRow, VolumeRow } from "models.slint";
 
@@ -13,8 +14,15 @@ export global AppActions {
     callback container_logs(string);
     callback container_select(string);
     callback container_sort(int);
+    callback container_toggle_select(string);
     callback image_select(string);
     callback image_remove(string);
+    // 批量操作（遍历 selected_ids）
+    callback batch_start();
+    callback batch_stop();
+    callback batch_restart();
+    callback batch_remove();
+    callback batch_clear();
 }
 
 export component MainWindow inherits Window {
@@ -28,6 +36,7 @@ export component MainWindow inherits Window {
     in-out property <string> image_count: "0";
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: false;
+    in-out property <int> batch_selected_count: 0;
     in-out property <[ContainerRow]> container_rows: [];
     in-out property <[ImageRow]> image_rows: [];
     in-out property <[NetworkRow]> network_rows: [];
@@ -113,10 +122,24 @@ export component MainWindow inherits Window {
                 container_logs(id) => { AppActions.container_logs(id); }
                 container_remove(id) => { AppActions.container_remove(id); }
                 container_sort(f) => { AppActions.container_sort(f); }
+                container_toggle_select(id) => { AppActions.container_toggle_select(id); }
                 image_click(id) => { AppActions.image_select(id); }
                 image_remove(id) => { AppActions.image_remove(id); }
             }
             Rectangle { background: #334155; width: parent.width; height: 1px; }
+            // —— 批量操作浮动栏（选了容器才显示，视觉与 ToolBar 一致）——
+            if root.active_view == 0 && root.batch_selected_count > 0: Rectangle {
+                background: #1e293b; width: parent.width; height: 36px;
+                BatchBar {
+                    width: parent.width; height: parent.height;
+                    selected_count <=> root.batch_selected_count;
+                    batch_start => { AppActions.batch_start(); }
+                    batch_stop => { AppActions.batch_stop(); }
+                    batch_restart => { AppActions.batch_restart(); }
+                    batch_remove => { AppActions.batch_remove(); }
+                    batch_clear => { AppActions.batch_clear(); }
+                }
+            }
             Rectangle { background: #1e293b; width: parent.width; height: 40px;
                 ToolBar { stop_all => { root.stop_all_requested(); }
                     pull_requested => { root.pull_requested(); }

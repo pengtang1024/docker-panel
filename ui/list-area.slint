@@ -71,6 +71,7 @@ export component ListArea inherits Rectangle {
     callback container_logs(string);
     callback container_remove(string);
     callback container_sort(int);
+    callback container_toggle_select(string);
     callback image_click(string);
     callback image_remove(string);
     clip: true;
@@ -88,7 +89,7 @@ export component ListArea inherits Rectangle {
                 for row in root.container_rows: ContainerRowDelegate {
                     width: parent.width; row_id: row.id; short_id: row.short_id;
                     name: row.name; image: row.image; status: row.status;
-                    is_running: row.is_running;
+                    is_running: row.is_running; is_selected: row.is_selected;
                     compose_project: row.compose_project; compose_service: row.compose_service;
                     is_group_start: row.is_group_start;
                     cpu_percent: row.cpu_percent; mem_usage: row.mem_usage;
@@ -98,6 +99,7 @@ export component ListArea inherits Rectangle {
                     restart => { root.container_restart(row.id); }
                     logs => { root.container_logs(row.id); }
                     remove => { root.container_remove(row.id); }
+                    toggle_select => { root.container_toggle_select(row.id); }
                 }
             }
         }

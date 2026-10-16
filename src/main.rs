@@ -13,6 +13,7 @@
 //!   recv 到 → lock state → drain_messages → drop lock → invoke_from_event_loop 更新 Slint
 //!   （锁持有时间 = drain + build rows，微秒级）
 
+mod batch;
 mod callbacks;
 mod callbacks_container;
 mod callbacks_image;
@@ -25,7 +26,6 @@ mod ui_state;
 mod ui_update;
 
 use slint_gen::*;
-
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::JoinHandle;
@@ -77,7 +77,10 @@ fn main() {
             return;
         }
 
-        // 锁内：构建 rows + 读字段
+        let batch_count = {
+            let live: Vec<String> = s.containers.iter().map(|c| c.id.clone()).collect();
+            s.batch.purge_dead(live)
+        };
         let container_rows = ui_rows::build_container_rows(&s);
         let image_rows = ui_rows::build_image_rows(&s);
         let network_rows = ui_rows::build_network_rows(&s);
@@ -129,6 +132,7 @@ fn main() {
             ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
             ui.set_sort_field(sort_field_int);
             ui.set_sort_desc(sort_desc);
+            ui.set_batch_selected_count(batch_count as i32);
             ui.set_container_count(SharedString::from(running_total));
             ui.set_image_count(SharedString::from(image_total));
             ui.set_docker_ok(update.docker_ok);

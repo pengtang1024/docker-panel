@@ -8,6 +8,7 @@ export struct ContainerRow {
     image: string,
     status: string,
     is_running: bool,
+    is_selected: bool,
     // —— Compose 分组 ——
     compose_project: string,       // 空字符串表示非 Compose 容器
     compose_service: string,       // Compose 服务名

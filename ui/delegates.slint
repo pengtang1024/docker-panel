@@ -1,11 +1,7 @@
 // delegates.slint — ListView 行视图
-// Compose 分组标题 + stats 列 + 自绘按钮 + 右键菜单（ContextMenuArea）
-// Slint 1.14 三元运算符：condition ? true : false
+// Compose 分组标题 + stats 列 + Checkbox 多选 + 自绘按钮 + 右键菜单
+import { HorizontalBox, CheckBox } from "std-widgets.slint";
 
-import { HorizontalBox } from "std-widgets.slint";
-// ContextMenuArea / Menu / MenuItem 是 Slint 内置元素，不需要从 std-widgets import
-
-// —— 圆形状态灯 ——
 export component StatusDot inherits Rectangle {
     width: 12px; height: 12px;
     border-radius: 6px;
@@ -13,7 +9,6 @@ export component StatusDot inherits Rectangle {
     background: running ? #22c55e : #64748b;
 }
 
-// —— 自绘方形按钮 ——
 export component RowButton inherits Rectangle {
     width: 28px; height: 26px;
     border-radius: 4px;
@@ -27,7 +22,6 @@ export component RowButton inherits Rectangle {
     }
 }
 
-// —— 容器行 ——
 export component ContainerRowDelegate inherits Rectangle {
     in-out property <string> row_id: "";
     in-out property <bool> is_group_start: false;
@@ -38,6 +32,7 @@ export component ContainerRowDelegate inherits Rectangle {
     in-out property <string> image: "";
     in-out property <string> status: "";
     in-out property <bool> is_running: false;
+    in-out property <bool> is_selected: false;
     in-out property <string> cpu_percent: "";
     in-out property <string> mem_usage: "";
     in-out property <string> net_traffic: "";
@@ -47,22 +42,23 @@ export component ContainerRowDelegate inherits Rectangle {
     callback logs();
     callback remove();
     callback clicked();
+    callback toggle_select();
 
     height: 36px;
     in-out property <bool> hovered: false;
-    background: is_group_start ? #1a2332 : transparent;
+    background: is_group_start ? #1a2332 : (is_selected ? #1e3a5f : transparent);
 
     ContextMenuArea {
         x: 0; y: 0; width: root.width; height: root.height;
 
-        // —— 左键点击（选择行）——
+        // —— 左键点击（选行看详情）——
         TouchArea {
-            x: 0; y: 0; width: parent.width; height: parent.height;
+            x: 16px; y: 0; width: parent.width - 16px; height: parent.height;
             property <bool> hovered2 <=> root.hovered;
             clicked => { root.clicked(); }
         }
 
-        // —— 右键菜单（Slint 要求 ContextMenuArea 的 Menu 不能在条件内）——
+        // —— 右键菜单 ——
         Menu {
             MenuItem { title: "查看详情"; activated => { root.clicked(); } }
             MenuItem { title: "查看日志"; activated => { root.logs(); } }
@@ -90,11 +86,15 @@ export component ContainerRowDelegate inherits Rectangle {
     // —— 普通容器行 ——
     if !root.is_group_start: HorizontalBox {
         spacing: 8px;
-        padding-left: 8px;
+        padding-left: 4px;
         padding-right: 8px;
         width: parent.width;
         height: parent.height;
 
+        CheckBox {
+            checked <=> root.is_selected;
+            toggled => { root.toggle_select(); }
+        }
         StatusDot { running <=> root.is_running; }
         Text { text: root.short_id; min-width: 96px; color: #64748b; font-size: 12px; }
 
@@ -102,7 +102,6 @@ export component ContainerRowDelegate inherits Rectangle {
             spacing: 4px;
             min-width: 180px;
             HorizontalLayout { }
-            // 三元：有 service 才显示
             Text {
                 text: root.compose_service != "" ? (root.compose_service + " ") : "";
                 color: #22d3ee; font-size: 11px; font-weight: 600;
@@ -114,7 +113,6 @@ export component ContainerRowDelegate inherits Rectangle {
         HorizontalLayout { }
         Text { text: root.status; min-width: 80px; color: #cbd5e1; font-size: 12px; }
 
-        // CPU：有数据才显示黄色
         Text {
             text: root.cpu_percent;
             min-width: 50px;
@@ -129,11 +127,9 @@ export component ContainerRowDelegate inherits Rectangle {
 
         RowButton {
             clicked => { root.toggle(); }
-            Text {
-                text: root.is_running ? "⏸" : "▶";
-                color: #cbd5e1; font-size: 12px;
-                x: 9px; height: parent.height; vertical-alignment: center;
-            }
+            Text { text: root.is_running ? "⏸" : "▶";
+                   color: #cbd5e1; font-size: 12px;
+                   x: 9px; height: parent.height; vertical-alignment: center; }
         }
         RowButton {
             clicked => { root.restart(); }
@@ -153,7 +149,7 @@ export component ContainerRowDelegate inherits Rectangle {
     }
 }
 
-// —— 镜像行 ——
+// —— 镜像行（暂不支持多选，保持原样）——
 export component ImageRowDelegate inherits Rectangle {
     in-out property <string> row_id: "";
     in-out property <string> short_id: "";
@@ -171,15 +167,11 @@ export component ImageRowDelegate inherits Rectangle {
 
     ContextMenuArea {
         x: 0; y: 0; width: root.width; height: root.height;
-
-        // —— 左键点击（选行看详情）——
         TouchArea {
             x: 0; y: 0; width: parent.width; height: parent.height;
             property <bool> hovered2 <=> root.hovered;
             clicked => { root.clicked(); }
         }
-
-        // —— 右键菜单 ——
         Menu {
             MenuItem { title: "查看详情"; activated => { root.clicked(); } }
             MenuItem { title: "删除"; activated => { root.remove(); } }

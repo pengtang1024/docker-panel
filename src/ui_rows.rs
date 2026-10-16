@@ -125,6 +125,7 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 image: SharedString::from(c.image.clone()),
                 status: SharedString::from(c.status.clone()),
                 is_running: c.is_running(),
+                is_selected: s.batch.contains(&c.id),
                 compose_project: SharedString::from(c.compose_project.clone().unwrap_or_default()),
                 compose_service: SharedString::from(c.compose_service.clone().unwrap_or_default()),
                 is_group_start: is_group,

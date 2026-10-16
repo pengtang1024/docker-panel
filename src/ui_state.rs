@@ -16,11 +16,12 @@ use std::time::{Duration, Instant};
 
 use tokio::runtime::Runtime;
 
-use crate::docker::{
-    compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
-};
-use crate::models::{
-    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
+use crate::{
+    batch::BatchState,
+    docker::{
+        compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
+    },
+    models::{ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo},
 };
 use slint::SharedString;
 
@@ -87,16 +88,14 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
-
-    // —— Phase 4 stats 双采样缓冲 ——
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
     pub shutdown: AtomicBool,
 
-    // —— 列表排序 ——
     pub sort_field: SortField,
     pub sort_desc: bool,
+    pub batch: BatchState,
 }
 
 impl AppState {
@@ -130,6 +129,7 @@ impl AppState {
             shutdown: AtomicBool::new(false),
             sort_field: SortField::Group,
             sort_desc: false,
+            batch: BatchState::default(),
         }));
         (state, rx)
     }

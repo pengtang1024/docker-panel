@@ -170,4 +170,104 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             });
         });
     }
+
+    // —— Checkbox 切换选中 ——
+    {
+        let s = state.clone();
+        actions.on_container_toggle_select(move |row_id: SharedString| {
+            if let Ok(mut st) = s.lock() {
+                st.batch.toggle(row_id.to_string());
+            }
+        });
+    }
+
+    // —— 批量清除选中 ——
+    {
+        let s = state.clone();
+        actions.on_batch_clear(move || {
+            if let Ok(mut st) = s.lock() {
+                st.batch.clear();
+            }
+        });
+    }
+
+    // —— 批量启动 ——
+    {
+        let s = state.clone();
+        actions.on_batch_start(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Start);
+            }
+        });
+    }
+
+    // —— 批量停止 ——
+    {
+        let s = state.clone();
+        actions.on_batch_stop(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Stop);
+            }
+        });
+    }
+
+    // —— 批量重启 ——
+    {
+        let s = state.clone();
+        actions.on_batch_restart(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Restart);
+            }
+        });
+    }
+
+    // —— 批量删除 ——
+    {
+        let s = state.clone();
+        actions.on_batch_remove(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Remove);
+            }
+        });
+    }
+}
+
+enum OpKind {
+    Start,
+    Stop,
+    Restart,
+    Remove,
+}
+
+fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
+    let (rt_handle, tx) = {
+        let Ok(st) = s.lock() else { return };
+        (st.rt.handle().clone(), st.tx.clone())
+    };
+    let id = id.to_string();
+    rt_handle.spawn(async move {
+        let (desc, result) = match op {
+            OpKind::Start => (format!("启动 {id}"), docker::start_container(&id).await),
+            OpKind::Stop => (format!("停止 {id}"), docker::stop_container(&id).await),
+            OpKind::Restart => (format!("重启 {id}"), docker::restart_container(&id).await),
+            OpKind::Remove => (format!("删除 {id}"), docker::remove_container(&id).await),
+        };
+        let _ = tx.send(Msg::ActionDone(desc, result));
+    });
 }

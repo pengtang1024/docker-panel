@@ -1,0 +1,46 @@
+// theme.slint — 全局设计令牌（Slint global out property）
+// 所有 Slint 文件的颜色/字号/间距统一从此引用
+// 使用：import { Theme } from "theme.slint";  然后 Theme.bg-surface
+
+export global Theme {
+    // —— 背景层级 ——
+    out property <color> bg-root: #0f172a;        // 最深层背景（窗口）
+    out property <color> bg-surface: #1e1e2e;      // 主要表面（左栏/右栏背景）
+    out property <color> bg-card: #1e293b;         // 卡片/工具栏背景
+    out property <color> bg-hover: #334155;        // 行 hover / 按钮 hover
+    out property <color> bg-selected: #0f3460;     // 选中行高亮
+    out property <color> bg-group: #1a2332;        // Compose 分组行背景
+    out property <color> bg-delete-hover: #7f1d1d; // 删除按钮 hover
+
+    // —— 分隔线 ——
+    out property <color> divider: #334155;
+
+    // —— 文字 ——
+    out property <color> text-primary: #f1f5f9;     // 主文字
+    out property <color> text-normal: #e2e8f0;      // 普通文字
+    out property <color> text-secondary: #cbd5e1;  // 次级文字
+    out property <color> text-muted: #94a3b8;       // 弱化文字
+    out property <color> text-faint: #64748b;       // 最淡（id hash 等）
+
+    // —— Accent ——
+    out property <color> accent: #22d3ee;           // 项目主 cyan
+    out property <color> accent-soft: #67e8f9;
+
+    // —— 状态色 ——
+    out property <color> status-running: #22c55e;   // 运行中绿
+    out property <color> status-stopped: #64748b;   // 停止灰
+    out property <color> status-warning: #f59e0b;   // 警告橙
+    out property <color> status-error: #f87171;      // 错误红
+
+    // —— 字号 ——
+    out property <length> text-xs: 11px;
+    out property <length> text-sm: 12px;
+    out property <length> text-base: 13px;
+    out property <length> text-lg: 16px;
+
+    // —— 间距 ——
+    out property <length> space-1: 4px;
+    out property <length> space-2: 6px;
+    out property <length> space-3: 8px;
+    out property <length> space-4: 12px;
+}

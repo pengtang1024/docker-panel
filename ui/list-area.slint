@@ -1,3 +1,4 @@
+import { Theme } from "theme.slint";
 // list-area.slint — TabBar + ListArea（不引用 app.slint 的任何 global）
 import { ListView, VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
 import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
@@ -10,47 +11,47 @@ export component TabBar inherits HorizontalBox {
     in-out property <int> active_view: 0;
 
     Rectangle { width: 76px; height: parent.height;
-        background: root.active_view == 0 ? #1e293b : transparent;
+        background: root.active_view == 0 ? Theme.bg-card : transparent;
         TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
             clicked => { root.active_view = 0; } }
         Text { text: "容器"; x: 12px; height: parent.height;
             vertical-alignment: center;
-            color: root.active_view == 0 ? #f1f5f9 : #94a3b8;
+            color: root.active_view == 0 ? Theme.text-primary : Theme.text-muted;
             font-weight: root.active_view == 0 ? 700 : 400; }
-        Rectangle { background: #22d3ee; width: parent.width;
+        Rectangle { background: Theme.accent; width: parent.width;
             height: 2px; y: parent.height - 2px; visible: root.active_view == 0; }
     }
     Rectangle { width: 76px; height: parent.height;
-        background: root.active_view == 1 ? #1e293b : transparent;
+        background: root.active_view == 1 ? Theme.bg-card : transparent;
         TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
             clicked => { root.active_view = 1; } }
         Text { text: "镜像"; x: 12px; height: parent.height;
             vertical-alignment: center;
-            color: root.active_view == 1 ? #f1f5f9 : #94a3b8;
+            color: root.active_view == 1 ? Theme.text-primary : Theme.text-muted;
             font-weight: root.active_view == 1 ? 700 : 400; }
-        Rectangle { background: #22d3ee; width: parent.width;
+        Rectangle { background: Theme.accent; width: parent.width;
             height: 2px; y: parent.height - 2px; visible: root.active_view == 1; }
     }
     Rectangle { width: 76px; height: parent.height;
-        background: root.active_view == 2 ? #1e293b : transparent;
+        background: root.active_view == 2 ? Theme.bg-card : transparent;
         TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
             clicked => { root.active_view = 2; } }
         Text { text: "网络"; x: 12px; height: parent.height;
             vertical-alignment: center;
-            color: root.active_view == 2 ? #f1f5f9 : #94a3b8;
+            color: root.active_view == 2 ? Theme.text-primary : Theme.text-muted;
             font-weight: root.active_view == 2 ? 700 : 400; }
-        Rectangle { background: #22d3ee; width: parent.width;
+        Rectangle { background: Theme.accent; width: parent.width;
             height: 2px; y: parent.height - 2px; visible: root.active_view == 2; }
     }
     Rectangle { width: 76px; height: parent.height;
-        background: root.active_view == 3 ? #1e293b : transparent;
+        background: root.active_view == 3 ? Theme.bg-card : transparent;
         TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
             clicked => { root.active_view = 3; } }
         Text { text: "卷"; x: 12px; height: parent.height;
             vertical-alignment: center;
-            color: root.active_view == 3 ? #f1f5f9 : #94a3b8;
+            color: root.active_view == 3 ? Theme.text-primary : Theme.text-muted;
             font-weight: root.active_view == 3 ? 700 : 400; }
-        Rectangle { background: #22d3ee; width: parent.width;
+        Rectangle { background: Theme.accent; width: parent.width;
             height: 2px; y: parent.height - 2px; visible: root.active_view == 3; }
     }
     HorizontalLayout { }

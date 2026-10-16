@@ -1,3 +1,4 @@
+import { Theme } from "theme.slint";
 // network-views.slint — 网络 + 卷的 Header + Delegate
 // Tab 切换直接在 app.slint 里用条件渲染 import 这些组件
 
@@ -5,17 +6,17 @@ import { HorizontalBox } from "std-widgets.slint";
 
 // —— 网络表头 ——
 export component NetworkHeader inherits Rectangle {
-    height: 32px; background: #0f172a;
+    height: 32px; background: Theme.bg-root;
     HorizontalBox {
-        spacing: 8px; padding-left: 8px; padding-right: 8px;
+        spacing: Theme.space-3; padding-left: Theme.space-3; padding-right: Theme.space-3;
         width: parent.width; height: parent.height;
-        Text { text: "ID"; min-width: 96px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "名称"; min-width: 200px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "ID"; min-width: 96px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "名称"; min-width: 200px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
         HorizontalLayout { }
-        Text { text: "驱动"; min-width: 80px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "范围"; min-width: 60px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "驱动"; min-width: 80px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "范围"; min-width: 60px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
     }
-    Rectangle { background: #334155; width: parent.width; height: 1px; y: parent.height - 1px; }
+    Rectangle { background: Theme.bg-hover; width: parent.width; height: 1px; y: parent.height - 1px; }
 }
 
 // —— 网络行 ——
@@ -26,28 +27,28 @@ export component NetworkRowDelegate inherits Rectangle {
     in-out property <string> scope: "";
     height: 36px;
     HorizontalBox {
-        spacing: 8px; padding-left: 8px; padding-right: 8px;
+        spacing: Theme.space-3; padding-left: Theme.space-3; padding-right: Theme.space-3;
         width: parent.width; height: parent.height;
-        Text { text: root.short_id; min-width: 96px; color: #64748b; font-size: 12px; }
-        Text { text: root.name; min-width: 200px; color: #e2e8f0; overflow: elide; }
+        Text { text: root.short_id; min-width: 96px; color: Theme.text-faint; font-size: Theme.text-sm; }
+        Text { text: root.name; min-width: 200px; color: Theme.text-normal; overflow: elide; }
         HorizontalLayout { }
-        Text { text: root.driver; min-width: 80px; color: #22d3ee; font-size: 12px; }
-        Text { text: root.scope; min-width: 60px; color: #94a3b8; font-size: 12px; }
+        Text { text: root.driver; min-width: 80px; color: Theme.accent; font-size: Theme.text-sm; }
+        Text { text: root.scope; min-width: 60px; color: Theme.text-muted; font-size: Theme.text-sm; }
     }
 }
 
 // —— 卷表头 ——
 export component VolumeHeader inherits Rectangle {
-    height: 32px; background: #0f172a;
+    height: 32px; background: Theme.bg-root;
     HorizontalBox {
-        spacing: 8px; padding-left: 8px; padding-right: 8px;
+        spacing: Theme.space-3; padding-left: Theme.space-3; padding-right: Theme.space-3;
         width: parent.width; height: parent.height;
-        Text { text: "名称"; min-width: 200px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "名称"; min-width: 200px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
         HorizontalLayout { }
-        Text { text: "驱动"; min-width: 100px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "挂载点"; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "驱动"; min-width: 100px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "挂载点"; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
     }
-    Rectangle { background: #334155; width: parent.width; height: 1px; y: parent.height - 1px; }
+    Rectangle { background: Theme.bg-hover; width: parent.width; height: 1px; y: parent.height - 1px; }
 }
 
 // —— 卷行 ——
@@ -57,11 +58,11 @@ export component VolumeRowDelegate inherits Rectangle {
     in-out property <string> mountpoint: "";
     height: 36px;
     HorizontalBox {
-        spacing: 8px; padding-left: 8px; padding-right: 8px;
+        spacing: Theme.space-3; padding-left: Theme.space-3; padding-right: Theme.space-3;
         width: parent.width; height: parent.height;
-        Text { text: root.name; min-width: 200px; color: #e2e8f0; overflow: elide; }
+        Text { text: root.name; min-width: 200px; color: Theme.text-normal; overflow: elide; }
         HorizontalLayout { }
-        Text { text: root.driver; min-width: 100px; color: #22d3ee; font-size: 12px; }
-        Text { text: root.mountpoint; color: #94a3b8; font-size: 12px; overflow: elide; }
+        Text { text: root.driver; min-width: 100px; color: Theme.accent; font-size: Theme.text-sm; }
+        Text { text: root.mountpoint; color: Theme.text-muted; font-size: Theme.text-sm; overflow: elide; }
     }
 }

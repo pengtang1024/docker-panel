@@ -1,3 +1,4 @@
+import { Theme } from "theme.slint";
 // ═══════════════════════════════════════════════════════════
 // dialogs.slint — 遮罩弹窗组件
 //
@@ -56,18 +57,18 @@ export component PullDialog inherits Rectangle {
         y: (root.height - 160px) / 2;
         width: 360px;
         height: 160px;
-        background: #2a2a3a;
+        background: Theme.bg-surface;
     }
 
     VerticalBox {
         x: (root.width - 360px) / 2 + 16px;
         y: (root.height - 160px) / 2 + 16px;
         width: 328px;
-        spacing: 12px;
+        spacing: Theme.space-4;
 
         Text {
             text: "拉取镜像";
-            font-size: 16px;
+            font-size: Theme.text-lg;
             font-weight: 700;
         }
         LineEdit {
@@ -114,7 +115,7 @@ export component CleanupDialog inherits Rectangle {
         y: (root.height - 200px) / 2;
         width: 320px;
         height: 200px;
-        background: #2a2a3a;
+        background: Theme.bg-surface;
     }
 
     VerticalBox {
@@ -125,7 +126,7 @@ export component CleanupDialog inherits Rectangle {
 
         Text {
             text: "清理未使用资源";
-            font-size: 16px;
+            font-size: Theme.text-lg;
             font-weight: 700;
         }
         CheckBox {

@@ -1,5 +1,6 @@
 // app.slint — Docker Panel 主骨架
 import { VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Theme } from "theme.slint";
 import { TopBar, ToolBar, StatusBar } from "panes.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
 import { DetailLogPanel } from "detail-log-panel.slint";
@@ -92,20 +93,20 @@ export component MainWindow inherits Window {
     callback cleanup_submit(bool, bool, bool);
     callback cleanup_close();
 
-    Rectangle { background: #0f172a; width: parent.width; height: parent.height; }
+    Rectangle { background: Theme.bg-root; width: parent.width; height: parent.height; }
 
     Rectangle {
         x: 0px; y: 0px;
         width: parent.width - root.right_pane_width;
-        height: parent.height; background: #0f172a;
+        height: parent.height; background: Theme.bg-root;
         VerticalBox { spacing: 0px; width: parent.width; height: parent.height;
-            Rectangle { background: #1e293b; width: parent.width; height: 48px;
+            Rectangle { background: Theme.bg-card; width: parent.width; height: 48px;
                 TopBar { docker_ok <=> root.docker_ok;
                     refresh => { root.refresh_requested(); }
                     search(val) => { root.search_accepted(val); } } }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
             TabBar { active_view <=> root.active_view; }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
             ListArea {
                 width: parent.width;
                 height: parent.height - 48px - 36px - 36px - 28px - 4px;
@@ -126,10 +127,10 @@ export component MainWindow inherits Window {
                 image_click(id) => { AppActions.image_select(id); }
                 image_remove(id) => { AppActions.image_remove(id); }
             }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
+            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
             // —— 批量操作浮动栏（选了容器才显示，视觉与 ToolBar 一致）——
             if root.active_view == 0 && root.batch_selected_count > 0: Rectangle {
-                background: #1e293b; width: parent.width; height: 36px;
+                background: Theme.bg-card; width: parent.width; height: 36px;
                 BatchBar {
                     width: parent.width; height: parent.height;
                     selected_count <=> root.batch_selected_count;
@@ -140,12 +141,12 @@ export component MainWindow inherits Window {
                     batch_clear => { AppActions.batch_clear(); }
                 }
             }
-            Rectangle { background: #1e293b; width: parent.width; height: 40px;
+            Rectangle { background: Theme.bg-card; width: parent.width; height: 40px;
                 ToolBar { stop_all => { root.stop_all_requested(); }
                     pull_requested => { root.pull_requested(); }
                     cleanup_requested => { root.cleanup_requested(); } } }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
-            Rectangle { background: #0f172a; width: parent.width; height: 28px;
+            Rectangle { background: Theme.divider; width: parent.width; height: 1px; }
+            Rectangle { background: Theme.bg-root; width: parent.width; height: 28px;
                 StatusBar { status_text <=> root.status_text;
                     container_count <=> root.container_count;
                     image_count <=> root.image_count; } }

@@ -1,3 +1,4 @@
+import { Theme } from "theme.slint";
 // headers.slint — 列表表头（支持点击排序 + 方向箭头）
 import { HorizontalBox } from "std-widgets.slint";
 // 自绘 Rectangle + Text（不用 Button，规避 Button 不支持 children）
@@ -8,13 +9,13 @@ export component SortArrow inherits Text {
     in-out property <int> mine: 0;
     in-out property <bool> desc: false;
     text: root.active == root.mine ? (root.desc ? "▼" : "▲") : "";
-    color: #22d3ee;
+    color: Theme.accent;
     font-size: 10px;
 }
 
 export component ContainerHeader inherits Rectangle {
     height: 32px;
-    background: #0f172a;
+    background: Theme.bg-root;
 
     // —— 排序状态（由 Rust 侧注入）——
     in-out property <int> sort_field: 0; // 0=Group 1=Name 2=Status 3=Cpu 4=Mem
@@ -24,9 +25,9 @@ export component ContainerHeader inherits Rectangle {
     callback sort(int);
 
     HorizontalBox {
-        spacing: 8px;
-        padding-left: 8px;
-        padding-right: 8px;
+        spacing: Theme.space-3;
+        padding-left: Theme.space-3;
+        padding-right: Theme.space-3;
         width: parent.width;
         height: parent.height;
 
@@ -42,13 +43,13 @@ export component ContainerHeader inherits Rectangle {
             }
             HorizontalBox {
                 x: 0; y: 0; width: parent.width; height: parent.height;
-                Text { text: "服务/名称"; color: #94a3b8; font-size: 12px; font-weight: 600; }
+                Text { text: "服务/名称"; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
                 SortArrow { active <=> root.sort_field; mine: 1; desc <=> root.sort_desc; }
             }
         }
 
         // —— 镜像 ——
-        Text { text: "镜像"; min-width: 100px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "镜像"; min-width: 100px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
 
         HorizontalLayout { }
 
@@ -61,7 +62,7 @@ export component ContainerHeader inherits Rectangle {
             }
             HorizontalBox {
                 x: 0; y: 0; width: parent.width; height: parent.height;
-                Text { text: "状态"; color: #94a3b8; font-size: 12px; font-weight: 600; }
+                Text { text: "状态"; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
                 SortArrow { active <=> root.sort_field; mine: 2; desc <=> root.sort_desc; }
             }
         }
@@ -76,7 +77,7 @@ export component ContainerHeader inherits Rectangle {
             HorizontalBox {
                 x: 0; y: 0; width: parent.width; height: parent.height;
                 HorizontalLayout { }
-                Text { text: "CPU"; color: #94a3b8; font-size: 11px; font-weight: 600; }
+                Text { text: "CPU"; color: Theme.text-muted; font-size: Theme.text-xs; font-weight: 600; }
                 SortArrow { active <=> root.sort_field; mine: 3; desc <=> root.sort_desc; }
             }
         }
@@ -91,7 +92,7 @@ export component ContainerHeader inherits Rectangle {
             HorizontalBox {
                 x: 0; y: 0; width: parent.width; height: parent.height;
                 HorizontalLayout { }
-                Text { text: "内存"; color: #94a3b8; font-size: 11px; font-weight: 600; }
+                Text { text: "内存"; color: Theme.text-muted; font-size: Theme.text-xs; font-weight: 600; }
                 SortArrow { active <=> root.sort_field; mine: 4; desc <=> root.sort_desc; }
             }
         }
@@ -101,27 +102,27 @@ export component ContainerHeader inherits Rectangle {
         Rectangle { width: 28px; height: 1px; }
         Rectangle { width: 28px; height: 1px; }
     }
-    Rectangle { background: #334155; width: parent.width; height: 1px; y: parent.height - 1px; }
+    Rectangle { background: Theme.bg-hover; width: parent.width; height: 1px; y: parent.height - 1px; }
 }
 
 export component ImageHeader inherits Rectangle {
     height: 32px;
-    background: #0f172a;
+    background: Theme.bg-root;
 
     HorizontalBox {
-        spacing: 8px;
-        padding-left: 8px;
-        padding-right: 8px;
+        spacing: Theme.space-3;
+        padding-left: Theme.space-3;
+        padding-right: Theme.space-3;
         width: parent.width;
         height: parent.height;
 
-        Text { text: "ID"; min-width: 96px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "仓库"; min-width: 200px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "Tag"; min-width: 100px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "ID"; min-width: 96px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "仓库"; min-width: 200px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "Tag"; min-width: 100px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
         HorizontalLayout { }
-        Text { text: "容器"; min-width: 80px; color: #94a3b8; font-size: 12px; font-weight: 600; }
-        Text { text: "大小"; min-width: 80px; color: #94a3b8; font-size: 12px; font-weight: 600; }
+        Text { text: "容器"; min-width: 80px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+        Text { text: "大小"; min-width: 80px; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
         Rectangle { width: 28px; height: 1px; } // 删除按钮占位
     }
-    Rectangle { background: #334155; width: parent.width; height: 1px; y: parent.height - 1px; }
+    Rectangle { background: Theme.bg-hover; width: parent.width; height: 1px; y: parent.height - 1px; }
 }

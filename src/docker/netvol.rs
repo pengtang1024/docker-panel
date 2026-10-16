@@ -26,7 +26,6 @@ pub async fn list_networks() -> Result<Vec<NetworkInfo>, String> {
                 name: n.name.unwrap_or_default(),
                 driver: n.driver.unwrap_or_default(),
                 scope: n.scope.unwrap_or_default(),
-                containers: 0,
             }
         })
         .collect())

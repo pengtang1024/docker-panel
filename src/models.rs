@@ -55,6 +55,8 @@ pub struct ContainerInfo {
     pub compose_project: Option<String>,
     /// compose 服务名（label `com.docker.compose.service`）
     pub compose_service: Option<String>,
+    /// 容器连接的网络名列表（从 ContainerSummary.NetworkSettings.Networks 提取）
+    pub networks: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -139,6 +141,8 @@ pub enum Msg {
     Networks(Result<Vec<NetworkInfo>, String>),
     /// 卷列表
     Volumes(Result<Vec<VolumeInfo>, String>),
+    /// 镜像 inspect 结果（镜像详情面板）
+    ImageDetail(Result<ImageDetail, String>),
 }
 
 /// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
@@ -177,7 +181,6 @@ pub struct NetworkInfo {
     pub name: String,
     pub driver: String,
     pub scope: String,
-    pub containers: usize,
 }
 
 /// 卷列表简化视图（卷 Tab 用）
@@ -187,4 +190,26 @@ pub struct VolumeInfo {
     pub driver: String,
     pub mountpoint: String,
     pub size: String,
+}
+
+/// inspect_image 结果的精简版本——只取 UI 镜像详情面板需要的字段
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+pub struct ImageDetail {
+    pub id: String,
+    pub short_id: String,
+    pub repo_tags: String, // join(", ") 后的 "name:tag, name2:tag2"
+    pub repo_digests: String,
+    pub created: String,
+    pub author: String,
+    pub size: String, // 格式化后的大小
+    pub os: String,
+    pub architecture: String,
+    pub entrypoint: String,
+    pub cmd: String,
+    pub working_dir: String,
+    pub labels: String,        // join("\n") 多行 key=value
+    pub env: String,           // join("\n") 多行 KEY=VALUE
+    pub exposed_ports: String, // join(", ")
+    pub volumes: String,       // join(", ")
 }

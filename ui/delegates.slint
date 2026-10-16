@@ -148,6 +148,7 @@ export component ImageRowDelegate inherits Rectangle {
     in-out property <int> containers: 0;
 
     callback remove();
+    callback clicked();
 
     height: 36px;
     in-out property <bool> hovered: false;
@@ -156,6 +157,7 @@ export component ImageRowDelegate inherits Rectangle {
     TouchArea {
         x: 0; y: 0; width: root.width; height: root.height;
         property <bool> hovered2 <=> root.hovered;
+        clicked => { root.clicked(); }
     }
 
     HorizontalBox {

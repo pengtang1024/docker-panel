@@ -3,6 +3,8 @@
 //! 这是独立模块，因为 Compose 分组排序 + 格式化逻辑较重，
 //! 单独放避免 main.rs 膨胀（main.rs 必须 ≤300 行）。
 
+use std::collections::HashMap;
+
 use slint::SharedString;
 
 use crate::models::ContainerInfo;
@@ -115,6 +117,13 @@ pub fn build_image_rows(s: &AppState) -> Vec<ImageRow> {
 }
 
 pub fn build_network_rows(s: &AppState) -> Vec<NetworkRow> {
+    // 从容器列表反推每个 network 的连接数（bollard Network struct 本身没有此字段）
+    let mut net_counts: HashMap<&str, usize> = HashMap::new();
+    for c in &s.containers {
+        for net in &c.networks {
+            *net_counts.entry(net.as_str()).or_insert(0) += 1;
+        }
+    }
     s.networks
         .iter()
         .map(|n| NetworkRow {
@@ -123,7 +132,7 @@ pub fn build_network_rows(s: &AppState) -> Vec<NetworkRow> {
             name: SharedString::from(n.name.clone()),
             driver: SharedString::from(n.driver.clone()),
             scope: SharedString::from(n.scope.clone()),
-            containers: n.containers as i32,
+            containers: *net_counts.get(n.name.as_str()).unwrap_or(&0) as i32,
         })
         .collect()
 }

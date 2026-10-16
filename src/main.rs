@@ -88,6 +88,7 @@ fn main() {
         let containers_len = s.containers.len();
         let update = derive_update(containers_len, &latest_msg);
         let detail_data = s.build_detail_data();
+        let image_detail_data = s.build_image_detail_data();
 
         // —— 日志搬运 ——
         let log_lines: Vec<LogLineRow> = s
@@ -131,6 +132,9 @@ fn main() {
             }
             if let Some(ref d) = detail_data {
                 ui_apply::apply_detail(&ui, d);
+            }
+            if let Some(ref fields) = image_detail_data {
+                ui_apply::apply_image_detail(&ui, fields);
             }
         })
         .ok();

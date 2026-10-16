@@ -9,7 +9,7 @@
 //!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -80,6 +80,9 @@ pub struct AppState {
     // —— Phase 2 详情面板 ——
     pub detail: Option<ContainerDetail>,
 
+    // —— 镜像详情面板 ——
+    pub image_detail: Option<crate::models::ImageDetail>,
+
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
@@ -115,6 +118,7 @@ impl AppState {
             container_query: String::new(),
             image_query: String::new(),
             detail: None,
+            image_detail: None,
             logs: Vec::new(),
             logs_cap: 500,
             stats_prev: HashMap::new(),
@@ -123,11 +127,7 @@ impl AppState {
         (state, rx)
     }
 
-    /// 触发一次 Docker 列表刷新（在 Mutex 锁内调用，立刻释放）
-    ///
-    /// 为什么锁内调用安全：
-    ///   refresh() 不做任何 IO——只是 spawn 两个 tokio 异步任务就返回了。
-    ///   spawn 出来的任务会在**锁外**执行，真正的 Docker API 调用不会卡住主线程。
+    /// 触发 Docker 列表刷新（锁内安全：只 spawn，不做 IO）
     pub fn refresh(&mut self) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
@@ -146,6 +146,15 @@ impl AppState {
         self.rt.spawn(async move {
             let res = inspect_container(&id).await;
             let _ = tx.send(Msg::ContainerDetail(res));
+        });
+    }
+
+    /// 请求 inspect 一个镜像
+    pub fn request_image_detail(&mut self, name: String) {
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let res = crate::docker::inspect_image(&name).await;
+            let _ = tx.send(Msg::ImageDetail(res));
         });
     }
 
@@ -192,22 +201,32 @@ impl AppState {
         ))
     }
 
+    /// 锁内调用：把镜像详情格式化（14 字段 SharedString 列表）
+    pub fn build_image_detail_data(&self) -> Option<Vec<SharedString>> {
+        let d = self.image_detail.as_ref()?;
+        Some(vec![
+            SharedString::from(d.short_id.clone()),
+            SharedString::from(d.repo_tags.clone()),
+            SharedString::from(d.created.clone()),
+            SharedString::from(d.author.clone()),
+            SharedString::from(d.size.clone()),
+            SharedString::from(format!("{}/{}", d.os, d.architecture)),
+            SharedString::from(d.entrypoint.clone()),
+            SharedString::from(d.cmd.clone()),
+            SharedString::from(d.working_dir.clone()),
+            SharedString::from(d.exposed_ports.clone()),
+            SharedString::from(d.volumes.clone()),
+            SharedString::from(d.labels.clone()),
+            SharedString::from(d.env.clone()),
+            SharedString::from(d.id.clone()),
+        ])
+    }
+
     pub fn clear_logs(&mut self) {
         self.logs.clear();
     }
 
-    /// 消费一批 Msg，更新 containers / images 并返回 (need_ui_update, latest_msg)
-    ///
-    /// 两阶段设计：
-    ///   1. 先处理 `first` —— consumer.recv() 消费掉的那一条。
-    ///      必须立即交给 drain，因为 recv() 之后它就不属于 channel 了，
-    ///      try_recv() 再也看不到它。丢了 = 操作结果不回显。
-    ///   2. 再 try_recv 扫 channel 里剩余的积压消息。
-    ///      多条消息按 FIFO 顺序依次 handle_one。
-    ///
-    /// 返回的 (need_ui_update, latest_msg) 交给 main.rs 的 pump_and_apply：
-    ///   need_ui_update = false → 直接 return，跳过 build rows 和 invoke
-    ///   latest_msg      → derive_update() 用它推导 UI 最新意图（状态文案、docker_ok 角标等）
+    /// 消费一批 Msg，返回 (need_ui_update, latest_msg) — 两阶段：先处理 first、再 try_recv 扫积压
     pub fn drain_messages(
         &mut self,
         rx: &mpsc::Receiver<Msg>,
@@ -251,6 +270,9 @@ impl AppState {
                     if self.logs.len() > self.logs_cap {
                         self.logs.drain(0..self.logs.len() - self.logs_cap);
                     }
+                }
+                Msg::ImageDetail(Ok(d)) => {
+                    self.image_detail = Some(d.clone());
                 }
                 _ => {}
             }

@@ -12,6 +12,7 @@ export global AppActions {
     callback container_remove(string);
     callback container_logs(string);
     callback container_select(string);
+    callback image_select(string);
     callback image_remove(string);
 }
 
@@ -54,6 +55,21 @@ export component MainWindow inherits Window {
     in-out property <bool> cleanup_stopped: true;
     in-out property <bool> cleanup_dangling: true;
     in-out property <bool> cleanup_unused: false;
+    // —— 镜像详情属性 ——
+    in-out property <string> i_short_id: "";
+    in-out property <string> i_repo_tags: "";
+    in-out property <string> i_created: "";
+    in-out property <string> i_author: "";
+    in-out property <string> i_size: "";
+    in-out property <string> i_platform: "";
+    in-out property <string> i_entrypoint: "";
+    in-out property <string> i_cmd: "";
+    in-out property <string> i_workdir: "";
+    in-out property <string> i_ports: "";
+    in-out property <string> i_volumes: "";
+    in-out property <string> i_labels: "";
+    in-out property <string> i_env: "";
+    in-out property <string> i_id: "";
     callback refresh_requested();
     callback search_accepted(string);
     callback stop_all_requested();
@@ -91,6 +107,7 @@ export component MainWindow inherits Window {
                 container_restart(id) => { AppActions.container_restart(id); }
                 container_logs(id) => { AppActions.container_logs(id); }
                 container_remove(id) => { AppActions.container_remove(id); }
+                image_click(id) => { AppActions.image_select(id); }
                 image_remove(id) => { AppActions.image_remove(id); }
             }
             Rectangle { background: #334155; width: parent.width; height: 1px; }
@@ -116,6 +133,13 @@ export component MainWindow inherits Window {
         d_restart <=> root.d_restart; d_netmode <=> root.d_netmode; d_ports <=> root.d_ports;
         d_mounts <=> root.d_mounts; d_networks <=> root.d_networks; d_entry <=> root.d_entry;
         d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir; d_labels <=> root.d_labels;
+        i_short_id <=> root.i_short_id; i_repo_tags <=> root.i_repo_tags;
+        i_created <=> root.i_created; i_author <=> root.i_author;
+        i_size <=> root.i_size; i_platform <=> root.i_platform;
+        i_entrypoint <=> root.i_entrypoint; i_cmd <=> root.i_cmd;
+        i_workdir <=> root.i_workdir; i_ports <=> root.i_ports;
+        i_volumes <=> root.i_volumes; i_labels <=> root.i_labels;
+        i_env <=> root.i_env; i_id <=> root.i_id;
         log_lines <=> root.log_lines;
     }
 

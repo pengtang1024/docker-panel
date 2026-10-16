@@ -4,6 +4,7 @@
 import { DetailPanel } from "detail-panel.slint";
 import { LogPanel } from "log-panel.slint";
 import { LogLineRow } from "models.slint";
+import { ImageDetailPanel } from "image-detail-panel.slint";
 
 // 🔄 右侧面板（自绘 Tab 头 + 条件渲染内容）
 export component DetailLogPanel inherits Rectangle {
@@ -11,10 +12,10 @@ export component DetailLogPanel inherits Rectangle {
     height: 100%;
     background: #1e293b;
 
-    // —— 面板切换：0=详情 / 1=日志 ——
+    // —— 面板切换：0=容器详情 / 1=日志 / 2=镜像详情 ——
     in-out property <int> active_view: 0;
 
-    // —— 详情面板属性 ——
+    // —— 容器详情属性（Tab 0）——
     in-out property <string> d_name: "";
     in-out property <string> d_state: "";
     in-out property <string> d_status: "";
@@ -34,13 +35,29 @@ export component DetailLogPanel inherits Rectangle {
     in-out property <string> d_workdir: "";
     in-out property <string> d_labels: "";
 
-    // —— 日志行 ——
+    // —— 镜像详情属性（Tab 2）——
+    in-out property <string> i_short_id: "";
+    in-out property <string> i_repo_tags: "";
+    in-out property <string> i_created: "";
+    in-out property <string> i_author: "";
+    in-out property <string> i_size: "";
+    in-out property <string> i_platform: "";
+    in-out property <string> i_entrypoint: "";
+    in-out property <string> i_cmd: "";
+    in-out property <string> i_workdir: "";
+    in-out property <string> i_ports: "";
+    in-out property <string> i_volumes: "";
+    in-out property <string> i_labels: "";
+    in-out property <string> i_env: "";
+    in-out property <string> i_id: "";
+
+    // —— 日志行（Tab 1）——
     in-out property <[LogLineRow]> log_lines: [];
 
     // 左侧分隔线
     Rectangle { background: #334155; width: 1px; height: parent.height; x: 0px; y: 0px; }
 
-    // Tab 头
+    // Tab 头（3 Tab：容器详情 / 日志 / 镜像详情）
     Rectangle {
         width: parent.width;
         height: 36px;
@@ -48,7 +65,7 @@ export component DetailLogPanel inherits Rectangle {
         x: 0px; y: 0px;
 
         Rectangle {
-            width: 100px; height: parent.height;
+            width: 106px; height: parent.height;
             background: root.active_view == 0 ? #0f172a : transparent;
             TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
                         clicked => { root.active_view = 0; } }
@@ -59,8 +76,8 @@ export component DetailLogPanel inherits Rectangle {
                         y: parent.height - 2px; visible: root.active_view == 0; }
         }
         Rectangle {
-            x: 100px;
-            width: 100px; height: parent.height;
+            x: 106px;
+            width: 107px; height: parent.height;
             background: root.active_view == 1 ? #0f172a : transparent;
             TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
                         clicked => { root.active_view = 1; } }
@@ -69,6 +86,18 @@ export component DetailLogPanel inherits Rectangle {
                    font-weight: root.active_view == 1 ? 700 : 400; }
             Rectangle { background: #22d3ee; width: parent.width; height: 2px;
                         y: parent.height - 2px; visible: root.active_view == 1; }
+        }
+        Rectangle {
+            x: 213px;
+            width: 107px; height: parent.height;
+            background: root.active_view == 2 ? #0f172a : transparent;
+            TouchArea { x: 0; y: 0; width: parent.width; height: parent.height;
+                        clicked => { root.active_view = 2; } }
+            Text { text: "镜像"; x: 12px; height: parent.height; vertical-alignment: center;
+                   color: root.active_view == 2 ? #f1f5f9 : #94a3b8;
+                   font-weight: root.active_view == 2 ? 700 : 400; }
+            Rectangle { background: #22d3ee; width: parent.width; height: 2px;
+                        y: parent.height - 2px; visible: root.active_view == 2; }
         }
     }
     Rectangle { background: #334155; width: parent.width; height: 1px; x: 0px; y: 36px; }
@@ -86,5 +115,15 @@ export component DetailLogPanel inherits Rectangle {
     if root.active_view == 1: LogPanel {
         x: 0px; y: 37px; width: parent.width; height: parent.height - 37px;
         log_lines <=> root.log_lines;
+    }
+    if root.active_view == 2: ImageDetailPanel {
+        x: 0px; y: 37px; width: parent.width; height: parent.height - 37px;
+        i_short_id <=> root.i_short_id; i_repo_tags <=> root.i_repo_tags;
+        i_created <=> root.i_created; i_author <=> root.i_author;
+        i_size <=> root.i_size; i_platform <=> root.i_platform;
+        i_entrypoint <=> root.i_entrypoint; i_cmd <=> root.i_cmd;
+        i_workdir <=> root.i_workdir; i_ports <=> root.i_ports;
+        i_volumes <=> root.i_volumes; i_labels <=> root.i_labels;
+        i_env <=> root.i_env; i_id <=> root.i_id;
     }
 }

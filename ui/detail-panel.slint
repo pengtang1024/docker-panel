@@ -73,11 +73,9 @@ export component DetailPanel inherits Rectangle {
             font-weight: 700;
             color: #eee;
         }
-        Text {
-            text: root.d_name;
-            font-size: 11px;
-            color: #999;
+        VerticalBox {
             padding-bottom: 6px;
+            Text { text: root.d_name; font-size: 11px; color: #999; }
         }
         Rectangle { height: 1px; background: #3a3a55; width: parent.width; }
 
@@ -87,7 +85,7 @@ export component DetailPanel inherits Rectangle {
                 width: parent.width;
 
                 // —— 基本 ——
-                Text { text: "基本信息"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "基本信息"; color: #aaa; font-size: 11px; } }
                 DetailRow { label: "状态";    value: root.d_state; }
                 DetailRow { label: "状态描述"; value: root.d_status; }
                 DetailRow { label: "PID";      value: root.d_pid; }
@@ -100,22 +98,22 @@ export component DetailPanel inherits Rectangle {
                 DetailRow { label: "网络模式"; value: root.d_netmode; }
 
                 // —— 网络 ——
-                Text { text: "网络 / 端口"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "网络 / 端口"; color: #aaa; font-size: 11px; } }
                 DetailRow { label: "端口";   value: root.d_ports; }
                 DetailRow { label: "网络";   value: root.d_networks; }
 
                 // —— 挂载 ——
-                Text { text: "挂载卷"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "挂载卷"; color: #aaa; font-size: 11px; } }
                 DetailRow { label: "挂载"; value: root.d_mounts; }
 
                 // —— 运行 ——
-                Text { text: "运行配置"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "运行配置"; color: #aaa; font-size: 11px; } }
                 DetailRow { label: "入口点"; value: root.d_entry; }
                 DetailRow { label: "命令";   value: root.d_cmd; }
                 DetailRow { label: "工作目录"; value: root.d_workdir; }
 
                 // —— Labels ——
-                Text { text: "Labels"; color: #aaa; font-size: 11px; padding-top: 8px; padding-bottom: 4px; }
+                VerticalBox { padding-top: 8px; padding-bottom: 4px; Text { text: "Labels"; color: #aaa; font-size: 11px; } }
                 DetailRow { label: ""; value: root.d_labels; }
             }
         }

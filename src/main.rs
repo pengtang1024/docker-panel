@@ -90,6 +90,15 @@ fn main() {
         let detail_data = s.build_detail_data();
         let image_detail_data = s.build_image_detail_data();
 
+        // —— 排序状态（转 int 给 Slint：Group=0 Name=1 Status=2 Cpu=3 Mem=4）——
+        let (sort_field_int, sort_desc) = match s.sort_field {
+            crate::models::SortField::Group => (0, s.sort_desc),
+            crate::models::SortField::Name => (1, s.sort_desc),
+            crate::models::SortField::Status => (2, s.sort_desc),
+            crate::models::SortField::Cpu => (3, s.sort_desc),
+            crate::models::SortField::Mem => (4, s.sort_desc),
+        };
+
         // —— 日志搬运 ——
         let log_lines: Vec<LogLineRow> = s
             .logs
@@ -100,13 +109,11 @@ fn main() {
             .collect();
 
         // —— 操作完成立即刷新 —— 不等 3s Timer
-        if let Some(ref msg) = latest_msg {
-            match msg {
-                Msg::ActionDone(_, _) | Msg::PullDone(_) | Msg::CleanupDone(_) => {
-                    s.refresh();
-                }
-                _ => {}
-            }
+        if matches!(
+            latest_msg,
+            Some(Msg::ActionDone(_, _) | Msg::PullDone(_) | Msg::CleanupDone(_))
+        ) {
+            s.refresh();
         }
 
         drop(s); // ⚠️ 关键：必须在 invoke_from_event_loop 之前释放锁
@@ -120,6 +127,8 @@ fn main() {
             let vm: ModelRc<crate::slint_gen::VolumeRow> = ModelRc::from(volume_rows.as_slice());
             let lm: ModelRc<LogLineRow> = ModelRc::from(log_lines.as_slice());
             ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
+            ui.set_sort_field(sort_field_int);
+            ui.set_sort_desc(sort_desc);
             ui.set_container_count(SharedString::from(running_total));
             ui.set_image_count(SharedString::from(image_total));
             ui.set_docker_ok(update.docker_ok);
@@ -141,21 +150,8 @@ fn main() {
     };
 
     // ═══════════════════════════════════════════════════════
-    // Step 2: 启动 consumer 线程（架构中枢）
-    //
-    // 线程循环（优雅退出版）：
-    //   loop {
-    //     pump_c(&state_c, &rx_c, None);              // 扫积压
-    //     match rx_c.recv_timeout(200ms) {            // 定期检查 shutdown
-    //       Ok(msg) => pump_c(&state_c, &rx_c, Some(msg));
-    //       Err(Timeout) => if shutdown.load() { break; }
-    //       Err(Disconnected) => break;               // channel 关
-    //     }
-    //   }
-    //
-    // 所有权声明：rx_c 是 main 线程的 rx move 进来的，
-    // 从此 main 再也碰不到它——consumer 独占。
-    // 这样 consumer 持不持锁永远不影响主线程。
+    // Step 2: 启动 consumer 线程（recv_timeout 200ms + shutdown flag）
+    // rx_c 是 main move 进来的，consumer 独占从此 main 再也碰不到。
     // ═══════════════════════════════════════════════════════
     let consumer_handle: JoinHandle<()> = {
         let state_c = state.clone();

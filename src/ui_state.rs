@@ -19,34 +19,35 @@ use tokio::runtime::Runtime;
 use crate::docker::{
     compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
 };
-use crate::models::{ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, VolumeInfo};
+use crate::models::{
+    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
+};
 use slint::SharedString;
 
-/// 详情面板 17 个字段的 SharedString 元组
+/// 详情面板 18 字段 SharedString 元组（d_name..d_labels）
 pub type DetailTuple = (
-    SharedString, // d_name
-    SharedString, // d_state
-    SharedString, // d_status
-    SharedString, // d_image
-    SharedString, // d_id
-    SharedString, // d_pid
-    SharedString, // d_exit
-    SharedString, // d_created
-    SharedString, // d_started
-    SharedString, // d_restart
-    SharedString, // d_netmode
-    SharedString, // d_ports
-    SharedString, // d_mounts
-    SharedString, // d_networks
-    SharedString, // d_entry
-    SharedString, // d_cmd
-    SharedString, // d_workdir
-    SharedString, // d_labels
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
 );
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
-// —— 格式化工具 ——
 pub fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = bytes as f64;
@@ -92,6 +93,10 @@ pub struct AppState {
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
     pub shutdown: AtomicBool,
+
+    // —— 列表排序 ——
+    pub sort_field: SortField,
+    pub sort_desc: bool,
 }
 
 impl AppState {
@@ -123,6 +128,8 @@ impl AppState {
             logs_cap: 500,
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
+            sort_field: SortField::Group,
+            sort_desc: false,
         }));
         (state, rx)
     }

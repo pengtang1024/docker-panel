@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-17
+
+### 新增
+
+- **右键上下文菜单**：容器行 / 镜像行右键弹出 ContextMenuArea，容器菜单含"查看详情/日志/启停/重启/删除"5 项，镜像菜单含"查看详情/删除"2 项。行尾按钮保留作为快捷操作。
+- **表头点击排序**：容器列表可按服务名称 / 运行状态 / CPU% / 内存 4 列排序。点击当前排序列切换升/降序，点击不同列切换排序列。排序状态保持在 AppState 里，刷新不丢失。按状态/CPU/内存排序时自动关闭 Compose 分组视图。
+
+### 修复
+
+- **Slint padding 警告**：detail-panel / image-detail-panel / log-panel 中 Text 元素的 padding-top/bottom 改用 VerticalBox 包裹，release build 零警告。
+
 ## [0.2.2] - 2026-10-16
 
 ### 新增

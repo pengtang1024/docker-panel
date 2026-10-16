@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use slint::SharedString;
 
-use crate::models::ContainerInfo;
+use crate::models::{ContainerInfo, SortField};
 use crate::slint_gen::{ContainerRow, ImageRow, NetworkRow, VolumeRow};
 use crate::ui_state::{format_bytes, AppState};
 
@@ -34,26 +34,90 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
             }
         })
         .collect();
-    filtered.sort_by(|a, b| {
-        let ap = a.compose_project.as_deref().unwrap_or("~");
-        let bp = b.compose_project.as_deref().unwrap_or("~");
-        ap.cmp(bp).then_with(|| {
-            a.compose_service
-                .as_deref()
-                .cmp(&b.compose_service.as_deref())
-        })
-    });
+
+    // —— 排序 ——
+    match s.sort_field {
+        SortField::Group => {
+            // Compose 分组排序（默认）
+            filtered.sort_by(|a, b| {
+                let ap = a.compose_project.as_deref().unwrap_or("~");
+                let bp = b.compose_project.as_deref().unwrap_or("~");
+                let cmp = ap.cmp(bp).then_with(|| {
+                    a.compose_service
+                        .as_deref()
+                        .cmp(&b.compose_service.as_deref())
+                });
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
+        SortField::Name => {
+            filtered.sort_by(|a, b| {
+                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
+        SortField::Status => {
+            filtered.sort_by(|a, b| {
+                // running 在前，按 name 次级
+                let ar = a.is_running() as u8;
+                let br = b.is_running() as u8;
+                let cmp = br.cmp(&ar).then_with(|| a.name.cmp(&b.name));
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
+        SortField::Cpu => {
+            filtered.sort_by(|a, b| {
+                let cmp = b
+                    .cpu_percent
+                    .partial_cmp(&a.cpu_percent)
+                    .unwrap_or(std::cmp::Ordering::Equal);
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
+        SortField::Mem => {
+            filtered.sort_by(|a, b| {
+                let cmp = b.mem_usage.cmp(&a.mem_usage);
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
+    }
+
+    // —— 只在 Group 排序下生成分组行 ——
+    let grouping = matches!(s.sort_field, SortField::Group);
     let mut last: Option<&str> = None;
     filtered
         .into_iter()
         .map(|c| {
             let project = c.compose_project.as_deref();
-            let is_group = match (project, last) {
-                (Some(_), None) | (None, Some(_)) => true,
-                (Some(a), Some(b)) => a != b,
-                _ => false,
-            };
-            last = project;
+            let is_group = grouping
+                && match (project, last) {
+                    (Some(_), None) | (None, Some(_)) => true,
+                    (Some(a), Some(b)) => a != b,
+                    _ => false,
+                };
+            if grouping {
+                last = project;
+            }
             ContainerRow {
                 id: SharedString::from(c.id.clone()),
                 short_id: SharedString::from(c.short_id()),

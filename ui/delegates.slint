@@ -1,8 +1,9 @@
 // delegates.slint — ListView 行视图
-// Compose 分组标题 + stats 列 + 自绘按钮
+// Compose 分组标题 + stats 列 + 自绘按钮 + 右键菜单（ContextMenuArea）
 // Slint 1.14 三元运算符：condition ? true : false
 
 import { HorizontalBox } from "std-widgets.slint";
+// ContextMenuArea / Menu / MenuItem 是 Slint 内置元素，不需要从 std-widgets import
 
 // —— 圆形状态灯 ——
 export component StatusDot inherits Rectangle {
@@ -51,10 +52,24 @@ export component ContainerRowDelegate inherits Rectangle {
     in-out property <bool> hovered: false;
     background: is_group_start ? #1a2332 : transparent;
 
-    TouchArea {
+    ContextMenuArea {
         x: 0; y: 0; width: root.width; height: root.height;
-        property <bool> hovered2 <=> root.hovered;
-        clicked => { root.clicked(); }
+
+        // —— 左键点击（选择行）——
+        TouchArea {
+            x: 0; y: 0; width: parent.width; height: parent.height;
+            property <bool> hovered2 <=> root.hovered;
+            clicked => { root.clicked(); }
+        }
+
+        // —— 右键菜单（Slint 要求 ContextMenuArea 的 Menu 不能在条件内）——
+        Menu {
+            MenuItem { title: "查看详情"; activated => { root.clicked(); } }
+            MenuItem { title: "查看日志"; activated => { root.logs(); } }
+            MenuItem { title: root.is_running ? "停止" : "启动"; activated => { root.toggle(); } }
+            MenuItem { title: "重启"; activated => { root.restart(); } }
+            MenuItem { title: "删除"; activated => { root.remove(); } }
+        }
     }
 
     // —— 分组标题行 ——
@@ -154,10 +169,21 @@ export component ImageRowDelegate inherits Rectangle {
     in-out property <bool> hovered: false;
     background: hovered ? #1e293b : transparent;
 
-    TouchArea {
+    ContextMenuArea {
         x: 0; y: 0; width: root.width; height: root.height;
-        property <bool> hovered2 <=> root.hovered;
-        clicked => { root.clicked(); }
+
+        // —— 左键点击（选行看详情）——
+        TouchArea {
+            x: 0; y: 0; width: parent.width; height: parent.height;
+            property <bool> hovered2 <=> root.hovered;
+            clicked => { root.clicked(); }
+        }
+
+        // —— 右键菜单 ——
+        Menu {
+            MenuItem { title: "查看详情"; activated => { root.clicked(); } }
+            MenuItem { title: "删除"; activated => { root.remove(); } }
+        }
     }
 
     HorizontalBox {

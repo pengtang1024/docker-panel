@@ -8,7 +8,7 @@
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.0（Phase 2 已交付：详情面板 + 实时日志流）。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.2（Phase 2+ 已交付：详情面板 + 实时日志流 + 镜像详情 + 网络/卷 Tab + 网络容器计数）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 

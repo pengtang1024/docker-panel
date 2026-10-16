@@ -1,17 +1,18 @@
 // delegates.slint — ListView 行视图
 // Compose 分组标题 + stats 列 + Checkbox 多选 + 自绘按钮 + 右键菜单
+// 列宽用 Theme.col-* 常量，必须与 headers.slint 严格对齐
 import { HorizontalBox, CheckBox } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 
 export component StatusDot inherits Rectangle {
-    width: 12px; height: 12px;
+    width: Theme.col-status-dot; height: Theme.col-status-dot;
     border-radius: 6px;
     in-out property <bool> running: false;
     background: running ? Theme.status-running : Theme.status-stopped;
 }
 
 export component RowButton inherits Rectangle {
-    width: 28px; height: 26px;
+    width: Theme.col-btn; height: 26px;
     border-radius: 4px;
     in-out property <bool> hovered: false;
     background: hovered ? Theme.bg-hover : transparent;
@@ -22,6 +23,10 @@ export component RowButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
+
+// —— 带居中图标的 RowButton 内部 Text ——
+// 用法：RowButton 内的 Text 用 width: 100% + horizontal-alignment: center
+// 替代之前硬编码 x: 9px 偏移，避免不同 emoji 字宽下图标偏移
 
 export component ContainerRowDelegate inherits Rectangle {
     in-out property <string> row_id: "";
@@ -54,7 +59,9 @@ export component ContainerRowDelegate inherits Rectangle {
 
         // —— 左键点击（选行看详情）——
         TouchArea {
-            x: Theme.space-4; y: 0; width: parent.width - Theme.space-4; height: parent.height;
+            x: Theme.col-checkbox + Theme.col-status-dot + Theme.col-id + Theme.space-3 + Theme.space-1;
+            // 跳过 CheckBox + StatusDot + short_id 的区域从 name 开始算... 简化：让 CheckBox 独占第一列，后面都可点击
+            width: parent.width; height: parent.height;
             property <bool> hovered2 <=> root.hovered;
             clicked => { root.clicked(); }
         }
@@ -84,73 +91,118 @@ export component ContainerRowDelegate inherits Rectangle {
         HorizontalLayout { }
     }
 
-    // —— 普通容器行 ——
+    // —— 普通容器行（10 列与 header 严格对齐）——
     if !root.is_group_start: HorizontalBox {
         spacing: Theme.space-3;
-        padding-left: Theme.space-1;
+        padding-left: Theme.space-1;    // 与 header padding-left: space-1 对齐
         padding-right: Theme.space-3;
         width: parent.width;
         height: parent.height;
 
+        // 1. CheckBox
         CheckBox {
             checked <=> root.is_selected;
             toggled => { root.toggle_select(); }
         }
+        // 2. 状态灯
         StatusDot { running <=> root.is_running; }
-        Text { text: root.short_id; min-width: 96px; color: Theme.text-faint; font-size: Theme.text-sm; }
-
+        // 3. 短 ID
+        Text {
+            text: root.short_id;
+            min-width: Theme.col-id;
+            color: Theme.text-faint;
+            font-size: Theme.text-sm;
+        }
+        // 4. 服务名 + 容器名（可弹性）
         HorizontalBox {
             spacing: Theme.space-1;
-            min-width: 180px;
+            min-width: Theme.col-name;
             HorizontalLayout { }
             Text {
                 text: root.compose_service != "" ? (root.compose_service + " ") : "";
                 color: Theme.accent; font-size: Theme.text-xs; font-weight: 600;
             }
-            Text { text: root.name; min-width: 120px; overflow: elide; color: Theme.text-normal; }
+            Text {
+                text: root.name;
+                min-width: 120px;
+                overflow: elide;
+                color: Theme.text-normal;
+            }
+        }
+        // 5. 镜像
+        Text {
+            text: root.image;
+            min-width: Theme.col-image;
+            overflow: elide;
+            color: Theme.text-muted;
+            font-size: Theme.text-sm;
         }
 
-        Text { text: root.image; min-width: 100px; overflow: elide; color: Theme.text-muted; font-size: Theme.text-sm; }
         HorizontalLayout { }
-        Text { text: root.status; min-width: 80px; color: Theme.text-secondary; font-size: Theme.text-sm; }
 
+        // 6. 状态
+        Text {
+            text: root.status;
+            min-width: Theme.col-status;
+            color: Theme.text-secondary;
+            font-size: Theme.text-sm;
+        }
+        // 7. CPU
         Text {
             text: root.cpu_percent;
-            min-width: 50px;
+            min-width: Theme.col-cpu;
             color: root.cpu_percent != "" && root.cpu_percent != "0.0%" ? Theme.status-warning : Theme.text-faint;
-            font-size: Theme.text-xs; horizontal-alignment: right;
+            font-size: Theme.text-xs;
+            horizontal-alignment: right;
         }
+        // 8. 内存
         Text {
             text: root.mem_usage;
-            min-width: 80px;
-            color: Theme.text-muted; font-size: Theme.text-xs; horizontal-alignment: right;
+            min-width: Theme.col-mem;
+            color: Theme.text-muted;
+            font-size: Theme.text-xs;
+            horizontal-alignment: right;
         }
 
+        // 9-12. 四个 RowButton（图标用 width:100% + horizontal-alignment:center 居中）
         RowButton {
             clicked => { root.toggle(); }
-            Text { text: root.is_running ? "⏸" : "▶";
-                   color: Theme.text-secondary; font-size: Theme.text-sm;
-                   x: 9px; height: parent.height; vertical-alignment: center; }
+            Text {
+                text: root.is_running ? "⏸" : "▶";
+                color: Theme.text-secondary;
+                font-size: Theme.text-sm;
+                height: parent.height; width: parent.width;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
         }
         RowButton {
             clicked => { root.restart(); }
-            Text { text: "⟳"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                   x: 9px; height: parent.height; vertical-alignment: center; }
+            Text {
+                text: "⟳"; color: Theme.text-secondary; font-size: Theme.text-sm;
+                height: parent.height; width: parent.width;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
         }
         RowButton {
             clicked => { root.logs(); }
-            Text { text: "📋"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                   x: 9px; height: parent.height; vertical-alignment: center; }
+            Text {
+                text: "📋"; color: Theme.text-secondary; font-size: Theme.text-sm;
+                height: parent.height; width: parent.width;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
         }
         RowButton {
             clicked => { root.remove(); }
-            Text { text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                   x: 9px; height: parent.height; vertical-alignment: center; }
+            Text {
+                text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
+                height: parent.height; width: parent.width;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
         }
     }
 }
 
-// —— 镜像行（暂不支持多选，保持原样）——
+// —— 镜像行 ——
 export component ImageRowDelegate inherits Rectangle {
     in-out property <string> row_id: "";
     in-out property <string> short_id: "";
@@ -186,20 +238,23 @@ export component ImageRowDelegate inherits Rectangle {
         width: parent.width;
         height: parent.height;
 
-        Text { text: root.short_id; min-width: 96px; color: Theme.text-faint; font-size: Theme.text-sm; }
+        Text { text: root.short_id; min-width: Theme.col-id; color: Theme.text-faint; font-size: Theme.text-sm; }
         Text { text: root.name; min-width: 200px; overflow: elide; color: Theme.text-normal; }
-        Text { text: ":" + root.tag; color: Theme.accent; min-width: 100px; font-size: Theme.text-sm; }
+        Text { text: ":" + root.tag; color: Theme.accent; min-width: Theme.col-tag; font-size: Theme.text-sm; }
         HorizontalLayout { }
         Text {
             text: root.containers > 0 ? (root.containers + " 使用中") : "未使用";
-            min-width: 80px; font-size: Theme.text-sm;
+            min-width: Theme.col-usage; font-size: Theme.text-sm;
             color: root.containers > 0 ? Theme.status-running : Theme.status-warning;
         }
-        Text { text: root.size; min-width: 80px; color: Theme.text-muted; font-size: Theme.text-sm; }
+        Text { text: root.size; min-width: Theme.col-size; color: Theme.text-muted; font-size: Theme.text-sm; }
         RowButton {
             clicked => { root.remove(); }
-            Text { text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                   x: 9px; height: parent.height; vertical-alignment: center; }
+            Text {
+                text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
+                height: parent.height; width: parent.width;
+                horizontal-alignment: center; vertical-alignment: center;
+            }
         }
     }
 }

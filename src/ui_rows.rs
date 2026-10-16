@@ -20,6 +20,15 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                     || c.short_id().contains(&q)
                     || c.image.to_lowercase().contains(&q)
                     || c.state.to_lowercase().contains(&q)
+                    || c.compose_project
+                        .as_deref()
+                        .map(|p| p.to_lowercase().contains(&q))
+                        .unwrap_or(false)
+                    || c.compose_service
+                        .as_deref()
+                        .map(|p| p.to_lowercase().contains(&q))
+                        .unwrap_or(false)
+                    || c.ports.to_lowercase().contains(&q)
             }
         })
         .collect();

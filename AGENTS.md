@@ -109,6 +109,25 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo check --all-targets
 ```
 
+## target/ 清理
+
+Rust 不自动清理编译缓存，`target/` 可能膨胀到 10G+。推荐工具链：
+
+```bash
+# 全清（最快释放空间，下次全量重编）
+cargo clean
+
+# 只清 release（保留 debug 增量缓存）
+cargo clean --release
+
+# 细粒度清理（推荐：已装 cargo-sweep）
+cargo sweep --time 7       # 清理 7 天未用产物
+cargo sweep --time 7 -d    # dry-run 先预览
+cargo sweep --maxsize 10G  # 超过阈值才清
+```
+
+`cargo-sweep` 已全局安装，`~/.cargo/config.toml` 已配 `[build] incremental = true`（release profile 也开启增量编译）。
+
 ## 发版流程
 
 严格走 Git Flow，详见 [docs/git-flow.md](docs/git-flow.md)。三个位置必须同步版本号：

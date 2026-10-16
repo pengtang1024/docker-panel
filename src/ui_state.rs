@@ -26,16 +26,28 @@ use slint::SharedString;
 
 /// 详情面板 18 字段 SharedString 元组（d_name..d_labels）
 pub type DetailTuple = (
-    SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString, SharedString, SharedString,
-    SharedString, SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
+    SharedString,
 );
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
-// —— 格式化工具 ——
 pub fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = bytes as f64;

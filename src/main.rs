@@ -109,13 +109,11 @@ fn main() {
             .collect();
 
         // —— 操作完成立即刷新 —— 不等 3s Timer
-        if let Some(ref msg) = latest_msg {
-            match msg {
-                Msg::ActionDone(_, _) | Msg::PullDone(_) | Msg::CleanupDone(_) => {
-                    s.refresh();
-                }
-                _ => {}
-            }
+        if matches!(
+            latest_msg,
+            Some(Msg::ActionDone(_, _) | Msg::PullDone(_) | Msg::CleanupDone(_))
+        ) {
+            s.refresh();
         }
 
         drop(s); // ⚠️ 关键：必须在 invoke_from_event_loop 之前释放锁

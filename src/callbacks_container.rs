@@ -146,7 +146,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
             // Rust 侧直接切面板 —— 行点击必然看详情
-            ui.set_active_view(0);
+            ui.set_side_tab(0);
             ui.set_status_text(SharedString::from(format!("查看 {id}")));
             bind_inspect(&s, id);
         });
@@ -159,7 +159,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_logs(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_active_view(1); // 🆕 自动切到日志面板
+            ui.set_side_tab(1); // 自动切到日志面板
             bind_inspect(&s, id.clone());
             let (rt_handle, tx) = {
                 let Ok(st) = s.lock() else { return };

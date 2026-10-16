@@ -6,6 +6,31 @@
 
 本项目唯一正确的名称是 **docker-panel**（品牌名 Docker Panel）。`dvkit` 是已废弃的旧名，**任何文件、注释、字符串、日志前缀、包名、二进制名、desktop 入口中禁止出现 dvkit 字样**。提交前必须 `grep -ri dvkit .` 确认零残留。
 
+## ⚠️ 硬约束：UI 验证只能通过 Slint MCP
+
+本项目运行在 Wayland 下，**系统截图工具（scrot/gnome-screenshot/maim）全部黑屏**，无法用于 UI 验收。查看 UI 状态必须使用 Slint 内置 MCP 服务器：
+
+```bash
+# 1. 构建带 mcp feature 的版本
+cargo build --release --features slint/mcp
+
+# 2. 启动（SLINT_MCP_PORT 指定端口）
+SLINT_EMIT_DEBUG_INFO=1 SLINT_MCP_PORT=8080 ./target/release/docker-panel &
+
+# 3. 截图（通过 MCP HTTP 接口）
+curl -s -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"take_screenshot","arguments":{"windowHandle":{"generation":"1","index":"1"},"imageMimeType":"image/png"}}}'
+```
+
+Slint MCP 还提供 `get_element_tree` / `get_element_properties` / `click_element` 等工具，可精确检查元素几何尺寸、属性值和模拟交互。**修复 UI 问题时必须用 MCP 截图验证，不要依赖用户口述。**
+
+Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
+```json
+"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }
+```
+
 ## 项目是什么
 
 **docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.2（Phase 2+ 已交付：详情面板 + 实时日志流 + 镜像详情 + 网络/卷 Tab + 网络容器计数）。

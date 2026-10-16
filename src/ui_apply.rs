@@ -7,18 +7,18 @@ use crate::slint_gen::MainWindow;
 use crate::ui_state::DetailTuple;
 use slint::{ModelRc, SharedString};
 
-/// 把 14 字段 SharedString Vec 灌入 ImageDetailPanel
+/// 把 14 字段 SharedString Vec 灌入右侧镜像面板
 pub fn apply_image_detail(ui: &MainWindow, fields: &[SharedString]) {
     if fields.len() < 14 {
         return;
     }
-    ui.set_i_short_id(fields[0].clone());
-    ui.set_i_repo_tags(fields[1].clone());
+    ui.set_i_short(fields[0].clone());
+    ui.set_i_repo(fields[1].clone());
     ui.set_i_created(fields[2].clone());
     ui.set_i_author(fields[3].clone());
     ui.set_i_size(fields[4].clone());
     ui.set_i_platform(fields[5].clone());
-    ui.set_i_entrypoint(fields[6].clone());
+    ui.set_i_entry(fields[6].clone());
     ui.set_i_cmd(fields[7].clone());
     ui.set_i_workdir(fields[8].clone());
     ui.set_i_ports(fields[9].clone());

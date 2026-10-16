@@ -1,221 +1,306 @@
-// components.slint — 统一现代组件皮肤 v2
-// 所有组件用 Theme 令牌 + 一致的视觉规范
+// components.slint — 基础组件（布局纪律：只用 HorizontalLayout / VerticalLayout）
 import { Theme } from "theme.slint";
-import { HorizontalBox, VerticalBox, LineEdit } from "std-widgets.slint";
+import { LineEdit, CheckBox } from "std-widgets.slint";
 
-// ============== FlatButton（替代 std-widgets Button）==============
-export component FlatButton inherits Rectangle {
+// ============ 主按钮 / 次按钮 ============
+export component Button inherits Rectangle {
     in-out property <string> text: "";
-    in-out property <string> icon: "";
-    in-out property <bool> hovered: false;
-    in-out property <color> fg_color: Theme.text-secondary;
-    in-out property <color> hover_bg: Theme.bg-hover;
+    in-out property <string> glyph: "";
+    in-out property <bool> primary: false;
+    in-out property <bool> danger: false;
+    in-out property <bool> enabled: true;
     callback clicked();
 
-    height: 32px;
-    border-radius: 6px;
-    background: hovered ? hover_bg : transparent;
+    height: 28px;
+    border-radius: 5px;
+    border-width: root.primary ? 0px : 1px;
+    border-color: root.danger ? Theme.err : Theme.line;
+    background: root.primary ? Theme.accent
+        : root.danger ? (touch.has-hover ? #3a2230 : Theme.bg-card)
+        : touch.has-hover ? Theme.bg-row-hover
+        : Theme.bg-card;
+    opacity: root.enabled ? 1.0 : 0.35;
 
-    TouchArea {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        property <bool> h <=> parent.hovered;
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        enabled: root.enabled;
         clicked => { root.clicked(); }
     }
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-1;
-        padding-left: Theme.space-2;
-        padding-right: Theme.space-2;
-        HorizontalLayout { }
-        if root.icon != "": Text {
-            text: root.icon; color: root.fg_color; font-size: Theme.text-sm;
-            height: parent.height; vertical-alignment: center;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Text {
+                text: root.glyph;
+                font-size: Theme.fs;
+                color: root.primary ? Theme.bg-root : (root.danger ? Theme.err : Theme.fg-2);
+                visible: root.glyph != "";
+                vertical-alignment: center;
+            }
+            if root.glyph != "": Rectangle { width: 3px; height: 1px; }
+            Text {
+                text: root.text;
+                font-size: Theme.fs;
+                font-weight: 600;
+                color: root.primary ? Theme.bg-root : (root.danger ? Theme.err : Theme.fg-2);
+                vertical-alignment: center;
+            }
         }
-        Text {
-            text: root.text; color: root.fg_color; font-size: Theme.text-sm;
-            height: parent.height; vertical-alignment: center;
-        }
-        HorizontalLayout { }
     }
 }
 
-// ============== IconButton（icon-only 小按钮，用于 ToolBar）==============
-export component IconButton inherits Rectangle {
-    in-out property <string> icon: "";
-    in-out property <bool> hovered: false;
+// ============ 图标按钮 ============
+export component IconBtn inherits Rectangle {
+    in-out property <string> glyph: "";
+    in-out property <bool> danger: false;
     callback clicked();
 
-    width: 24px; height: 24px;
-    border-radius: 6px;
-    background: hovered ? Theme.bg-hover : transparent;
+    width: 28px; height: 28px;
+    border-radius: 5px;
+    background: touch.has-hover ? (root.danger ? #3a2230 : Theme.bg-row-hover) : transparent;
 
-    TouchArea {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        property <bool> h <=> parent.hovered;
+    touch := TouchArea {
+        width: 100%; height: 100%;
         clicked => { root.clicked(); }
     }
 
     Text {
-        text: root.icon;
-        color: hovered ? Theme.text-primary : Theme.text-secondary;
-        font-size: Theme.text-sm;
-        height: parent.height; width: parent.width;
+        text: root.glyph;
+        font-size: Theme.fs-md;
+        color: touch.has-hover ? (root.danger ? Theme.err : Theme.fg) : Theme.fg-3;
+        width: 100%; height: 100%;
         horizontal-alignment: center; vertical-alignment: center;
     }
 }
 
-// ============== StatusChip（连接状态徽章）==============
-export component StatusChip inherits Rectangle {
-    in-out property <bool> online: true;
-    height: 26px;
-    border-radius: 13px;
-    background: root.online ? rgba(34,197,94,0.15) : rgba(239,68,68,0.15);
+// ============ 状态圆点 ============
+export component Dot inherits Rectangle {
+    in-out property <bool> on: false;
+    width: 8px; height: 8px;
+    border-radius: 4px;
+    background: root.on ? Theme.ok : Theme.off;
+}
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-1;
-        padding-left: Theme.space-2;
-        padding-right: Theme.space-2;
-        Rectangle {
-            width: 8px; height: 8px; border-radius: 4px;
-            background: root.online ? Theme.status-running : Theme.status-error;
-        }
-        Text {
-            text: root.online ? "已连接" : "未连接";
-            color: root.online ? Theme.status-running : Theme.status-error;
-            font-size: Theme.text-xs; font-weight: 600;
-            height: parent.height; vertical-alignment: center;
+// ============ 连接状态徽章 ============
+export component ConnBadge inherits Rectangle {
+    in-out property <bool> online: false;
+    height: 22px;
+    border-radius: 11px;
+    background: root.online ? #16342e : #3a2230;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: 10px; padding-right: 10px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 6px; height: 6px; border-radius: 3px;
+                background: root.online ? Theme.ok : Theme.err;
+            }
+            Rectangle { width: 5px; height: 1px; }
+            Text {
+                text: root.online ? "已连接" : "未连接";
+                font-size: Theme.fs-sm;
+                font-weight: 600;
+                color: root.online ? Theme.ok : Theme.err;
+                vertical-alignment: center;
+            }
         }
     }
 }
 
-// ============== SearchInput（带 🔍 前缀的搜索框）==============
-export component SearchInput inherits Rectangle {
-    in-out property <string> placeholder: "搜索...";
+// ============ 搜索框 ============
+export component SearchBox inherits Rectangle {
+    in-out property <string> placeholder: "搜索容器、镜像...";
     callback accepted(string);
 
-    height: 36px;
-    border-radius: 6px;
+    height: 28px;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: touch.has-hover ? Theme.accent : Theme.line;
     background: Theme.bg-card;
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-1;
-        padding-left: Theme.space-2;
-        padding-right: Theme.space-2;
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        padding-left: 8px; padding-right: 4px;
+        spacing: 4px;
         Text {
-            text: "⌕"; font-size: Theme.text-base; color: Theme.text-muted;
-            height: parent.height; vertical-alignment: center;
+            text: "⌕";
+            font-size: Theme.fs-md;
+            color: Theme.fg-4;
+            vertical-alignment: center;
         }
         LineEdit {
-            width: parent.width - 30px; height: parent.height;
+            vertical-stretch: 1;
+            font-size: Theme.fs;
             placeholder-text: root.placeholder;
             accepted => { root.accepted(self.text); }
         }
     }
+    touch := TouchArea {
+        x: parent.width - 36px; y: 0;
+        width: 36px; height: 100%;
+    }
 }
 
-// ============== ActivityItem（Activity Bar 单项 — 必须在 ActivityBar 之前定义）==============
-export component ActivityItem inherits Rectangle {
-    in-out property <string> icon: "";
-    in-out property <string> label: "";
-    in-out property <bool> active: false;
-    in-out property <bool> hovered: false;
-    callback clicked();
+// ============ 复选框（表格内用，纯几何不用 std 控件）============
+export component CheckCell inherits Rectangle {
+    in-out property <bool> checked: false;
+    callback toggled();
 
-    width: 48px; height: 48px;
-    background: active ? Theme.bg-hover : (hovered ? Theme.bg-hover-soft : transparent);
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: root.checked ? Theme.accent : (touch.has-hover ? Theme.fg-3 : Theme.line);
+    background: root.checked ? Theme.accent : (touch.has-hover ? Theme.bg-row-hover : transparent);
 
-    TouchArea {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        property <bool> h <=> parent.hovered;
-        clicked => { root.clicked(); }
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.toggled(); }
     }
 
-    // accent 左竖条（active 时显示）
-    Rectangle {
-        x: 0; y: 0; width: 2px; height: parent.height;
-        background: Theme.accent;
-        visible: root.active;
-    }
-
-    Text {
-        text: root.icon;
-        color: root.active ? Theme.accent-soft : (root.hovered ? Theme.text-primary : Theme.text-muted);
-        font-size: Theme.text-lg;
-        height: parent.height; width: parent.width;
+    if root.checked: Text {
+        text: "✓";
+        font-size: 11px;
+        font-weight: 700;
+        color: Theme.bg-root;
+        width: 100%; height: 100%;
         horizontal-alignment: center; vertical-alignment: center;
     }
 }
 
-// ============== ActivityBar（左侧 48px icon 竖排导航栏）==============
-export component ActivityBar inherits Rectangle {
-    in-out property <int> active_view: 0;
-    callback clicked(int);
+// ============ 左侧导航项 ============
+export component NavItem inherits Rectangle {
+    in-out property <string> glyph: "";
+    in-out property <string> label: "";
+    in-out property <int> count: 0;
+    in-out property <bool> active: false;
+    callback clicked();
 
-    width: 48px;
-    background: Theme.bg-card;
+    height: 34px;
+    background: root.active ? Theme.bg-row-sel : (touch.has-hover ? Theme.bg-row-hover : transparent);
 
-    VerticalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.clicked(); }
+    }
+
+    // 左侧高亮条
+    Rectangle {
+        x: 0; y: 0;
+        width: 3px; height: 100%;
+        background: Theme.accent;
+        visible: root.active;
+    }
+
+    VerticalLayout {
+        x: 3px; width: parent.width - 3px; height: 100%;
+        padding-left: 12px; padding-right: 10px;
         spacing: 0px;
-
-        VerticalLayout { }
-        ActivityItem { icon: "■"; active: root.active_view == 0; clicked => { root.clicked(0); } }
-        ActivityItem { icon: "◆"; active: root.active_view == 1; clicked => { root.clicked(1); } }
-        ActivityItem { icon: "●"; active: root.active_view == 2; clicked => { root.clicked(2); } }
-        ActivityItem { icon: "▲"; active: root.active_view == 3; clicked => { root.clicked(3); } }
-        VerticalLayout { }
+        HorizontalLayout {
+            spacing: 9px;
+            alignment: center;
+            Rectangle {
+                width: 18px; height: 100%;
+                Text {
+                    text: root.glyph;
+                    font-size: Theme.fs-md;
+                    color: root.active ? Theme.accent : Theme.fg-3;
+                    width: 100%; height: 100%;
+                    horizontal-alignment: center; vertical-alignment: center;
+                }
+            }
+            Text {
+                text: root.label;
+                font-size: Theme.fs-md;
+                font-weight: root.active ? 700 : 400;
+                color: root.active ? Theme.fg : Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if root.count > 0: Text {
+                text: root.count;
+                font-size: Theme.fs-sm;
+                color: root.active ? Theme.accent : Theme.fg-4;
+                vertical-alignment: center;
+            }
+        }
     }
 }
 
-// ============== TabItem（右侧内部 TabBar 单项 — 自绘 Tab）==============
+// ============ Tab 项 ============
 export component TabItem inherits Rectangle {
     in-out property <string> label: "";
     in-out property <bool> active: false;
     callback clicked();
 
-    height: 32px;
+    height: 100%;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
 
-    TouchArea {
-        x: 0; y: 0; width: parent.width; height: parent.height;
+    touch := TouchArea {
+        width: 100%; height: 100%;
         clicked => { root.clicked(); }
     }
 
     Text {
         text: root.label;
-        height: parent.height;
-        vertical-alignment: center;
-        color: root.active ? Theme.accent : Theme.text-muted;
+        font-size: Theme.fs-md;
         font-weight: root.active ? 700 : 400;
+        color: root.active ? Theme.accent : Theme.fg-3;
+        width: 100%; height: 100%;
+        horizontal-alignment: center; vertical-alignment: center;
     }
 
     Rectangle {
+        x: 0; y: parent.height - 2px;
+        width: parent.width; height: 2px;
         background: Theme.accent;
-        height: 2px;
-        y: parent.height - 2px;
         visible: root.active;
     }
 }
 
-// ============== SectionHeader（详情面板分组标题）==============
-export component SectionHeader inherits Rectangle {
-    in-out property <string> title: "";
-    height: 20px;
+// ============ 可排序表头单元格 ============
+export component SortCell inherits Rectangle {
+    in-out property <string> label: "";
+    in-out property <int> field: 0;
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: false;
+    in-out property <bool> align-right: false;
+    callback sort(int);
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-2;
-        padding-left: Theme.space-2;
-        Rectangle { width: 3px; height: 10px; background: Theme.accent; border-radius: 1px; }
-        Text {
-            text: root.title;
-            color: Theme.accent;
-            font-size: Theme.text-xs;
-            font-weight: 600;
-            height: parent.height; vertical-alignment: center;
+    height: 100%;
+    border-radius: 4px;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
+
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.sort(root.field); }
+    }
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: 6px; padding-right: 6px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            if root.align-right: Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: root.label;
+                font-size: Theme.fs-xs;
+                font-weight: 700;
+                color: root.sort_field == root.field ? Theme.accent : Theme.fg-3;
+                vertical-alignment: center;
+            }
+            if root.sort_field == root.field: Text {
+                text: root.sort_desc ? "▾" : "▴";
+                font-size: 9px;
+                color: Theme.accent;
+                vertical-alignment: center;
+            }
+            if root.align-right == false: Rectangle { horizontal-stretch: 1; }
         }
-        HorizontalLayout { }
     }
 }

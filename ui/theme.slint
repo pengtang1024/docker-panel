@@ -1,62 +1,75 @@
-// theme.slint — 全局设计令牌（Slint global out property）
-// 所有 Slint 文件的颜色/字号/间距统一从此引用
-// 使用：import { Theme } from "theme.slint";  然后 Theme.bg-surface
+// theme.slint — 设计令牌 + 网格常量（唯一真相源）
+// 布局纪律：只用 HorizontalLayout / VerticalLayout（无隐式 padding）。
+// Box = Layout + 隐式 5px padding，是错位根源，禁止使用。
 
 export global Theme {
-    // —— 背景层级 ——
-    out property <color> bg-root: #0f172a;        // 最深层背景（窗口）
-    out property <color> bg-surface: #1e1e2e;      // 主要表面（左栏/右栏背景）
-    out property <color> bg-card: #1e293b;         // 卡片/工具栏背景
-    out property <color> bg-hover: #334155;        // 行 hover / 按钮 hover
-    out property <color> bg-hover-soft: rgba(255, 255, 255, 0.06); // 轻微 hover（ActivityItem 等）
-    out property <color> bg-selected: #0f3460;     // 选中行高亮
-    out property <color> bg-group: #1a2332;        // Compose 分组行背景
-    out property <color> bg-delete-hover: #7f1d1d; // 删除按钮 hover
+    // ============ 色彩 ============
+    out property <color> bg-root: #0b1220;
+    out property <color> bg-side: #101b2d;      // 左导航 / 右面板 / 顶底栏
+    out property <color> bg-main: #16233a;      // 主列表区
+    out property <color> bg-card: #1d2c45;      // 卡片 / 控件底
+    out property <color> bg-row-hover: #1f3350;
+    out property <color> bg-row-sel: #1d4a6b;
+    out property <color> bg-group: #131f33;
 
-    // —— 分隔线 ——
-    out property <color> divider: #334155;
+    out property <color> line: #24344d;         // 分隔线 / 边框
 
-    // —— 文字 ——
-    out property <color> text-primary: #f1f5f9;     // 主文字
-    out property <color> text-normal: #e2e8f0;      // 普通文字
-    out property <color> text-secondary: #cbd5e1;  // 次级文字
-    out property <color> text-muted: #94a3b8;       // 弱化文字
-    out property <color> text-faint: #64748b;       // 最淡（id hash 等）
+    out property <color> fg: #f1f5f9;           // 主文字
+    out property <color> fg-2: #c3d0e0;         // 次文字
+    out property <color> fg-3: #8296b0;         // 弱文字
+    out property <color> fg-4: #5b6b82;         // 占位符
 
-    // —— Accent ——
-    out property <color> accent: #22d3ee;           // 项目主 cyan
-    out property <color> accent-soft: #67e8f9;
+    out property <color> accent: #38bdf8;
+    out property <color> ok: #34d399;
+    out property <color> off: #64748b;
+    out property <color> warn: #fbbf24;
+    out property <color> err: #f87171;
 
-    // —— 状态色 ——
-    out property <color> status-running: #22c55e;   // 运行中绿
-    out property <color> status-stopped: #64748b;   // 停止灰
-    out property <color> status-warning: #f59e0b;   // 警告橙
-    out property <color> status-error: #f87171;      // 错误红
+    // ============ 字号 ============
+    out property <length> fs-xs: 10px;
+    out property <length> fs-sm: 11px;
+    out property <length> fs: 12px;
+    out property <length> fs-md: 13px;
+    out property <length> fs-lg: 16px;
 
-    // —— 字号 ——
-    out property <length> text-xs: 11px;
-    out property <length> text-sm: 12px;
-    out property <length> text-base: 13px;
-    out property <length> text-lg: 16px;
+    // ============ 间距 ============
+    out property <length> s1: 4px;
+    out property <length> s2: 6px;
+    out property <length> s3: 8px;
+    out property <length> s4: 12px;
+    out property <length> s5: 16px;
 
-    // —— 间距 ——
-    out property <length> space-1: 4px;
-    out property <length> space-2: 6px;
-    out property <length> space-3: 8px;
-    out property <length> space-4: 12px;
+    // ============ 结构尺寸 ============
+    out property <length> nav-w: 200px;
+    out property <length> side-w: 360px;
+    out property <length> top-h: 48px;
+    out property <length> tab-h: 34px;
+    out property <length> head-h: 30px;
+    out property <length> row-h: 32px;
+    out property <length> group-h: 28px;
+    out property <length> tool-h: 40px;
+    out property <length> foot-h: 24px;
+    out property <length> batch-h: 42px;
 
-    // —— 列宽（表头与 delegate 严格对齐，任何一边改了另一边也会错）——
-    out property <length> col-checkbox: 24px;     // CheckBox 列宽
-    out property <length> col-status-dot: 12px;   // 状态灯（运行/停止圆点）
-    out property <length> col-id: 96px;           // 短 ID（a1b2c3d4e5f6）
-    out property <length> col-name: 200px;        // 服务名 + 容器名 + Compose 前缀
-    out property <length> col-image: 100px;        // 镜像名
-    out property <length> col-status: 80px;       // 状态文字（running/exited）
-    out property <length> col-cpu: 50px;          // CPU %
-    out property <length> col-mem: 80px;          // 内存占用
-    out property <length> col-btn: 28px;          // RowButton 宽度（启停/重启/日志/删除）
-    out property <length> col-tag: 100px;          // 镜像 Tag 列
-    out property <length> col-usage: 80px;          // 镜像容器使用数列
-    out property <length> col-size: 80px;           // 镜像大小列
-    out property <length> col-net-scope: 60px;      // 网络 scope 列（bridge/host/none）
+    // ============ 网格：容器列表 ============
+    // 表头与数据行使用完全相同的单元格序列。
+    // 固定列合计 = 32+12+150+88+56+86+120 = 544
+    // 名称列占据剩余空间（flex）
+    out property <length> c-check: 32px;
+    out property <length> c-dot: 12px;
+    out property <length> c-image: 150px;
+    out property <length> c-state: 88px;
+    out property <length> c-cpu: 56px;
+    out property <length> c-mem: 86px;
+    out property <length> c-act: 120px;
+
+    // ============ 网格：镜像列表 ============
+    out property <length> i-tag: 130px;
+    out property <length> i-use: 70px;
+    out property <length> i-size: 80px;
+
+    // ============ 网格：网络 / 卷 ============
+    out property <length> n-driver: 110px;
+    out property <length> n-scope: 80px;
+    out property <length> n-count: 60px;
 }

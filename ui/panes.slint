@@ -1,109 +1,115 @@
-// —— Slint UI 面板组件 v2（顶栏 / 工具栏 / 状态栏）——
-import { SearchInput, FlatButton, StatusChip, IconButton } from "components.slint";
-import { HorizontalBox } from "std-widgets.slint";
+// panes.slint — 顶栏 / 工具栏 / 状态栏
 import { Theme } from "theme.slint";
+import { Button, SearchBox, ConnBadge } from "components.slint";
 
-// —— 顶栏：Logo chip + Docker 连接状态 chip + 搜索框 + 刷新按钮 ——
+// ============ 顶栏 ============
 export component TopBar inherits Rectangle {
-    in-out property <bool> docker_ok: false;
+    in-out property <bool> online: false;
     callback refresh();
     callback search(string);
 
-    height: 48px;
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-3;
-        padding-left: Theme.space-3;
-        padding-right: Theme.space-3;
+    height: Theme.top-h;
+    background: Theme.bg-side;
 
-        // Logo 胶囊
-        Rectangle {
-            height: 36px; border-radius: 6px;
-            background: Theme.bg-surface;
-            HorizontalBox {
-                x: 0; y: 0; width: parent.width; height: parent.height;
-                padding-left: Theme.space-3; padding-right: Theme.space-3;
-                spacing: Theme.space-1;
-                Text {
-                    text: "◆";
-                    height: parent.height; vertical-alignment: center;
-                    font-size: Theme.text-base;
-                    color: Theme.accent;
-                }
-                Text {
-                    text: "Docker Panel";
-                    height: parent.height; vertical-alignment: center;
-                    font-size: Theme.text-base; font-weight: 700;
-                    color: Theme.text-primary;
-                }
+    VerticalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
+        HorizontalLayout {
+            padding-left: Theme.s5; padding-right: Theme.s4;
+            spacing: Theme.s3;
+            alignment: center;
+
+            Text {
+                text: "▣";
+                font-size: Theme.fs-lg;
+                color: Theme.accent;
+                vertical-alignment: center;
             }
-        }
+            Text {
+                text: "Docker Panel";
+                font-size: Theme.fs-lg;
+                font-weight: 700;
+                color: Theme.fg;
+                vertical-alignment: center;
+            }
+            Rectangle { width: Theme.s2; height: 1px; }
+            ConnBadge { online <=> root.online; }
+            Rectangle { horizontal-stretch: 1; }
 
-        StatusChip { height: 26px; online <=> root.docker_ok; }
-
-        HorizontalLayout { }
-
-        SearchInput {
-            height: 36px;
-            min-width: 220px;
-            accepted(s) => { root.search(s); }
-        }
-
-        FlatButton {
-            height: 32px;
-            icon: "↻"; text: "刷新";
-            clicked => { root.refresh(); }
+            SearchBox {
+                width: 260px;
+                accepted(s) => { root.search(s); }
+            }
+            Rectangle { width: Theme.s1; height: 1px; }
+            Button { text: "刷新"; glyph: "↻"; clicked => { root.refresh(); } }
         }
     }
+
+    Rectangle { x: 0; y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
 }
 
-// —— ToolBar：三个 icon-only 按钮 ——
+// ============ 工具栏 ============
 export component ToolBar inherits Rectangle {
+    in-out property <int> running: 0;
     callback stop_all();
-    callback pull_requested();
-    callback cleanup_requested();
+    callback pull();
+    callback cleanup();
 
-    height: 36px;
+    height: Theme.tool-h;
+    background: Theme.bg-main;
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-3;
-        padding-left: Theme.space-3;
-        padding-right: Theme.space-3;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
+        HorizontalLayout {
+            padding-left: Theme.s5; padding-right: Theme.s4;
+            spacing: Theme.s2;
+            alignment: center;
 
-        HorizontalLayout { }
-
-        IconButton { icon: "⏹"; clicked => { root.stop_all(); } }
-        IconButton { icon: "⬇"; clicked => { root.pull_requested(); } }
-        IconButton { icon: "🧹"; clicked => { root.cleanup_requested(); } }
-
-        HorizontalLayout { }
+            Button { text: "拉取镜像"; glyph: "↓"; primary: true; clicked => { root.pull(); } }
+            Button { text: "清理资源"; glyph: "✦"; clicked => { root.cleanup(); } }
+            Rectangle { width: Theme.s3; height: 1px; }
+            Button {
+                text: "停止全部"; glyph: "■"; danger: true;
+                enabled: root.running > 0;
+                clicked => { root.stop_all(); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
     }
+
+    Rectangle { x: 0; y: 0; width: 100%; height: 1px; background: Theme.line; }
 }
 
-// —— 状态栏：底部状态文本 + 容器/镜像计数 ——
-export component StatusBar inherits Rectangle {
-    in-out property <string> status_text: "就绪";
-    in-out property <string> container_count: "0";
-    in-out property <string> image_count: "0";
+// ============ 状态栏 ============
+export component FootBar inherits Rectangle {
+    in-out property <string> status: "就绪";
+    in-out property <string> summary: "";
 
-    height: 28px;
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-4;
-        padding-left: Theme.space-3;
-        padding-right: Theme.space-3;
+    height: Theme.foot-h;
+    background: Theme.bg-side;
 
-        Text {
-            text: root.status_text;
-            height: parent.height; vertical-alignment: center;
-            color: Theme.text-muted; font-size: Theme.text-xs;
-        }
-        HorizontalLayout { }
-        Text {
-            text: root.container_count + " 容器  ·  " + root.image_count + " 镜像";
-            height: parent.height; vertical-alignment: center;
-            color: Theme.text-faint; font-size: Theme.text-xs;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s5; padding-right: Theme.s5;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            spacing: Theme.s2;
+            Rectangle { width: 5px; height: 5px; border-radius: 3px; background: Theme.accent; }
+            Text {
+                text: root.status;
+                font-size: Theme.fs-sm;
+                color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: root.summary;
+                font-size: Theme.fs-sm;
+                color: Theme.fg-4;
+                vertical-alignment: center;
+            }
         }
     }
 }

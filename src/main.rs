@@ -86,9 +86,16 @@ fn main() {
         let network_rows = ui_rows::build_network_rows(&s);
         let volume_rows = ui_rows::build_volume_rows(&s);
         let running = s.containers.iter().filter(|c| c.is_running()).count();
-        let running_total = format!("{}/{}", running, s.containers.len());
-        let image_total = s.images.len().to_string();
         let containers_len = s.containers.len();
+        let images_len = s.images.len();
+        let networks_len = s.networks.len();
+        let volumes_len = s.volumes.len();
+        let running_count = running;
+        let has_detail = s.detail.is_some();
+        let summary = format!(
+            "{} 容器  ·  {} 镜像  ·  {} 网络  ·  {} 卷",
+            containers_len, images_len, networks_len, volumes_len
+        );
         let update = derive_update(containers_len, &latest_msg);
         let detail_data = s.build_detail_data();
         let image_detail_data = s.build_image_detail_data();
@@ -132,11 +139,16 @@ fn main() {
             ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
             ui.set_sort_field(sort_field_int);
             ui.set_sort_desc(sort_desc);
-            ui.set_batch_selected_count(batch_count as i32);
-            ui.set_container_count(SharedString::from(running_total));
-            ui.set_image_count(SharedString::from(image_total));
+            ui.set_batch_count(batch_count as i32);
+            ui.set_total_containers(containers_len as i32);
+            ui.set_running_containers(running_count as i32);
+            ui.set_total_images(images_len as i32);
+            ui.set_total_networks(networks_len as i32);
+            ui.set_total_volumes(volumes_len as i32);
+            ui.set_has_detail(has_detail);
             ui.set_docker_ok(update.docker_ok);
-            ui.set_status_text(SharedString::from(update.status_text));
+            ui.set_status_text(SharedString::from(update.status_text.as_str()));
+            ui.set_summary_text(SharedString::from(summary.as_str()));
             if update.reset_pull_busy {
                 ui.set_pull_busy(false);
             }

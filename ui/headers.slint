@@ -1,119 +1,182 @@
-// headers.slint — 列表表头（支持点击排序 + 方向箭头）
-// 列宽用 Theme.col-* 常量，必须与 delegates.slint 行严格对齐
-import { HorizontalBox } from "std-widgets.slint";
+// headers.slint — 表格表头
+// 关键设计：单元格序列与 delegates.slint 中的行**逐字段一致**，列宽全部来自 Theme.c-*。
+// 表头:  [checkbox] [dot] [name flex] [image] [state] [cpu] [mem] [actions]
+// 数据行: [checkbox] [dot] [name flex] [image] [state] [cpu] [mem] [actions]
 import { Theme } from "theme.slint";
+import { SortCell } from "components.slint";
 
-// —— 排序箭头（独立组件，两个 Header 共享）——
-export component SortArrow inherits Text {
-    in-out property <int> active: 0;
-    in-out property <int> mine: 0;
-    in-out property <bool> desc: false;
-    text: root.active == root.mine ? (root.desc ? "▼" : "▲") : "";
-    color: Theme.accent;
-    font-size: 10px;
-}
-
-export component ContainerHeader inherits Rectangle {
-    height: 32px;
-    background: Theme.bg-root;
-
-    // —— 排序状态（Rust 侧注入）——
+// ============ 容器表头 ============
+export component HeadContainer inherits Rectangle {
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: false;
     callback sort(int);
 
-    HorizontalBox {
-        spacing: Theme.space-3;
-        padding-left: Theme.space-1;    // 与 delegate padding-left: space-1 对齐
-        padding-right: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
+    height: Theme.head-h;
+    background: Theme.bg-main;
 
-        // 1. CheckBox 占位（delegate 第一列）
-        Rectangle { width: Theme.col-checkbox; height: 1px; }
-        // 2. 状态灯占位
-        Rectangle { width: Theme.col-status-dot; height: 1px; }
-        // 3. 短 ID
-        Text { text: "ID"; min-width: Theme.col-id; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
 
-        // 4. 服务/名称 (sort_field=1) — 可点击排序
-        Rectangle {
-            min-width: Theme.col-name; height: parent.height;
-            TouchArea { width: parent.width; height: parent.height; clicked => { root.sort(1); } }
-            HorizontalBox {
-                x: 0; y: 0; width: parent.width; height: parent.height;
-                Text { text: "服务/名称"; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-                SortArrow { active <=> root.sort_field; mine: 1; desc <=> root.sort_desc; }
+            Rectangle { width: Theme.c-check; height: 1px; }
+            Rectangle { width: Theme.c-dot; height: 1px; }
+
+            SortCell {
+                horizontal-stretch: 1;
+                label: "名称"; field: 1;
+                sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+                sort(f) => { root.sort(f); }
             }
-        }
-
-        // 5. 镜像
-        Text { text: "镜像"; min-width: Theme.col-image; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-
-        HorizontalLayout { }
-
-        // 6. 状态 (sort_field=2)
-        Rectangle {
-            min-width: Theme.col-status; height: parent.height;
-            TouchArea { width: parent.width; height: parent.height; clicked => { root.sort(2); } }
-            HorizontalBox {
-                x: 0; y: 0; width: parent.width; height: parent.height;
-                Text { text: "状态"; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-                SortArrow { active <=> root.sort_field; mine: 2; desc <=> root.sort_desc; }
+            SortCell {
+                width: Theme.c-image;
+                label: "镜像"; field: 5;
+                sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+                sort(f) => { root.sort(f); }
             }
-        }
-
-        // 7. CPU (sort_field=3)
-        Rectangle {
-            min-width: Theme.col-cpu; height: parent.height;
-            TouchArea { width: parent.width; height: parent.height; clicked => { root.sort(3); } }
-            HorizontalBox {
-                x: 0; y: 0; width: parent.width; height: parent.height;
-                HorizontalLayout { }
-                Text { text: "CPU"; color: Theme.text-muted; font-size: Theme.text-xs; font-weight: 600; }
-                SortArrow { active <=> root.sort_field; mine: 3; desc <=> root.sort_desc; }
+            SortCell {
+                width: Theme.c-state;
+                label: "状态"; field: 2;
+                sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+                sort(f) => { root.sort(f); }
             }
-        }
-
-        // 8. 内存 (sort_field=4)
-        Rectangle {
-            min-width: Theme.col-mem; height: parent.height;
-            TouchArea { width: parent.width; height: parent.height; clicked => { root.sort(4); } }
-            HorizontalBox {
-                x: 0; y: 0; width: parent.width; height: parent.height;
-                HorizontalLayout { }
-                Text { text: "内存"; color: Theme.text-muted; font-size: Theme.text-xs; font-weight: 600; }
-                SortArrow { active <=> root.sort_field; mine: 4; desc <=> root.sort_desc; }
+            SortCell {
+                width: Theme.c-cpu; align-right: true;
+                label: "CPU"; field: 3;
+                sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+                sort(f) => { root.sort(f); }
             }
+            SortCell {
+                width: Theme.c-mem; align-right: true;
+                label: "内存"; field: 4;
+                sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+                sort(f) => { root.sort(f); }
+            }
+            Rectangle { width: Theme.c-act; height: 1px; }
         }
-
-        // 9-12. 四个按钮占位（RowButton 列）
-        Rectangle { width: Theme.col-btn; height: 1px; }
-        Rectangle { width: Theme.col-btn; height: 1px; }
-        Rectangle { width: Theme.col-btn; height: 1px; }
-        Rectangle { width: Theme.col-btn; height: 1px; }
     }
-    Rectangle { background: Theme.divider; width: parent.width; height: 1px; y: parent.height - 1px; }
+
+    Rectangle { x: 0; y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
 }
 
-export component ImageHeader inherits Rectangle {
-    height: 32px;
-    background: Theme.bg-root;
+// ============ 镜像表头 ============
+export component HeadImage inherits Rectangle {
+    height: Theme.head-h;
+    background: Theme.bg-main;
 
-    HorizontalBox {
-        spacing: Theme.space-3;
-        padding-left: Theme.space-3;
-        padding-right: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
 
-        Text { text: "ID";    min-width: Theme.col-id;    color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-        Text { text: "仓库";  min-width: Theme.col-name;  color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-        Text { text: "Tag"; min-width: Theme.col-tag; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-        HorizontalLayout { }
-        Text { text: "容器"; min-width: Theme.col-usage; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-        Text { text: "大小"; min-width: Theme.col-size; color: Theme.text-muted; font-size: Theme.text-sm; font-weight: 600; }
-        Rectangle { width: Theme.col-btn; height: 1px; } // 删除按钮占位
+            Text {
+                horizontal-stretch: 1;
+                text: "仓库";
+                font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-tag;
+                text: "标签";
+                font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-use;
+                text: "使用";
+                font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-size;
+                text: "大小";
+                font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Rectangle { width: 28px; height: 1px; }
+        }
     }
-    Rectangle { background: Theme.divider; width: parent.width; height: 1px; y: parent.height - 1px; }
+
+    Rectangle { x: 0; y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+}
+
+// ============ 网络表头 ============
+export component HeadNetwork inherits Rectangle {
+    height: Theme.head-h;
+    background: Theme.bg-main;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: "名称"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-driver;
+                text: "驱动"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-scope;
+                text: "范围"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-count;
+                text: "容器"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    Rectangle { x: 0; y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+}
+
+// ============ 卷表头 ============
+export component HeadVolume inherits Rectangle {
+    height: Theme.head-h;
+    background: Theme.bg-main;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: "名称"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-driver;
+                text: "驱动"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: "挂载点"; font-size: Theme.fs-xs; font-weight: 700; color: Theme.fg-3;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    Rectangle { x: 0; y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
 }

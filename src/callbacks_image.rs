@@ -17,7 +17,7 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_image_select(move |row_id: SharedString| {
             let name = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_active_view(2); // 切到详情/日志面板的"镜像" Tab
+            ui.set_side_tab(2); // 切到右侧面板的"镜像" Tab
             ui.set_status_text(SharedString::from(format!("查看镜像 {name}")));
             if let Ok(mut st) = s.lock() {
                 st.request_image_detail(name);

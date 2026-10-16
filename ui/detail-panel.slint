@@ -1,204 +1,112 @@
-// detail-panel.slint — 右侧详情面板（卡片化分组）
+// detail-panel.slint — 详情字段渲染基元
+// 设计：取消固定高度卡片（高度计算是溢出/截断的根源），
+// 改为「小节标题 + 扁平行」平铺，高度由行数自然决定，外层 ScrollView 滚动。
 import { Theme } from "theme.slint";
-import { SectionHeader } from "components.slint";
-import { VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
 
-// —— 详情行：label + value ——
-export component DetailRow inherits Rectangle {
-    in-out property <string> label: "";
-    in-out property <string> value: "";
-    height: 20px;
+// ============ 小节标题 ============
+export component SecTitle inherits Rectangle {
+    in-out property <string> text: "";
+    height: 26px;
 
-    HorizontalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-3;
-        padding-left: Theme.space-2;
-        padding-right: Theme.space-2;
-        Text {
-            text: root.label;
-            min-width: 64px;
-            color: Theme.text-faint;
-            font-size: Theme.text-xs;
-            horizontal-alignment: right;
-        }
-        Text {
-            text: root.value;
-            color: Theme.text-normal;
-            font-size: Theme.text-xs;
-            overflow: elide;
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle { width: 2px; height: 10px; background: Theme.accent; }
+            Rectangle { width: 6px; height: 1px; }
+            Text {
+                text: root.text;
+                font-size: Theme.fs-xs; font-weight: 700;
+                color: Theme.fg-4;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
         }
     }
 }
 
-// —— 详情分组卡片：SectionHeader + DetailRow 列表 ——
-export component DetailSection inherits Rectangle {
-    in-out property <string> title: "";
-    in-out property <int> num_rows: 0;
+// ============ 键值行 ============
+export component Field inherits Rectangle {
+    in-out property <string> k: "";
+    in-out property <string> v: "";
+    height: 21px;
 
-    height: 100px; // 占位，实际由内部 ScrollView 撑满
-
-    background: Theme.bg-card;
-    border-radius: 8px;
-
-    VerticalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        spacing: Theme.space-1;
-        padding-left: Theme.space-2;
-        padding-right: Theme.space-2;
-        padding-top: Theme.space-2;
-        padding-bottom: Theme.space-2;
-        SectionHeader { title: root.title; width: parent.width; }
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s3;
+            alignment: center;
+            Text {
+                width: 66px;
+                text: root.k;
+                font-size: Theme.fs-sm; color: Theme.fg-4;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.v == "" ? "—" : root.v;
+                font-size: Theme.fs-sm;
+                color: root.v == "" ? Theme.fg-4 : Theme.fg-2;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+        }
     }
 }
 
-export component DetailPanel inherits Rectangle {
-    background: Theme.bg-surface;
-    width: 100%;
-    height: 100%;
+// ============ 多行文本块 ============
+export component FieldBlock inherits Rectangle {
+    in-out property <string> k: "";
+    in-out property <string> v: "";
+    in-out property <length> block-h: 72px;
 
-    in-out property <bool> has_detail: false;
-
-    // —— 基本信息 ——
-    in-out property <string> d_name: "";
-    in-out property <string> d_state: "";
-    in-out property <string> d_status: "";
-    in-out property <string> d_image: "";
-    in-out property <string> d_id: "";
-    in-out property <string> d_pid: "";
-    in-out property <string> d_exit: "";
-    in-out property <string> d_created: "";
-    in-out property <string> d_started: "";
-    in-out property <string> d_restart: "";
-    in-out property <string> d_netmode: "";
-
-    // —— 端口 / 挂载 / 网络 ——
-    in-out property <string> d_ports: "";
-    in-out property <string> d_mounts: "";
-    in-out property <string> d_networks: "";
-
-    // —— 运行配置 ——
-    in-out property <string> d_entry: "";
-    in-out property <string> d_cmd: "";
-    in-out property <string> d_workdir: "";
-
-    // —— Labels ——
-    in-out property <string> d_labels: "";
-
-    VerticalBox {
+    VerticalLayout {
+        width: 100%; height: 100%;
         spacing: 0px;
-        padding: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
 
-        // 主标题区
-        VerticalBox {
-            spacing: 0px;
-            width: parent.width;
-
-            Text {
-                text: "容器详情";
-                font-size: Theme.text-lg;
-                font-weight: 700;
-                color: Theme.text-primary;
-            }
-            Text {
-                text: root.d_name;
-                font-size: Theme.text-xs;
-                color: Theme.accent;
-                font-weight: 600;
+        VerticalLayout {
+            width: 100%; height: 21px;
+            padding-left: Theme.s4; padding-right: Theme.s4;
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.s3;
+                alignment: center;
+                Text {
+                    width: 66px;
+                    text: root.k;
+                    font-size: Theme.fs-sm; color: Theme.fg-4;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: "—";
+                    font-size: Theme.fs-sm; color: Theme.fg-4;
+                    vertical-alignment: center;
+                }
             }
         }
 
-        ScrollView {
-            width: parent.width;
-            height: parent.height - 52px;
-            VerticalBox {
-                spacing: Theme.space-2;
-                width: parent.width;
+        Rectangle {
+            width: 100%; height: root.block-h;
+            background: #0d1626;
+            border-radius: 5px;
+            border-width: 1px;
+            border-color: Theme.line;
 
-                // —— 卡片 1：基本信息 ——
-                Rectangle {
-                    width: parent.width;
-                    background: Theme.bg-card;
-                    border-radius: 8px;
-                    VerticalBox {
-                        x: 0; y: 0; width: parent.width; height: parent.height;
-                        spacing: 0px;
-                        padding: Theme.space-2;
-                        SectionHeader { title: "基本信息"; width: parent.width; }
-                        DetailRow { label: "状态";     value: root.d_state; }
-                        DetailRow { label: "描述";     value: root.d_status; }
-                        DetailRow { label: "PID";      value: root.d_pid; }
-                        DetailRow { label: "退出码";   value: root.d_exit; }
-                        DetailRow { label: "镜像";     value: root.d_image; }
-                        DetailRow { label: "ID";       value: root.d_id; }
-                        DetailRow { label: "创建";     value: root.d_created; }
-                        DetailRow { label: "启动";     value: root.d_started; }
-                        DetailRow { label: "重启";     value: root.d_restart; }
-                        DetailRow { label: "网络模式"; value: root.d_netmode; }
-                    }
-                }
-
-                // —— 卡片 2：网络 ——
-                Rectangle {
-                    width: parent.width;
-                    background: Theme.bg-card;
-                    border-radius: 8px;
-                    VerticalBox {
-                        x: 0; y: 0; width: parent.width; height: parent.height;
-                        spacing: 0px;
-                        padding: Theme.space-2;
-                        SectionHeader { title: "网络"; width: parent.width; }
-                        DetailRow { label: "端口"; value: root.d_ports; }
-                        DetailRow { label: "网络"; value: root.d_networks; }
-                    }
-                }
-
-                // —— 卡片 3：挂载卷 ——
-                Rectangle {
-                    width: parent.width;
-                    background: Theme.bg-card;
-                    border-radius: 8px;
-                    VerticalBox {
-                        x: 0; y: 0; width: parent.width; height: parent.height;
-                        spacing: 0px;
-                        padding: Theme.space-2;
-                        SectionHeader { title: "挂载卷"; width: parent.width; }
-                        DetailRow { label: "挂载"; value: root.d_mounts; }
-                    }
-                }
-
-                // —— 卡片 4：运行配置 ——
-                Rectangle {
-                    width: parent.width;
-                    background: Theme.bg-card;
-                    border-radius: 8px;
-                    VerticalBox {
-                        x: 0; y: 0; width: parent.width; height: parent.height;
-                        spacing: 0px;
-                        padding: Theme.space-2;
-                        SectionHeader { title: "运行配置"; width: parent.width; }
-                        DetailRow { label: "入口点";   value: root.d_entry; }
-                        DetailRow { label: "命令";     value: root.d_cmd; }
-                        DetailRow { label: "工作目录"; value: root.d_workdir; }
-                    }
-                }
-
-                // —— 卡片 5：Labels ——
-                Rectangle {
-                    width: parent.width;
-                    background: Theme.bg-card;
-                    border-radius: 8px;
-                    VerticalBox {
-                        x: 0; y: 0; width: parent.width; height: parent.height;
-                        spacing: 0px;
-                        padding: Theme.space-2;
-                        SectionHeader { title: "Labels"; width: parent.width; }
-                        DetailRow { label: ""; value: root.d_labels; }
-                    }
-                }
-
-                VerticalLayout { }
+            Text {
+                x: Theme.s3; y: Theme.s2;
+                width: parent.width - 2 * Theme.s3;
+                height: parent.height - 2 * Theme.s2;
+                text: root.v == "" ? "—" : root.v;
+                font-size: Theme.fs-xs; color: Theme.fg-3;
+                wrap: word-wrap;
+                vertical-alignment: top;
             }
         }
     }

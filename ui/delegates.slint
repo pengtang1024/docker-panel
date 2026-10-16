@@ -1,260 +1,332 @@
-// delegates.slint — ListView 行视图
-// Compose 分组标题 + stats 列 + Checkbox 多选 + 自绘按钮 + 右键菜单
-// 列宽用 Theme.col-* 常量，必须与 headers.slint 严格对齐
-import { HorizontalBox, CheckBox } from "std-widgets.slint";
+// delegates.slint — 表格数据行
+// 对齐契约：本文件的每个行组件，其 HorizontalLayout 的子元素序列与
+// headers.slint 中对应表头的子元素序列**逐个对应**，宽度取自同一组 Theme 常量。
 import { Theme } from "theme.slint";
+import { IconBtn, Dot, CheckCell } from "components.slint";
 
-export component StatusDot inherits Rectangle {
-    width: Theme.col-status-dot; height: Theme.col-status-dot;
-    border-radius: 6px;
-    in-out property <bool> running: false;
-    background: running ? Theme.status-running : Theme.status-stopped;
-}
+// ============ Compose 分组标题行 ============
+export component RowGroup inherits Rectangle {
+    in-out property <string> project: "";
+    in-out property <int> count: 0;
 
-export component RowButton inherits Rectangle {
-    width: Theme.col-btn; height: 26px;
-    border-radius: 4px;
-    in-out property <bool> hovered: false;
-    background: hovered ? Theme.bg-hover : transparent;
-    callback clicked();
-    TouchArea {
-        x: 0; y: 0; width: parent.width; height: parent.height;
-        property <bool> hovered2 <=> root.hovered;
-        clicked => { root.clicked(); }
+    height: Theme.group-h;
+    background: Theme.bg-group;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            spacing: Theme.s2;
+            Text {
+                text: "▾";
+                font-size: 9px; color: Theme.accent;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.project;
+                font-size: Theme.fs-sm; font-weight: 700; color: Theme.accent;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: root.count + " 个容器";
+                font-size: Theme.fs-xs; color: Theme.fg-4;
+                vertical-alignment: center;
+            }
+        }
     }
 }
 
-// —— 带居中图标的 RowButton 内部 Text ——
-// 用法：RowButton 内的 Text 用 width: 100% + horizontal-alignment: center
-// 替代之前硬编码 x: 9px 偏移，避免不同 emoji 字宽下图标偏移
-
-export component ContainerRowDelegate inherits Rectangle {
-    in-out property <string> row_id: "";
-    in-out property <bool> is_group_start: false;
-    in-out property <string> compose_project: "";
-    in-out property <string> compose_service: "";
-    in-out property <string> short_id: "";
+// ============ 容器行 ============
+export component RowContainer inherits Rectangle {
+    in-out property <string> id: "";
+    in-out property <bool> is-group: false;
+    in-out property <string> group: "";
+    in-out property <int> group-count: 0;
+    in-out property <string> service: "";
     in-out property <string> name: "";
     in-out property <string> image: "";
-    in-out property <string> status: "";
-    in-out property <bool> is_running: false;
-    in-out property <bool> is_selected: false;
-    in-out property <string> cpu_percent: "";
-    in-out property <string> mem_usage: "";
-    in-out property <string> net_traffic: "";
+    in-out property <string> state: "";
+    in-out property <bool> running: false;
+    in-out property <bool> selected: false;
+    in-out property <string> cpu: "";
+    in-out property <string> mem: "";
 
+    callback pick();
     callback toggle();
-    callback restart();
     callback logs();
     callback remove();
-    callback clicked();
-    callback toggle_select();
+    callback pick-box();
 
-    height: 36px;
-    in-out property <bool> hovered: false;
-    background: is_group_start ? Theme.bg-group : (is_selected ? Theme.bg-selected : transparent);
+    height: Theme.row-h;
+    background: root.is-group ? Theme.bg-group
+        : root.selected ? Theme.bg-row-sel
+        : touch.has-hover ? Theme.bg-row-hover : transparent;
 
-    ContextMenuArea {
-        x: 0; y: 0; width: root.width; height: root.height;
-
-        // —— 左键点击（选行看详情）——
-        TouchArea {
-            x: Theme.col-checkbox + Theme.col-status-dot + Theme.col-id + Theme.space-3 + Theme.space-1;
-            // 跳过 CheckBox + StatusDot + short_id 的区域从 name 开始算... 简化：让 CheckBox 独占第一列，后面都可点击
-            width: parent.width; height: parent.height;
-            property <bool> hovered2 <=> root.hovered;
-            clicked => { root.clicked(); }
-        }
-
-        // —— 右键菜单 ——
-        Menu {
-            MenuItem { title: "查看详情"; activated => { root.clicked(); } }
-            MenuItem { title: "查看日志"; activated => { root.logs(); } }
-            MenuItem { title: root.is_running ? "停止" : "启动"; activated => { root.toggle(); } }
-            MenuItem { title: "重启"; activated => { root.restart(); } }
-            MenuItem { title: "删除"; activated => { root.remove(); } }
-        }
+    touch := TouchArea {
+        x: 0; y: 0;
+        width: parent.width - Theme.c-act; height: 100%;
+        clicked => { root.pick(); }
     }
 
-    // —— 分组标题行 ——
-    if root.is_group_start: HorizontalBox {
-        spacing: Theme.space-3;
-        padding-left: Theme.space-1;   // 与普通行保持一致起点
-        padding-right: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
-        Text { text: "📁"; font-size: Theme.text-sm; }
-        Text {
-            text: "Compose Project: " + root.compose_project;
-            color: Theme.accent; font-size: Theme.text-base; font-weight: 700;
-        }
-        HorizontalLayout { }
+    // 分组行
+    if root.is-group: RowGroup {
+        x: 0; y: 0; width: 100%; height: 100%;
+        project: root.group; count: root.group-count;
     }
 
-    // —— 普通容器行（10 列与 header 严格对齐）——
-    if root.is_group_start == false: HorizontalBox {
-        spacing: Theme.space-3;
-        padding-left: Theme.space-1;    // 与 header padding-left: space-1 对齐
-        padding-right: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
+    // 数据行
+    if root.is-group == false: VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
 
-        // 1. CheckBox
-        CheckBox {
-            min-width: Theme.col-checkbox;
-            checked <=> root.is_selected;
-            toggled => { root.toggle_select(); }
-        }
-        // 2. 状态灯
-        StatusDot { running <=> root.is_running; }
-        // 3. 短 ID
-        Text {
-            text: root.short_id;
-            min-width: Theme.col-id;
-            color: Theme.text-faint;
-            font-size: Theme.text-sm;
-        }
-        // 4. 服务名 + 容器名（可弹性）
-        HorizontalBox {
-            spacing: Theme.space-1;
-            min-width: Theme.col-name;
-            HorizontalLayout { }
-            Text {
-                text: root.compose_service != "" ? (root.compose_service + " ") : "";
-                color: Theme.accent; font-size: Theme.text-xs; font-weight: 600;
+            // 1 checkbox
+            Rectangle {
+                width: Theme.c-check; height: 100%;
+                HorizontalLayout {
+                    alignment: center;
+                    CheckCell {
+                        checked <=> root.selected;
+                        toggled => { root.pick-box(); }
+                    }
+                }
             }
+            // 2 dot
+            Rectangle {
+                width: Theme.c-dot; height: 100%;
+                HorizontalLayout {
+                    alignment: center;
+                    Dot { on <=> root.running; }
+                }
+            }
+            // 3 name (flex)
+            HorizontalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.s2;
+                alignment: center;
+                if root.service != "": Text {
+                    text: root.service;
+                    font-size: Theme.fs-xs; font-weight: 700; color: Theme.accent;
+                    max-width: 100px;
+                    overflow: elide;
+                    vertical-alignment: center;
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.name;
+                    font-size: Theme.fs-md; color: Theme.fg-2;
+                    overflow: elide;
+                    vertical-alignment: center;
+                }
+            }
+            // 4 image
             Text {
-                text: root.name;
-                min-width: 120px;
+                width: Theme.c-image;
+                text: root.image;
+                font-size: Theme.fs; color: Theme.fg-3;
                 overflow: elide;
-                color: Theme.text-normal;
+                vertical-alignment: center;
             }
-        }
-        // 5. 镜像
-        Text {
-            text: root.image;
-            min-width: Theme.col-image;
-            overflow: elide;
-            color: Theme.text-muted;
-            font-size: Theme.text-sm;
-        }
-
-        HorizontalLayout { }
-
-        // 6. 状态
-        Text {
-            text: root.status;
-            min-width: Theme.col-status;
-            color: Theme.text-secondary;
-            font-size: Theme.text-sm;
-        }
-        // 7. CPU
-        Text {
-            text: root.cpu_percent;
-            min-width: Theme.col-cpu;
-            color: root.cpu_percent != "" && root.cpu_percent != "0.0%" ? Theme.status-warning : Theme.text-faint;
-            font-size: Theme.text-xs;
-            horizontal-alignment: right;
-        }
-        // 8. 内存
-        Text {
-            text: root.mem_usage;
-            min-width: Theme.col-mem;
-            color: Theme.text-muted;
-            font-size: Theme.text-xs;
-            horizontal-alignment: right;
-        }
-
-        // 9-12. 四个 RowButton（图标用 width:100% + horizontal-alignment:center 居中）
-        RowButton {
-            clicked => { root.toggle(); }
+            // 5 state
             Text {
-                text: root.is_running ? "⏸" : "▶";
-                color: Theme.text-secondary;
-                font-size: Theme.text-sm;
-                height: parent.height; width: parent.width;
-                horizontal-alignment: center; vertical-alignment: center;
+                width: Theme.c-state;
+                text: root.state;
+                font-size: Theme.fs;
+                color: root.running ? Theme.ok : Theme.fg-4;
+                overflow: elide;
+                vertical-alignment: center;
             }
-        }
-        RowButton {
-            clicked => { root.restart(); }
+            // 6 cpu
             Text {
-                text: "⟳"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                height: parent.height; width: parent.width;
-                horizontal-alignment: center; vertical-alignment: center;
+                width: Theme.c-cpu;
+                text: root.cpu;
+                font-size: Theme.fs-sm;
+                color: root.cpu == "" || root.cpu == "0.00%" ? Theme.fg-4 : Theme.warn;
+                horizontal-alignment: right;
+                vertical-alignment: center;
             }
-        }
-        RowButton {
-            clicked => { root.logs(); }
+            // 7 mem
             Text {
-                text: "📋"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                height: parent.height; width: parent.width;
-                horizontal-alignment: center; vertical-alignment: center;
+                width: Theme.c-mem;
+                text: root.mem;
+                font-size: Theme.fs-sm; color: Theme.fg-3;
+                horizontal-alignment: right;
+                overflow: elide;
+                vertical-alignment: center;
             }
-        }
-        RowButton {
-            clicked => { root.remove(); }
-            Text {
-                text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                height: parent.height; width: parent.width;
-                horizontal-alignment: center; vertical-alignment: center;
+            // 8 actions
+            HorizontalLayout {
+                width: Theme.c-act; height: 100%;
+                spacing: 0px;
+                alignment: center;
+                Rectangle { horizontal-stretch: 1; }
+                IconBtn { glyph: root.running ? "■" : "▶"; clicked => { root.toggle(); } }
+                IconBtn { glyph: "↻"; clicked => { root.restart(); } }
+                IconBtn { glyph: "≡"; clicked => { root.logs(); } }
+                IconBtn { glyph: "✕"; danger: true; clicked => { root.remove(); } }
             }
         }
     }
 }
 
-// —— 镜像行 ——
-export component ImageRowDelegate inherits Rectangle {
-    in-out property <string> row_id: "";
-    in-out property <string> short_id: "";
-    in-out property <string> name: "";
+// ============ 镜像行 ============
+export component RowImage inherits Rectangle {
+    in-out property <string> id: "";
+    in-out property <string> repo: "";
     in-out property <string> tag: "";
     in-out property <string> size: "";
-    in-out property <int> containers: 0;
+    in-out property <int> used: 0;
 
+    callback pick();
     callback remove();
-    callback clicked();
 
-    height: 36px;
-    in-out property <bool> hovered: false;
-    background: hovered ? Theme.bg-card : transparent;
+    height: Theme.row-h;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
 
-    ContextMenuArea {
-        x: 0; y: 0; width: root.width; height: root.height;
-        TouchArea {
-            x: 0; y: 0; width: parent.width; height: parent.height;
-            property <bool> hovered2 <=> root.hovered;
-            clicked => { root.clicked(); }
-        }
-        Menu {
-            MenuItem { title: "查看详情"; activated => { root.clicked(); } }
-            MenuItem { title: "删除"; activated => { root.remove(); } }
-        }
+    touch := TouchArea {
+        x: 0; y: 0;
+        width: parent.width - 28px; height: 100%;
+        clicked => { root.pick(); }
     }
 
-    HorizontalBox {
-        spacing: Theme.space-3;
-        padding-left: Theme.space-3;
-        padding-right: Theme.space-3;
-        width: parent.width;
-        height: parent.height;
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
 
-        Text { text: root.short_id; min-width: Theme.col-id;   color: Theme.text-faint; font-size: Theme.text-sm; }
-        Text { text: root.name;     min-width: Theme.col-name; color: Theme.text-normal; overflow: elide; }
-        Text { text: ":" + root.tag; color: Theme.accent; min-width: Theme.col-tag; font-size: Theme.text-sm; }
-        HorizontalLayout { }
-        Text {
-            text: root.containers > 0 ? (root.containers + " 使用中") : "未使用";
-            min-width: Theme.col-usage; font-size: Theme.text-sm;
-            color: root.containers > 0 ? Theme.status-running : Theme.status-warning;
-        }
-        Text { text: root.size; min-width: Theme.col-size; color: Theme.text-muted; font-size: Theme.text-sm; }
-        RowButton {
-            clicked => { root.remove(); }
             Text {
-                text: "🗑"; color: Theme.text-secondary; font-size: Theme.text-sm;
-                height: parent.height; width: parent.width;
-                horizontal-alignment: center; vertical-alignment: center;
+                horizontal-stretch: 1;
+                text: root.repo;
+                font-size: Theme.fs-md; color: Theme.fg-2;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-tag;
+                text: root.tag;
+                font-size: Theme.fs; color: Theme.accent;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-use;
+                text: root.used > 0 ? (root.used + " 个") : "未使用";
+                font-size: Theme.fs-sm;
+                color: root.used > 0 ? Theme.ok : Theme.fg-4;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.i-size;
+                text: root.size;
+                font-size: Theme.fs-sm; color: Theme.fg-3;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            IconBtn { glyph: "✕"; danger: true; clicked => { root.remove(); } }
+        }
+    }
+}
+
+// ============ 网络行 ============
+export component RowNetwork inherits Rectangle {
+    in-out property <string> name: "";
+    in-out property <string> driver: "";
+    in-out property <string> scope: "";
+    in-out property <int> used: 0;
+
+    height: Theme.row-h;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
+
+    touch := TouchArea { x: 0; y: 0; width: 100%; height: 100%; }
+
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.name;
+                font-size: Theme.fs-md; color: Theme.fg-2;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-driver;
+                text: root.driver;
+                font-size: Theme.fs; color: Theme.accent;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-scope;
+                text: root.scope;
+                font-size: Theme.fs; color: Theme.fg-3;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-count;
+                text: root.used > 0 ? root.used : "0";
+                font-size: Theme.fs-sm; color: Theme.fg-4;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+// ============ 卷行 ============
+export component RowVolume inherits Rectangle {
+    in-out property <string> name: "";
+    in-out property <string> driver: "";
+    in-out property <string> mountpoint: "";
+
+    height: Theme.row-h;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
+
+    touch := TouchArea { x: 0; y: 0; width: 100%; height: 100%; }
+
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.name;
+                font-size: Theme.fs-md; color: Theme.fg-2;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                width: Theme.n-driver;
+                text: root.driver;
+                font-size: Theme.fs; color: Theme.accent;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.mountpoint;
+                font-size: Theme.fs-sm; color: Theme.fg-4;
+                overflow: elide;
+                vertical-alignment: center;
             }
         }
     }

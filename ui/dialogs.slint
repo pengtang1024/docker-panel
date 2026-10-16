@@ -1,79 +1,93 @@
-// dialogs.slint — 自绘弹窗（遮罩 + 居中卡片 + 标题区 + 内容区 + footer 按钮区）
+// dialogs.slint — 模态弹窗
 import { Theme } from "theme.slint";
-import { FlatButton } from "components.slint";
-import { LineEdit, HorizontalBox, VerticalBox, CheckBox } from "std-widgets.slint";
+import { LineEdit, CheckBox } from "std-widgets.slint";
+import { Button, IconBtn } from "components.slint";
 
-// —— 拉取镜像弹窗 ——
+// ============ 拉取镜像 ============
 export component PullDialog inherits Rectangle {
     in-out property <string> input: "";
     in-out property <bool> busy: false;
     callback close();
     callback submit(string);
 
-    background: rgba(0,0,0,0.45);
+    background: #05090fdd;
 
-    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
+    scrim := TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
 
     Rectangle {
-        x: (root.width - 380px) / 2;
-        y: (root.height - 180px) / 2;
-        width: 380px; height: 180px;
-        background: Theme.bg-surface;
+        x: (root.width - 400px) / 2;
+        y: (root.height - 190px) / 2;
+        width: 400px; height: 190px;
+        background: Theme.bg-side;
         border-radius: 10px;
-    }
+        border-width: 1px;
+        border-color: Theme.line;
 
-    VerticalBox {
-        x: (root.width - 380px) / 2 + 20px;
-        y: (root.height - 180px) / 2 + 16px;
-        width: 340px; height: 148px;
-        spacing: Theme.space-3;
+        VerticalLayout {
+            width: 100%; height: 100%;
+            padding: Theme.s5;
+            spacing: 0px;
 
-        HorizontalBox {
-            width: parent.width; height: 28px;
+            // 标题
+            VerticalLayout {
+                width: 100%; height: 30px;
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "拉取镜像";
+                        font-size: Theme.fs-lg; font-weight: 700; color: Theme.fg;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconBtn { glyph: "✕"; clicked => { root.close(); } }
+                }
+            }
+
+            Rectangle { width: 100%; height: 1px; background: Theme.line; }
+            Rectangle { vertical-stretch: 1; }
+
+            // 输入
             Text {
-                text: "拉取镜像";
-                font-size: Theme.text-lg; font-weight: 700;
-                color: Theme.text-primary;
-                height: parent.height; vertical-alignment: center;
+                text: "镜像名";
+                font-size: Theme.fs-sm; color: Theme.fg-3;
+                width: 100%; height: 18px;
+                vertical-alignment: center;
             }
-            HorizontalLayout { }
-            FlatButton {
-                text: "✕"; height: 24px; width: 28px; fg_color: Theme.text-muted;
-                clicked => { root.close(); }
+            Rectangle {
+                width: 100%; height: 32px;
+                border-radius: 5px;
+                border-width: 1px; border-color: Theme.line;
+                background: Theme.bg-card;
+                LineEdit {
+                    x: Theme.s3; y: 0;
+                    width: parent.width - 2 * Theme.s3; height: 100%;
+                    font-size: Theme.fs;
+                    placeholder-text: "nginx:latest";
+                    text <=> root.input;
+                    enabled: root.busy == false;
+                    accepted => { root.submit(root.input); }
+                }
             }
-        }
 
-        Rectangle {
-            width: parent.width; height: 40px;
-            background: Theme.bg-card; border-radius: 6px;
-            LineEdit {
-                x: 8px; y: 0; width: parent.width - 16px; height: parent.height;
-                placeholder-text: "镜像名:tag  （如 nginx:latest）";
-                text <=> root.input;
-                enabled: root.busy == false;
-                accepted => { root.submit(root.input); }
-            }
-        }
+            Rectangle { vertical-stretch: 1; }
 
-        HorizontalBox {
-            width: parent.width; height: 32px; spacing: Theme.space-2;
-            HorizontalLayout { }
-            FlatButton {
-                text: "取消"; height: 30px; width: 80px;
-                fg_color: Theme.text-muted;
-                clicked => { root.close(); }
-            }
-            FlatButton {
-                text: root.busy ? "拉取中..." : "开始拉取";
-                height: 30px; width: 100px;
-                hover_bg: Theme.accent; fg_color: Theme.bg-root;
-                clicked => { root.submit(root.input); }
+            // 操作
+            HorizontalLayout {
+                width: 100%; height: 28px;
+                spacing: Theme.s2;
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "取消"; clicked => { root.close(); } }
+                Button {
+                    text: root.busy ? "拉取中" : "拉取"; primary: true;
+                    enabled: root.busy == false;
+                    clicked => { root.submit(root.input); }
+                }
             }
         }
     }
 }
 
-// —— 清理资源弹窗 ——
+// ============ 清理资源 ============
 export component CleanupDialog inherits Rectangle {
     in-out property <bool> stopped: true;
     in-out property <bool> dangling: true;
@@ -81,79 +95,82 @@ export component CleanupDialog inherits Rectangle {
     callback close();
     callback submit(bool, bool, bool);
 
-    background: rgba(0,0,0,0.45);
+    background: #05090fdd;
 
     TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
 
     Rectangle {
-        x: (root.width - 380px) / 2;
-        y: (root.height - 240px) / 2;
-        width: 380px; height: 240px;
-        background: Theme.bg-surface;
+        x: (root.width - 420px) / 2;
+        y: (root.height - 280px) / 2;
+        width: 420px; height: 280px;
+        background: Theme.bg-side;
         border-radius: 10px;
-    }
+        border-width: 1px;
+        border-color: Theme.line;
 
-    VerticalBox {
-        x: (root.width - 380px) / 2 + 20px;
-        y: (root.height - 240px) / 2 + 16px;
-        width: 340px; height: 208px;
-        spacing: Theme.space-2;
+        VerticalLayout {
+            width: 100%; height: 100%;
+            padding: Theme.s5;
+            spacing: 0px;
 
-        HorizontalBox {
-            width: parent.width; height: 28px;
-            Text {
-                text: "清理未使用资源";
-                font-size: Theme.text-lg; font-weight: 700;
-                color: Theme.text-primary;
-                height: parent.height; vertical-alignment: center;
+            VerticalLayout {
+                width: 100%; height: 30px;
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: "清理未使用资源";
+                        font-size: Theme.fs-lg; font-weight: 700; color: Theme.fg;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    IconBtn { glyph: "✕"; clicked => { root.close(); } }
+                }
             }
-            HorizontalLayout { }
-            FlatButton {
-                text: "✕"; height: 24px; width: 28px; fg_color: Theme.text-muted;
-                clicked => { root.close(); }
-            }
-        }
 
-        Rectangle {
-            width: parent.width; height: 36px;
-            background: Theme.bg-card; border-radius: 6px;
-            CheckBox {
-                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
-                text: "清理停止的容器";
-                checked <=> root.stopped;
-            }
-        }
-        Rectangle {
-            width: parent.width; height: 36px;
-            background: Theme.bg-card; border-radius: 6px;
-            CheckBox {
-                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
-                text: "清理悬空镜像 (dangling)";
-                checked <=> root.dangling;
-            }
-        }
-        Rectangle {
-            width: parent.width; height: 36px;
-            background: Theme.bg-card; border-radius: 6px;
-            CheckBox {
-                x: 12px; y: 0; width: parent.width - 24px; height: parent.height;
-                text: "清理所有未使用镜像 (危险!)";
-                checked <=> root.unused;
-            }
-        }
+            Rectangle { width: 100%; height: 1px; background: Theme.line; }
+            Rectangle { vertical-stretch: 1; }
 
-        HorizontalBox {
-            width: parent.width; height: 32px; spacing: Theme.space-2;
-            HorizontalLayout { }
-            FlatButton {
-                text: "取消"; height: 30px; width: 80px; fg_color: Theme.text-muted;
-                clicked => { root.close(); }
+            Rectangle {
+                width: 100%; height: 34px;
+                border-radius: 5px; background: Theme.bg-card;
+                CheckBox {
+                    x: Theme.s3; y: 0;
+                    width: parent.width - 2 * Theme.s3; height: 100%;
+                    text: "停止的容器"; checked <=> root.stopped;
+                }
             }
-            FlatButton {
-                text: "执行清理";
-                height: 30px; width: 100px;
-                hover_bg: Theme.status-error; fg_color: Theme.bg-root;
-                clicked => { root.submit(root.stopped, root.dangling, root.unused); }
+            Rectangle { width: 100%; height: Theme.s2; }
+            Rectangle {
+                width: 100%; height: 34px;
+                border-radius: 5px; background: Theme.bg-card;
+                CheckBox {
+                    x: Theme.s3; y: 0;
+                    width: parent.width - 2 * Theme.s3; height: 100%;
+                    text: "悬空镜像 (dangling)"; checked <=> root.dangling;
+                }
+            }
+            Rectangle { width: 100%; height: Theme.s2; }
+            Rectangle {
+                width: 100%; height: 34px;
+                border-radius: 5px; background: Theme.bg-card;
+                CheckBox {
+                    x: Theme.s3; y: 0;
+                    width: parent.width - 2 * Theme.s3; height: 100%;
+                    text: "所有未使用镜像（危险）"; checked <=> root.unused;
+                }
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            HorizontalLayout {
+                width: 100%; height: 28px;
+                spacing: Theme.s2;
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "取消"; clicked => { root.close(); } }
+                Button {
+                    text: "执行清理"; primary: true;
+                    clicked => { root.submit(root.stopped, root.dangling, root.unused); }
+                }
             }
         }
     }

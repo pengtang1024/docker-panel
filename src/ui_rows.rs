@@ -108,12 +108,11 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
     filtered
         .into_iter()
         .map(|c| {
-            let project = c.compose_project.as_deref();
+            let project = c.compose_project.as_deref().or(Some("独立容器"));
             let is_group = grouping
                 && match (project, last) {
-                    (Some(_), None) | (None, Some(_)) => true,
                     (Some(a), Some(b)) => a != b,
-                    _ => false,
+                    _ => last.is_none(),
                 };
             if grouping {
                 last = project;
@@ -126,7 +125,11 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 status: SharedString::from(c.status.clone()),
                 is_running: c.is_running(),
                 is_selected: s.batch.contains(&c.id),
-                compose_project: SharedString::from(c.compose_project.clone().unwrap_or_default()),
+                compose_project: SharedString::from(
+                    c.compose_project
+                        .clone()
+                        .unwrap_or_else(|| "独立容器".into()),
+                ),
                 compose_service: SharedString::from(c.compose_service.clone().unwrap_or_default()),
                 is_group_start: is_group,
                 cpu_percent: if c.cpu_percent > 0.0 {

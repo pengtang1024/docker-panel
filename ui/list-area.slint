@@ -1,105 +1,140 @@
-// list-area.slint — ListArea（主列表区，不含 TabBar，主视图切换由 Activity Bar 驱动）
+// list-area.slint — 主列表区（表头 + 列表，4 个视图互斥）
 import { Theme } from "theme.slint";
-import { ListView, VerticalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
-import { ContainerRowDelegate, ImageRowDelegate } from "delegates.slint";
-import { ContainerHeader, ImageHeader } from "headers.slint";
-import { NetworkHeader, NetworkRowDelegate, VolumeHeader, VolumeRowDelegate } from "network-views.slint";
+import { ListView, ScrollView } from "std-widgets.slint";
+import { HeadContainer, HeadImage, HeadNetwork, HeadVolume } from "headers.slint";
+import { RowContainer, RowImage, RowNetwork, RowVolume } from "delegates.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
 
+// —— 空状态 ——
+export component Blank inherits Rectangle {
+    in-out property <string> title: "";
+    in-out property <string> hint: "";
+    background: Theme.bg-main;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
+        Text {
+            text: root.title;
+            font-size: Theme.fs-lg; color: Theme.fg-3;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.hint;
+            font-size: Theme.fs; color: Theme.fg-4;
+            horizontal-alignment: center;
+            visible: root.hint != "";
+        }
+    }
+}
+
 export component ListArea inherits Rectangle {
-    in-out property <int> active_view: 0;
-    in-out property <[ContainerRow]> container_rows: [];
-    in-out property <[ImageRow]> image_rows: [];
-    in-out property <[NetworkRow]> network_rows: [];
-    in-out property <[VolumeRow]> volume_rows: [];
+    in-out property <int> tab: 0;
+    in-out property <[ContainerRow]> containers: [];
+    in-out property <[ImageRow]> images: [];
+    in-out property <[NetworkRow]> networks: [];
+    in-out property <[VolumeRow]> volumes: [];
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: false;
 
-    callback container_click(string);
-    callback container_toggle(string);
-    callback container_restart(string);
-    callback container_logs(string);
-    callback container_remove(string);
-    callback container_sort(int);
-    callback container_toggle_select(string);
-    callback image_click(string);
-    callback image_remove(string);
-    clip: true;
+    callback c-pick(string);
+    callback c-toggle(string);
+    callback c-restart(string);
+    callback c-logs(string);
+    callback c-remove(string);
+    callback c-sort(int);
+    callback c-box(string);
+    callback i-pick(string);
+    callback i-remove(string);
 
-    // 单一直接子元素：VerticalBox 包住所有条件分支
-    VerticalBox {
-        x: 0; y: 0; width: parent.width; height: parent.height;
+    clip: true;
+    background: Theme.bg-main;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
         spacing: 0px;
 
-        if active_view == 0: VerticalBox {
-            width: parent.width; height: parent.height; spacing: 0px;
-            ContainerHeader {
-                width: parent.width;
-                sort_field <=> root.sort_field;
-                sort_desc <=> root.sort_desc;
-                sort(f) => { root.container_sort(f); }
-            }
-            ScrollView { width: parent.width; height: parent.height - 32px;
-                ListView { width: parent.width;
-                    for row in root.container_rows: ContainerRowDelegate {
-                        width: parent.width; row_id: row.id; short_id: row.short_id;
-                        name: row.name; image: row.image; status: row.status;
-                        is_running: row.is_running; is_selected: row.is_selected;
-                        compose_project: row.compose_project; compose_service: row.compose_service;
-                        is_group_start: row.is_group_start;
-                        cpu_percent: row.cpu_percent; mem_usage: row.mem_usage;
-                        net_traffic: row.net_traffic;
-                        clicked => { root.container_click(row.id); }
-                        toggle => { root.container_toggle(row.id); }
-                        restart => { root.container_restart(row.id); }
-                        logs => { root.container_logs(row.id); }
-                        remove => { root.container_remove(row.id); }
-                        toggle_select => { root.container_toggle_select(row.id); }
-                    }
+        // ===== 容器 =====
+        if root.tab == 0: HeadContainer {
+            width: 100%;
+            sort_field <=> root.sort_field; sort_desc <=> root.sort_desc;
+            sort(f) => { root.c-sort(f); }
+        }
+        if root.tab == 0 && root.containers.length > 0: ScrollView {
+            width: 100%; vertical-stretch: 1;
+            ListView {
+                width: 100%;
+                for r in root.containers: RowContainer {
+                    width: 100%;
+                    id: r.id; is-group: r.is_group_start; group: r.compose_project;
+                    service: r.compose_service; name: r.name; image: r.image;
+                    state: r.status; running: r.is_running; selected: r.is_selected;
+                    cpu: r.cpu_percent; mem: r.mem_usage;
+                    pick => { root.c-pick(r.id); }
+                    toggle => { root.c-toggle(r.id); }
+                    restart => { root.c-restart(r.id); }
+                    logs => { root.c-logs(r.id); }
+                    remove => { root.c-remove(r.id); }
+                    pick-box => { root.c-box(r.id); }
                 }
             }
         }
+        if root.tab == 0 && root.containers.length == 0: Blank {
+            width: 100%; vertical-stretch: 1;
+            title: "没有容器"; hint: "用「拉取镜像」获取第一个镜像";
+        }
 
-        if active_view == 1: VerticalBox {
-            width: parent.width; height: parent.height; spacing: 0px;
-            ImageHeader { width: parent.width; }
-            ScrollView { width: parent.width; height: parent.height - 32px;
-                ListView { width: parent.width;
-                    for row in root.image_rows: ImageRowDelegate {
-                        width: parent.width; row_id: row.id; short_id: row.short_id;
-                        name: row.name; tag: row.tag; size: row.size;
-                        containers: row.containers;
-                        clicked => { root.image_click(row.id); }
-                        remove => { root.image_remove(row.id); }
-                    }
+        // ===== 镜像 =====
+        if root.tab == 1: HeadImage { width: 100%; }
+        if root.tab == 1 && root.images.length > 0: ScrollView {
+            width: 100%; vertical-stretch: 1;
+            ListView {
+                width: 100%;
+                for r in root.images: RowImage {
+                    width: 100%;
+                    id: r.id; repo: r.name; tag: r.tag; size: r.size; used: r.containers;
+                    pick => { root.i-pick(r.id); }
+                    remove => { root.i-remove(r.id); }
                 }
             }
         }
+        if root.tab == 1 && root.images.length == 0: Blank {
+            width: 100%; vertical-stretch: 1;
+            title: "没有镜像"; hint: "点击「拉取镜像」下载";
+        }
 
-        if active_view == 2: VerticalBox {
-            width: parent.width; height: parent.height; spacing: 0px;
-            NetworkHeader { width: parent.width; }
-            ScrollView { width: parent.width; height: parent.height - 32px;
-                ListView { width: parent.width;
-                    for row in root.network_rows: NetworkRowDelegate {
-                        width: parent.width; short_id: row.short_id; name: row.name;
-                        driver: row.driver; scope: row.scope;
-                    }
+        // ===== 网络 =====
+        if root.tab == 2: HeadNetwork { width: 100%; }
+        if root.tab == 2 && root.networks.length > 0: ScrollView {
+            width: 100%; vertical-stretch: 1;
+            ListView {
+                width: 100%;
+                for r in root.networks: RowNetwork {
+                    width: 100%;
+                    name: r.name; driver: r.driver; scope: r.scope; used: r.containers;
                 }
             }
         }
+        if root.tab == 2 && root.networks.length == 0: Blank {
+            width: 100%; vertical-stretch: 1;
+            title: "没有网络"; hint: "";
+        }
 
-        if active_view == 3: VerticalBox {
-            width: parent.width; height: parent.height; spacing: 0px;
-            VolumeHeader { width: parent.width; }
-            ScrollView { width: parent.width; height: parent.height - 32px;
-                ListView { width: parent.width; height: parent.height - 32px;
-                    for row in root.volume_rows: VolumeRowDelegate {
-                        width: parent.width; name: row.name; driver: row.driver;
-                        mountpoint: row.mountpoint;
-                    }
+        // ===== 卷 =====
+        if root.tab == 3: HeadVolume { width: 100%; }
+        if root.tab == 3 && root.volumes.length > 0: ScrollView {
+            width: 100%; vertical-stretch: 1;
+            ListView {
+                width: 100%;
+                for r in root.volumes: RowVolume {
+                    width: 100%;
+                    name: r.name; driver: r.driver; mountpoint: r.mountpoint;
                 }
             }
+        }
+        if root.tab == 3 && root.volumes.length == 0: Blank {
+            width: 100%; vertical-stretch: 1;
+            title: "没有卷"; hint: "";
         }
     }
 }

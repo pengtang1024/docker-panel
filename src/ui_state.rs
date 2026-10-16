@@ -9,7 +9,7 @@
 //!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

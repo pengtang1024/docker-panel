@@ -5,9 +5,12 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-16
+
 ### 新增
 
 - **镜像详情面板**：点击镜像行 → `inspect_image` → 右侧面板切到第 3 Tab（镜像），显示 RepoTag / 创建时间 / 作者 / 大小 / 平台 / Entrypoint / Cmd / 工作目录 / 暴露端口 / Volumes / Labels / Env 共 14 字段。
+- **网络 Tab 真实容器计数**：从容器列表反推每个网络的连接容器数，零额外 API 调用，网络行右侧实时显示。
 
 ## [0.2.1] - 2026-10-16
 
@@ -84,6 +87,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.2.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.2
 [0.2.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.1
 [0.2.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.0
 [0.1.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.1

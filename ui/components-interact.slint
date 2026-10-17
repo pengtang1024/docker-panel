@@ -1,0 +1,166 @@
+// components-interact.slint — 交互控件（按钮 / 菜单 / Tooltip）
+// 所有内部 Text 必须是 CenterText / VCenterText / RightText，禁止裸写 Text {}。
+import { Theme } from "theme.slint";
+import { Tip, CenterText, VCenterText } from "components-align.slint";
+
+// ============ Tooltip 泡泡层（spec 3.5）============
+export component TipLayer inherits Rectangle {
+    width: row.preferred-width;
+    height: row.preferred-height;
+    background: Theme.tip_bg;
+    border-radius: Theme.r_xs;
+    drop-shadow-color: Theme.shadow;
+    drop-shadow-blur: 12px;
+    drop-shadow-offset-y: 4px;
+    opacity: Tip.text == "" ? 0.0 : 1.0;
+    animate opacity { duration: 120ms; delay: Tip.text == "" ? 0ms : 300ms; easing: ease-out; }
+
+    row := HorizontalLayout {
+        padding-left: 9px; padding-right: 9px; padding-top: 5px; padding-bottom: 5px;
+        VCenterText {
+            text: Tip.text;
+            color: Theme.tip_ink;
+            font-size: Theme.fs_sm;
+            font-weight: 500;
+        }
+    }
+
+    Path {
+        x: (parent.width - 8px) / 2;
+        y: parent.height;
+        commands: "M 0 0 L 8 0 L 4 4 Z";
+        fill: Theme.tip_bg;
+    }
+}
+
+// ============ 图标按钮 ============
+// prototype .icon-btn / .ca-main / .ca-menu —— display:grid; place-items:center
+export component IconBtn inherits Rectangle {
+    in-out property <string> glyph: "";
+    in-out property <bool> primary: false;
+    in-out property <bool> danger: false;
+    in-out property <bool> active: false;
+    in-out property <bool> enabled: true;
+    in-out property <bool> outline: false;
+    in-out property <bool> hidden: false;
+    in-out property <length> size: 32px;
+    in-out property <length> glyph_size: 16px;
+    in-out property <string> tip: "";
+    in-out property <color> rest_bg: Theme.bg;
+    in-out property <color> hover_fg: Theme.ink;
+    out property <bool> hovered: touch.has-hover;
+    callback clicked();
+
+    width: root.size;
+    height: root.size;
+    border-radius: Theme.r_sm;
+    border-width: (root.primary || (root.outline == false && root.active == false)) ? 0px : 1px;
+    border-color: root.outline ? Theme.line : Theme.ok;
+    background: root.primary ? Theme.ink
+        : root.active ? Theme.pill_on_bg
+        : (root.danger && touch.has-hover) ? Theme.err_bg
+        : touch.has-hover ? (root.outline ? Theme.bg : Theme.row_hover)
+        : root.rest_bg;
+    opacity: root.hidden ? 0.0 : (root.enabled ? 1.0 : 0.4);
+    animate opacity { duration: 120ms; easing: ease-out; }
+
+    touch := TouchArea { width: 100%; height: 100%; enabled: root.enabled && root.hidden == false; clicked => { root.clicked(); } }
+
+    // glyph 双向居中（IconBtn 本质是一个 place-items:center 的 grid 容器）
+    CenterText {
+        text: root.glyph;
+        font-size: root.glyph_size;
+        width: 100%; height: 100%;
+        color: root.primary ? Theme.card
+            : root.active ? Theme.ok
+            : root.danger ? Theme.err
+            : touch.has-hover ? root.hover_fg
+            : Theme.ink_2;
+    }
+
+    changed hovered => {
+        if (root.hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
+        else if (Tip.text == root.tip) { Tip.text = ""; }
+    }
+}
+
+// ============ 状态圆点 ============
+export component Dot inherits Rectangle {
+    in-out property <bool> on: false;
+    in-out property <string> tip: "";
+    width: 8px; height: 8px; border-radius: 4px;
+    background: root.on ? Theme.ok : Theme.stop;
+
+    touch := TouchArea { width: 100%; height: 100%; }
+    private property <bool> tip_hover: touch.has-hover;
+    changed tip_hover => {
+        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
+        else if (Tip.text == root.tip) { Tip.text = ""; }
+    }
+}
+
+// ============ 复选框 ============
+export component CheckCell inherits Rectangle {
+    in-out property <bool> checked: false;
+    in-out property <length> box: 16px;
+    callback toggled();
+
+    width: root.box;
+    height: root.box;
+    border-radius: Theme.r_xs;
+    border-width: 1px;
+    border-color: root.checked ? Theme.ok : (touch.has-hover ? Theme.ink_3 : Theme.line);
+    background: root.checked ? Theme.pill_on_bg : (touch.has-hover ? Theme.row_hover : transparent);
+
+    touch := TouchArea { width: 100%; height: 100%; clicked => { root.toggled(); } }
+
+    // 勾号双向居中
+    if root.checked : CenterText {
+        text: "✓"; font-size: 11px; font-weight: 700; color: Theme.ok;
+        width: 100%; height: 100%;
+    }
+}
+
+// ============ 菜单项 ============
+export component MenuItem inherits Rectangle {
+    in-out property <string> glyph: "";
+    in-out property <string> label: "";
+    in-out property <bool> danger: false;
+    in-out property <bool> active: false;
+    callback clicked();
+
+    height: 26px;
+    border-radius: Theme.r_xs;
+    background: touch.has-hover ? (root.danger ? Theme.err_bg : Theme.row_hover) : transparent;
+
+    touch := TouchArea { width: 100%; height: 100%; clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: Theme.s3;
+        padding-left: Theme.s3; padding-right: Theme.s3;
+        VCenterText {
+            text: root.glyph; font-size: 11px; width: 14px;
+            color: root.danger ? Theme.err : Theme.ink_3;
+        }
+        VCenterText {
+            text: root.label; font-size: Theme.fs;
+            color: root.active ? Theme.ink : (root.danger ? Theme.err : Theme.ink_2);
+            horizontal-stretch: 1; overflow: elide;
+        }
+    }
+}
+
+// ============ 下拉菜单外壳 ============
+export component Dropdown inherits Rectangle {
+    in-out property <length> dw: 124px;
+    width: root.dw;
+    border-radius: Theme.r_md;
+    background: Theme.card;
+    border-width: 1px; border-color: Theme.line;
+    drop-shadow-color: Theme.shadow;
+    drop-shadow-blur: 12px;
+    drop-shadow-offset-y: 3px;
+
+    VerticalLayout { width: 100%; spacing: 1px; padding: 4px; @children }
+}

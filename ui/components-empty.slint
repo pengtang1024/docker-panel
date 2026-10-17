@@ -1,0 +1,19 @@
+// components-empty.slint — 空状态占位
+// prototype .empty：flex-direction:column; align-items:center; justify-content:center
+import { Theme } from "theme.slint";
+import { CenterText } from "components-align.slint";
+
+export component EmptyState inherits Rectangle {
+    in-out property <string> title: "";
+    in-out property <string> desc: "";
+    in-out property <string> glyph: "▢";
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
+        spacing: Theme.s3;
+        CenterText { text: root.glyph; font-size: 40px; color: Theme.ink_4; width: 100%; }
+        CenterText { text: root.title; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink_2; width: 100%; }
+        CenterText { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; width: 100%; }
+    }
+}

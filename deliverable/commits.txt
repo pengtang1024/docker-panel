@@ -1,0 +1,8 @@
+7531297 docs(skel): 注释 shimmer 限制 + 清理 width_pct 字符串属性
+6f34a63 fix(toast): 只在 toast=true 时更新 status_text，周期性刷新不覆盖
+5cd5ea4 fix(toast): 周期性刷新不再覆盖 ActionDone toast
+dc63707 feat(toast): FootBar status_text 操作结果 2s 自动恢复 Ready（对齐 prototype toast）
+ac05ff6 feat(ui): 骨架屏 loading 中间态（对齐 prototype .skel-card）
+2bbc809 fix(sel-mode): 拆分 sel_mode 与 batch_count，加 SubBar 显式「多选」入口按钮
+1f60edb fix(drawer): 用原生 Flickable 替换 ScrollView，修复 kv 行被均摊拉高到 100px+
+ad19b39 refactor: 重构模块结构并优化代码格式与翻译

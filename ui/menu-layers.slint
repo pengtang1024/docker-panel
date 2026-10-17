@@ -1,11 +1,8 @@
-// menu-layers.slint — 浮动菜单层（SubBar 排序菜单 + 卡片「···」菜单）
-// 铁律：两者都必须在卡片区**之后**渲染（Window 直接子元素）。卡片带 clip，且 Repeater
-// 按源码顺序绘制，同层渲染会被下方卡片裁掉 / 覆盖。
-// 菜单只声明 callback，动作由 app.slint 注入 —— 子文件不 import AppActions global。
+// menu-layers.slint — 浮动菜单层
 import { Theme } from "theme.slint";
-import { Dropdown, MenuItem } from "components.slint";
+import { VCenterText, CenterText } from "components-align.slint";
+import { Dropdown, MenuItem } from "components-interact.slint";
 
-// ============ 排序菜单行（prototype .sort-menu .si：标签 + 右侧方向箭头）============
 component SortRow inherits Rectangle {
     in property <string> label: "";
     in property <bool> active: false;
@@ -28,21 +25,19 @@ component SortRow inherits Rectangle {
         spacing: Theme.s3;
         padding-left: 10px;
         padding-right: 10px;
-        Text {
+        alignment: center;
+        VCenterText {
             text: root.label;
             font-size: Theme.fs;
             font-weight: root.active ? 600 : 500;
             color: root.active ? Theme.ink : Theme.ink_2;
-            vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
         }
-        // 当前排序字段才显示方向（prototype .sort-menu .si .ck）
-        if root.active : Text {
+        if root.active : CenterText {
             text: root.desc ? "↓" : "↑";
             font-size: Theme.fs_sm;
             color: Theme.ink_3;
-            vertical-alignment: center;
         }
     }
 }

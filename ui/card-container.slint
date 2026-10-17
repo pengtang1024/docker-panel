@@ -3,7 +3,9 @@
 //       + 右上角 .card-actions（主按钮 + 更多菜单，hover 显形）
 // 「···」菜单本体在 app.slint 顶层渲染：本卡片带 clip，菜单冒泡走 CardMenu 总线。
 import { Theme } from "theme.slint";
-import { IconBtn, Dot, CheckCell, MonoChip, Stat, ProjTag } from "components.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn, Dot, CheckCell } from "components-interact.slint";
+import { MonoChip, Stat, ProjTag } from "components-chip.slint";
 import { ContainerRow } from "models.slint";
 
 export component ContainerCard inherits Rectangle {
@@ -78,7 +80,8 @@ export component ContainerCard inherits Rectangle {
             width: 100%;
             padding-right: 70px;
             padding-left: root.sel_mode ? 26px : 0px;
-            Text {
+            alignment: center;
+            VCenterText {
                 text: root.data.name;
                 font-size: 14px;
                 font-weight: 700;
@@ -89,7 +92,7 @@ export component ContainerCard inherits Rectangle {
         }
 
         // .c-img（11px mono）
-        Text {
+        VCenterText {
             text: root.data.image;
             font-size: Theme.fs_sm;
             font-family: Theme.mono;

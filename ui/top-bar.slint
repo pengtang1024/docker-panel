@@ -1,6 +1,7 @@
 // top-bar.slint — 顶栏
 import { Theme } from "theme.slint";
-import { IconBtn, Dot } from "components.slint";
+import { VCenterText, CenterText } from "components-align.slint";
+import { IconBtn, Dot } from "components-interact.slint";
 
 export component TopBar inherits Rectangle {
     height: Theme.top_h;
@@ -21,7 +22,6 @@ export component TopBar inherits Rectangle {
     callback cleanup_click();
     callback pull_click();
     callback search(string);
-    /// 快捷键 Ctrl+K 触发：把键盘焦点交给搜索框
     callback focus_search();
     focus_search() => { search_input.focus(); }
 
@@ -31,8 +31,9 @@ export component TopBar inherits Rectangle {
         spacing: Theme.s4;
         padding-left: Theme.s5;
         padding-right: Theme.s5;
+        alignment: center;   // prototype .top: display:flex; align-items:center
 
-        Text {
+        VCenterText {
             text: "Docker Panel";
             font-size: Theme.fs_md;
             font-weight: 700;
@@ -40,7 +41,7 @@ export component TopBar inherits Rectangle {
         }
 
         Dot { on: root.docker_ok; }
-        Text {
+        VCenterText {
             text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: Theme.fs_sm;
             color: Theme.ink_3;
@@ -62,18 +63,17 @@ export component TopBar inherits Rectangle {
                 spacing: Theme.s2;
                 padding-left: Theme.s3;
                 padding-right: Theme.s3;
-                Text {
+                alignment: center;   // prototype .search: display:flex; align-items:center
+                CenterText {
                     text: "⌕";
                     color: Theme.ink_3;
                     font-size: Theme.fs_md;
                 }
-                // TextInput 无内建 placeholder：用等宽 TextInput + 空值叠加提示文本
                 Rectangle {
                     horizontal-stretch: 1;
                     height: 100%;
                     search_input := TextInput {
-                        x: 0px;
-                        y: (parent.height - self.height) / 2;
+                        x: 0px; y: (parent.height - self.height) / 2;
                         width: 100%;
                         text <=> root.search_q;
                         color: Theme.ink;
@@ -81,9 +81,8 @@ export component TopBar inherits Rectangle {
                         accepted() => { root.search(root.search_q); }
                         edited() => { root.search(root.search_q); }
                     }
-                    Text {
-                        x: 0px;
-                        y: (parent.height - self.height) / 2;
+                    VCenterText {
+                        x: 0px; y: (parent.height - self.height) / 2;
                         width: 100%;
                         visible: search_input.text == "";
                         text: @tr("Search name, image...");
@@ -91,7 +90,7 @@ export component TopBar inherits Rectangle {
                         font-size: Theme.fs_sm;
                     }
                 }
-                Text {
+                VCenterText {
                     text: "Ctrl+K";
                     color: Theme.ink_4;
                     font-size: Theme.fs_xs;

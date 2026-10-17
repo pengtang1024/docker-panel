@@ -2,7 +2,9 @@
 // 结构：.repo（仓库名）→ .tags（tag 芯片 ≤3 +N，latest 高亮）→ .img-stats（大小/层数/创建）
 //       + .card-actions（运行 + 更多菜单）；菜单走 CardMenu 总线顶层渲染。
 import { Theme } from "theme.slint";
-import { IconBtn, MonoChip } from "components.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
+import { MonoChip } from "components-chip.slint";
 import { ImageRow } from "models.slint";
 
 export component ImageCard inherits Rectangle {
@@ -58,7 +60,8 @@ export component ImageCard inherits Rectangle {
         HorizontalLayout {
             width: 100%;
             padding-right: 70px;
-            Text {
+            alignment: center;
+            VCenterText {
                 text: root.data.name;
                 font-size: 14px;
                 font-weight: 700;
@@ -73,6 +76,7 @@ export component ImageCard inherits Rectangle {
             width: 100%;
             spacing: 4px;
             padding-top: 4px;
+            alignment: center;
             MonoChip {
                 label: root.data.tag1;
                 fs: Theme.fs_sm;
@@ -104,43 +108,26 @@ export component ImageCard inherits Rectangle {
             }
         }
 
-        // .img-stats：值在上（13px mono 600）、标签在下（11px ink-2）
+        // .img-stats：值在上、标签在下
         HorizontalLayout {
             width: 100%;
             spacing: 16px;
             padding-top: 7px;
+            alignment: center;
             VerticalLayout {
                 spacing: 1px;
-                Text {
-                    text: root.data.size;
-                    font-size: Theme.fs_md;
-                    font-weight: 600;
-                    font-family: Theme.mono;
-                    color: Theme.ink;
-                }
-                Text { text: @tr("Size"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+                VCenterText { text: root.data.size; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Size"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }
             VerticalLayout {
                 spacing: 1px;
-                Text {
-                    text: root.data.layers;
-                    font-size: Theme.fs_md;
-                    font-weight: 600;
-                    font-family: Theme.mono;
-                    color: Theme.ink;
-                }
-                Text { text: @tr("Layers"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+                VCenterText { text: root.data.layers; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Layers"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }
             VerticalLayout {
                 spacing: 1px;
-                Text {
-                    text: root.data.created;
-                    font-size: Theme.fs_md;
-                    font-weight: 600;
-                    font-family: Theme.mono;
-                    color: Theme.ink;
-                }
-                Text { text: @tr("Created"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+                VCenterText { text: root.data.created; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Created"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }
             Rectangle { horizontal-stretch: 1; }
         }

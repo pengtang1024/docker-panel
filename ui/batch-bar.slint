@@ -1,6 +1,7 @@
 // batch-bar.slint — 批量操作栏
 import { Theme } from "theme.slint";
-import { IconBtn } from "components.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
 
 export component BatchBar inherits Rectangle {
     height: Theme.batch_h;
@@ -19,8 +20,9 @@ export component BatchBar inherits Rectangle {
         spacing: Theme.s3;
         padding-left: Theme.s5;
         padding-right: Theme.s5;
+        alignment: center;
 
-        Text {
+        VCenterText {
             text: @tr("{0} selected", root.count);
             font-size: Theme.fs;
             font-weight: 700;
@@ -29,7 +31,6 @@ export component BatchBar inherits Rectangle {
 
         Rectangle { horizontal-stretch: 1; }
 
-        // 全图标 + tooltip（spec 2.3）
         IconBtn { size: 28px; glyph_size: 12px; glyph: "▶"; tip: @tr("Start"); clicked => { root.start(); } }
         IconBtn { size: 28px; glyph_size: 10px; glyph: "■"; tip: @tr("Stop"); clicked => { root.stop(); } }
         IconBtn { size: 28px; glyph_size: 13px; glyph: "↻"; tip: @tr("Restart"); clicked => { root.restart(); } }

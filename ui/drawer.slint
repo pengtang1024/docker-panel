@@ -1,14 +1,8 @@
 // drawer.slint — 右侧抽屉（详情 / 日志 / 环境）
-//
-// 详情区不再用固定字段属性，统一走 [DetailPair] 列表：
-// 同一个抽屉要展示容器 / 镜像 / 网络 / 卷四种不同结构，固定属性无法表达，
-// 由 Rust 侧 detail_fmt::build_drawer_data 按选中类型生成行列表。
 import { Theme } from "theme.slint";
-import { IconBtn } from "components.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
 import { LogLineRow, DetailPair } from "models.slint";
-// 不用 std-widgets 的 ScrollView（它把内层布局强制拉到视口高、会把 kv 行均摊拉高到 100px+），
-// 直接用原生 Flickable：viewport 高由 Flickable.height 决定，content 子元素高度由自身 children 决定——两者独立，
-// 内容超过视口时 Flickable 自动滚动；不超过时 content 保持紧凑排布（对齐 prototype 紧凑 kv 行）
 
 component DTab inherits Rectangle {
     in property <string> label: "";
@@ -21,7 +15,7 @@ component DTab inherits Rectangle {
         height: 2px;
         background: root.active ? Theme.ink : transparent;
     }
-    Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
+    VCenterText { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; width: 100%; height: 100%; }
     TouchArea { clicked => { root.clicked(root.idx); } }
 }
 
@@ -30,8 +24,7 @@ component DetailRow inherits Rectangle {
     in property <DetailPair> data;
     in property <bool> head_gap: false;   // 非首节：头部上方先画 1px 分节线
 
-    // kind 1 — 分节标题（.sec h3：小字灰度 + 上下留白）
-    // 对齐 prototype：分节线在最上 → 16px 顶部留白 → 标题 → 10px 底部留白
+    // kind 1 — 分节标题
     if root.data.kind == 1 : VerticalLayout {
         width: 100%;
         spacing: 0px;
@@ -41,7 +34,8 @@ component DetailRow inherits Rectangle {
             width: 100%;
             padding-left: Theme.s6;
             padding-right: Theme.s6;
-            Text {
+            alignment: center;
+            VCenterText {
                 text: root.data.k;
                 font-size: Theme.fs_xs;
                 font-weight: 700;
@@ -54,7 +48,7 @@ component DetailRow inherits Rectangle {
         Rectangle { height: 10px; }
     }
 
-    // kind 0 — kv 行（.kv：k 62px 右对齐灰字 + v 正文）
+    // kind 0 — kv 行
     if root.data.kind == 0 : HorizontalLayout {
         width: 100%;
         spacing: Theme.s4;
@@ -62,16 +56,15 @@ component DetailRow inherits Rectangle {
         padding-right: Theme.s6;
         padding-top: 5px;
         padding-bottom: 5px;
-        alignment: start;
-        Text {
+        alignment: center;
+        RightText {
             text: root.data.k;
             width: 62px;
             font-size: Theme.fs;
             color: Theme.ink_3;
-            horizontal-alignment: right;
             wrap: word-wrap;
         }
-        Text {
+        VCenterText {
             text: root.data.v;
             font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
             font-family: root.data.mono ? Theme.mono : "";
@@ -82,7 +75,7 @@ component DetailRow inherits Rectangle {
         }
     }
 
-    // kind 2 — kv 行，值渲染为代码盒（.box：底色 + 描边 + 等宽 pre-wrap）
+    // kind 2 — kv 行 + code box
     if root.data.kind == 2 : HorizontalLayout {
         width: 100%;
         spacing: Theme.s4;
@@ -90,13 +83,12 @@ component DetailRow inherits Rectangle {
         padding-right: Theme.s6;
         padding-top: 5px;
         padding-bottom: 5px;
-        alignment: start;
-        Text {
+        alignment: center;
+        RightText {
             text: root.data.k;
             width: 62px;
             font-size: Theme.fs;
             color: Theme.ink_3;
-            horizontal-alignment: right;
             wrap: word-wrap;
         }
         Rectangle {
@@ -111,7 +103,8 @@ component DetailRow inherits Rectangle {
                 padding-right: 11px;
                 padding-top: 9px;
                 padding-bottom: 9px;
-                Text {
+                alignment: center;
+                VCenterText {
                     text: root.data.v;
                     font-size: Theme.fs_sm;
                     font-family: Theme.mono;
@@ -123,8 +116,7 @@ component DetailRow inherits Rectangle {
         }
     }
 
-    // kind 3 — 代码盒条目（.kv-list .it：描边小条；k 为高亮键名前缀）
-    // padding 必须由布局元素承载：外层用 VerticalLayout 提供左右 20px / 上下 2px 间距
+    // kind 3 — kv-list entries
     if root.data.kind == 3 : VerticalLayout {
         width: 100%;
         spacing: 0px;
@@ -144,8 +136,8 @@ component DetailRow inherits Rectangle {
                 padding-right: Theme.s3;
                 padding-top: Theme.s1;
                 padding-bottom: Theme.s1;
-                Text {
-                    // 键名前缀固定自然宽（无键名时值独占整行并换行），避免剩余宽度被摊到 KEY
+                alignment: center;
+                VCenterText {
                     text: root.data.k == "" ? root.data.v : root.data.k + "=";
                     font-size: Theme.fs_sm;
                     font-family: Theme.mono;
@@ -153,8 +145,7 @@ component DetailRow inherits Rectangle {
                     horizontal-stretch: root.data.k == "" ? 1 : 0;
                     wrap: word-wrap;
                 }
-                if root.data.k != "" : Text {
-                    // 值吃满剩余宽度并在盒内换行（对齐 prototype 的 word-break:break-all）
+                if root.data.k != "" : VCenterText {
                     text: root.data.v;
                     font-size: Theme.fs_sm;
                     font-family: Theme.mono;
@@ -223,18 +214,19 @@ export component Drawer inherits Rectangle {
                 spacing: Theme.s3;
                 padding-left: Theme.s4;
                 padding-right: Theme.s4;
+                alignment: center;
                 VerticalLayout {
                     horizontal-stretch: 1;
                     spacing: 2px;
                     alignment: center;
-                    Text {
+                    VCenterText {
                         text: root.title;
                         font-size: Theme.fs_lg;
                         font-weight: 700;
                         color: Theme.ink;
                         overflow: elide;
                     }
-                    Text {
+                    VCenterText {
                         text: root.sub;
                         font-size: Theme.fs_sm;
                         color: Theme.ink_3;
@@ -262,6 +254,7 @@ export component Drawer inherits Rectangle {
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 0px;
+                alignment: center;
                 DTab { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
                 DTab { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
                 DTab { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
@@ -310,9 +303,9 @@ export component Drawer inherits Rectangle {
                         spacing: Theme.s2;
                         padding-left: Theme.s3;
                         padding-right: Theme.s3;
+                        alignment: center;
                         IconBtn {
                             size: 28px; glyph_size: 11px;
-                            // 字形改用系统字体（Noto/DejaVu）确定覆盖的符号，避免 ⏸ 等 emoji 显示为方块
                             glyph: root.log_follow ? "‖" : "▶";
                             active: root.log_follow;
                             tip: @tr("Follow logs");
@@ -339,7 +332,7 @@ export component Drawer inherits Rectangle {
                         width: 100%;
                         height: 100%;
                         padding: Theme.s3;
-                        for line in root.log_lines : Text {
+                        for line in root.log_lines : VCenterText {
                             text: line.text;
                             font-size: Theme.fs_xs;
                             font-family: Theme.mono;

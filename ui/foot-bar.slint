@@ -1,5 +1,6 @@
 // foot-bar.slint — 底栏
 import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
 
 component OvItem inherits Rectangle {
     in property <string> label: "";
@@ -17,9 +18,10 @@ component OvItem inherits Rectangle {
         spacing: Theme.s2;
         padding-left: Theme.s3;
         padding-right: Theme.s3;
-        Text { text: root.ic; color: Theme.ink_3; font-size: Theme.fs_sm; }
-        Text { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
-        Text { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
+        alignment: center;
+        VCenterText { text: root.ic; color: Theme.ink_3; font-size: Theme.fs_sm; }
+        VCenterText { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
+        VCenterText { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
     }
 }
 
@@ -43,10 +45,11 @@ export component FootBar inherits Rectangle {
         spacing: 0px;
         padding-left: Theme.s4;
         padding-right: Theme.s4;
+        alignment: center;
 
         Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.docker_ok ? Theme.ok : Theme.stop; }
         Rectangle { width: Theme.s2; }
-        Text {
+        VCenterText {
             text: root.status;
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
@@ -65,7 +68,7 @@ export component FootBar inherits Rectangle {
 
         Rectangle { horizontal-stretch: 1; }
 
-        Text {
+        VCenterText {
             text: @tr("{0} containers · {1} images · {2} nets · {3} vols", root.total_containers, root.total_images, root.total_networks, root.total_volumes);
             font-size: Theme.fs_xs;
             color: Theme.ink_3;

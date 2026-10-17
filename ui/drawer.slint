@@ -1,8 +1,9 @@
 // drawer.slint — 右侧抽屉（详情 / 日志 / 环境）
 import { Theme } from "theme.slint";
-import { VCenterText, RightText } from "components-align.slint";
+import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
 import { LogLineRow, DetailPair } from "models.slint";
+import { DetailRow } from "drawer-detail-row.slint";
 
 component DTab inherits Rectangle {
     in property <string> label: "";
@@ -19,157 +20,15 @@ component DTab inherits Rectangle {
     TouchArea { clicked => { root.clicked(root.idx); } }
 }
 
-// 单条详情行：按 kind 切换渲染（对齐 prototype .sec / .kv / .box / .kv-list .it）
-component DetailRow inherits Rectangle {
-    in property <DetailPair> data;
-    in property <bool> head_gap: false;   // 非首节：头部上方先画 1px 分节线
-
-    // kind 1 — 分节标题
-    if root.data.kind == 1 : VerticalLayout {
-        width: 100%;
-        spacing: 0px;
-        if root.head_gap : Rectangle { height: 1px; background: Theme.line; }
-        Rectangle { height: Theme.s5; }
-        HorizontalLayout {
-            width: 100%;
-            padding-left: Theme.s6;
-            padding-right: Theme.s6;
-            alignment: center;
-            VCenterText {
-                text: root.data.k;
-                font-size: Theme.fs_xs;
-                font-weight: 700;
-                color: Theme.ink_3;
-                letter-spacing: 1.1px;
-                horizontal-stretch: 1;
-                wrap: word-wrap;
-            }
-        }
-        Rectangle { height: 10px; }
-    }
-
-    // kind 0 — kv 行
-    if root.data.kind == 0 : HorizontalLayout {
-        width: 100%;
-        spacing: Theme.s4;
-        padding-left: Theme.s6;
-        padding-right: Theme.s6;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        alignment: center;
-        RightText {
-            text: root.data.k;
-            width: 62px;
-            font-size: Theme.fs;
-            color: Theme.ink_3;
-            wrap: word-wrap;
-        }
-        VCenterText {
-            text: root.data.v;
-            font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
-            font-family: root.data.mono ? Theme.mono : "";
-            color: root.data.mono ? Theme.ink_2 : Theme.ink;
-            font-weight: 500;
-            horizontal-stretch: 1;
-            wrap: word-wrap;
-        }
-    }
-
-    // kind 2 — kv 行 + code box
-    if root.data.kind == 2 : HorizontalLayout {
-        width: 100%;
-        spacing: Theme.s4;
-        padding-left: Theme.s6;
-        padding-right: Theme.s6;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        alignment: center;
-        RightText {
-            text: root.data.k;
-            width: 62px;
-            font-size: Theme.fs;
-            color: Theme.ink_3;
-            wrap: word-wrap;
-        }
-        Rectangle {
-            horizontal-stretch: 1;
-            border-radius: Theme.r_md;
-            background: Theme.bg;
-            border-width: 1px;
-            border-color: Theme.line;
-            HorizontalLayout {
-                width: 100%;
-                padding-left: 11px;
-                padding-right: 11px;
-                padding-top: 9px;
-                padding-bottom: 9px;
-                alignment: center;
-                VCenterText {
-                    text: root.data.v;
-                    font-size: Theme.fs_sm;
-                    font-family: Theme.mono;
-                    color: Theme.ink_2;
-                    horizontal-stretch: 1;
-                    wrap: word-wrap;
-                }
-            }
-        }
-    }
-
-    // kind 3 — kv-list entries
-    if root.data.kind == 3 : VerticalLayout {
-        width: 100%;
-        spacing: 0px;
-        padding-left: Theme.s6;
-        padding-right: Theme.s6;
-        padding-top: 2px;
-        padding-bottom: 2px;
-        Rectangle {
-            width: 100%;
-            border-radius: Theme.r_xs;
-            background: Theme.bg;
-            border-width: 1px;
-            border-color: Theme.line;
-            HorizontalLayout {
-                width: 100%;
-                padding-left: Theme.s3;
-                padding-right: Theme.s3;
-                padding-top: Theme.s1;
-                padding-bottom: Theme.s1;
-                alignment: center;
-                VCenterText {
-                    text: root.data.k == "" ? root.data.v : root.data.k + "=";
-                    font-size: Theme.fs_sm;
-                    font-family: Theme.mono;
-                    color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
-                    horizontal-stretch: root.data.k == "" ? 1 : 0;
-                    wrap: word-wrap;
-                }
-                if root.data.k != "" : VCenterText {
-                    text: root.data.v;
-                    font-size: Theme.fs_sm;
-                    font-family: Theme.mono;
-                    color: Theme.ink_2;
-                    horizontal-stretch: 1;
-                    wrap: word-wrap;
-                }
-            }
-        }
-    }
-}
-
 export component Drawer inherits Rectangle {
     in-out property <bool> open: false;
     in-out property <int> tab: 0;
     in-out property <bool> log_follow: true;
     in-out property <[LogLineRow]> log_lines: [];
 
-    /// 标题（容器名 / 镜像仓库名 / 网络名 / 卷名）与副标题（镜像 / 大小 / 驱动）
     in-out property <string> title: "";
     in-out property <string> sub: "";
-    /// 仅容器展示 Tab 栏（对齐 prototype openDetail：非容器类型隐藏 tabs）
     in-out property <bool> tabs_visible: true;
-    /// 详情 Tab 与 环境 Tab 的行列表
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
 
@@ -179,184 +38,97 @@ export component Drawer inherits Rectangle {
     callback log_copy_click();
     callback log_clear_click();
 
-    /// 抽屉布局契约（对齐 Theme.drawer_*）：内容区高 = 抽屉高 - 头部 -（容器才有）Tab 栏。
-    /// Drawer.height 自身是百分比，其后代一律用此定值推导，不依赖 height:% / 嵌套 vertical-stretch。
     property <length> content_h: root.height - Theme.drawer_head - (root.tabs_visible ? Theme.drawer_tabs : 0px);
 
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    Rectangle {
-        width: 1px;
-        height: 100%;
-        background: Theme.line;
-    }
+    Rectangle { width: 1px; height: 100%; background: Theme.line; }
 
-    // 内容布局：非条件元素 + 显式高度 root.height（Drawer 已解析的确定高度），
-    // 切断「条件元素自动高 ↔ 子级 height:%」的循环绑定（否则整层塌陷到 min 高）。
     body := VerticalLayout {
         visible: root.open;
         width: 100%;
         height: root.height;
         spacing: 0px;
 
-        // 头部
         Rectangle {
             height: Theme.drawer_head;
-            Rectangle {
-                y: parent.height - 1px;
-                width: 100%;
-                height: 1px;
-                background: Theme.line;
-            }
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
                 width: 100%; height: 100%;
-                spacing: Theme.s3;
-                padding-left: Theme.s4;
-                padding-right: Theme.s4;
+                spacing: Theme.s3; padding-left: Theme.s4; padding-right: Theme.s4;
                 alignment: center;
                 VerticalLayout {
-                    horizontal-stretch: 1;
-                    spacing: 2px;
-                    alignment: center;
-                    VCenterText {
-                        text: root.title;
-                        font-size: Theme.fs_lg;
-                        font-weight: 700;
-                        color: Theme.ink;
-                        overflow: elide;
-                    }
-                    VCenterText {
-                        text: root.sub;
-                        font-size: Theme.fs_sm;
-                        color: Theme.ink_3;
-                        overflow: elide;
-                    }
+                    horizontal-stretch: 1; spacing: 2px; alignment: center;
+                    VCenterText { text: root.title; font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; overflow: elide; }
+                    VCenterText { text: root.sub; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
                 }
-                IconBtn {
-                    size: 28px; glyph_size: 12px;
-                    glyph: "✕";
-                    tip: @tr("Close");
-                    clicked => { root.close(); }
-                }
+                IconBtn { size: 28px; glyph_size: 12px; glyph: "✕"; tip: @tr("Close"); clicked => { root.close(); } }
             }
         }
 
-        // Tab 栏（仅容器）
         if root.tabs_visible : Rectangle {
             height: Theme.drawer_tabs;
-            Rectangle {
-                y: parent.height - 1px;
-                width: 100%;
-                height: 1px;
-                background: Theme.line;
-            }
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
-                width: 100%; height: 100%;
-                spacing: 0px;
-                alignment: center;
+                width: 100%; height: 100%; spacing: 0px; alignment: center;
                 DTab { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
                 DTab { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
                 DTab { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
             }
         }
 
-        // 内容区：唯一分配剩余高度的非条件容器（对齐 Theme 抽屉契约）。
-        // 三个视图并存、用 visible 切换显隐；content_box 是普通 Rectangle，
-        // 子级按各自绑定定位 → 三者重叠，仅可见者被绘制。
         content_box := Rectangle {
             width: 100%;
             height: root.content_h;
 
-            // 详情（非容器类型没有 Tab 栏，恒展示详情）
             detail_scroll := Flickable {
                 visible: (root.tabs_visible == false) || root.tab == 0;
                 height: root.content_h;
-                // Flickable 只有一个子元素即滚动内容——不设 height，由 DetailRow 总高决定，
-                // 与视口高 root.content_h 独立：内容少时保持紧凑排布，超出时可滚动
                 VerticalLayout {
-                    width: 100%;
-                    spacing: 0px;
-                    for row[i] in root.detail_rows : DetailRow {
-                        data: row;
-                        head_gap: i > 0;
-                    }
+                    width: 100%; spacing: 0px;
+                    for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }
                 }
             }
 
-            // 日志
             logsec := VerticalLayout {
                 visible: root.tabs_visible && root.tab == 1;
                 height: root.content_h;
                 spacing: 0px;
                 Rectangle {
                     height: Theme.drawer_logbar;
-                    Rectangle {
-                        y: parent.height - 1px;
-                        width: 100%;
-                        height: 1px;
-                        background: Theme.line;
-                    }
+                    Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
                     HorizontalLayout {
-                        width: 100%; height: 100%;
-                        spacing: Theme.s2;
-                        padding-left: Theme.s3;
-                        padding-right: Theme.s3;
+                        width: 100%; height: 100%; spacing: Theme.s2; padding-left: Theme.s3; padding-right: Theme.s3;
                         alignment: center;
-                        IconBtn {
-                            size: 28px; glyph_size: 11px;
-                            glyph: root.log_follow ? "‖" : "▶";
-                            active: root.log_follow;
-                            tip: @tr("Follow logs");
-                            clicked => { root.log_follow_click(); }
-                        }
-                        IconBtn {
-                            size: 28px; glyph_size: 12px;
-                            glyph: "❐";
-                            tip: @tr("Copy logs");
-                            clicked => { root.log_copy_click(); }
-                        }
-                        IconBtn {
-                            size: 28px; glyph_size: 12px;
-                            glyph: "⌫";
-                            tip: @tr("Clear logs");
-                            clicked => { root.log_clear_click(); }
-                        }
+                        IconBtn { size: 28px; glyph_size: 11px; glyph: root.log_follow ? "‖" : "▶"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
+                        IconBtn { size: 28px; glyph_size: 12px; glyph: "❐"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
+                        IconBtn { size: 28px; glyph_size: 12px; glyph: "⌫"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                     }
                 }
                 logbox := Rectangle {
                     height: root.content_h - Theme.drawer_logbar;
                     background: Theme.log_bg;
                     VerticalLayout {
-                        width: 100%;
-                        height: 100%;
-                        padding: Theme.s3;
+                        width: 100%; height: 100%; padding: Theme.s3;
                         for line in root.log_lines : VCenterText {
-                            text: line.text;
-                            font-size: Theme.fs_xs;
-                            font-family: Theme.mono;
-                            color: Theme.log_ink;
-                            wrap: word-wrap;
+                            text: line.text; font-size: Theme.fs_xs; font-family: Theme.mono;
+                            color: Theme.log_ink; wrap: word-wrap;
                         }
                     }
                 }
             }
 
-            // 环境（仅容器）
             env_scroll := Flickable {
                 visible: root.tabs_visible && root.tab == 2;
                 height: root.content_h;
                 VerticalLayout {
-                    width: 100%;
-                    spacing: 0px;
-                    for row[i] in root.env_rows : DetailRow {
-                        data: row;
-                        head_gap: i > 0;
-                    }
+                    width: 100%; spacing: 0px;
+                    for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }
                 }
             }
-        }   // 闭 content
-    }       // 闭 body
+        }
+    }
 }

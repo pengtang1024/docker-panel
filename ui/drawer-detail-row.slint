@@ -1,0 +1,104 @@
+// drawer-detail-row.slint — Drawer 详情/环境行（四种 kind 变体）
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { DetailPair } from "models.slint";
+
+export component DetailRow inherits Rectangle {
+    in property <DetailPair> data;
+    in property <bool> head_gap: false;
+
+    if root.data.kind == 1 : VerticalLayout {
+        width: 100%;
+        spacing: 0px;
+        if root.head_gap : Rectangle { height: 1px; background: Theme.line; }
+        Rectangle { height: Theme.s5; }
+        HorizontalLayout {
+            width: 100%;
+            padding-left: Theme.s6; padding-right: Theme.s6;
+            alignment: center;
+            VCenterText {
+                text: root.data.k;
+                font-size: Theme.fs_xs; font-weight: 700;
+                color: Theme.ink_3; letter-spacing: 1.1px;
+                horizontal-stretch: 1; wrap: word-wrap;
+            }
+        }
+        Rectangle { height: 10px; }
+    }
+
+    if root.data.kind == 0 : HorizontalLayout {
+        width: 100%;
+        spacing: Theme.s4;
+        padding-left: Theme.s6; padding-right: Theme.s6;
+        padding-top: 5px; padding-bottom: 5px;
+        alignment: center;
+        RightText {
+            text: root.data.k; width: 62px;
+            font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
+        }
+        VCenterText {
+            text: root.data.v;
+            font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
+            font-family: root.data.mono ? Theme.mono : "";
+            color: root.data.mono ? Theme.ink_2 : Theme.ink;
+            font-weight: 500; horizontal-stretch: 1; wrap: word-wrap;
+        }
+    }
+
+    if root.data.kind == 2 : HorizontalLayout {
+        width: 100%;
+        spacing: Theme.s4;
+        padding-left: Theme.s6; padding-right: Theme.s6;
+        padding-top: 5px; padding-bottom: 5px;
+        alignment: center;
+        RightText {
+            text: root.data.k; width: 62px;
+            font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            border-radius: Theme.r_md; background: Theme.bg;
+            border-width: 1px; border-color: Theme.line;
+            HorizontalLayout {
+                width: 100%;
+                padding-left: 11px; padding-right: 11px;
+                padding-top: 9px; padding-bottom: 9px;
+                alignment: center;
+                VCenterText {
+                    text: root.data.v;
+                    font-size: Theme.fs_sm; font-family: Theme.mono;
+                    color: Theme.ink_2; horizontal-stretch: 1; wrap: word-wrap;
+                }
+            }
+        }
+    }
+
+    if root.data.kind == 3 : VerticalLayout {
+        width: 100%;
+        spacing: 0px;
+        padding-left: Theme.s6; padding-right: Theme.s6;
+        padding-top: 2px; padding-bottom: 2px;
+        Rectangle {
+            width: 100%;
+            border-radius: Theme.r_xs; background: Theme.bg;
+            border-width: 1px; border-color: Theme.line;
+            HorizontalLayout {
+                width: 100%;
+                padding-left: Theme.s3; padding-right: Theme.s3;
+                padding-top: Theme.s1; padding-bottom: Theme.s1;
+                alignment: center;
+                VCenterText {
+                    text: root.data.k == "" ? root.data.v : root.data.k + "=";
+                    font-size: Theme.fs_sm; font-family: Theme.mono;
+                    color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
+                    horizontal-stretch: root.data.k == "" ? 1 : 0; wrap: word-wrap;
+                }
+                if root.data.k != "" : VCenterText {
+                    text: root.data.v;
+                    font-size: Theme.fs_sm; font-family: Theme.mono;
+                    color: Theme.ink_2; horizontal-stretch: 1; wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

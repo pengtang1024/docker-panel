@@ -80,6 +80,8 @@ export component MainWindow inherits Window {
     in-out property <bool> docker_ok: false;
     in-out property <string> status_text: @tr("Connecting...");
     in-out property <int> batch_count: 0;
+    /// 多选模式独立开关（与 batch_count 解耦：进入 sel-mode 后可先不选任何项）
+    in-out property <bool> sel_mode: false;
 
     // —— 统计 ——
     in-out property <int> total_containers: 0;
@@ -164,6 +166,10 @@ export component MainWindow inherits Window {
                 } else if (root.batch_count > 0) {
                     // sel-mode 退出：清空多选 → 复选框随之隐藏
                     AppActions.batch_clear();
+                    root.sel_mode = false;
+                } else if (root.sel_mode) {
+                    // sel-mode=true 但还没选任何项 → 直接退出
+                    root.sel_mode = false;
                 }
                 // 弹窗/抽屉被条件渲染移除后其内部焦点会悬空，把焦点收回全局快捷键层
                 global-shortcuts.focus();
@@ -194,6 +200,7 @@ export component MainWindow inherits Window {
             filter <=> root.filter;
             sort_field <=> root.sort_field;
             sort_desc <=> root.sort_desc;
+            sel_mode <=> root.sel_mode;
             compose_rows <=> root.compose_rows;
             total_containers <=> root.total_containers;
             running_containers <=> root.running_containers;
@@ -204,6 +211,7 @@ export component MainWindow inherits Window {
             set_filter(f) => { AppActions.set_filter(f); }
             set_sort(f) => { AppActions.set_sort(f); }
             set_sort_dir() => { AppActions.set_sort_dir(); }
+            sel_toggle() => { root.sel_mode = root.sel_mode == false; if (root.sel_mode == false) { AppActions.batch_clear(); } }
         }
 
         if root.batch_count > 0: BatchBar {
@@ -219,7 +227,7 @@ export component MainWindow inherits Window {
         CardsArea {
             vertical-stretch: 1;
             view <=> root.view;
-            sel_mode: root.batch_count > 0;
+            sel_mode <=> root.sel_mode;
             containers <=> root.container_rows;
             images <=> root.image_rows;
             networks <=> root.network_rows;

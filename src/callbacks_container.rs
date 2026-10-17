@@ -149,20 +149,31 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
 
     // Checkbox 切换选中
     {
+        let ui_c = ui.as_weak();
         let s = state.clone();
         actions.on_container_toggle_select(move |row_id: SharedString| {
+            let Some(ui) = ui_c.upgrade() else { return };
             if let Ok(mut st) = s.lock() {
                 st.batch.toggle(row_id.to_string());
+                let n = st.batch.selected_ids.len() as i32;
+                drop(st);
+                ui.set_batch_count(n);
             }
         });
     }
 
     // 批量清除
     {
+        let ui_b = ui.as_weak();
         let s = state.clone();
         actions.on_batch_clear(move || {
             if let Ok(mut st) = s.lock() {
                 st.batch.clear();
+                drop(st);
+                if let Some(ui) = ui_b.upgrade() {
+                    ui.set_batch_count(0);
+                    ui.set_sel_mode(false);
+                }
             }
         });
     }

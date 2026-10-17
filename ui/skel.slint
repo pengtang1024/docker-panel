@@ -1,0 +1,79 @@
+// skel.slint — 骨架屏占位组件（prototype .skel-card / .skel-line）
+// 仅在 loading 中间态使用：首次数据拉取 / refresh 期间。
+// 注：shimmer 动画需要 LinearGradient 填充 Path，Slint 1.18 Rectangle 不支持
+// LinearGradient background；未来如需 shimmer 可改为 Path + fill: LinearGradient。
+import { Theme } from "theme.slint";
+
+// 骨架卡片：4 条 SkelLine（不同宽度）+ 左侧 3px 竖线装饰
+export component SkelCard inherits Rectangle {
+    width: 100%;
+    height: 104px;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: Theme.r;
+
+    // 左侧 3px 装饰竖线（与骨架线同色）
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.skel;
+    }
+
+    VerticalLayout {
+        width: 100%;
+        height: 100%;
+        padding-left: 11px;
+        padding-top: 9px;
+        padding-bottom: 7px;
+        spacing: 8px;
+
+        // width_ratio 模拟：各条线不同宽度（对齐原型 w60/w40/w80/w30）
+        Rectangle {
+            width: 60%;
+            height: 12px;
+            background: Theme.skel;
+            border-radius: 4px;
+        }
+        Rectangle {
+            width: 40%;
+            height: 12px;
+            background: Theme.skel;
+            border-radius: 4px;
+        }
+        Rectangle {
+            width: 80%;
+            height: 12px;
+            background: Theme.skel;
+            border-radius: 4px;
+        }
+        Rectangle {
+            width: 30%;
+            height: 12px;
+            background: Theme.skel;
+            border-radius: 4px;
+        }
+    }
+}
+
+// 网格骨架屏：for 循环渲染 6 个 SkelCard（两行 × 三列）
+export component SkelGrid inherits Flickable {
+    VerticalLayout {
+        width: 100%;
+        spacing: 12px;
+
+        HorizontalLayout {
+            width: 100%;
+            spacing: 12px;
+            for i[i] in 3 : SkelCard { }
+        }
+        HorizontalLayout {
+            width: 100%;
+            spacing: 12px;
+            for i[i] in 3 : SkelCard { }
+        }
+    }
+}

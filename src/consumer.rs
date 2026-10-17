@@ -92,6 +92,8 @@ fn pump_and_apply(
     let ui_w = ui_weak.clone();
     invoke_from_event_loop(move || {
         let Some(ui) = ui_w.upgrade() else { return };
+        // 首次刷新到达，关闭骨架屏 loading 态（后续 interval 重复 set 无副作用）
+        ui.set_loading(false);
         // 走 render::*（thread_local 缓存模型就地同步）而非 ModelRc::from：
         // 后者每次都是新模型对象，Slint 会重置 Repeater 销毁全部行组件
         let cm = crate::render::containers(container_rows);

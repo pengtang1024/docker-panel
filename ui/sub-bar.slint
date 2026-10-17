@@ -78,9 +78,9 @@ export component SubBar inherits Rectangle {
     HorizontalLayout {
         width: 100%;
         height: 100%;
-        spacing: Theme.s4;
-        padding-left: Theme.s5;
-        padding-right: Theme.s5;
+        spacing: 6px;
+        padding-left: 14px;
+        padding-right: 14px;
 
         Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
         Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
@@ -104,13 +104,13 @@ export component SubBar inherits Rectangle {
             HorizontalLayout {
                 width: 100%;
                 height: 100%;
-                spacing: Theme.s2;
-                padding-left: Theme.s3;
-                padding-right: Theme.s3;
+                spacing: 6px;
+                padding-left: 10px;
+                padding-right: 10px;
                 VCenterText { text: "↕"; color: Theme.ink_3; font-size: 12px; }
                 VCenterText {
                     text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];
-                    font-size: Theme.fs_xs;
+                    font-size: 12px;
                     color: Theme.ink_2;
                 }
                 Rectangle {

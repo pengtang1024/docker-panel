@@ -1,8 +1,9 @@
 // components-state.slint — 状态层抽象
-// StateArea = Rectangle(背景) + TouchArea(点击) + StateLayer(hover/disabled) + @children
+// StateArea = Rectangle(背景) + TouchArea(点击) + StateLayer(hover/disabled overlay) + @children
+// ⚠️ z-order 铁律：TouchArea → StateLayer（opacity 0→0.08 overlay）→ @children（内容在最顶层）
 import { Theme } from "theme.slint";
 
-/// StateLayer — hover/disabled 两态 background overlay
+/// StateLayer — hover/disabled 两态 background overlay（opacity 0→0.08）
 export component StateLayer inherits Rectangle {
     in property <color> layer_color: Theme.ink;
     in property <length> layer_radius: Theme.r_sm;
@@ -23,6 +24,7 @@ export component StateLayer inherits Rectangle {
 }
 
 /// StateArea — Rectangle(背景) + TouchArea(点击) + StateLayer + @children
+/// 渲染顺序（后声明在上层）：TouchArea(透明点击) → StateLayer(hover overlay) → @children(图标/文字)
 export component StateArea inherits Rectangle {
     in property <color> layer_color: Theme.ink;
     in property <length> layer_radius: Theme.r_sm;

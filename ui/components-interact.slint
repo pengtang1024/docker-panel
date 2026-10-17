@@ -28,8 +28,7 @@ export component TipLayer inherits Rectangle {
     }
 }
 
-// ============ IconBtn（API 完全兼容旧版）============
-// 内部用 StateArea + states DSL 重写，统一 hover/pressed/disabled 状态
+// ============ IconBtn（严格对齐 prototype .icon-btn{width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card);display:grid;place-items:center}）============
 export component IconBtn inherits Rectangle {
     in-out property <string> glyph: "";
     in-out property <bool> primary: false;
@@ -41,32 +40,30 @@ export component IconBtn inherits Rectangle {
     in-out property <length> size: 32px;
     in-out property <length> glyph_size: 16px;
     in-out property <string> tip: "";
-    in-out property <color> rest_bg: Theme.bg;
+    in-out property <color> rest_bg: Theme.card;
     in-out property <color> hover_fg: Theme.ink;
     out property <bool> hovered: area.has_hover;
     callback clicked();
 
     width: root.size;
     height: root.size;
-    border-radius: Theme.r_sm;
-    border-width: (root.primary || (root.outline == false && root.active == false)) ? 0px : 1px;
-    border-color: root.outline ? Theme.line : Theme.ok;
+    border-radius: Theme.r_md;
+    border-width: 1px;
+    border-color: root.outline ? Theme.line : (root.active ? Theme.ok : Theme.line);
     opacity: root.hidden ? 0.0 : 1.0;
     animate opacity { duration: 120ms; easing: ease-out; }
 
-    // 背景三态：base(rest_bg) → active(pill_on_bg/ok) → primary(ink)
     property <color> base_bg: root.primary ? Theme.ink
         : root.active ? Theme.pill_on_bg
-        : root.danger ? root.rest_bg
+        : root.danger ? Theme.card
         : root.rest_bg;
 
     area := StateArea {
         width: 100%; height: 100%;
         area_enabled: root.enabled && root.hidden == false;
-        layer_color: root.danger ? Theme.err_bg : root.outline ? Theme.bg : Theme.row_hover;
-        layer_radius: Theme.r_sm;
+        layer_color: root.danger ? Theme.err_bg : root.outline ? Theme.bg : Theme.bg;
+        layer_radius: Theme.r_md;
         clicked => { root.clicked(); }
-
         background: base_bg;
     }
 
@@ -129,11 +126,11 @@ export component TextButton inherits Rectangle {
     }
 }
 
-// ============ 状态圆点 ============
+// ============ 状态圆点（严格对齐 prototype .status-dot{width:7px;height:7px}）============
 export component Dot inherits Rectangle {
     in-out property <bool> on: false;
     in-out property <string> tip: "";
-    width: 8px; height: 8px; border-radius: 4px;
+    width: 7px; height: 7px; border-radius: 3px;
     background: root.on ? Theme.ok : Theme.stop;
 
     touch := TouchArea { width: 100%; height: 100%; }
@@ -144,7 +141,7 @@ export component Dot inherits Rectangle {
     }
 }
 
-// ============ CheckBox（完整状态机 + hover/disabled + label 插槽）============
+// ============ CheckBox（严格对齐 prototype .check{border-radius:5px}）============
 export component CheckBox inherits Rectangle {
     in-out property <bool> checked: false;
     in-out property <bool> enabled: true;
@@ -154,7 +151,7 @@ export component CheckBox inherits Rectangle {
 
     height: root.box;
     width: root.box;
-    border-radius: Theme.r_xs;
+    border-radius: 5px;
     border-width: 1.5px;
 
     property <color> border_base: root.checked ? transparent : (root.error ? Theme.err : Theme.ink_4);
@@ -183,7 +180,7 @@ export component CheckCell inherits CheckBox {
     // 完全继承 CheckBox，保持旧名 API 兼容
 }
 
-// ============ 菜单项 ============
+// ============ 菜单项（严格对齐 prototype .dropdown .di{height:30px;padding:0 10px;font-size:12px;font-weight:500}）============
 export component MenuItem inherits Rectangle {
     in-out property <string> glyph: "";
     in-out property <string> label: "";
@@ -191,23 +188,22 @@ export component MenuItem inherits Rectangle {
     in-out property <bool> active: false;
     callback clicked();
 
-    height: 26px;
+    height: 30px;
     border-radius: Theme.r_xs;
     area := StateArea {
         width: 100%; height: 100%;
         area_enabled: true;
-        layer_color: root.danger ? Theme.err_bg : Theme.row_hover;
+        layer_color: root.danger ? Theme.err_bg : Theme.bg;
         layer_radius: Theme.r_xs;
         clicked => { root.clicked(); }
     }
 
     HorizontalLayout {
-        alignment: center;
         width: 100%; height: 100%;
-        spacing: Theme.s3;
-        padding-left: Theme.s3; padding-right: Theme.s3;
+        spacing: 8px;
+        padding-left: 10px; padding-right: 10px;
         VCenterText {
-            text: root.glyph; font-size: 11px; width: 14px;
+            text: root.glyph; font-size: 12px; width: 14px;
             color: root.danger ? Theme.err : Theme.ink_3;
         }
         VCenterText {

@@ -101,11 +101,17 @@ export component IconBtn inherits Rectangle {
 
     Path {
         width: root.icon_size; height: root.icon_size;
+        x: (root.size - root.icon_size) / 2;
+        y: (root.size - root.icon_size) / 2;
         commands: icon_path;
         stroke: icon_color;
         stroke-width: 1.5px;
         stroke-line-cap: round;
         stroke-line-join: round;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: 24;
+        viewbox-height: 24;
         fill: transparent;
         visible: icon_path != "";
     }
@@ -254,7 +260,11 @@ export component MenuItem inherits Rectangle {
             stroke-width: 1.5px;
             stroke-line-cap: round;
             stroke-line-join: round;
-            fill: transparent;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: transparent;
             visible: icon_commands != "";
         }
         VCenterText {

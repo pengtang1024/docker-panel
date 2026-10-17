@@ -22,7 +22,11 @@ export component EmptyState inherits Rectangle {
             stroke-width: 1.5px;
             stroke-line-cap: round;
             stroke-line-join: round;
-            fill: transparent;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: transparent;
             visible: icon_commands != "";
         }
         CenterText { text: root.title; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink_2; width: 100%; }

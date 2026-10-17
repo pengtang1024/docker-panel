@@ -1,4 +1,4 @@
-// cards.slint — 卡片网格区域
+// cards.slint — 卡片网格区域（自适应多列 + 垂直滚动）
 import { Theme } from "theme.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
 
@@ -8,7 +8,6 @@ component ContainerCard inherits Rectangle {
     callback toggle(string);
     callback logs(string);
     callback remove(string);
-    width: 280px;
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
@@ -17,8 +16,8 @@ component ContainerCard inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s2;
         padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
-        Text { text: data.image; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
+        Text { text: data.image; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
         HorizontalLayout {
             width: 100%;
             spacing: Theme.s3;
@@ -31,6 +30,7 @@ component ContainerCard inherits Rectangle {
                 text: data.compose_project;
                 font-size: Theme.fs_xs;
                 color: Theme.bar_cpu;
+                overflow: elide;
             }
         }
         HorizontalLayout {
@@ -65,7 +65,6 @@ component ImageCard inherits Rectangle {
     in property <ImageRow> data;
     callback select(string);
     callback remove(string);
-    width: 280px;
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
@@ -74,12 +73,13 @@ component ImageCard inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s2;
         padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
-        Text { text: data.tag; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
+        Text { text: data.tag; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
         HorizontalLayout {
             spacing: Theme.s4;
             Text { text: data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
             Text { text: @tr("{0} in use", data.containers); font-size: Theme.fs_xs; color: Theme.ink_3; }
+            Rectangle { horizontal-stretch: 1; }
         }
         HorizontalLayout {
             padding-top: Theme.s2;
@@ -103,7 +103,6 @@ component ImageCard inherits Rectangle {
 
 component NetworkCard inherits Rectangle {
     in property <NetworkRow> data;
-    width: 280px;
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
@@ -112,15 +111,14 @@ component NetworkCard inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s2;
         padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
-        Text { text: data.driver + " · " + data.scope; font-size: Theme.fs_xs; color: Theme.ink_3; }
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
+        Text { text: data.driver + " · " + data.scope; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
         Text { text: @tr("{0} container" | "{0} containers" % data.containers, data.containers); font-size: Theme.fs_xs; color: Theme.ink_2; }
     }
 }
 
 component VolumeCard inherits Rectangle {
     in property <VolumeRow> data;
-    width: 280px;
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
@@ -129,9 +127,9 @@ component VolumeCard inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s2;
         padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
-        Text { text: data.mountpoint; font-size: Theme.fs_xs; color: Theme.ink_3; }
-        Text { text: data.driver + " · " + data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
+        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
+        Text { text: data.mountpoint; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
+        Text { text: data.driver + " · " + data.size; font-size: Theme.fs_xs; color: Theme.ink_2; overflow: elide; }
     }
 }
 
@@ -151,30 +149,73 @@ export component CardsArea inherits Rectangle {
     callback i_select(string);
     callback i_remove(string);
 
-    if root.view == 0 : VerticalLayout {
+    // —— 网格几何：按宽度自适应列数（全部用 float，避免 int/float 隐式转换）——
+    property <length> pad: Theme.s5;
+    property <length> gap: Theme.s4;
+    property <length> card_h: 128px;
+    property <length> card_min: 296px;
+    property <float> per_row: Math.max(1, Math.floor((self.width - 2 * pad + gap) / (card_min + gap)));
+    property <float> row_cnt: Math.ceil(n / per_row);
+    property <int> n: view == 0 ? containers.length
+                    : view == 1 ? images.length
+                    : view == 2 ? networks.length
+                    : volumes.length;
+    // 单元格宽度：总宽均分后减去列间 gap
+    property <length> pitch: (self.width - 2 * pad - (per_row - 1) * gap) / per_row;
+
+    if root.view == 0 : Flickable {
         width: 100%; height: 100%;
-        for row in root.containers : ContainerCard {
-            data <=> row;
+        viewport-width: self.width;
+        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+        for row[i] in root.containers : ContainerCard {
+            data: row;
+            x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
+            y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
+            width: root.pitch;
+            height: root.card_h;
             select(id) => { root.c_select(id); }
             toggle(id) => { root.c_toggle(id); }
             logs(id) => { root.c_logs(id); }
             remove(id) => { root.c_remove(id); }
         }
     }
-    if root.view == 1 : VerticalLayout {
+    if root.view == 1 : Flickable {
         width: 100%; height: 100%;
-        for row in root.images : ImageCard {
-            data <=> row;
+        viewport-width: self.width;
+        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+        for row[i] in root.images : ImageCard {
+            data: row;
+            x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
+            y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
+            width: root.pitch;
+            height: root.card_h;
             select(id) => { root.i_select(id); }
             remove(id) => { root.i_remove(id); }
         }
     }
-    if root.view == 2 : VerticalLayout {
+    if root.view == 2 : Flickable {
         width: 100%; height: 100%;
-        for row in root.networks : NetworkCard { data <=> row; }
+        viewport-width: self.width;
+        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+        for row[i] in root.networks : NetworkCard {
+            data: row;
+            x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
+            y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
+            width: root.pitch;
+            height: root.card_h;
+        }
     }
-    if root.view == 3 : VerticalLayout {
+    if root.view == 3 : Flickable {
         width: 100%; height: 100%;
-        for row in root.volumes : VolumeCard { data <=> row; }
+        viewport-width: self.width;
+        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+        for row[i] in root.volumes : VolumeCard {
+            data: row;
+            x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
+            y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
+            width: root.pitch;
+            height: root.card_h;
+        }
     }
 }
+

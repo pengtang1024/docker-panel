@@ -227,6 +227,9 @@ export component MainWindow inherits Window {
     }
 
     Drawer {
+        // 未显式定位的元素默认在父级居中（x=(1280-400)/2=440），必须显式绑定到窗口右侧
+        x: root.drawer_open ? root.width - Theme.drawer_w : root.width;
+        animate x { duration: 180ms; easing: ease-out; }
         open <=> root.drawer_open;
         tab <=> root.drawer_tab;
         log_follow <=> root.log_follow;

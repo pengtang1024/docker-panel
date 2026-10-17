@@ -2,6 +2,7 @@
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
 import { TextButton, CheckBox, ProgressBar } from "components-interact.slint";
+import { TextField } from "components-form.slint";
 import { DialogShell, BodySlot, FooterSlot } from "components-dialog.slint";
 
 // ============ CleanItem — 清理行 ============
@@ -66,30 +67,11 @@ export component PullDialog inherits DialogShell {
             width: 100%; spacing: Theme.s2; alignment: start;
 
             VCenterText { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
-            Rectangle {
-                height: 38px;
-                border-radius: Theme.r_md;
-                background: Theme.bg;
-                border-width: 1px; border-color: Theme.line;
-                HorizontalLayout {
-                    width: 100%; height: 100%;
-                    padding-left: Theme.s4; padding-right: Theme.s4;
-                    alignment: center;
-                    input_edit := TextInput {
-                        width: 100%; height: 100%;
-                        text <=> root.input;
-                        color: Theme.ink;
-                        font-family: Theme.mono;
-                        font-size: Theme.fs_md;
-                    }
-                }
-                if input_edit.text == "" : VCenterText {
-                    x: Theme.s4; y: (parent.height - self.height) / 2;
-                    text: "nginx:latest";
-                    color: Theme.ink_4;
-                    font-family: Theme.mono;
-                    font-size: Theme.fs_md;
-                }
+            TextField {
+                text <=> root.input;
+                placeholder: "nginx:latest";
+                font_family: Theme.mono;
+                font_size: Theme.fs_md;
             }
 
             VCenterText { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }

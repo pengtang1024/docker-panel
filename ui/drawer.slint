@@ -2,23 +2,9 @@
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
+import { TabItem } from "components-nav.slint";
 import { LogLineRow, DetailPair } from "models.slint";
 import { DetailRow } from "drawer-detail-row.slint";
-
-component DTab inherits Rectangle {
-    in property <string> label: "";
-    in property <bool> active: false;
-    in property <int> idx: 0;
-    callback clicked(int);
-    Rectangle {
-        y: parent.height - 2px;
-        width: 100%;
-        height: 2px;
-        background: root.active ? Theme.ink : transparent;
-    }
-    VCenterText { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; width: 100%; height: 100%; }
-    TouchArea { clicked => { root.clicked(root.idx); } }
-}
 
 export component Drawer inherits Rectangle {
     in-out property <bool> open: false;
@@ -67,14 +53,15 @@ export component Drawer inherits Rectangle {
             }
         }
 
+        // Tab 栏（用通用 TabItem，统一状态机 + indicator 下划线）
         if root.tabs_visible : Rectangle {
             height: Theme.drawer_tabs;
             Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
                 width: 100%; height: 100%; spacing: 0px; alignment: center;
-                DTab { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
-                DTab { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
-                DTab { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
+                TabItem { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
+                TabItem { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
+                TabItem { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
             }
         }
 

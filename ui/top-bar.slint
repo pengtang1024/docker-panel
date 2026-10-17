@@ -20,6 +20,9 @@ export component TopBar inherits Rectangle {
     callback cleanup_click();
     callback pull_click();
     callback search(string);
+    /// 快捷键 Ctrl+K 触发：把键盘焦点交给搜索框
+    callback focus_search();
+    focus_search() => { search_input.focus(); }
 
     HorizontalLayout {
         width: 100%;
@@ -42,7 +45,7 @@ export component TopBar inherits Rectangle {
             background: root.docker_ok ? Theme.ok : Theme.stop;
         }
         Text {
-            text: root.docker_ok ? "Connected" : "Disconnected";
+            text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: Theme.fs_sm;
             color: Theme.ink_3;
         }
@@ -68,7 +71,7 @@ export component TopBar inherits Rectangle {
                     color: Theme.ink_3;
                     font-size: Theme.fs_md;
                 }
-                TextInput {
+                search_input := TextInput {
                     horizontal-stretch: 1;
                     text <=> root.search_q;
                     color: Theme.ink;
@@ -116,7 +119,7 @@ export component TopBar inherits Rectangle {
             height: 32px;
             border-radius: Theme.r_sm;
             background: Theme.ink;
-            Text { text: "Pull"; color: Theme.card; font-size: Theme.fs_sm; font-weight: 600; }
+            Text { text: @tr("Pull"); color: Theme.card; font-size: Theme.fs_sm; font-weight: 600; }
             TouchArea { clicked => { root.pull_click(); } }
         }
     }

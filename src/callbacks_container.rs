@@ -3,7 +3,8 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
-use crate::models::{Msg, SortField};
+use crate::i18n::{t, trf};
+use crate::models::Msg;
 use crate::slint_gen::*;
 use crate::ui_state::SharedState;
 
@@ -16,7 +17,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_toggle(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("切换容器状态..."));
+            ui.set_status_text(SharedString::from(t("Toggling container...").as_str()));
 
             let is_running = {
                 let Ok(st) = s.lock() else { return };
@@ -34,10 +35,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 rt_handle.spawn(async move {
                     match docker::stop_container(&id).await {
                         Ok(_) => {
-                            let _ = tx.send(Msg::ActionDone("容器已停止".into(), Ok("ok".into())));
+                            let _ = tx
+                                .send(Msg::ActionDone("Container stopped".into(), Ok("ok".into())));
                         }
                         Err(e) => {
-                            let _ = tx.send(Msg::ActionDone("停止失败".into(), Err(e)));
+                            let _ = tx.send(Msg::ActionDone("Failed to stop".into(), Err(e)));
                         }
                     }
                 });
@@ -45,10 +47,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 rt_handle.spawn(async move {
                     match docker::start_container(&id).await {
                         Ok(_) => {
-                            let _ = tx.send(Msg::ActionDone("容器已启动".into(), Ok("ok".into())));
+                            let _ = tx
+                                .send(Msg::ActionDone("Container started".into(), Ok("ok".into())));
                         }
                         Err(e) => {
-                            let _ = tx.send(Msg::ActionDone("启动失败".into(), Err(e)));
+                            let _ = tx.send(Msg::ActionDone("Failed to start".into(), Err(e)));
                         }
                     }
                 });
@@ -68,10 +71,13 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             rt_handle.spawn(async move {
                 match docker::restart_container(&id).await {
                     Ok(_) => {
-                        let _ = tx.send(Msg::ActionDone("容器已重启".into(), Ok("ok".into())));
+                        let _ = tx.send(Msg::ActionDone(
+                            "Container restarted".into(),
+                            Ok("ok".into()),
+                        ));
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::ActionDone("重启失败".into(), Err(e)));
+                        let _ = tx.send(Msg::ActionDone("Failed to restart".into(), Err(e)));
                     }
                 }
             });
@@ -90,10 +96,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             rt_handle.spawn(async move {
                 match docker::remove_container(&id).await {
                     Ok(_) => {
-                        let _ = tx.send(Msg::ActionDone("容器已删除".into(), Ok("ok".into())));
+                        let _ =
+                            tx.send(Msg::ActionDone("Container removed".into(), Ok("ok".into())));
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::ActionDone("删除失败".into(), Err(e)));
+                        let _ = tx.send(Msg::ActionDone("Failed to remove".into(), Err(e)));
                     }
                 }
             });
@@ -117,7 +124,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
-            ui.set_status_text(SharedString::from(format!("查看 {id}")));
+            ui.set_status_text(SharedString::from(trf("Inspect {0}", &[&id]).as_str()));
             bind_inspect(&s, id);
         });
     }
@@ -234,10 +241,16 @@ fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
     let id = id.to_string();
     rt_handle.spawn(async move {
         let (desc, result) = match op {
-            OpKind::Start => (format!("启动 {id}"), docker::start_container(&id).await),
-            OpKind::Stop => (format!("停止 {id}"), docker::stop_container(&id).await),
-            OpKind::Restart => (format!("重启 {id}"), docker::restart_container(&id).await),
-            OpKind::Remove => (format!("删除 {id}"), docker::remove_container(&id).await),
+            OpKind::Start => (trf("Start {0}", &[&id]), docker::start_container(&id).await),
+            OpKind::Stop => (trf("Stop {0}", &[&id]), docker::stop_container(&id).await),
+            OpKind::Restart => (
+                trf("Restart {0}", &[&id]),
+                docker::restart_container(&id).await,
+            ),
+            OpKind::Remove => (
+                trf("Remove {0}", &[&id]),
+                docker::remove_container(&id).await,
+            ),
         };
         let _ = tx.send(Msg::ActionDone(desc, result));
     });

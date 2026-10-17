@@ -79,7 +79,7 @@ component ImageCard inherits Rectangle {
         HorizontalLayout {
             spacing: Theme.s4;
             Text { text: data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
-            Text { text: data.containers + " used"; font-size: Theme.fs_xs; color: Theme.ink_3; }
+            Text { text: @tr("{0} in use", data.containers); font-size: Theme.fs_xs; color: Theme.ink_3; }
         }
         HorizontalLayout {
             padding-top: Theme.s2;
@@ -114,7 +114,7 @@ component NetworkCard inherits Rectangle {
         padding: Theme.s4;
         Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; }
         Text { text: data.driver + " · " + data.scope; font-size: Theme.fs_xs; color: Theme.ink_3; }
-        Text { text: data.containers + " containers"; font-size: Theme.fs_xs; color: Theme.ink_2; }
+        Text { text: @tr("{0} container" | "{0} containers" % data.containers, data.containers); font-size: Theme.fs_xs; color: Theme.ink_2; }
     }
 }
 

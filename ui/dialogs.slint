@@ -50,7 +50,7 @@ export component PullDialog inherits Rectangle {
             spacing: Theme.s4;
             padding: Theme.s5;
 
-            Text { text: "Pull Image"; font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+            Text { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
 
             Rectangle {
                 height: 36px;
@@ -85,17 +85,25 @@ export component PullDialog inherits Rectangle {
                 spacing: Theme.s3;
                 Rectangle { horizontal-stretch: 1; }
                 Rectangle {
-                    height: 32px; padding-left: Theme.s4; padding-right: Theme.s4;
+                    height: 32px;
                     border-radius: Theme.r_sm;
                     background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                    Text { text: "Cancel"; font-size: Theme.fs_sm; color: Theme.ink_2; }
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: Theme.s4; padding-right: Theme.s4;
+                        Text { text: @tr("Cancel"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+                    }
                     TouchArea { clicked => { root.close(); } }
                 }
                 Rectangle {
-                    height: 32px; padding-left: Theme.s4; padding-right: Theme.s4;
+                    height: 32px;
                     border-radius: Theme.r_sm;
                     background: Theme.ink;
-                    Text { text: "Pull"; font-size: Theme.fs_sm; font-weight: 600; color: Theme.card; }
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: Theme.s4; padding-right: Theme.s4;
+                        Text { text: @tr("Pull"); font-size: Theme.fs_sm; font-weight: 600; color: Theme.card; }
+                    }
                     TouchArea { clicked => { root.submit(root.input); } }
                 }
             }
@@ -124,12 +132,12 @@ export component CleanupDialog inherits Rectangle {
             spacing: Theme.s3;
             padding: Theme.s5;
 
-            Text { text: "Cleanup Resources"; font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+            Text { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
 
-            CleanItem { label: "Stopped Containers"; desc: "Remove all stopped containers"; checked <=> root.stopped; }
-            CleanItem { label: "Dangling Images"; desc: "Remove unused image layers"; checked <=> root.dangling; }
-            CleanItem { label: "Unused Networks"; desc: "Remove networks not in use"; checked <=> root.unused_net; }
-            CleanItem { label: "Unused Volumes"; desc: "Remove volumes not in use"; checked <=> root.unused_vol; }
+            CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); checked <=> root.stopped; }
+            CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); checked <=> root.dangling; }
+            CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); checked <=> root.unused_net; }
+            CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); checked <=> root.unused_vol; }
 
             Rectangle { vertical-stretch: 1; }
 
@@ -137,17 +145,25 @@ export component CleanupDialog inherits Rectangle {
                 spacing: Theme.s3;
                 Rectangle { horizontal-stretch: 1; }
                 Rectangle {
-                    height: 32px; padding-left: Theme.s4; padding-right: Theme.s4;
+                    height: 32px;
                     border-radius: Theme.r_sm;
                     background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                    Text { text: "Cancel"; font-size: Theme.fs_sm; color: Theme.ink_2; }
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: Theme.s4; padding-right: Theme.s4;
+                        Text { text: @tr("Cancel"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+                    }
                     TouchArea { clicked => { root.close(); } }
                 }
                 Rectangle {
-                    height: 32px; padding-left: Theme.s4; padding-right: Theme.s4;
+                    height: 32px;
                     border-radius: Theme.r_sm;
                     background: Theme.err;
-                    Text { text: "Cleanup"; font-size: Theme.fs_sm; font-weight: 600; color: #fff; }
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: Theme.s4; padding-right: Theme.s4;
+                        Text { text: @tr("Cleanup"); font-size: Theme.fs_sm; font-weight: 600; color: #fff; }
+                    }
                     TouchArea { clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
                 }
             }

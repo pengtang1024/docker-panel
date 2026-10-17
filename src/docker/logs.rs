@@ -11,7 +11,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let raw = docker
         .inspect_container(id, None)
         .await
-        .map_err(|e| format!("inspect 容器失败: {e}"))?;
+        .map_err(|e| crate::i18n::trf("inspect container failed: {0}", &[&e.to_string()]))?;
 
     let name = raw.name.clone().unwrap_or_default();
     let name = name.trim_start_matches('/').to_string();

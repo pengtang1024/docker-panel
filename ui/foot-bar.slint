@@ -45,28 +45,28 @@ export component FootBar inherits Rectangle {
         padding-right: Theme.s4;
 
         Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.docker_ok ? Theme.ok : Theme.stop; }
+        Rectangle { width: Theme.s2; }
         Text {
             text: root.status;
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
-            padding-left: Theme.s2;
         }
 
         Rectangle { width: 1px; height: 16px; background: Theme.line_2; }
 
-        OvItem { label: "Docker"; val: "v26.1"; ic: "▣"; }
-        OvItem { label: "Containers"; val: root.running_containers + "/" + root.total_containers; ic: "▢"; }
-        OvItem { label: "Images"; val: root.total_images; ic: "▤"; }
-        OvItem { label: "Networks"; val: root.total_networks; ic: "⬡"; }
-        OvItem { label: "Volumes"; val: root.total_volumes; ic: "▦"; }
-        OvItem { label: "CPU"; val: root.cpu_total; ic: "◐"; }
-        OvItem { label: "Memory"; val: root.mem_total; ic: "▥"; }
-        OvItem { label: "Disk"; val: root.disk_total; ic: "▣"; show_border: false; }
+        OvItem { label: @tr("Docker"); val: "v26.1"; ic: "▣"; }
+        OvItem { label: @tr("Containers"); val: root.running_containers + "/" + root.total_containers; ic: "▢"; }
+        OvItem { label: @tr("Images"); val: root.total_images; ic: "▤"; }
+        OvItem { label: @tr("Networks"); val: root.total_networks; ic: "⬡"; }
+        OvItem { label: @tr("Volumes"); val: root.total_volumes; ic: "▦"; }
+        OvItem { label: @tr("CPU"); val: root.cpu_total; ic: "◐"; }
+        OvItem { label: @tr("Memory"); val: root.mem_total; ic: "▥"; }
+        OvItem { label: @tr("Disk"); val: root.disk_total; ic: "▣"; show_border: false; }
 
         Rectangle { horizontal-stretch: 1; }
 
         Text {
-            text: root.total_containers + " containers · " + root.total_images + " images · " + root.total_networks + " nets · " + root.total_volumes + " vols";
+            text: @tr("{0} containers · {1} images · {2} nets · {3} vols", root.total_containers, root.total_images, root.total_networks, root.total_volumes);
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
         }

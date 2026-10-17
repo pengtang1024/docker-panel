@@ -8,10 +8,9 @@ use crate::models::ImageDetail;
 /// inspect 单个镜像
 pub async fn inspect_image(name: &str) -> Result<ImageDetail, String> {
     let docker = connect()?;
-    let img = docker
-        .inspect_image(name)
-        .await
-        .map_err(|e| format!("镜像详情失败 ({name}): {e}"))?;
+    let img = docker.inspect_image(name).await.map_err(|e| {
+        crate::i18n::trf("Image inspect failed ({0}): {1}", &[name, &e.to_string()])
+    })?;
     Ok(map_image_inspect(img))
 }
 

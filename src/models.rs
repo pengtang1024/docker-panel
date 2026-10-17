@@ -228,4 +228,46 @@ pub enum SortField {
     Cpu,
     /// 按内存使用
     Mem,
+    /// 按磁盘读写总量
+    Disk,
+}
+
+impl SortField {
+    /// Slint UI 索引：0=Name 1=Cpu 2=Mem 3=Disk 4=Status（Group 归到 Name）
+    pub fn to_ui_index(self) -> i64 {
+        match self {
+            SortField::Name | SortField::Group => 0,
+            SortField::Cpu => 1,
+            SortField::Mem => 2,
+            SortField::Disk => 3,
+            SortField::Status => 4,
+        }
+    }
+
+    /// 配置文件索引：比 UI 多一个 -1=Group（首次启动的默认分组视图）
+    pub fn to_config_index(self) -> i64 {
+        match self {
+            SortField::Group => -1,
+            other => other.to_ui_index(),
+        }
+    }
+
+    /// 配置索引 → 排序字段（-1=Group，越界回落 Group）
+    pub fn from_config_index(i: i64) -> SortField {
+        match i {
+            -1 => SortField::Group,
+            other => SortField::from_ui_index(other),
+        }
+    }
+
+    /// UI 索引 → 排序字段（越界回落 Name）
+    pub fn from_ui_index(i: i64) -> SortField {
+        match i {
+            1 => SortField::Cpu,
+            2 => SortField::Mem,
+            3 => SortField::Disk,
+            4 => SortField::Status,
+            _ => SortField::Name,
+        }
+    }
 }

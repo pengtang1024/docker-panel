@@ -32,5 +32,6 @@ pub use system::cleanup;
 
 /// 建立本机 Docker 连接
 pub fn connect() -> Result<Docker, String> {
-    Docker::connect_with_local_defaults().map_err(|e| format!("连接 Docker 失败: {e}"))
+    Docker::connect_with_local_defaults()
+        .map_err(|e| crate::i18n::trf("Failed to connect to Docker: {0}", &[&e.to_string()]))
 }

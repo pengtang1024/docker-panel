@@ -18,6 +18,7 @@ export global AppActions {
     callback set_view(int);
     callback set_filter(string);
     callback set_sort(int);
+    callback set_sort_dir();
     callback search(string);
     callback container_toggle(string);
     callback container_restart(string);
@@ -48,6 +49,13 @@ export component MainWindow inherits Window {
     width: 1280px; height: 760px;
     background: Theme.bg;
 
+    // 启动即把键盘焦点交给全局快捷键 FocusScope。
+    // init 里先试一次；Rust 在事件循环启动后置 boot_tick 再兜底一次
+    // （testing/winit 后端下 init 阶段焦点可能在窗口 show 时被清掉）
+    in-out property <int> boot_tick: 0;
+    init => { global-shortcuts.focus(); }
+    changed boot_tick => { if root.boot_tick > 0 { global-shortcuts.focus(); } }
+
     // —— 视图与筛选 ——
     in-out property <int> view: 0;          // 0=容器 1=镜像 2=网络 3=卷
     in-out property <string> filter: "all";
@@ -58,7 +66,7 @@ export component MainWindow inherits Window {
 
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
-    in-out property <string> status_text: "Connecting...";
+    in-out property <string> status_text: @tr("Connecting...");
     in-out property <int> batch_count: 0;
 
     // —— 统计 ——
@@ -108,11 +116,46 @@ export component MainWindow inherits Window {
     in-out property <bool> cleanup_unused_net: false;
     in-out property <bool> cleanup_unused_vol: false;
 
+    // —— 全局快捷键（capture 阶段拦截：必须是所有可聚焦元素的祖先，
+    //    否则捕获路径不含此 FocusScope，搜索框聚焦时收不到组合键）——
+    global-shortcuts := FocusScope {
+        width: 100%;
+        height: 100%;
+        capture-key-pressed(e) => {
+            if (e.modifiers.control) {
+                if (e.text == "k") {
+                    top-bar.focus_search();
+                    accept
+                } else if (e.text == "r") {
+                    AppActions.refresh();
+                    accept
+                } else if (e.text == "1" || e.text == "2" || e.text == "3" || e.text == "4") {
+                    if (e.text == "1") { root.view = 0; }
+                    else if (e.text == "2") { root.view = 1; }
+                    else if (e.text == "3") { root.view = 2; }
+                    else { root.view = 3; }
+                    AppActions.set_view(root.view);
+                    accept
+                } else {
+                    reject
+                }
+            } else if (e.text == Key.Escape) {
+                root.drawer_open = false;
+                root.pull_open = false;
+                root.cleanup_open = false;
+                // 弹窗/抽屉被条件渲染移除后其内部焦点会悬空，把焦点收回全局快捷键层
+                global-shortcuts.focus();
+                accept
+            } else {
+                reject
+            }
+        }
+
     VerticalLayout {
         width: 100%; height: 100%;
         spacing: 0px;
 
-        TopBar {
+        top-bar := TopBar {
             height: Theme.top_h;
             docker_ok <=> root.docker_ok;
             search_q <=> root.search_q;
@@ -137,6 +180,7 @@ export component MainWindow inherits Window {
             set_view(v) => { AppActions.set_view(v); }
             set_filter(f) => { AppActions.set_filter(f); }
             set_sort(f) => { AppActions.set_sort(f); }
+            set_sort_dir() => { AppActions.set_sort_dir(); }
         }
 
         if root.batch_count > 0: BatchBar {
@@ -218,5 +262,6 @@ export component MainWindow inherits Window {
         unused_vol <=> root.cleanup_unused_vol;
         close => { AppActions.cleanup_close(); }
         submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
+    }
     }
 }

@@ -3,6 +3,7 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
+use crate::i18n::trf;
 use crate::models::Msg;
 use crate::slint_gen::*;
 use crate::ui_state::SharedState;
@@ -18,7 +19,9 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
-            ui.set_status_text(SharedString::from(format!("查看镜像 {name}")));
+            ui.set_status_text(SharedString::from(
+                trf("Inspect image {0}", &[&name]).as_str(),
+            ));
             if let Ok(mut st) = s.lock() {
                 st.request_image_detail(name);
             }
@@ -41,10 +44,10 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
             rt_handle.spawn(async move {
                 match docker::remove_image(&name, &tag).await {
                     Ok(_) => {
-                        let _ = tx.send(Msg::ActionDone("镜像已删除".into(), Ok("ok".into())));
+                        let _ = tx.send(Msg::ActionDone("Image removed".into(), Ok("ok".into())));
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::ActionDone("删除镜像失败".into(), Err(e)));
+                        let _ = tx.send(Msg::ActionDone("Failed to remove image".into(), Err(e)));
                     }
                 }
             });

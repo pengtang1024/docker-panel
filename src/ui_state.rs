@@ -1,12 +1,10 @@
 //! UI 状态 + 消息处理
 //!
 //! 线程模型（修死锁版）：
-//! - AppState（Arc<Mutex<>>）只放**可共享**的状态：tokio runtime、tx、containers/images、query
+//! - AppState（Arc<Mutex<>>）只放**可共享**的状态：tokio runtime、tx、列表数据、query
 //! - mpsc::Receiver<Msg> **不在 Mutex 内** — consumer 线程独占它
-//!   → 这样 consumer 的 recv() 永远不阻塞主线程拿 state 锁
-//! - 主线程 Timer/回调 → lock state → spawn refresh/task → send tx
-//! - consumer 线程：阻塞 recv() → 收到消息后 lock state → drain_messages → 构建 UI rows
-//!   → drop state 锁 → invoke_from_event_loop 更新 Slint Model
+//!   → consumer 的 recv() 永远不阻塞主线程拿 state 锁
+//! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
@@ -16,12 +14,12 @@ use std::time::{Duration, Instant};
 
 use tokio::runtime::Runtime;
 
-use crate::{
-    batch::BatchState,
-    docker::{
-        compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
-    },
-    models::{ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo},
+use crate::batch::BatchState;
+use crate::docker::{
+    compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
+};
+use crate::models::{
+    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
 };
 use slint::SharedString;
 
@@ -49,21 +47,6 @@ pub type DetailTuple = (
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
-pub fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut v = bytes as f64;
-    let mut i = 0;
-    while v >= 1024.0 && i < UNITS.len() - 1 {
-        v /= 1024.0;
-        i += 1;
-    }
-    if i == 0 {
-        format!("{bytes} {}", UNITS[i])
-    } else {
-        format!("{v:.1} {}", UNITS[i])
-    }
-}
-
 /// 后台可共享状态
 /// 注意：mpsc::Receiver<Msg> 不在这里 — 它由 consumer 线程独占
 pub struct AppState {
@@ -81,7 +64,6 @@ pub struct AppState {
 
     // —— Phase 2 详情面板 ——
     pub detail: Option<ContainerDetail>,
-
     // —— 镜像详情面板 ——
     pub image_detail: Option<crate::models::ImageDetail>,
 
@@ -96,20 +78,45 @@ pub struct AppState {
     pub sort_field: SortField,
     pub sort_desc: bool,
     pub filter: String,
+    /// 当前视图 0=容器 1=镜像 2=网络 3=卷（真值在 UI，回写 state 仅为持久化）
+    pub view: i64,
+    /// 主题模式 0=auto 1=light 2=dark
+    pub theme: i64,
+    /// 日志自动跟随
+    pub log_follow: bool,
     pub batch: BatchState,
 }
 
 impl AppState {
-    /// 创建 AppState，**返回 (state, rx)**
-    /// rx 交给 consumer 线程独占，不进 Mutex
-    ///
-    /// 内部会 spawn 一个后台线程永久 poll tokio runtime —
-    /// 否则 current_thread runtime 里 spawn 的异步任务永远没人执行。
+    /// 创建 AppState，**返回 (state, rx)**；rx 交给 consumer 线程独占
     pub fn new() -> (Arc<Mutex<Self>>, mpsc::Receiver<Msg>) {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("tokio runtime");
+
+        // 首次启动（无配置文件）用内置默认；之后以配置文件为准
+        let (sort_field, sort_desc, filter, view, theme, log_follow, query) =
+            match crate::config::AppConfig::load() {
+                Some(c) => (
+                    SortField::from_config_index(c.sort_field),
+                    c.sort_desc,
+                    c.filter,
+                    c.view,
+                    c.theme,
+                    c.log_follow,
+                    c.search,
+                ),
+                None => (
+                    SortField::Group,
+                    false,
+                    "all".into(),
+                    0,
+                    0,
+                    true,
+                    String::new(),
+                ),
+            };
 
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self {
@@ -120,29 +127,44 @@ impl AppState {
             networks: Vec::new(),
             volumes: Vec::new(),
             last_refresh: Instant::now() - Duration::from_secs(10),
-            container_query: String::new(),
-            image_query: String::new(),
+            container_query: query.clone(),
+            image_query: query,
             detail: None,
             image_detail: None,
             logs: Vec::new(),
             logs_cap: 500,
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
-            sort_field: SortField::Group,
-            sort_desc: false,
-            filter: String::from("all"),
+            sort_field,
+            sort_desc,
+            filter,
+            view,
+            theme,
+            log_follow,
             batch: BatchState::default(),
         }));
         (state, rx)
+    }
+
+    /// 把当前 UI 状态写入配置文件（低频回调/退出时调用；小文件原子写）
+    pub fn persist(&self) {
+        crate::config::AppConfig {
+            theme: self.theme,
+            view: self.view,
+            filter: self.filter.clone(),
+            sort_field: self.sort_field.to_config_index(),
+            sort_desc: self.sort_desc,
+            search: self.container_query.clone(),
+            log_follow: self.log_follow,
+        }
+        .save();
     }
 
     /// 触发 Docker 列表刷新（锁内安全：只 spawn，不做 IO）
     pub fn refresh(&mut self) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
-            let c_fut = list_containers(true);
-            let i_fut = list_images();
-            let (c_res, i_res) = futures::join!(c_fut, i_fut);
+            let (c_res, i_res) = futures::join!(list_containers(true), list_images());
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
         });
@@ -165,74 +187,6 @@ impl AppState {
             let res = crate::docker::inspect_image(&name).await;
             let _ = tx.send(Msg::ImageDetail(res));
         });
-    }
-
-    /// 锁内调用：把 detail 格式化 17 个 SharedString
-    pub fn build_detail_data(&self) -> Option<DetailTuple> {
-        let d = self.detail.as_ref()?;
-        let fmt_list = |list: &[String]| -> String {
-            if list.is_empty() {
-                "—".into()
-            } else {
-                list.join(", ")
-            }
-        };
-        let fmt_labels = |labels: &[(String, String)]| -> String {
-            if labels.is_empty() {
-                "—".into()
-            } else {
-                labels
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
-        };
-        let cpu = self
-            .containers
-            .iter()
-            .find(|c| c.id == d.id)
-            .map(|c| format!("{:.1}%", c.cpu_percent))
-            .unwrap_or_default();
-        let mem = self
-            .containers
-            .iter()
-            .find(|c| c.id == d.id)
-            .map(|c| format!("{} / {}", format_bytes(c.mem_usage), format_bytes(c.mem_limit)))
-            .unwrap_or_default();
-        Some((
-            SharedString::from(d.name.clone()),
-            SharedString::from(d.state.clone()),
-            SharedString::from(d.status.clone()),
-            SharedString::from(d.image.clone()),
-            SharedString::from(d.id.clone()),
-            SharedString::from(d.pid.to_string()),
-            SharedString::from("—"),
-            SharedString::from(cpu),
-            SharedString::from(mem),
-            SharedString::from(d.restart_policy.clone()),
-            SharedString::from(d.created.clone()),
-            SharedString::from(d.started_at.clone()),
-            SharedString::from(d.network_mode.clone()),
-            SharedString::from(fmt_list(&d.ports)),
-            SharedString::from(fmt_list(&d.mounts)),
-            SharedString::from(fmt_list(&d.networks)),
-            SharedString::from(d.entrypoint.clone()),
-            SharedString::from(d.command.clone()),
-        ))
-    }
-
-    /// 锁内调用：把镜像详情格式化（6 字段 SharedString 列表）
-    pub fn build_image_detail_data(&self) -> Option<Vec<SharedString>> {
-        let d = self.image_detail.as_ref()?;
-        Some(vec![
-            SharedString::from(d.repo_tags.clone()),
-            SharedString::from(d.size.clone()),
-            SharedString::from(format!("{}/{}", d.os, d.architecture)),
-            SharedString::from(d.created.clone()),
-            SharedString::from(d.entrypoint.clone()),
-            SharedString::from(d.cmd.clone()),
-        ])
     }
 
     pub fn clear_logs(&mut self) {
@@ -261,51 +215,36 @@ impl AppState {
                     c.net_tx = curr.net_tx;
                 }
             }
-            // 列表/Detail/Logs：立即更新 state
             match &msg {
                 Msg::Containers(Ok(list)) => {
-                    // ⚠️ 关键：保留旧容器的 stats 数据，避免 3s 列表刷新冲掉 6s stats 写入
-                    let mut old: std::collections::HashMap<String, (f64, u64, u64, u64, u64)> =
-                        self.containers
-                            .iter()
-                            .map(|c| {
-                                (
-                                    c.id.clone(),
-                                    (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx),
-                                )
-                            })
-                            .collect();
+                    // ⚠️ 保留旧容器 stats，避免 3s 列表刷新冲掉 6s stats 写入
+                    let mut old: HashMap<String, (f64, u64, u64, u64, u64)> = self
+                        .containers
+                        .iter()
+                        .map(|c| {
+                            (
+                                c.id.clone(),
+                                (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx),
+                            )
+                        })
+                        .collect();
                     self.containers = list.clone();
                     for c in &mut self.containers {
-                        if let Some((cpu, mu, ml, rx, tx)) = old.remove(&c.id) {
-                            c.cpu_percent = cpu;
-                            c.mem_usage = mu;
-                            c.mem_limit = ml;
-                            c.net_rx = rx;
-                            c.net_tx = tx;
+                        if let Some(v) = old.remove(&c.id) {
+                            (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
                         }
                     }
                 }
-                Msg::Images(Ok(list)) => {
-                    self.images = list.clone();
-                }
-                Msg::Networks(Ok(list)) => {
-                    self.networks = list.clone();
-                }
-                Msg::Volumes(Ok(list)) => {
-                    self.volumes = list.clone();
-                }
-                Msg::ContainerDetail(Ok(d)) => {
-                    self.detail = Some(d.clone());
-                }
+                Msg::Images(Ok(list)) => self.images = list.clone(),
+                Msg::Networks(Ok(list)) => self.networks = list.clone(),
+                Msg::Volumes(Ok(list)) => self.volumes = list.clone(),
+                Msg::ContainerDetail(Ok(d)) => self.detail = Some(d.clone()),
+                Msg::ImageDetail(Ok(d)) => self.image_detail = Some(d.clone()),
                 Msg::LogLine(line) => {
                     self.logs.push(line.clone());
                     if self.logs.len() > self.logs_cap {
                         self.logs.drain(0..self.logs.len() - self.logs_cap);
                     }
-                }
-                Msg::ImageDetail(Ok(d)) => {
-                    self.image_detail = Some(d.clone());
                 }
                 _ => {}
             }

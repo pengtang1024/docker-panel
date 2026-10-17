@@ -23,7 +23,7 @@ pub async fn list_images() -> Result<Vec<ImageInfo>, String> {
     let images = docker
         .list_images(Some(options))
         .await
-        .map_err(|e| format!("获取镜像列表失败: {e}"))?;
+        .map_err(|e| crate::i18n::trf("Failed to fetch image list: {0}", &[&e.to_string()]))?;
     let containers = list_containers(true).await.unwrap_or_default();
 
     // 镜像名:tag → 关联容器数（在 image_id 匹配不到时兜底）
@@ -86,15 +86,17 @@ pub async fn remove_image(name: &str, tag: &str) -> Result<String, String> {
     docker
         .remove_image(&reference, Some(options), None)
         .await
-        .map_err(|e| format!("删除镜像失败: {e}"))?;
-    Ok(format!("镜像 {reference} 已删除"))
+        .map_err(|e| crate::i18n::trf("Failed to remove image: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::trf("Image {0} removed", &[&reference]))
 }
 
 /// 拉取镜像（spec 形如 "nginx:latest"，进度通过 `on_progress` 回调上报）
 pub async fn pull_image(spec: &str, on_progress: impl Fn(String)) -> Result<String, String> {
     let spec = spec.trim();
     if spec.is_empty() {
-        return Err("请输入镜像名称，例如 nginx:latest".into());
+        return Err(crate::i18n::t(
+            "Please enter an image name, e.g. nginx:latest",
+        ));
     }
     let docker = connect()?;
 
@@ -114,7 +116,10 @@ pub async fn pull_image(spec: &str, on_progress: impl Fn(String)) -> Result<Stri
         match item {
             Ok(info) => {
                 if let Some(err) = info.error_detail.as_ref().and_then(|e| e.message.clone()) {
-                    return Err(format!("拉取镜像失败: {err}"));
+                    return Err(crate::i18n::trf(
+                        "Failed to pull image: {0}",
+                        &[&err.to_string()],
+                    ));
                 }
                 let mut text = info.status.unwrap_or_default();
                 if let Some(detail) = info.progress_detail {
@@ -128,8 +133,13 @@ pub async fn pull_image(spec: &str, on_progress: impl Fn(String)) -> Result<Stri
                     on_progress(text);
                 }
             }
-            Err(e) => return Err(format!("拉取镜像失败: {e}")),
+            Err(e) => {
+                return Err(crate::i18n::trf(
+                    "Failed to pull image: {0}",
+                    &[&e.to_string()],
+                ))
+            }
         }
     }
-    Ok(format!("{name}:{tag} 拉取完成"))
+    Ok(crate::i18n::trf("{0}:{1} pulled", &[&name, &tag]))
 }

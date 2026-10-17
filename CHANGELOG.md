@@ -7,17 +7,23 @@
 
 ### 新增
 
-- **多选批量操作**：容器列表最左侧加 CheckBox 列，点击切换选中；底部浮动批量栏（选中 >0 时显示）提供"全部启动 / 停止 / 重启 / 删除 / 清除"按钮，视觉与 ToolBar 统一。
-- **Slint 升级 1.14 → 1.18.1**：slint + slint-build 同步升级到 1.18.1，编译零 breaking change，跨文件 global（Theme）可见性修复。
-- **ui/theme.slint 设计令牌系统**：22 种语义色（背景层级 / 文字 / accent / 状态色）+ 4 级字号 + 4 级间距的 Slint global out property，**全项目 10 个 .slint 文件、176 处 Theme.xxx 引用、23 种硬编码颜色清零**。改一处主题全局生效。
+- **UI 全面重构（slint-ui-overhaul spec）**：主题系统（浅/深/auto 三态 + 22 语义色令牌）、顶栏+筛选栏+卡片网格+底栏+右侧抽屉布局、四种卡片组件、自定义 Tooltip、抽屉三 Tab（详情/日志/环境）、拉取/清理对话框。
+- **本地化 i18n（gettext .po 按 locale 选择）**：`translations/zh_CN/LC_MESSAGES/docker-panel.po` 编译期嵌入二进制，`slint::select_bundled_translation` 按系统 locale（zh* → zh_CN）选择，未命中回落英文源串。修复 select 调用时机（必须在第一个组件创建之后，否则 `NoTranslationsBundled`）。
+- **配置持久化**：`src/config.rs` 持久化 theme/view/filter/sort/search/log_follow 到用户配置目录 JSON（directories 定位 + 原子写），启动恢复、变更即存、退出落盘。
+- **全局快捷键**：Ctrl+K 聚焦搜索、Ctrl+R 刷新、Ctrl+1~4 切换容器/镜像/网络/卷视图、Esc 关闭抽屉/弹窗。实现于 app.slint 根级 FocusScope（capture-key-pressed），启动时延时焦点引导保证快捷键零点击可用；Esc 关闭弹层后主动归还焦点。
+- **网络/卷视图搜索过滤**：搜索词同时过滤网络（名称/driver/scope/ID）与卷（名称/driver/挂载点），搜索/筛选/排序回调即时重建列表（网络/卷不在 3s 定时刷新内）。
 
 ### 变更
 
-- **视觉系统完全统一**：所有颜色/字号/间距引用 Theme 令牌，消除散落硬编码。状态栏 `#888` → `Theme.text-faint`、TopBar 连接状态 `#00c853/#ff5252` → `Theme.status-running/error`。
-- **新增 src/batch.rs**：BatchState { selected_ids: HashSet<String> } + purge_dead（清理已删除容器 id 并返回选中数）+ spawn_container_op（批量操作 spawn helper）。
-- **新增 ui/batch-bar.slint**：BatchBar 独立组件，42 行；视觉规范与 ToolBar 完全一致。
-- **AppState 新增 `pub batch: BatchState`**：单字段承载多选状态，避免 ui_state.rs 爆 300 行硬限。
-- **Delegate 视觉调整**：选中行背景 #1e3a5f，未改 Compose 分组行。
+- **模块拆分（单文件 ≤300 行）**：main.rs 312→73 行（拆出 [src/consumer.rs] consumer 线程 Msg 泵 + 3s 刷新 interval、[src/bootstrap.rs] 6s stats 采样 + 首屏加载）；ui_state.rs 367→265 行（拆出 [src/detail_fmt.rs] 详情/镜像详情字段格式化）；delegates.slint 313→224 行（拆出 [ui/network-views.slint] 网络/卷表格行）。
+
+### 修复
+
+- **Esc 关闭弹层后焦点悬空**：条件渲染移除弹窗后其内部焦点丢失导致快捷键失效，Esc 分支末尾 `global-shortcuts.focus()` 归还焦点。
+
+### 移除
+
+- 旧三栏布局（Sidebar + 内嵌 DetailPanel）由新布局与右侧 Drawer 取代。
 
 ## [0.2.3] - 2026-10-17
 

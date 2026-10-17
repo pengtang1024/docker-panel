@@ -1,0 +1,93 @@
+// network-views.slint — 网络/卷表格行
+// 对齐契约：行组件的 HorizontalLayout 子元素序列与 headers.slint 中
+// 对应表头逐个对应，宽度取自同一组 Theme 常量。
+import { Theme } from "theme.slint";
+
+// ============ 网络行 ============
+export component RowNetwork inherits Rectangle {
+    in-out property <string> name: "";
+    in-out property <string> driver: "";
+    in-out property <string> scope: "";
+    in-out property <int> used: 0;
+
+    height: Theme.row-h;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
+
+    touch := TouchArea { x: 0; y: 0; width: 100%; height: 100%; }
+
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.name;
+                font-size: Theme.fs-md; color: Theme.fg-2;
+                overflow: elide;
+                }
+            Text {
+                width: Theme.n-driver;
+                text: root.driver;
+                font-size: Theme.fs; color: Theme.accent;
+                overflow: elide;
+                }
+            Text {
+                width: Theme.n-scope;
+                text: root.scope;
+                font-size: Theme.fs; color: Theme.fg-3;
+                overflow: elide;
+                }
+            Text {
+                width: Theme.n-count;
+                text: root.used > 0 ? root.used : "0";
+                font-size: Theme.fs-sm; color: Theme.fg-4;
+                horizontal-alignment: right;
+                }
+        }
+    }
+}
+
+// ============ 卷行 ============
+export component RowVolume inherits Rectangle {
+    in-out property <string> name: "";
+    in-out property <string> driver: "";
+    in-out property <string> mountpoint: "";
+
+    height: Theme.row-h;
+    background: touch.has-hover ? Theme.bg-row-hover : transparent;
+
+    touch := TouchArea { x: 0; y: 0; width: 100%; height: 100%; }
+
+    VerticalLayout {
+        x: 0; y: 0; width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        HorizontalLayout {
+            spacing: Theme.s2;
+            alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.name;
+                font-size: Theme.fs-md; color: Theme.fg-2;
+                overflow: elide;
+                }
+            Text {
+                width: Theme.n-driver;
+                text: root.driver;
+                font-size: Theme.fs; color: Theme.accent;
+                overflow: elide;
+                }
+            Text {
+                horizontal-stretch: 1;
+                text: root.mountpoint;
+                font-size: Theme.fs-sm; color: Theme.fg-4;
+                overflow: elide;
+                }
+        }
+    }
+}

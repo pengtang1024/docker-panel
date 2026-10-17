@@ -30,8 +30,8 @@ pub async fn fetch_stats(id: &str) -> Result<ContainerStatsSnapshot, String> {
         .stats(id, Some(opts))
         .next()
         .await
-        .ok_or_else(|| "stats 空响应".to_string())?
-        .map_err(|e| format!("stats 失败: {e}"))?;
+        .ok_or_else(|| crate::i18n::t("Empty stats response"))?
+        .map_err(|e| crate::i18n::trf("Failed to fetch stats: {0}", &[&e.to_string()]))?;
 
     let cpu = resp.cpu_stats.as_ref();
     let cpu_usage = cpu.and_then(|c| c.cpu_usage.as_ref());

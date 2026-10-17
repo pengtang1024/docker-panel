@@ -20,7 +20,7 @@ export component BatchBar inherits Rectangle {
         padding-right: Theme.s5;
 
         Text {
-            text: "Selected " + root.count;
+            text: @tr("{0} selected", root.count);
             font-size: Theme.fs;
             font-weight: 700;
             color: Theme.ink;
@@ -53,10 +53,14 @@ export component BatchBar inherits Rectangle {
             TouchArea { clicked => { root.remove(); } }
         }
         Rectangle {
-            height: 28px; padding-left: Theme.s4; padding-right: Theme.s4;
+            height: 28px;
             border-radius: Theme.r_sm;
             background: Theme.card; border-width: 1px; border-color: Theme.line;
-            Text { text: "Cancel"; color: Theme.ink_2; font-size: Theme.fs_sm; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: Theme.s4; padding-right: Theme.s4;
+                Text { text: @tr("Cancel"); color: Theme.ink_2; font-size: Theme.fs_sm; }
+            }
             TouchArea { clicked => { root.clear(); } }
         }
     }

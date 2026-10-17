@@ -65,6 +65,7 @@ export component SubBar inherits Rectangle {
     callback set_view(int);
     callback set_filter(string);
     callback set_sort(int);
+    callback set_sort_dir();
 
     HorizontalLayout {
         width: 100%;
@@ -73,17 +74,15 @@ export component SubBar inherits Rectangle {
         padding-left: Theme.s5;
         padding-right: Theme.s5;
 
-        Chip { label: "All"; n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: "Running"; n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: "Stopped"; n: root.total_containers - root.running_containers; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: @tr("Stopped"); n: root.total_containers - root.running_containers; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
 
         Rectangle { horizontal-stretch: 1; }
 
         // 排序按钮
         Rectangle {
             height: 28px;
-            padding-left: Theme.s3;
-            padding-right: Theme.s3;
             border-radius: Theme.r_sm;
             background: Theme.bg;
             border-width: 1px;
@@ -92,20 +91,31 @@ export component SubBar inherits Rectangle {
                 width: 100%;
                 height: 100%;
                 spacing: Theme.s2;
+                padding-left: Theme.s3;
+                padding-right: Theme.s3;
                 Text { text: "↕"; color: Theme.ink_3; font-size: 12px; }
                 Text {
-                    text: ["Name","CPU","Memory","Disk","Status"][root.sort_field];
+                    text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];
                     font-size: Theme.fs_xs;
                     color: Theme.ink_2;
                 }
-                Text { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; }
+                Rectangle {
+                    width: 16px; height: 100%;
+                    Text { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; }
+                    // 点箭头只切升降序（覆盖在按钮 TouchArea 之上）
+                    TouchArea { clicked => { root.set_sort_dir(); } }
+                }
             }
-            TouchArea { clicked => { root.set_sort(root.sort_field); } }
+            // 点按钮主体循环切换排序字段
+            TouchArea { clicked => {
+                root.sort_field = Math.mod(root.sort_field + 1, 5);
+                root.set_sort(root.sort_field);
+            } }
         }
 
-        ViewTab { label: "Containers"; n: root.total_containers; active: root.view == 0; idx: 0; clicked(i) => { root.set_view(i); } }
-        ViewTab { label: "Images"; n: root.total_images; active: root.view == 1; idx: 1; clicked(i) => { root.set_view(i); } }
-        ViewTab { label: "Networks"; n: root.total_networks; active: root.view == 2; idx: 2; clicked(i) => { root.set_view(i); } }
-        ViewTab { label: "Volumes"; n: root.total_volumes; active: root.view == 3; idx: 3; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: @tr("Containers"); n: root.total_containers; active: root.view == 0; idx: 0; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: @tr("Images"); n: root.total_images; active: root.view == 1; idx: 1; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: @tr("Networks"); n: root.total_networks; active: root.view == 2; idx: 2; clicked(i) => { root.set_view(i); } }
+        ViewTab { label: @tr("Volumes"); n: root.total_volumes; active: root.view == 3; idx: 3; clicked(i) => { root.set_view(i); } }
     }
 }

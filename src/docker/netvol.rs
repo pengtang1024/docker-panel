@@ -10,7 +10,7 @@ pub async fn list_networks() -> Result<Vec<NetworkInfo>, String> {
     let nets = docker
         .list_networks(Some(ListNetworksOptionsBuilder::default().build()))
         .await
-        .map_err(|e| format!("网络列表失败: {e}"))?;
+        .map_err(|e| crate::i18n::trf("Failed to list networks: {0}", &[&e.to_string()]))?;
     Ok(nets
         .into_iter()
         .map(|n| {
@@ -36,7 +36,7 @@ pub async fn list_volumes() -> Result<Vec<VolumeInfo>, String> {
     let resp = docker
         .list_volumes(None::<bollard::query_parameters::ListVolumesOptions>)
         .await
-        .map_err(|e| format!("卷列表失败: {e}"))?;
+        .map_err(|e| crate::i18n::trf("Failed to list volumes: {0}", &[&e.to_string()]))?;
     Ok(resp
         .volumes
         .unwrap_or_default()

@@ -147,14 +147,14 @@
 
 ## Task 10: 本地化 i18n
 - **Priority**: medium
-- **Status**: pending
+- **Status**: completed
 - **AC 覆盖**: AC5
 - **依赖**: Task 3-9
-- **描述**: 实现中/英双语，默认跟随系统语言
+- **描述**: 实现中/英双语，按系统 locale 选择配置文件（用户硬要求：gettext .po 按 locale 选择）
 - **工作**:
-  1. Rust 侧定义 I18N 字典（zh/en）
-  2. 检测系统语言
-  3. 所有 UI 文本走翻译函数
+  1. Slint 官方 bundled gettext `.po` 方案：`translations/zh_CN/LC_MESSAGES/docker-panel.po`
+  2. `src/i18n.rs`：检测系统 locale（zh* → zh_CN），Rust 侧 `t()` 函数 + Slint `@tr` 双轨
+  3. `slint::select_bundled_translation(lang)` 在组件创建前调用（@tr 构建时求值）
   4. 无语言切换按钮
 - **TR**:
   - rule: 系统语言中文时显示中文
@@ -163,47 +163,50 @@
 
 ## Task 11: 配置持久化
 - **Priority**: medium
-- **Status**: pending
+- **Status**: completed
 - **AC 覆盖**: AC6
 - **依赖**: Task 2-10
-- **描述**: 用 confy/directories crate 持久化配置
+- **描述**: `src/config.rs`（directories + 手写 JSON，零新依赖）
 - **工作**:
-  1. 定义 Config 结构体（theme, view, filter, sort_field, sort_desc, search, log_follow）
-  2. 启动时加载，变更时保存
-  3. 枚举值校验
+  1. Config 结构体（theme, view, filter, sort_field, sort_desc, search, log_follow）
+  2. 启动时加载，低频变更 persist() + 退出落盘
+  3. 枚举值越界回落默认
 - **TR**:
-  - rule: 配置保存到用户配置目录
-  - rule: 重启后状态恢复
+  - rule: 配置保存到用户配置目录（XDG_CONFIG_HOME 可隔离测试）
+  - rule: 重启后状态恢复（MCP 验证通过）
 
 ## Task 12: 快捷键
 - **Priority**: low
-- **Status**: pending
+- **Status**: completed
 - **AC 覆盖**: AC7
 - **依赖**: Task 2-9
-- **描述**: 实现全局快捷键
+- **描述**: app.slint 根级 FocusScope（global-shortcuts）包裹全部 UI，capture-key-pressed 实现
 - **工作**:
-  1. Slint `Shortcut` 或 Rust 侧全局快捷键
-  2. Ctrl+K 搜索、Ctrl+R 刷新、Ctrl+1~4 视图、Esc 关闭
+  1. Ctrl+K → top-bar.focus_search()（TextInput 命名 `search_input := TextInput`）
+  2. Ctrl+R → AppActions.refresh()；Ctrl+1~4 → 显式 if 分支设 view
+  3. Esc → 关 drawer/pull/cleanup 弹层 + `global-shortcuts.focus()` 归还焦点（条件渲染移除后焦点悬空问题）
+  4. 启动焦点引导：restore_config 里延时 300ms 线程投递 boot_tick（run() 前排队 invoke 会被 winit 丢弃）
 - **TR**:
-  - rule: Ctrl+K 聚焦搜索
-  - rule: Ctrl+R 刷新
-  - rule: Ctrl+1~4 切换视图
-  - rule: Esc 关闭抽屉/对话框
+  - rule: Ctrl+K 聚焦搜索（MCP 录制 Accepted + 打字进框验证）
+  - rule: Ctrl+R 刷新（Accepted）
+  - rule: Ctrl+1~4 切换视图（零点击直达验证）
+  - rule: Esc 关闭抽屉/对话框（截图验证）
 
 ## Task 13: 编译验证与 MCP 验收
 - **Priority**: high
-- **Status**: pending
+- **Status**: completed
 - **AC 覆盖**: AC1-AC8
 - **依赖**: Task 1-12
 - **描述**: 编译验证 + Slint MCP 截图对照原型验收
 - **工作**:
-  1. cargo build --release --features slint/mcp
-  2. cargo clippy --all-targets --all-features -- -D warnings
-  3. cargo fmt --all -- --check
-  4. 启动带 MCP 的版本，截图对照 prototype.html
-  5. 修复所有视觉差异
+  1. cargo build --release --features slint/mcp（必须看完整输出末尾 "Finished"）
+  2. cargo clippy --all-targets --all-features -- -D warnings（零警告通过）
+  3. cargo fmt --all
+  4. 单文件 ≤300 行：main.rs 312→73（拆 consumer.rs + bootstrap.rs），ui_state.rs 367→265（拆 detail_fmt.rs），delegates.slint 313→224（拆 network-views.slint）
+  5. 补网络/卷搜索过滤（ui_rows.rs filter + callbacks.rs refresh_lists_now 即时重建，因网络/卷不在 3s 定时刷新内）
+  6. MCP 截图对照 prototype.html 验证（Ctrl+3 网络视图、Ctrl+K 搜索、Esc 关弹窗）
 - **TR**:
-  - rule: build 成功
+  - rule: build 成功（Finished 确认）
   - rule: clippy 无 warning
   - rule: fmt 通过
   - rubric: MCP 截图与原型视觉一致，评分 0-2，阈值 ≥1.5

@@ -104,9 +104,9 @@ export component Drawer inherits Rectangle {
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 0px;
-                DTab { label: "Details"; active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
-                DTab { label: "Logs"; active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
-                DTab { label: "Environment"; active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
+                DTab { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
+                DTab { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
+                DTab { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
             }
         }
 
@@ -117,26 +117,29 @@ export component Drawer inherits Rectangle {
                 width: 100%;
                 spacing: Theme.s4;
                 padding: Theme.s4;
-                Text { text: "Overview"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
+                Text { text: @tr("Overview"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
-                KvRow { k: "Status"; v: root.d_state; }
-                KvRow { k: "Image"; v: root.d_image; }
-                KvRow { k: "PID"; v: root.d_pid; }
-                Text { text: "Resources"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                KvRow { k: @tr("Status"); v: root.d_state; }
+                KvRow { k: @tr("Image"); v: root.d_image; }
+                KvRow { k: @tr("PID"); v: root.d_pid; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Resources"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
-                KvRow { k: "CPU"; v: root.d_cpu; }
-                KvRow { k: "Memory"; v: root.d_mem; }
-                KvRow { k: "Disk"; v: root.d_disk; }
-                Text { text: "Time"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                KvRow { k: @tr("CPU"); v: root.d_cpu; }
+                KvRow { k: @tr("Memory"); v: root.d_mem; }
+                KvRow { k: @tr("Disk"); v: root.d_disk; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Time"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
-                KvRow { k: "Created"; v: root.d_created; }
-                KvRow { k: "Started"; v: root.d_started; }
-                KvRow { k: "Restart Policy"; v: root.d_restart; }
-                Text { text: "Network"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                KvRow { k: @tr("Created"); v: root.d_created; }
+                KvRow { k: @tr("Started"); v: root.d_started; }
+                KvRow { k: @tr("Restart Policy"); v: root.d_restart; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Network"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
-                KvRow { k: "Mode"; v: root.d_netmode; }
-                KvRow { k: "Ports"; v: root.d_ports; }
-                KvRow { k: "Networks"; v: root.d_networks; }
+                KvRow { k: @tr("Mode"); v: root.d_netmode; }
+                KvRow { k: @tr("Ports"); v: root.d_ports; }
+                KvRow { k: @tr("Networks"); v: root.d_networks; }
             }
         }
 
@@ -199,16 +202,19 @@ export component Drawer inherits Rectangle {
                 width: 100%;
                 spacing: Theme.s3;
                 padding: Theme.s4;
-                Text { text: "Environment Variables"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
+                Text { text: @tr("Environment Variables"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
                 Text { text: root.d_env; font-size: Theme.fs_xs; color: Theme.ink; }
-                Text { text: "Port Mappings"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Port Mappings"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
                 Text { text: root.d_ports; font-size: Theme.fs_xs; color: Theme.ink; }
-                Text { text: "Networks"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Networks"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
                 Text { text: root.d_networks; font-size: Theme.fs_xs; color: Theme.ink; }
-                Text { text: "Mounts"; font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; padding-top: Theme.s3; }
+                Rectangle { height: Theme.s3; }
+                Text { text: @tr("Mounts"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_2; }
                 Rectangle { height: 1px; background: Theme.line_2; }
                 Text { text: root.d_mounts; font-size: Theme.fs_xs; color: Theme.ink; }
             }

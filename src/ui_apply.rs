@@ -58,3 +58,18 @@ pub fn apply_lists(
     ui.set_volume_rows(vm);
     ui.set_log_lines(lm);
 }
+
+/// UI 线程内按当前 AppState 立即重建四个资源列表（搜索/筛选/排序回调的即时反馈）。
+/// 网络/卷不在 3s 定时刷新范围内，不主动重建则过滤永不生效。
+/// 日志模型原样回传，避免清空日志面板。
+pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
+    let cm: ModelRc<crate::slint_gen::ContainerRow> =
+        ModelRc::from(crate::ui_rows::build_container_rows(s).as_slice());
+    let im: ModelRc<crate::slint_gen::ImageRow> =
+        ModelRc::from(crate::ui_rows::build_image_rows(s).as_slice());
+    let nm: ModelRc<crate::slint_gen::NetworkRow> =
+        ModelRc::from(crate::ui_rows::build_network_rows(s).as_slice());
+    let vm: ModelRc<crate::slint_gen::VolumeRow> =
+        ModelRc::from(crate::ui_rows::build_volume_rows(s).as_slice());
+    apply_lists(ui, cm, im, nm, vm, ui.get_log_lines());
+}

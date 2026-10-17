@@ -6,6 +6,7 @@ pub struct UiUpdate {
     pub reset_pull_busy: bool,
 }
 
+use crate::i18n::{t, trf};
 use crate::models::Msg;
 
 /// derive_update — 把"最后一条 Msg"翻译成 UI 想知道的状态
@@ -14,41 +15,43 @@ use crate::models::Msg;
 /// 不关心历史过程。ActionDone / PullDone / CleanupDone 的结果都通过
 /// 这里变成 status_text。返回的 UiUpdate 由 main.rs 的 pump_and_apply
 /// 在 invoke_from_event_loop 里一次性应用到 Slint Model。
+///
+/// status_text 的 msgid 统一为英文，翻译在 i18n 模块按系统 locale 查表。
 pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
     match latest_msg {
         Some(Msg::Containers(Ok(_))) => UiUpdate {
             docker_ok: true,
-            status_text: format!("已加载 {containers_len} 个容器"),
+            status_text: trf("Loaded {0} containers", &[&containers_len.to_string()]),
             close_pull: false,
             reset_pull_busy: false,
         },
         Some(Msg::Containers(Err(e))) => UiUpdate {
             docker_ok: false,
-            status_text: format!("容器刷新失败: {e}"),
+            status_text: trf("Container refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
         },
         Some(Msg::Images(Err(e))) => UiUpdate {
             docker_ok: false,
-            status_text: format!("镜像刷新失败: {e}"),
+            status_text: trf("Image refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
         },
         Some(Msg::ActionDone(desc, Ok(_))) => UiUpdate {
             docker_ok: true,
-            status_text: desc.clone(),
+            status_text: t(desc),
             close_pull: false,
             reset_pull_busy: false,
         },
         Some(Msg::ActionDone(desc, Err(e))) => UiUpdate {
             docker_ok: true,
-            status_text: format!("{desc}: {e}"),
+            status_text: format!("{}: {e}", t(desc)),
             close_pull: false,
             reset_pull_busy: false,
         },
-        Some(Msg::PullProgress(t)) => UiUpdate {
+        Some(Msg::PullProgress(progress)) => UiUpdate {
             docker_ok: true,
-            status_text: t.clone(),
+            status_text: progress.clone(),
             close_pull: false,
             reset_pull_busy: false,
         },
@@ -60,7 +63,7 @@ pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdat
         },
         Some(Msg::PullDone(Err(e))) => UiUpdate {
             docker_ok: true,
-            status_text: format!("拉取失败: {e}"),
+            status_text: trf("Pull failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: true,
         },
@@ -72,13 +75,13 @@ pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdat
         },
         Some(Msg::CleanupDone(Err(e))) => UiUpdate {
             docker_ok: true,
-            status_text: format!("清理失败: {e}"),
+            status_text: trf("Cleanup failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
         },
         _ => UiUpdate {
             docker_ok: true,
-            status_text: "就绪".into(),
+            status_text: t("Ready"),
             close_pull: false,
             reset_pull_busy: false,
         },

@@ -7,9 +7,10 @@ use std::collections::HashMap;
 
 use slint::SharedString;
 
+use crate::detail_fmt::format_bytes;
 use crate::models::{ContainerInfo, SortField};
 use crate::slint_gen::{ContainerRow, ImageRow, NetworkRow, VolumeRow};
-use crate::ui_state::{format_bytes, AppState};
+use crate::ui_state::AppState;
 
 pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
     let mut filtered: Vec<&ContainerInfo> = s
@@ -100,6 +101,16 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 }
             });
         }
+        SortField::Disk => {
+            filtered.sort_by(|a, b| {
+                let cmp = (b.block_read + b.block_write).cmp(&(a.block_read + a.block_write));
+                if s.sort_desc {
+                    cmp.reverse()
+                } else {
+                    cmp
+                }
+            });
+        }
     }
 
     // —— 只在 Group 排序下生成分组行 ——
@@ -108,7 +119,8 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
     filtered
         .into_iter()
         .map(|c| {
-            let project = c.compose_project.as_deref().or(Some("独立容器"));
+            // 分组比较始终用英文 key，显示时再走 i18n 翻译
+            let project = c.compose_project.as_deref().or(Some("Standalone"));
             let is_group = grouping
                 && match (project, last) {
                     (Some(a), Some(b)) => a != b,
@@ -128,7 +140,7 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 compose_project: SharedString::from(
                     c.compose_project
                         .clone()
-                        .unwrap_or_else(|| "独立容器".into()),
+                        .unwrap_or_else(|| crate::i18n::t("Standalone")),
                 ),
                 compose_service: SharedString::from(c.compose_service.clone().unwrap_or_default()),
                 is_group_start: is_group,
@@ -194,6 +206,15 @@ pub fn build_network_rows(s: &AppState) -> Vec<NetworkRow> {
     }
     s.networks
         .iter()
+        .filter(|n| {
+            s.container_query.is_empty() || {
+                let q = s.container_query.to_lowercase();
+                n.name.to_lowercase().contains(&q)
+                    || n.driver.to_lowercase().contains(&q)
+                    || n.scope.to_lowercase().contains(&q)
+                    || n.short_id.to_lowercase().contains(&q)
+            }
+        })
         .map(|n| NetworkRow {
             id: SharedString::from(n.id.clone()),
             short_id: SharedString::from(n.short_id.clone()),
@@ -208,6 +229,14 @@ pub fn build_network_rows(s: &AppState) -> Vec<NetworkRow> {
 pub fn build_volume_rows(s: &AppState) -> Vec<VolumeRow> {
     s.volumes
         .iter()
+        .filter(|v| {
+            s.container_query.is_empty() || {
+                let q = s.container_query.to_lowercase();
+                v.name.to_lowercase().contains(&q)
+                    || v.driver.to_lowercase().contains(&q)
+                    || v.mountpoint.to_lowercase().contains(&q)
+            }
+        })
         .map(|v| VolumeRow {
             name: SharedString::from(v.name.clone()),
             driver: SharedString::from(v.driver.clone()),

@@ -6,7 +6,9 @@
 import { Theme } from "theme.slint";
 import { IconBtn } from "components.slint";
 import { LogLineRow, DetailPair } from "models.slint";
-import { ScrollView } from "std-widgets.slint";
+// 不用 std-widgets 的 ScrollView（它把内层布局强制拉到视口高、会把 kv 行均摊拉高到 100px+），
+// 直接用原生 Flickable：viewport 高由 Flickable.height 决定，content 子元素高度由自身 children 决定——两者独立，
+// 内容超过视口时 Flickable 自动滚动；不超过时 content 保持紧凑排布（对齐 prototype 紧凑 kv 行）
 
 component DTab inherits Rectangle {
     in property <string> label: "";
@@ -267,22 +269,21 @@ export component Drawer inherits Rectangle {
         }
 
         // 内容区：唯一分配剩余高度的非条件容器（对齐 Theme 抽屉契约）。
-        // 三个视图并存、用 visible 切换显隐；content 是普通 Rectangle，
+        // 三个视图并存、用 visible 切换显隐；content_box 是普通 Rectangle，
         // 子级按各自绑定定位 → 三者重叠，仅可见者被绘制。
-        content := Rectangle {
+        content_box := Rectangle {
             width: 100%;
             height: root.content_h;
 
             // 详情（非容器类型没有 Tab 栏，恒展示详情）
-            detail_scroll := ScrollView {
+            detail_scroll := Flickable {
                 visible: (root.tabs_visible == false) || root.tab == 0;
                 height: root.content_h;
+                // Flickable 只有一个子元素即滚动内容——不设 height，由 DetailRow 总高决定，
+                // 与视口高 root.content_h 独立：内容少时保持紧凑排布，超出时可滚动
                 VerticalLayout {
                     width: 100%;
                     spacing: 0px;
-                    // ScrollView 会把内层布局拉满视口，若不置 start 则每行被均摊拉高到 100px+；
-                    // alignment:start 让各行保持自然高，从顶部紧密排布（对齐 prototype 紧凑 kv 行）
-                    alignment: start;
                     for row[i] in root.detail_rows : DetailRow {
                         data: row;
                         head_gap: i > 0;
@@ -350,13 +351,12 @@ export component Drawer inherits Rectangle {
             }
 
             // 环境（仅容器）
-            env_scroll := ScrollView {
+            env_scroll := Flickable {
                 visible: root.tabs_visible && root.tab == 2;
                 height: root.content_h;
                 VerticalLayout {
                     width: 100%;
                     spacing: 0px;
-                    alignment: start;
                     for row[i] in root.env_rows : DetailRow {
                         data: row;
                         head_gap: i > 0;

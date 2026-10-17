@@ -1,0 +1,47 @@
+// components-state.slint — 状态层抽象
+// StateArea = Rectangle(背景) + TouchArea(点击) + StateLayer(hover/disabled) + @children
+import { Theme } from "theme.slint";
+
+/// StateLayer — hover/disabled 两态 background overlay
+export component StateLayer inherits Rectangle {
+    in property <color> layer_color: Theme.ink;
+    in property <length> layer_radius: Theme.r_sm;
+    in property <bool> layer_enabled: true;
+    in property <bool> layer_hover: false;
+    property <float> state_opacity: 0.0;
+
+    width: 100%; height: 100%;
+    opacity: self.state_opacity;
+    background: root.layer_color;
+    border-radius: root.layer_radius;
+
+    states [
+        disabled when root.layer_enabled == false : { state_opacity: 0.0; }
+        hover when root.layer_enabled && root.layer_hover : { state_opacity: 0.08; }
+    ]
+    animate state_opacity { duration: 120ms; easing: ease-out; }
+}
+
+/// StateArea — Rectangle(背景) + TouchArea(点击) + StateLayer + @children
+export component StateArea inherits Rectangle {
+    in property <color> layer_color: Theme.ink;
+    in property <length> layer_radius: Theme.r_sm;
+    in-out property <bool> area_enabled: true;
+    out property <bool> has_hover: touch.has-hover;
+    callback clicked();
+
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        enabled: root.area_enabled;
+        clicked => { root.clicked(); }
+    }
+
+    StateLayer {
+        layer_color: root.layer_color;
+        layer_radius: root.layer_radius;
+        layer_enabled: root.area_enabled;
+        layer_hover: touch.has-hover;
+    }
+
+    @children
+}

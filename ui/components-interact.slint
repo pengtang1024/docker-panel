@@ -1,9 +1,10 @@
-// components-interact.slint — 交互控件（按钮 / 菜单 / Tooltip）
-// 所有内部 Text 必须是 CenterText / VCenterText / RightText，禁止裸写 Text {}。
+// components-interact.slint — 交互控件（按钮 / 菜单 / Tooltip / 输入 / 进度）
+// 架构：StateArea（状态层）+ states DSL（声明式状态机）+ @children 插槽
 import { Theme } from "theme.slint";
 import { Tip, CenterText, VCenterText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
 
-// ============ Tooltip 泡泡层（spec 3.5）============
+// ============ Tooltip 泡泡层 ============
 export component TipLayer inherits Rectangle {
     width: row.preferred-width;
     height: row.preferred-height;
@@ -17,14 +18,8 @@ export component TipLayer inherits Rectangle {
 
     row := HorizontalLayout {
         padding-left: 9px; padding-right: 9px; padding-top: 5px; padding-bottom: 5px;
-        VCenterText {
-            text: Tip.text;
-            color: Theme.tip_ink;
-            font-size: Theme.fs_sm;
-            font-weight: 500;
-        }
+        VCenterText { text: Tip.text; color: Theme.tip_ink; font-size: Theme.fs_sm; font-weight: 500; }
     }
-
     Path {
         x: (parent.width - 8px) / 2;
         y: parent.height;
@@ -33,8 +28,8 @@ export component TipLayer inherits Rectangle {
     }
 }
 
-// ============ 图标按钮 ============
-// prototype .icon-btn / .ca-main / .ca-menu —— display:grid; place-items:center
+// ============ IconBtn（API 完全兼容旧版）============
+// 内部用 StateArea + states DSL 重写，统一 hover/pressed/disabled 状态
 export component IconBtn inherits Rectangle {
     in-out property <string> glyph: "";
     in-out property <bool> primary: false;
@@ -48,7 +43,7 @@ export component IconBtn inherits Rectangle {
     in-out property <string> tip: "";
     in-out property <color> rest_bg: Theme.bg;
     in-out property <color> hover_fg: Theme.ink;
-    out property <bool> hovered: touch.has-hover;
+    out property <bool> hovered: area.has_hover;
     callback clicked();
 
     width: root.size;
@@ -56,17 +51,25 @@ export component IconBtn inherits Rectangle {
     border-radius: Theme.r_sm;
     border-width: (root.primary || (root.outline == false && root.active == false)) ? 0px : 1px;
     border-color: root.outline ? Theme.line : Theme.ok;
-    background: root.primary ? Theme.ink
-        : root.active ? Theme.pill_on_bg
-        : (root.danger && touch.has-hover) ? Theme.err_bg
-        : touch.has-hover ? (root.outline ? Theme.bg : Theme.row_hover)
-        : root.rest_bg;
-    opacity: root.hidden ? 0.0 : (root.enabled ? 1.0 : 0.4);
+    opacity: root.hidden ? 0.0 : 1.0;
     animate opacity { duration: 120ms; easing: ease-out; }
 
-    touch := TouchArea { width: 100%; height: 100%; enabled: root.enabled && root.hidden == false; clicked => { root.clicked(); } }
+    // 背景三态：base(rest_bg) → active(pill_on_bg/ok) → primary(ink)
+    property <color> base_bg: root.primary ? Theme.ink
+        : root.active ? Theme.pill_on_bg
+        : root.danger ? root.rest_bg
+        : root.rest_bg;
 
-    // glyph 双向居中（IconBtn 本质是一个 place-items:center 的 grid 容器）
+    area := StateArea {
+        width: 100%; height: 100%;
+        area_enabled: root.enabled && root.hidden == false;
+        layer_color: root.danger ? Theme.err_bg : root.outline ? Theme.bg : Theme.row_hover;
+        layer_radius: Theme.r_sm;
+        clicked => { root.clicked(); }
+
+        background: base_bg;
+    }
+
     CenterText {
         text: root.glyph;
         font-size: root.glyph_size;
@@ -74,13 +77,55 @@ export component IconBtn inherits Rectangle {
         color: root.primary ? Theme.card
             : root.active ? Theme.ok
             : root.danger ? Theme.err
-            : touch.has-hover ? root.hover_fg
+            : area.has-hover ? root.hover_fg
             : Theme.ink_2;
     }
 
     changed hovered => {
-        if (root.hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
+        if (root.hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; }
         else if (Tip.text == root.tip) { Tip.text = ""; }
+    }
+}
+
+// ============ 文本按钮（Dialog footer 等场景，替代 DlgButton）============
+// 支持 filled / outlined / ghost 三变体 + rest/hover/pressed/disabled 状态机
+export component TextButton inherits Rectangle {
+    in-out property <string> label: "";
+    in-out property <bool> filled: false;
+    in-out property <bool> ghost: false;
+    in-out property <bool> outline: false;
+    in-out property <bool> danger: false;
+    in-out property <bool> enabled: true;
+    callback clicked();
+
+    width: self.preferred-width + 24px;
+    height: 32px;
+    border-radius: Theme.r_md;
+    border-width: root.outline ? 1px : 0px;
+    border-color: root.outline ? Theme.line : transparent;
+
+    property <color> bg_base: root.filled ? Theme.ink : root.ghost ? transparent : Theme.card;
+    property <color> fg_base: root.filled ? Theme.card : root.danger ? Theme.err : Theme.ink_2;
+
+    area := StateArea {
+        width: 100%; height: 100%;
+        area_enabled: root.enabled;
+        layer_color: root.danger ? Theme.err_bg : Theme.ink;
+        layer_radius: Theme.r_md;
+        clicked => { root.clicked(); }
+        background: bg_base;
+    }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        padding-left: 12px; padding-right: 12px;
+        alignment: center;
+        VCenterText {
+            text: root.label;
+            font-size: Theme.fs_md;
+            font-weight: 600;
+            color: area.has-hover ? Theme.ink : fg_base;
+        }
     }
 }
 
@@ -99,26 +144,43 @@ export component Dot inherits Rectangle {
     }
 }
 
-// ============ 复选框 ============
-export component CheckCell inherits Rectangle {
+// ============ CheckBox（完整状态机 + hover/disabled + label 插槽）============
+export component CheckBox inherits Rectangle {
     in-out property <bool> checked: false;
-    in-out property <length> box: 16px;
+    in-out property <bool> enabled: true;
+    in-out property <bool> error: false;
+    in-out property <length> box: 18px;
     callback toggled();
 
-    width: root.box;
     height: root.box;
+    width: root.box;
     border-radius: Theme.r_xs;
-    border-width: 1px;
-    border-color: root.checked ? Theme.ok : (touch.has-hover ? Theme.ink_3 : Theme.line);
-    background: root.checked ? Theme.pill_on_bg : (touch.has-hover ? Theme.row_hover : transparent);
+    border-width: 1.5px;
 
-    touch := TouchArea { width: 100%; height: 100%; clicked => { root.toggled(); } }
+    property <color> border_base: root.checked ? transparent : (root.error ? Theme.err : Theme.ink_4);
+    property <color> bg_base: root.checked ? (root.error ? Theme.err : Theme.ink) : transparent;
 
-    // 勾号双向居中
+    area := StateArea {
+        width: 100%; height: 100%;
+        area_enabled: root.enabled;
+        layer_color: root.checked ? (root.error ? Theme.err : Theme.ink) : Theme.ink;
+        layer_radius: Theme.r_xs;
+        clicked => { root.checked = !root.checked; root.toggled(); }
+    }
+
+    border-color: area.has-hover ? Theme.ink_2 : border_base;
+    background: area.has-hover && root.checked == false ? Theme.bg : bg_base;
+
     if root.checked : CenterText {
-        text: "✓"; font-size: 11px; font-weight: 700; color: Theme.ok;
+        text: "✓"; font-size: 11px; font-weight: 700;
+        color: root.error ? Theme.card : Theme.card;
         width: 100%; height: 100%;
     }
+}
+
+// ============ CheckCell（CheckBox 简化别名，API 兼容旧版）============
+export component CheckCell inherits CheckBox {
+    // 完全继承 CheckBox，保持旧名 API 兼容
 }
 
 // ============ 菜单项 ============
@@ -131,9 +193,13 @@ export component MenuItem inherits Rectangle {
 
     height: 26px;
     border-radius: Theme.r_xs;
-    background: touch.has-hover ? (root.danger ? Theme.err_bg : Theme.row_hover) : transparent;
-
-    touch := TouchArea { width: 100%; height: 100%; clicked => { root.clicked(); } }
+    area := StateArea {
+        width: 100%; height: 100%;
+        area_enabled: true;
+        layer_color: root.danger ? Theme.err_bg : Theme.row_hover;
+        layer_radius: Theme.r_xs;
+        clicked => { root.clicked(); }
+    }
 
     HorizontalLayout {
         width: 100%; height: 100%;
@@ -163,4 +229,21 @@ export component Dropdown inherits Rectangle {
     drop-shadow-offset-y: 3px;
 
     VerticalLayout { width: 100%; spacing: 1px; padding: 4px; @children }
+}
+
+// ============ ProgressBar（determinate + indeterminate）============
+export component ProgressBar inherits Rectangle {
+    in-out property <float> value: 0.0;   // 0.0 ~ 1.0
+    in-out property <bool> indeterminate: false;
+
+    height: 6px;
+    border-radius: 3px;
+    background: Theme.line_2;
+
+    Rectangle {
+        width: parent.width * root.value;
+        height: 100%;
+        border-radius: 3px;
+        background: Theme.ink;
+    }
 }

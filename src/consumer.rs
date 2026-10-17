@@ -121,7 +121,12 @@ fn pump_and_apply(
         ui.set_total_networks(networks_len as i32);
         ui.set_total_volumes(volumes_len as i32);
         ui.set_docker_ok(update.docker_ok);
-        ui.set_status_text(SharedString::from(update.status_text.as_str()));
+        // 只在 toast=true（操作结果：ActionDone/PullDone/CleanupDone）时更新 status_text
+        // —— 周期性 Containers/Images/Networks/Volumes 刷新不覆盖 toast 消息
+        // （让 toast 保持到 timer 自然恢复 "Ready"）
+        if update.toast {
+            ui.set_status_text(SharedString::from(update.status_text.as_str()));
+        }
         if update.reset_pull_busy {
             ui.set_pull_busy(false);
         }

@@ -78,7 +78,7 @@ export component MainWindow inherits Window {
 
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
-    in-out property <string> status_text: @tr("Connecting...");
+    in-out property <string> status_text: @tr("Ready");
     in-out property <int> batch_count: 0;
     /// 首次数据拉取期间显示骨架屏（强制 true 单独验证骨架屏渲染效果）
     in-out property <bool> loading: true;

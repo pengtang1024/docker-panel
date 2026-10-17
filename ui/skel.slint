@@ -1,10 +1,22 @@
 // skel.slint — 骨架屏占位组件（prototype .skel-card / .skel-line）
 // 仅在 loading 中间态使用：首次数据拉取 / refresh 期间。
-// 注：shimmer 动画需要 LinearGradient 填充 Path，Slint 1.18 Rectangle 不支持
-// LinearGradient background；未来如需 shimmer 可改为 Path + fill: LinearGradient。
+// shimmer 光带动画：Slint animate block 是属性变化动画（duration/easing/iteration-count -1），
+// 不支持 CSS @keyframes from/to 语法，也没有 timeout 自动切换的 state 循环。
+// 如需 shimmer：Rust 侧 spawn tokio 1.4s interval 调 invoke_from_event_loop 更新 shimmer_x。
+// 纯 .slint markup 可实现 LinearGradient 光带（@linear-gradient brush literal），
+// 但必须由属性变化驱动动画。
 import { Theme } from "theme.slint";
 
-// 骨架卡片：4 条 SkelLine（不同宽度）+ 左侧 3px 竖线装饰
+// 骨架线：不同宽度（硬设百分比）
+export component SkelLine inherits Rectangle {
+    in-out property <length> line_h: 12px;
+
+    height: self.line_h;
+    border-radius: 4px;
+    background: Theme.skel;
+}
+
+// 骨架卡片：4 条 SkelLine（硬设宽度）+ 左侧 3px 装饰竖线
 export component SkelCard inherits Rectangle {
     width: 100%;
     height: 104px;
@@ -13,7 +25,6 @@ export component SkelCard inherits Rectangle {
     border-color: Theme.line;
     border-radius: Theme.r;
 
-    // 左侧 3px 装饰竖线（与骨架线同色）
     Rectangle {
         x: 0px;
         y: 9px;
@@ -31,31 +42,10 @@ export component SkelCard inherits Rectangle {
         padding-bottom: 7px;
         spacing: 8px;
 
-        // width_ratio 模拟：各条线不同宽度（对齐原型 w60/w40/w80/w30）
-        Rectangle {
-            width: 60%;
-            height: 12px;
-            background: Theme.skel;
-            border-radius: 4px;
-        }
-        Rectangle {
-            width: 40%;
-            height: 12px;
-            background: Theme.skel;
-            border-radius: 4px;
-        }
-        Rectangle {
-            width: 80%;
-            height: 12px;
-            background: Theme.skel;
-            border-radius: 4px;
-        }
-        Rectangle {
-            width: 30%;
-            height: 12px;
-            background: Theme.skel;
-            border-radius: 4px;
-        }
+        SkelLine { width: 60%; }
+        SkelLine { width: 40%; }
+        SkelLine { width: 80%; }
+        SkelLine { width: 30%; }
     }
 }
 

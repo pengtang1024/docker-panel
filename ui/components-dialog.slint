@@ -46,18 +46,17 @@ export component DialogShell inherits Rectangle {
         VerticalLayout {
             width: 100%; spacing: 0px;
 
-            // Header
+            // Header（严格对齐 prototype .dlg-head{padding:18px 20px 14px}）
             Rectangle {
-                height: root.card_height != 0 ? 56px : self.preferred-height;
                 Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
                 HorizontalLayout {
                     width: 100%; height: 100%;
-                    spacing: Theme.s3; padding-left: Theme.s6; padding-right: Theme.s6;
-                    padding-top: 14px; padding-bottom: 14px;
+                    spacing: 0px; padding-left: 20px; padding-right: 20px;
+                    padding-top: 18px; padding-bottom: 14px;
                     alignment: center;
 
                     VerticalLayout {
-                        horizontal-stretch: 1; spacing: 3px; alignment: center;
+                        horizontal-stretch: 1; spacing: 3px; alignment: start;
                         VCenterText {
                             text: root.dlg_title;
                             font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
@@ -76,15 +75,15 @@ export component DialogShell inherits Rectangle {
                 }
             }
 
-            // Body（子类 fill）
+            // Body（.dlg-body{padding:16px 20px}）
             Rectangle {
                 width: 100%;
-                padding-left: Theme.s6; padding-right: Theme.s6;
-                padding-top: Theme.s5; padding-bottom: Theme.s5;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 16px; padding-bottom: 16px;
                 body_slot := BodySlot { width: 100%; }
             }
 
-            // Footer（子类 fill）
+            // Footer
             Rectangle {
                 width: 100%;
                 Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }

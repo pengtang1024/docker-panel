@@ -5,7 +5,8 @@ import { TextButton, CheckBox, ProgressBar } from "components-interact.slint";
 import { TextField } from "components-form.slint";
 import { DialogShell, BodySlot, FooterSlot } from "components-dialog.slint";
 
-// ============ CleanItem — 清理行 ============
+// ============ CleanItem — 清理行（严格对齐 prototype .check-row）============
+// .check-row{padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px;display:flex;align-items:center;gap:12px}
 component CleanItem inherits Rectangle {
     in-out property <bool> checked: true;
     in-out property <string> label: "";
@@ -14,7 +15,7 @@ component CleanItem inherits Rectangle {
     in-out property <string> cnt: "";
     callback toggled();
 
-    height: 56px;
+    height: 52px;
     border-radius: Theme.r_md;
     border-width: 1px;
     border-color: root.checked ? Theme.ink_3 : Theme.line;
@@ -22,8 +23,8 @@ component CleanItem inherits Rectangle {
 
     HorizontalLayout {
         width: 100%; height: 100%;
-        spacing: Theme.s4;
-        padding-left: Theme.s4; padding-right: Theme.s4;
+        spacing: 12px;
+        padding-left: 12px; padding-right: 12px;
         alignment: center;
 
         CheckBox {
@@ -39,11 +40,11 @@ component CleanItem inherits Rectangle {
         VerticalLayout {
             horizontal-stretch: 1; spacing: 1px; alignment: center;
             VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
-            VCenterText { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
+            VCenterText { text: root.desc; font-size: Theme.fs; color: Theme.ink_3; overflow: elide; }
         }
 
         VCenterText {
-            text: root.cnt; font-size: Theme.fs_sm;
+            text: root.cnt; font-size: Theme.fs;
             font-family: Theme.mono; color: Theme.ink_3;
         }
     }

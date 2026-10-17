@@ -24,7 +24,7 @@ export component Drawer inherits Rectangle {
     callback log_copy_click();
     callback log_clear_click();
 
-    property <length> content_h: root.height - Theme.drawer_head - (root.tabs_visible ? Theme.drawer_tabs : 0px);
+    property <length> content_h: root.height - 62px - (root.tabs_visible ? 36px : 0px);
 
     width: Theme.drawer_w;
     height: 100%;
@@ -38,27 +38,29 @@ export component Drawer inherits Rectangle {
         spacing: 0px;
 
         Rectangle {
-            height: Theme.drawer_head;
             Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
                 width: 100%; height: 100%;
-                spacing: Theme.s3; padding-left: Theme.s4; padding-right: Theme.s4;
+                spacing: 0px; padding-left: Theme.s6; padding-right: Theme.s6;
+                padding-top: 18px; padding-bottom: 14px;
                 alignment: center;
                 VerticalLayout {
-                    horizontal-stretch: 1; spacing: 2px; alignment: center;
-                    VCenterText { text: root.title; font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; overflow: elide; }
-                    VCenterText { text: root.sub; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
+                    horizontal-stretch: 1; spacing: 4px; alignment: start;
+                    VCenterText { text: root.title; font-size: Theme.fs_xl; font-weight: 700; color: Theme.ink; overflow: elide; }
+                    VCenterText { text: root.sub; font-size: Theme.fs; color: Theme.ink_2; font-family: Theme.mono; overflow: elide; }
                 }
                 IconBtn { size: 28px; glyph_size: 12px; glyph: "✕"; tip: @tr("Close"); clicked => { root.close(); } }
             }
         }
 
-        // Tab 栏（用通用 TabItem，统一状态机 + indicator 下划线）
+        // Tab 栏（严格对齐 prototype .d-tabs{d-tab）
         if root.tabs_visible : Rectangle {
-            height: Theme.drawer_tabs;
+            height: 36px;
             Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
-                width: 100%; height: 100%; spacing: 0px; alignment: center;
+                width: 100%; height: 100%;
+                spacing: 2px; padding-left: 12px; padding-right: 12px;
+                alignment: center;
                 TabItem { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
                 TabItem { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
                 TabItem { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
@@ -84,18 +86,18 @@ export component Drawer inherits Rectangle {
                 height: root.content_h;
                 spacing: 0px;
                 Rectangle {
-                    height: Theme.drawer_logbar;
-                    Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                    height: 36px;
+                    Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.ink_4; }
                     HorizontalLayout {
-                        width: 100%; height: 100%; spacing: Theme.s2; padding-left: Theme.s3; padding-right: Theme.s3;
+                        width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
                         alignment: center;
-                        IconBtn { size: 28px; glyph_size: 11px; glyph: root.log_follow ? "‖" : "▶"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
-                        IconBtn { size: 28px; glyph_size: 12px; glyph: "❐"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
-                        IconBtn { size: 28px; glyph_size: 12px; glyph: "⌫"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
+                        IconBtn { size: 26px; glyph_size: 11px; glyph: root.log_follow ? "‖" : "▶"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
+                        IconBtn { size: 26px; glyph_size: 12px; glyph: "❐"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
+                        IconBtn { size: 26px; glyph_size: 12px; glyph: "⌫"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                     }
                 }
                 logbox := Rectangle {
-                    height: root.content_h - Theme.drawer_logbar;
+                    height: root.content_h - 36px;
                     background: Theme.log_bg;
                     VerticalLayout {
                         width: 100%; height: 100%; padding: Theme.s3;

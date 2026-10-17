@@ -4,20 +4,21 @@ import { Theme } from "theme.slint";
 import { Tip, VCenterText, CenterText } from "components-align.slint";
 import { StateArea } from "components-state.slint";
 
-// ============ Chip 基类（MonoChip / ProjTag 合并）============
-// variant: 0=filled（默认灰色背景） 1=plain（透明背景） 2=filled_danger（深色背景 浅色字）
-// 所有旧 MonoChip/ProjTag 调用点 API 兼容（label/tip/plain/ink/fs/rad/dot_color 保留）
+// ============ Chip 基类（严格对齐 prototype .chip/.tag/.view-tab）============
+// .tag{font-size:11px;font-weight:600;color:var(--ink);background:var(--line-2);padding:2px 8px;border-radius:var(--r-sm);font-family:var(--m)}
 export component Chip inherits Rectangle {
     in-out property <string> label: "";
     in-out property <string> tip: "";
     in-out property <bool> plain: false;
     in-out property <color> ink: Theme.ink_2;
-    in-out property <length> fs: Theme.fs_xs;
-    in-out property <length> rad: Theme.r_xs;
+    in-out property <length> fs: Theme.fs_sm;
+    in-out property <length> rad: Theme.r_sm;
     in-out property <color> dot_color: Theme.accent;
     in-out property <bool> show_dot: false;
-    in-out property <bool> mono: true;   // 字重：true=等宽 false=常规
-    in-out property <bool> bold: false;  // 字重加粗（ProjTag 用）
+    in-out property <bool> mono: true;
+    in-out property <bool> bold: true;
+    in-out property <length> pad_h: 8px;     // padding-left/right
+    in-out property <length> pad_v: 2px;     // padding-top/bottom
 
     border-radius: root.rad;
     background: root.plain ? transparent : Theme.line_2;
@@ -29,8 +30,8 @@ export component Chip inherits Rectangle {
     }
 
     HorizontalLayout {
-        padding-left: 6px; padding-right: 6px;
-        padding-top: 1px; padding-bottom: 2px;
+        padding-left: root.pad_h; padding-right: root.pad_h;
+        padding-top: root.pad_v; padding-bottom: root.pad_v;
         spacing: 4px; alignment: center;
 
         if root.show_dot : Rectangle {
@@ -40,7 +41,7 @@ export component Chip inherits Rectangle {
         VCenterText {
             text: root.label; font-size: root.fs;
             font-family: root.mono ? Theme.mono : "";
-            font-weight: root.bold ? 700 : 400;
+            font-weight: root.bold ? 600 : 400;
             color: root.ink;
         }
     }
@@ -52,9 +53,9 @@ export component Chip inherits Rectangle {
     }
 }
 
-// ============ 向后兼容别名 ============
-export component MonoChip inherits Chip { mono: true; bold: false; show_dot: false; }
-export component ProjTag inherits Chip { mono: false; bold: true; show_dot: true; }
+// ============ 向后兼容别名（各组件独立微调 padding）============
+export component MonoChip inherits Chip { mono: true; bold: true; show_dot: false; pad_h: 8px; pad_v: 2px; }
+export component ProjTag inherits Chip { mono: false; bold: true; show_dot: true; pad_h: 8px; pad_v: 2px; }
 
 // ============ 资源指标（图标 + 数值，异构垂直布局，独立）============
 export component Stat inherits Rectangle {

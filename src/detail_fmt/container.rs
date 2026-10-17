@@ -52,11 +52,7 @@ fn detail_rows(d: &ContainerDetail, c: Option<&ContainerInfo>) -> Vec<DetailPair
     };
     rows.push(kv("CPU", cpu, false));
     rows.push(kv(&t("Memory"), mem, false));
-    rows.push(kv(
-        &t("Restart Policy"),
-        or_dash(&d.restart_policy),
-        false,
-    ));
+    rows.push(kv(&t("Restart Policy"), or_dash(&d.restart_policy), false));
     rows.push(kv(
         &t("Restart Count"),
         trf("{0} times", &[&d.restarts.to_string()]),

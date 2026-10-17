@@ -280,6 +280,9 @@ export component Drawer inherits Rectangle {
                 VerticalLayout {
                     width: 100%;
                     spacing: 0px;
+                    // ScrollView 会把内层布局拉满视口，若不置 start 则每行被均摊拉高到 100px+；
+                    // alignment:start 让各行保持自然高，从顶部紧密排布（对齐 prototype 紧凑 kv 行）
+                    alignment: start;
                     for row[i] in root.detail_rows : DetailRow {
                         data: row;
                         head_gap: i > 0;
@@ -353,6 +356,7 @@ export component Drawer inherits Rectangle {
                 VerticalLayout {
                     width: 100%;
                     spacing: 0px;
+                    alignment: start;
                     for row[i] in root.env_rows : DetailRow {
                         data: row;
                         head_gap: i > 0;

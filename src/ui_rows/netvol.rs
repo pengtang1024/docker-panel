@@ -36,12 +36,7 @@ pub fn build_network_rows(s: &AppState) -> Vec<NetworkRow> {
 pub fn build_volume_rows(s: &AppState) -> Vec<VolumeRow> {
     s.volumes
         .iter()
-        .filter(|v| {
-            hit_any(
-                &s.container_query,
-                &[&v.name, &v.driver, &v.mountpoint],
-            )
-        })
+        .filter(|v| hit_any(&s.container_query, &[&v.name, &v.driver, &v.mountpoint]))
         .map(|v| {
             let size = match s.volume_sizes.get(&v.name) {
                 Some(bytes) => format_bytes(*bytes),

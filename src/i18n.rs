@@ -45,7 +45,27 @@ pub fn t(msgid: &str) -> String {
 
 /// 翻译并替换占位符：`trf("Loaded {0} containers", &[&n.to_string()])`
 pub fn trf(msgid: &str, args: &[&str]) -> String {
-    let mut s = translate(msgid).into_owned();
+    fill(translate(msgid).into_owned(), args)
+}
+
+/// 复数翻译，对齐 .slint 的 `@tr("sing" | "plural" % n)`：
+/// 中文 nplurals=1 取 msgstr[0]；非中文回落 `n == 1 ? singular : plural`。
+pub fn trfp(singular: &str, plural: &str, n: usize, args: &[&str]) -> String {
+    let base = match TABLE.get() {
+        Some(Some(_)) => translate(&format!("{singular}\x00{plural}")).into_owned(),
+        _ => {
+            if n == 1 {
+                singular.to_string()
+            } else {
+                plural.to_string()
+            }
+        }
+    };
+    fill(base, args)
+}
+
+/// 按 `{0}` `{1}` … 顺序替换占位符。
+fn fill(mut s: String, args: &[&str]) -> String {
     for (i, a) in args.iter().enumerate() {
         s = s.replace(&format!("{{{i}}}"), a);
     }

@@ -15,10 +15,18 @@
 
 ### 变更
 
-- **模块拆分（单文件 ≤300 行）**：main.rs 312→73 行（拆出 [src/consumer.rs] consumer 线程 Msg 泵 + 3s 刷新 interval、[src/bootstrap.rs] 6s stats 采样 + 首屏加载）；ui_state.rs 367→265 行（拆出 [src/detail_fmt.rs] 详情/镜像详情字段格式化）；delegates.slint 313→224 行（拆出 [ui/network-views.slint] 网络/卷表格行）。
+- **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；新增 [src/render.rs]（CachedModel 差量同步）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
 
 ### 修复
 
+- **抽屉详情代码盒键值布局**：环境 Tab 的 `KEY=value` 行原两段 Text 无 stretch 划分，键名被摊宽、长值溢出容器；改为键名自然宽、值吃满剩余宽度并自动换行。
+- **抽屉日志 Tab 不拉流**：切到「日志」Tab 未建立 follow 日志流（仅切 Tab 不请求）。新增 `AppState::ensure_follow`（按 id 幂等建流，避免重复 follow），容器选中与 Tab 切换两条路径统一调用。
+- **卡片「···」菜单点外部不关闭**：新增卡片区背景点击层（`CardsArea` 根 `TouchArea`）并让卡片 select 前置 `CardMenu.close()`，点击其它卡片或空白处均收起菜单。
+- **拉取弹窗缺原型要素**：补齐副标题、`Image`/`Progress` 字段标签、输入框 placeholder（`nginx:latest`）、常显进度条与状态文本（`等待拉取…`）。
+- **清理弹窗缺原型要素**：补齐副标题、四行资源图标（▢/▣/◇/▤）、各类型数量回填、深色勾选态复选框、头/脚分隔线。
+- **排序菜单锚点偏移**：改为左对齐锚定排序按钮（`menu_x = 按钮 absolute-position.x`）、宽 120px。
+- **图标字形 tofu**：日志工具栏/顶栏/卡片菜单的 `⏸`/`⧉`/`🗑` 等字形系统字体缺失（仅 Noto Color Emoji/Math 覆盖 → 显示豆腐块），换为系统可渲染字形（`‖`/`❐`/`⌫`）。
+- **网络详情容器数英文回退**：Rust 侧 `trf("{0} containers")` 命中 po 的复数条目（键为 `msgid\0msgid_plural`）失败而回落英文；新增 `i18n::trfp`（复数翻译，对齐 Slint `@tr("sing" | "plural" % n)`），网络详情容器数现为「N 个容器」。
 - **Esc 关闭弹层后焦点悬空**：条件渲染移除弹窗后其内部焦点丢失导致快捷键失效，Esc 分支末尾 `global-shortcuts.focus()` 归还焦点。
 
 ### 移除

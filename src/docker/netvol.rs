@@ -77,15 +77,13 @@ pub async fn volume_sizes() -> Result<HashMap<String, u64>, String> {
     let opts = DataUsageOptionsBuilder::default()
         ._type(vec!["volume".to_string()])
         .build();
-    let resp = docker.df(Some(opts)).await.map_err(|e| {
-        crate::i18n::trf("Failed to list volumes: {0}", &[&e.to_string()])
-    })?;
+    let resp = docker
+        .df(Some(opts))
+        .await
+        .map_err(|e| crate::i18n::trf("Failed to list volumes: {0}", &[&e.to_string()]))?;
     let mut out = HashMap::new();
     // `VolumeUsage.Items` 为未建模的原始 JSON，逐项取 Name / UsageData.Size
-    let items = resp
-        .volume_usage
-        .and_then(|u| u.items)
-        .unwrap_or_default();
+    let items = resp.volume_usage.and_then(|u| u.items).unwrap_or_default();
     for item in items {
         let name = item.get("Name").and_then(|v| v.as_str());
         let size = item

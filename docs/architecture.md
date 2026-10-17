@@ -39,7 +39,7 @@ docker-panel/
 ├── src/                       Rust 层（所有 ≤ 300 行）
 │   ├── main.rs                组装入口：i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
 │   ├── slint_gen.rs           include_modules!() 集中入口
-│   ├── i18n.rs                locale 检测（zh*→zh_CN）+ Rust 侧 t() + slint_language()
+│   ├── i18n.rs                locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp()（复数，对齐 @tr 的 `"sing" | "plural" % n`）+ slint_language()
 │   ├── config.rs              AppConfig 持久化（directories + 手写 JSON 原子写）
 │   │
 │   ├── consumer.rs            consumer 线程：recv_timeout(200ms) Msg 泵 pump_and_apply + 3s 刷新 interval
@@ -48,15 +48,18 @@ docker-panel/
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
-│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ drain_messages + persist
-│   ├── detail_fmt.rs          详情/镜像详情 → SharedString 元组格式化（format_bytes）
-│   ├── ui_rows.rs             4 种行构建 + Compose 分组排序 + 网络/卷搜索过滤
+│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ drain_messages + ensure_follow（日志流幂等建流）+ cleanup_counts + persist
+│   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）
+│   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
 │   ├── ui_update.rs           derive_update(Msg → UiUpdate)
 │   ├── ui_apply.rs            apply_detail / apply_lists / refresh_lists_now（搜索排序即时重建）
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
 │   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
-│   ├── callbacks_image.rs     镜像删除（AppActions global）
+│   ├── callbacks_drawer.rs    抽屉 Tab 切换（切到日志 Tab 触发 ensure_follow）
+│   ├── callbacks_image.rs     镜像删除 / 选中（AppActions global）
+│   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
 │   │
 │   └── docker/
 │       ├── mod.rs             connect() + pub use 重导出
@@ -77,16 +80,16 @@ docker-panel/
     ├── models.slint           ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
-    ├── cards.slint            四种资源卡片网格
-    ├── foot-bar.slint         底部 8 项资源概览
-    ├── batch-bar.slint        批量操作浮动栏
-    ├── drawer.slint           右侧抽屉：详情/日志/环境 三 Tab
-    ├── detail-panel.slint     DetailRow + 详情 kv section（drawer 复用）
-    ├── dialogs.slint          PullDialog + CleanupDialog 弹窗
-    ├── delegates.slint        容器/镜像表格行（RowGroup/RowContainer/RowImage）
-    ├── network-views.slint    网络/卷表格行（RowNetwork/RowVolume）
-    ├── headers.slint          各视图表头（列宽严格对齐 delegates）
-    └── components.slint       IconBtn / Dot / CheckCell 等原子组件
+    ├── cards.slint             卡片网格容器（四种视图共用，含空状态 + 背景点击层）
+    ├── card-container.slint    容器卡片（多选勾选 + 启停/重启/日志）
+    ├── card-image.slint        镜像卡片（运行/删除）
+    ├── card-netvol.slint       网络/卷卡片（共用布局，内建标记 + 容器数）
+    ├── foot-bar.slint          底部 8 项资源概览
+    ├── batch-bar.slint         批量操作浮动栏
+    ├── drawer.slint            右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
+    ├── dialogs.slint           PullDialog + CleanupDialog 弹窗
+    ├── menu-layers.slint       浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
+    └── components.slint        IconBtn / Dot / CheckCell / MenuItem / Dropdown / TipLayer 等原子组件
 ```
 
 ### 依赖方向（严格单向，无循环）

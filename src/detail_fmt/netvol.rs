@@ -1,6 +1,6 @@
 //! 网络 / 卷抽屉内容，对齐 prototype detailHTML 的 network / volume 分支
 
-use crate::i18n::{t, trf};
+use crate::i18n::{t, trfp};
 use crate::ui_state::AppState;
 
 use super::{head, kv, or_dash, DrawerData};
@@ -19,7 +19,12 @@ pub(crate) fn build_network(s: &AppState) -> Option<DrawerData> {
             kv(&t("Scope"), or_dash(&n.scope), false),
             kv(
                 &t("Containers"),
-                trf("{0} containers", &[&count.to_string()]),
+                trfp(
+                    "{0} container",
+                    "{0} containers",
+                    count,
+                    &[&count.to_string()],
+                ),
                 false,
             ),
             head(&t("Subnet")),

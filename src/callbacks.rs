@@ -1,7 +1,7 @@
 //! UI 回调绑定
 
-use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_container::bind_container_actions;
+use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_image::bind_image_actions;
 pub use super::callbacks_netvol::bind_netvol_actions;
 
@@ -261,5 +261,3 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
         );
     }
 }
-
-

@@ -199,12 +199,10 @@ impl AppState {
         }
         let tx = self.tx.clone();
         self.rt.spawn(async move {
-            let futs = missing
-                .into_iter()
-                .map(|id| async move {
-                    let n = crate::docker::image_layer_count(&id).await.unwrap_or(0);
-                    (id, n)
-                });
+            let futs = missing.into_iter().map(|id| async move {
+                let n = crate::docker::image_layer_count(&id).await.unwrap_or(0);
+                (id, n)
+            });
             let got: Vec<(String, usize)> = futures::future::join_all(futs).await;
             let _ = tx.send(Msg::ImageLayers(got));
         });

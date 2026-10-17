@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.2（Phase 2+ 已交付：详情面板 + 实时日志流 + 镜像详情 + 网络/卷 Tab + 网络容器计数）。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.3（Phase 2+ 已交付：卡片化四视图 + 右侧抽屉详情/日志/环境 + 网络/卷视图与容器计数 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
@@ -123,8 +123,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（16 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌）/ models / top-bar / sub-bar / cards / foot-bar / batch-bar / drawer / detail-panel / dialogs / delegates / network-views / headers / **components（原子组件库，R4 复用检索起点）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n / config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样）/ models / ui_state（AppState）/ detail_fmt / ui_update / ui_apply / ui_rows / batch / callbacks{,_container,_image} / docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
+| `ui/` | Slint 声明层（15 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ foot-bar / batch-bar / drawer / dialogs / menu-layers（浮动菜单层）/ **components（原子组件库，R4 复用检索起点）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样）/ models / ui_state（AppState + `follow_id` 日志流 + `cleanup_counts`）/ render（CachedModel 差量同步）/ ui_update / ui_apply / batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol} / ui_rows/{containers,images,netvol} / docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
 | `translations/` | gettext zh_CN（编译期嵌入，按 locale 选择） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading 线程与消息 · ui-interaction Slint 交互 · docker-bollard Docker 与 bollard 坑条）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
@@ -147,14 +147,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
      + shutdown: AtomicBool
 ```
 
-**关键设计**：`mpsc::Receiver<Msg>` 不在 Mutex 内部，由 consumer 线程独占。`rx.recv_timeout(200ms)` 替代阻塞 `recv()`，每次 timeout 检查 `AppState.shutdown` flag。窗口关闭 → flag=true → consumer ~250ms 内 break → join → state/runtime 自然 drop。
-
-**Slint Timer 已废弃**：软件渲染器 + MCP 模式下 Slint Timer 不触发（连 debug eprintln 都没有），全部改用 `rt.handle().clone(); rt_h.spawn(async { tokio::time::interval(...); loop { tick().await; } })`。
-
-**pump_and_apply 两阶段铁律**：
-1. 锁内：`drain_messages` + `build rows` + `build_detail_data` + 读字段 + 操作完成时 `s.refresh()`
-2. `drop(state)`
-3. `invoke_from_event_loop` 闭包里调 `ui_apply::apply_lists(...)` / `ui_apply::apply_detail(...)` / 其他 `ui.set_*` — **闭包里绝不碰 state**
+**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式不触发，改 tokio interval）· pump_and_apply 两阶段铁律（锁内 drain + build → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
 
 ## 消息类型（`models::Msg`）
 
@@ -194,9 +187,7 @@ cargo run
 cargo build --release
 ./target/release/docker-panel
 
-# MCP 截图验收（必须 feature slint/mcp）
-cargo build --release --features slint/mcp
-SLINT_EMIT_DEBUG_INFO=1 SLINT_MCP_PORT=8080 ./target/release/docker-panel &
+# MCP 截图验收：命令见顶部「硬约束：UI 验证只能通过 Slint MCP」（不在此重复）
 
 # 代码检查
 cargo fmt --all -- --check
@@ -229,7 +220,7 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 ## 当前已知限制
 
-- **无快捷键、无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
+- **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
 - **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
 
 ## 文档导航

@@ -122,16 +122,16 @@ export component ContainerCard inherits Rectangle {
             padding-top: 7px;
             Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
             Stat {
-                glyph: "◐";
+                icon_name: "monitor";
                 value: (root.data.is_running && root.data.cpu_percent != "") ? root.data.cpu_percent : "—";
                 tip: @tr("CPU usage");
             }
             Stat {
-                glyph: "▥";
+                icon_name: "";
                 value: (root.data.is_running && root.data.mem_usage != "") ? root.data.mem_usage : "—";
                 tip: @tr("Memory usage");
             }
-            Stat { glyph: "▣"; value: root.data.disk; tip: @tr("Disk usage"); }
+            Stat { icon_name: ""; value: root.data.disk; tip: @tr("Disk usage"); }
             Rectangle { horizontal-stretch: 1; }
             if root.data.compose_project != "" : ProjTag {
                 label: root.data.compose_project;
@@ -154,10 +154,10 @@ export component ContainerCard inherits Rectangle {
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
-        glyph_size: 13px;
+        icon_size: 13px;
         outline: true;
         hidden: root.act_show == false;
-        glyph: root.data.is_running ? "↻" : "▶";
+        icon_name: root.data.is_running ? "restart" : "play";
         tip: root.data.is_running ? @tr("Restart") : @tr("Start");
         clicked => {
             if (root.menu_open) { root.menu_toggle(root.data.id, 0, false, 0px, 0px); }
@@ -170,11 +170,11 @@ export component ContainerCard inherits Rectangle {
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
-        glyph_size: 13px;
+        icon_size: 13px;
         outline: true;
         active: root.menu_open;
         hidden: root.act_show == false;
-        glyph: "···";
+        icon_name: "more";
         tip: @tr("More");
         clicked => {
             root.menu_toggle(

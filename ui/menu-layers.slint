@@ -96,23 +96,23 @@ export component CardMenuLayer inherits Dropdown {
 
     // 容器：停止 / 日志 / 删除（prototype 卡片 dropdown）
     if root.kind == 0 && root.can_stop : MenuItem {
-        glyph: "■";
+        icon_name: "";
         label: @tr("Stop");
         clicked => { root.stop_card(root.id); }
     }
     if root.kind == 0 : MenuItem {
-        glyph: "≡";
+        icon_name: "more";
         label: @tr("Logs");
         clicked => { root.logs(root.id); }
     }
     // 镜像 / 网络 / 卷：详情 + 删除
     if root.kind != 0 : MenuItem {
-        glyph: "≡";
+        icon_name: "more";
         label: @tr("Details");
         clicked => { root.details(root.id); }
     }
     MenuItem {
-        glyph: "⌫";
+        icon_name: "trash";
         label: @tr("Remove");
         danger: true;
         clicked => { root.remove(root.id); }

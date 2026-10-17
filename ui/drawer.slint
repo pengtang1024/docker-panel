@@ -53,7 +53,7 @@ export component Drawer inherits Rectangle {
             // .d-close{position:absolute;top:14px;right:14px;width:28px;height:28px}
             IconBtn {
                 x: parent.width - 14px - 28px; y: 14px;
-                size: 28px; glyph_size: 12px; glyph: "✕";
+                size: 28px; icon_size: 12px; icon_name: "x";
                 tip: @tr("Close");
                 clicked => { root.close(); }
             }
@@ -95,9 +95,9 @@ export component Drawer inherits Rectangle {
                     Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.ink_4; }
                     HorizontalLayout {
                         width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
-                        IconBtn { size: 26px; glyph_size: 11px; glyph: root.log_follow ? "‖" : "▶"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
-                        IconBtn { size: 26px; glyph_size: 12px; glyph: "❐"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
-                        IconBtn { size: 26px; glyph_size: 12px; glyph: "⌫"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
+                        IconBtn { size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
+                        IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
+                        IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                     }
                 }
                 logbox := Rectangle {

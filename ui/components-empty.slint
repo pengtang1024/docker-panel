@@ -1,18 +1,30 @@
 // components-empty.slint — 空状态占位
-// prototype .empty：flex-direction:column; align-items:center; justify-content:center
 import { Theme } from "theme.slint";
 import { CenterText } from "components-align.slint";
 
 export component EmptyState inherits Rectangle {
     in-out property <string> title: "";
     in-out property <string> desc: "";
-    in-out property <string> glyph: "▢";
+    in-out property <string> icon_name: "";
+
+    property <string> icon_commands: root.icon_name == "box" ? "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12"
+        : root.icon_name == "search" ? "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35"
+        : "";
 
     VerticalLayout {
         width: 100%; height: 100%;
         alignment: center;
-        spacing: Theme.s3;
-        CenterText { text: root.glyph; font-size: 40px; color: Theme.ink_4; width: 100%; }
+        spacing: 8px;
+        Path {
+            width: 48px; height: 48px;
+            commands: icon_commands;
+            stroke: Theme.ink_4;
+            stroke-width: 1.5px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            visible: icon_commands != "";
+        }
         CenterText { text: root.title; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink_2; width: 100%; }
         CenterText { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; width: 100%; }
     }

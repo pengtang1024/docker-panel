@@ -134,10 +134,10 @@ export component ImageCard inherits Rectangle {
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
-        glyph_size: 13px;
+        icon_size: 13px;
         outline: true;
         hidden: root.act_show == false;
-        glyph: "▶";
+        icon_name: "play";
         tip: @tr("Run");
         clicked => {
             if (root.menu_open) { root.menu_toggle(root.data.id, 1, false, 0px, 0px); }
@@ -149,11 +149,11 @@ export component ImageCard inherits Rectangle {
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
-        glyph_size: 13px;
+        icon_size: 13px;
         outline: true;
         active: root.menu_open;
         hidden: root.act_show == false;
-        glyph: "···";
+        icon_name: "more";
         tip: @tr("More");
         clicked => { root.menu_toggle(root.data.id, 1, false, root.menu_mx, root.menu_my); }
     }

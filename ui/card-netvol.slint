@@ -73,16 +73,16 @@ export component NetworkCard inherits Rectangle {
     }
 
     main_btn := IconBtn {
-        x: parent.width - 65px; y: 9px; size: 26px; glyph_size: 13px;
-        glyph: "≡"; tip: @tr("Details");
+        x: parent.width - 65px; y: 9px; size: 26px; icon_size: 13px;
+        icon_name: "more"; tip: @tr("Details");
         clicked => {
             if (root.menu_open) { root.menu_toggle(root.data.id, 2, false, 0px, 0px); }
             else { root.select(root.data.id); }
         }
     }
     more_btn := IconBtn {
-        x: parent.width - 35px; y: 9px; size: 26px; glyph_size: 13px;
-        glyph: "···"; tip: @tr("More");
+        x: parent.width - 35px; y: 9px; size: 26px; icon_size: 13px;
+        icon_name: "more"; tip: @tr("More");
         clicked => { root.menu_toggle(root.data.id, 2, false, root.menu_mx, root.menu_my); }
     }
 }
@@ -162,16 +162,16 @@ export component VolumeCard inherits Rectangle {
     }
 
     main_btn := IconBtn {
-        x: parent.width - 65px; y: 9px; size: 26px; glyph_size: 13px;
-        glyph: "≡"; tip: @tr("Details");
+        x: parent.width - 65px; y: 9px; size: 26px; icon_size: 13px;
+        icon_name: "more"; tip: @tr("Details");
         clicked => {
             if (root.menu_open) { root.menu_toggle(root.data.name, 3, false, 0px, 0px); }
             else { root.select(root.data.name); }
         }
     }
     more_btn := IconBtn {
-        x: parent.width - 35px; y: 9px; size: 26px; glyph_size: 13px;
-        glyph: "···"; tip: @tr("More");
+        x: parent.width - 35px; y: 9px; size: 26px; icon_size: 13px;
+        icon_name: "more"; tip: @tr("More");
         clicked => { root.menu_toggle(root.data.name, 3, false, root.menu_mx, root.menu_my); }
     }
 }

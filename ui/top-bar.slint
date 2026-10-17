@@ -97,9 +97,9 @@ export component TopBar inherits Rectangle {
 
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 
-        IconBtn { glyph: Theme.theme_mode == 1 ? "☀" : Theme.theme_mode == 2 ? "☾" : "◐"; glyph_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
-        IconBtn { glyph: "↻"; glyph_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
-        IconBtn { glyph: "⌫"; glyph_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
-        IconBtn { glyph: "⤓"; glyph_size: 16px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
+        IconBtn { icon_name: Theme.theme_mode == 1 ? "sun" : Theme.theme_mode == 2 ? "moon" : "monitor"; icon_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
+        IconBtn { icon_name: "refresh"; icon_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
+        IconBtn { icon_name: "trash"; icon_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
+        IconBtn { icon_name: "download"; icon_size: 16px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
     }
 }

@@ -59,15 +59,27 @@ export component ProjTag inherits Chip { mono: false; bold: true; show_dot: true
 
 // ============ 资源指标（图标 + 数值，异构垂直布局，独立）============
 export component Stat inherits Rectangle {
-    in-out property <string> glyph: "";
+    in-out property <string> icon_name: "";
     in-out property <string> value: "";
     in-out property <string> tip: "";
 
+    property <string> icon_commands: root.icon_name == "cpu" ? "M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3"
+        : root.icon_name == "memory" ? "M2 6h20v12H2z M6 10v4 M10 10v4 M14 10v4 M18 10v4"
+        : root.icon_name == "disk" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20"
+        : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
+        : "";
+
     HorizontalLayout {
         alignment: center;
-        CenterText {
-            text: root.glyph; font-size: 11px; width: 14px; height: 14px;
-            color: Theme.ink_3;
+        Path {
+            width: 14px; height: 14px;
+            commands: icon_commands;
+            stroke: Theme.ink_3;
+            stroke-width: 1.5px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            visible: icon_commands != "";
         }
         VCenterText {
             text: root.value; font-size: Theme.fs_sm; font-weight: 600;

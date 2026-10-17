@@ -78,7 +78,7 @@ export component CardsArea inherits Rectangle {
     if root.loading == false && root.n == 0 : EmptyState {
         width: 100%;
         height: 100%;
-        glyph: "▢";
+        icon_name: "";
         title: root.view == 0 ? @tr("No matching containers")
             : root.view == 1 ? @tr("No matching images")
             : root.view == 2 ? @tr("No matching networks")

@@ -30,10 +30,10 @@ export component BatchBar inherits Rectangle {
 
         Rectangle { horizontal-stretch: 1; }
 
-        IconBtn { size: 28px; glyph_size: 12px; glyph: "▶"; tip: @tr("Start"); clicked => { root.start(); } }
-        IconBtn { size: 28px; glyph_size: 10px; glyph: "■"; tip: @tr("Stop"); clicked => { root.stop(); } }
-        IconBtn { size: 28px; glyph_size: 13px; glyph: "↻"; tip: @tr("Restart"); clicked => { root.restart(); } }
-        IconBtn { size: 28px; glyph_size: 13px; glyph: "🗑"; danger: true; tip: @tr("Remove"); clicked => { root.remove(); } }
-        IconBtn { size: 28px; glyph_size: 12px; glyph: "✕"; tip: @tr("Cancel"); clicked => { root.clear(); } }
+        IconBtn { size: 28px; icon_size: 12px; icon_name: "play"; tip: @tr("Start"); clicked => { root.start(); } }
+        IconBtn { size: 28px; icon_size: 10px; icon_name: ""; tip: @tr("Stop"); clicked => { root.stop(); } }
+        IconBtn { size: 28px; icon_size: 13px; icon_name: "restart"; tip: @tr("Restart"); clicked => { root.restart(); } }
+        IconBtn { size: 28px; icon_size: 13px; icon_name: ""; danger: true; tip: @tr("Remove"); clicked => { root.remove(); } }
+        IconBtn { size: 28px; icon_size: 12px; icon_name: "x"; tip: @tr("Cancel"); clicked => { root.clear(); } }
     }
 }

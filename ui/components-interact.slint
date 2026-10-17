@@ -1,5 +1,4 @@
-// components-interact.slint — 交互控件（按钮 / 菜单 / Tooltip / 输入 / 进度）
-// 架构：StateArea（状态层）+ states DSL（声明式状态机）+ @children 插槽
+// components-interact.slint — 交互控件
 import { Theme } from "theme.slint";
 import { Tip, CenterText, VCenterText } from "components-align.slint";
 import { StateArea } from "components-state.slint";
@@ -28,9 +27,10 @@ export component TipLayer inherits Rectangle {
     }
 }
 
-// ============ IconBtn（严格对齐 prototype .icon-btn{width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card);display:grid;place-items:center}）============
+// ============ IconBtn — SVG Path 图标按钮（用 LucidePath 替代 unicode glyph）============
+// icon_name 映射到 prototype.html ICONS 对象里的 Lucide path
 export component IconBtn inherits Rectangle {
-    in-out property <string> glyph: "";
+    in-out property <string> icon_name: "";
     in-out property <bool> primary: false;
     in-out property <bool> danger: false;
     in-out property <bool> active: false;
@@ -38,7 +38,7 @@ export component IconBtn inherits Rectangle {
     in-out property <bool> outline: false;
     in-out property <bool> hidden: false;
     in-out property <length> size: 32px;
-    in-out property <length> glyph_size: 16px;
+    in-out property <length> icon_size: 16px;
     in-out property <string> tip: "";
     callback clicked();
 
@@ -51,6 +51,44 @@ export component IconBtn inherits Rectangle {
     animate opacity { duration: 120ms; easing: ease-out; }
 
     property <color> base_bg: root.primary ? Theme.ink : root.active ? Theme.pill_on_bg : Theme.card;
+    property <color> icon_color: root.primary ? Theme.card
+        : root.active ? Theme.ok
+        : root.danger ? Theme.err
+        : area.has-hover ? Theme.ink
+        : Theme.ink_2;
+
+    // icon_name → SVG path 映射（来自 prototype.html ICONS 对象）
+    property <string> icon_path: root.icon_name == "refresh" ? "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5 M21 12a9 9 0 1 1-15 6.7L21 16 M21 21v-5h-5"
+        : root.icon_name == "sun" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 6v2 M12 16v2 M6 12H4 M20 12h-2 M7.05 7.05l1.41 1.41 M15.54 15.54l1.41 1.41 M7.05 16.95l1.41-1.41 M15.54 8.46l1.41-1.41"
+        : root.icon_name == "moon" ? "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+        : root.icon_name == "monitor" ? "M2 3h20v14H2z M8 21h8 M12 17v4"
+        : root.icon_name == "search" ? "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35"
+        : root.icon_name == "download" ? "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"
+        : root.icon_name == "play" ? "M6 3l14 9-14 9V3z"
+        : root.icon_name == "restart" ? "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5"
+        : root.icon_name == "stop" ? "M5 5h14v14H5z"
+        : root.icon_name == "more" ? "M5 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M12 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M19 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+        : root.icon_name == "x" ? "M18 6L6 18 M6 6l12 12"
+        : root.icon_name == "copy" ? "M9 9h13v13H9z M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        : root.icon_name == "trash" ? "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"
+        : root.icon_name == "check" ? "M20 6L9 17l-5-5"
+        : root.icon_name == "pause" ? "M6 4h4v16H6z M14 4h4v16h-4z"
+        : root.icon_name == "globe" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M2 12h20 M12 2a15 15 0 0 1 0 20 M12 2a15 15 0 0 0 0 20"
+        : root.icon_name == "settings" ? "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        : root.icon_name == "file-text" ? "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8"
+        : root.icon_name == "box" ? "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12"
+        : root.icon_name == "sort" ? "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12"
+        : root.icon_name == "arrow-down" ? "M12 5v14 M5 12l7 7 7-7"
+        : root.icon_name == "chevron-down" ? "M6 9l6 6 6-6"
+        : root.icon_name == "zap" ? "M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+        : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
+        : root.icon_name == "volume" ? "M12 5a9 3 0 1 1-18 0 9 3 0 0 1 18 0z M3 5v14a9 3 0 0 0 18 0V5 M3 12a9 3 0 0 0 18 0"
+        : root.icon_name == "container" ? "M3 3h18v18H3z M3 9h18 M9 21V9"
+        : root.icon_name == "image" ? "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5"
+        : root.icon_name == "cpu" ? "M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3"
+        : root.icon_name == "memory" ? "M2 6h20v12H2z M6 10v4 M10 10v4 M14 10v4 M18 10v4"
+        : root.icon_name == "disk" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20"
+        : "";
 
     area := StateArea {
         width: 100%; height: 100%;
@@ -61,19 +99,19 @@ export component IconBtn inherits Rectangle {
         background: area.has-hover ? Theme.bg : base_bg;
     }
 
-    CenterText {
-        text: root.glyph;
-        font-size: root.glyph_size;
-        width: 100%; height: 100%;
-        color: root.primary ? Theme.card
-            : root.active ? Theme.ok
-            : root.danger ? Theme.err
-            : area.has-hover ? Theme.ink
-            : Theme.ink_2;
+    Path {
+        width: root.icon_size; height: root.icon_size;
+        commands: icon_path;
+        stroke: icon_color;
+        stroke-width: 1.5px;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        fill: transparent;
+        visible: icon_path != "";
     }
 
     changed hovered => {
-        if (root.hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; }
+        if (hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; }
         else if (Tip.text == root.tip) { Tip.text = ""; }
     }
 
@@ -180,7 +218,7 @@ export component CheckCell inherits CheckBox {
 
 // ============ 菜单项（严格对齐 prototype .dropdown .di{height:30px;padding:0 10px;font-size:12px;font-weight:500}）============
 export component MenuItem inherits Rectangle {
-    in-out property <string> glyph: "";
+    in-out property <string> icon_name: "";
     in-out property <string> label: "";
     in-out property <bool> danger: false;
     in-out property <bool> active: false;
@@ -188,6 +226,15 @@ export component MenuItem inherits Rectangle {
 
     height: 30px;
     border-radius: Theme.r_xs;
+
+    property <string> icon_commands: root.icon_name == "trash" ? "M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"
+        : root.icon_name == "restart" ? "M3 12a9 9 0 1 0 3-6.7L3 8 M3 3v5h5"
+        : root.icon_name == "file-text" ? "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8"
+        : root.icon_name == "copy" ? "M9 9h13v13H9z M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        : root.icon_name == "x" ? "M18 6L6 18 M6 6l12 12"
+        : root.icon_name == "more" ? "M5 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M12 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M19 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"
+        : "";
+
     area := StateArea {
         width: 100%; height: 100%;
         area_enabled: true;
@@ -200,9 +247,15 @@ export component MenuItem inherits Rectangle {
         width: 100%; height: 100%;
         spacing: 8px;
         padding-left: 10px; padding-right: 10px;
-        VCenterText {
-            text: root.glyph; font-size: 12px; width: 14px;
-            color: root.danger ? Theme.err : Theme.ink_3;
+        Path {
+            width: 14px; height: 14px;
+            commands: icon_commands;
+            stroke: root.danger ? Theme.err : Theme.ink_3;
+            stroke-width: 1.5px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            visible: icon_commands != "";
         }
         VCenterText {
             text: root.label; font-size: Theme.fs;

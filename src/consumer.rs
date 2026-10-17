@@ -89,7 +89,16 @@ fn pump_and_apply(
 
     drop(s); // ⚠️ 关键：invoke_from_event_loop 之前必须释放锁
 
+    // toast auto-restore：操作结果 set 2s 后自动恢复 "Ready"（prototype 行为）
+    // 注：rt handle 已在锁内（上面 s.refresh() 调用处）clone，但函数作用域内
+    //     没暴露。这里通过 state 再次 lock 拿 handle（短暂锁持有，立即 clone）
+    let (toast_flag, rt_h) = {
+        let Ok(st) = state.lock() else { return };
+        (update.toast, st.rt.handle().clone())
+    };
+
     let ui_w = ui_weak.clone();
+    let ui_w_for_toast = ui_w.clone(); // 预 clone —— 避免 invoke 闭包 move 后不能用
     invoke_from_event_loop(move || {
         let Some(ui) = ui_w.upgrade() else { return };
         // 首次刷新到达，关闭骨架屏 loading 态（后续 interval 重复 set 无副作用）
@@ -121,6 +130,20 @@ fn pump_and_apply(
         }
         if let Some(ref d) = drawer_data {
             crate::ui_apply::apply_drawer(&ui, d);
+        }
+        // Toast auto-restore（prototype 行为）：操作结果 2s 后恢复 "Ready"
+        // 注：inner invoke 闭包必须只捕获 ui_weak（Send），不能 move MainWindow
+        // —— Slint MainWindow 内部有 Cell/UnsafeCell 等非 Send 字段
+        if toast_flag {
+            let rt_t = rt_h.clone();
+            let ui_weak_t = ui_w_for_toast.clone();
+            rt_t.spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                invoke_from_event_loop(move || {
+                    let Some(ui) = ui_weak_t.upgrade() else { return };
+                    ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+                }).ok();
+            });
         }
     })
     .ok();

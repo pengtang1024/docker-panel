@@ -4,6 +4,8 @@ pub struct UiUpdate {
     pub status_text: String,
     pub close_pull: bool,
     pub reset_pull_busy: bool,
+    /// 操作结果 toast（true = 2s 后自动恢复 "Ready"；false = 周期性刷新不自动恢复）
+    pub toast: bool,
 }
 
 use crate::i18n::{t, trf};
@@ -24,66 +26,77 @@ pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdat
             status_text: trf("Loaded {0} containers", &[&containers_len.to_string()]),
             close_pull: false,
             reset_pull_busy: false,
+            toast: false,
         },
         Some(Msg::Containers(Err(e))) => UiUpdate {
             docker_ok: false,
             status_text: trf("Container refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
+            toast: false,
         },
         Some(Msg::Images(Err(e))) => UiUpdate {
             docker_ok: false,
             status_text: trf("Image refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
+            toast: false,
         },
         Some(Msg::ActionDone(desc, Ok(_))) => UiUpdate {
             docker_ok: true,
             status_text: t(desc),
             close_pull: false,
             reset_pull_busy: false,
+            toast: true,
         },
         Some(Msg::ActionDone(desc, Err(e))) => UiUpdate {
             docker_ok: true,
             status_text: format!("{}: {e}", t(desc)),
             close_pull: false,
             reset_pull_busy: false,
+            toast: true,
         },
         Some(Msg::PullProgress(progress)) => UiUpdate {
             docker_ok: true,
             status_text: progress.clone(),
             close_pull: false,
             reset_pull_busy: false,
+            toast: false,
         },
         Some(Msg::PullDone(Ok(succ))) => UiUpdate {
             docker_ok: true,
             status_text: succ.clone(),
             close_pull: true,
             reset_pull_busy: true,
+            toast: true,
         },
         Some(Msg::PullDone(Err(e))) => UiUpdate {
             docker_ok: true,
             status_text: trf("Pull failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: true,
+            toast: true,
         },
         Some(Msg::CleanupDone(Ok(succ))) => UiUpdate {
             docker_ok: true,
             status_text: succ.clone(),
             close_pull: false,
             reset_pull_busy: false,
+            toast: true,
         },
         Some(Msg::CleanupDone(Err(e))) => UiUpdate {
             docker_ok: true,
             status_text: trf("Cleanup failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
+            toast: true,
         },
         _ => UiUpdate {
             docker_ok: true,
             status_text: t("Ready"),
             close_pull: false,
             reset_pull_busy: false,
+            toast: false,
         },
     }
 }

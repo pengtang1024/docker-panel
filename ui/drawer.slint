@@ -43,7 +43,6 @@ export component Drawer inherits Rectangle {
                 width: 100%; height: 100%;
                 spacing: 0px; padding-left: Theme.s6; padding-right: Theme.s6;
                 padding-top: 18px; padding-bottom: 14px;
-                alignment: center;
                 VerticalLayout {
                     horizontal-stretch: 1; spacing: 4px; alignment: start;
                     VCenterText { text: root.title; font-size: Theme.fs_xl; font-weight: 700; color: Theme.ink; overflow: elide; }
@@ -60,7 +59,6 @@ export component Drawer inherits Rectangle {
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 2px; padding-left: 12px; padding-right: 12px;
-                alignment: center;
                 TabItem { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
                 TabItem { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
                 TabItem { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
@@ -90,7 +88,6 @@ export component Drawer inherits Rectangle {
                     Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.ink_4; }
                     HorizontalLayout {
                         width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
-                        alignment: center;
                         IconBtn { size: 26px; glyph_size: 11px; glyph: root.log_follow ? "‖" : "▶"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
                         IconBtn { size: 26px; glyph_size: 12px; glyph: "❐"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
                         IconBtn { size: 26px; glyph_size: 12px; glyph: "⌫"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }

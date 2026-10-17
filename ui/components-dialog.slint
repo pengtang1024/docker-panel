@@ -11,10 +11,10 @@ export component BodySlot inherits Rectangle { @children }
 /// FooterSlot — Dialog footer 插槽（预置右对齐布局）
 export component FooterSlot inherits Rectangle {
     HorizontalLayout {
+        alignment: center;
         width: 100%; spacing: Theme.s3;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 14px; padding-bottom: 14px;
-        alignment: center;
         Rectangle { horizontal-stretch: 1; }
         @children
     }
@@ -53,7 +53,6 @@ export component DialogShell inherits Rectangle {
                     width: 100%; height: 100%;
                     spacing: 0px; padding-left: 20px; padding-right: 20px;
                     padding-top: 18px; padding-bottom: 14px;
-                    alignment: center;
 
                     VerticalLayout {
                         horizontal-stretch: 1; spacing: 3px; alignment: start;

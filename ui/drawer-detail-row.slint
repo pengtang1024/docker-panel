@@ -15,7 +15,6 @@ export component DetailRow inherits Rectangle {
         HorizontalLayout {
             width: 100%;
             padding-left: Theme.s6; padding-right: Theme.s6;
-            alignment: center;
             VCenterText {
                 text: root.data.k;
                 font-size: Theme.fs_xs; font-weight: 700;
@@ -31,7 +30,6 @@ export component DetailRow inherits Rectangle {
         spacing: Theme.s4;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 5px; padding-bottom: 5px;
-        alignment: center;
         RightText {
             text: root.data.k; width: 62px;
             font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
@@ -50,7 +48,6 @@ export component DetailRow inherits Rectangle {
         spacing: Theme.s4;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 5px; padding-bottom: 5px;
-        alignment: center;
         RightText {
             text: root.data.k; width: 62px;
             font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
@@ -63,7 +60,6 @@ export component DetailRow inherits Rectangle {
                 width: 100%;
                 padding-left: 11px; padding-right: 11px;
                 padding-top: 9px; padding-bottom: 9px;
-                alignment: center;
                 VCenterText {
                     text: root.data.v;
                     font-size: Theme.fs_sm; font-family: Theme.mono;
@@ -86,7 +82,6 @@ export component DetailRow inherits Rectangle {
                 width: 100%;
                 padding-left: Theme.s3; padding-right: Theme.s3;
                 padding-top: Theme.s1; padding-bottom: Theme.s1;
-                alignment: center;
                 VCenterText {
                     text: root.data.k == "" ? root.data.v : root.data.k + "=";
                     font-size: Theme.fs_sm; font-family: Theme.mono;

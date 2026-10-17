@@ -44,14 +44,12 @@ export component NetworkCard inherits Rectangle {
 
         HorizontalLayout {
             width: 100%; spacing: 6px; padding-right: 70px;
-            alignment: center;
             VCenterText { text: root.data.name; font-size: 14px; font-weight: 700; color: Theme.ink; overflow: elide; }
             if root.data.builtin : VCenterText { text: "(" + @tr("Builtin") + ")"; font-size: Theme.fs_xs; color: Theme.ink_3; }
             Rectangle { horizontal-stretch: 1; }
         }
 
         HorizontalLayout {
-            width: 100%; padding-top: 1px; alignment: center;
             VCenterText {
                 text: root.data.subnet == ""
                     ? root.data.driver + " · " + root.data.scope
@@ -61,13 +59,11 @@ export component NetworkCard inherits Rectangle {
         }
 
         HorizontalLayout {
-            width: 100%; spacing: 6px; padding-top: 6px; alignment: center;
             MonoChip { label: root.data.driver; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
             MonoChip { label: root.data.scope; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
         }
 
         HorizontalLayout {
-            width: 100%; padding-top: 7px; alignment: center;
             VCenterText {
                 text: @tr("{0} container" | "{0} containers" % root.data.containers, root.data.containers);
                 font-size: Theme.fs_sm; color: Theme.ink_2;
@@ -142,7 +138,6 @@ export component VolumeCard inherits Rectangle {
         x: 11px; y: 9px; width: parent.width - 20px; height: parent.height - 16px; spacing: 0px;
 
         HorizontalLayout {
-            width: 100%; padding-right: 70px; alignment: center;
             VCenterText {
                 text: root.data.display_name; font-size: Theme.fs_md; font-weight: 700;
                 font-family: Theme.mono; color: Theme.ink; horizontal-stretch: 1; overflow: elide;
@@ -150,12 +145,10 @@ export component VolumeCard inherits Rectangle {
         }
 
         if root.data.anonymous : HorizontalLayout {
-            width: 100%; padding-top: 2px; alignment: center;
             MonoChip { label: @tr("Anonymous volume"); plain: false; ink: Theme.ink_3; }
         }
 
         HorizontalLayout {
-            width: 100%; padding-top: 2px; alignment: center;
             VCenterText {
                 text: root.data.mountpoint; font-size: Theme.fs_xs; font-family: Theme.mono;
                 color: Theme.ink_3; overflow: elide;
@@ -163,7 +156,6 @@ export component VolumeCard inherits Rectangle {
         }
 
         HorizontalLayout {
-            width: 100%; padding-top: 7px; alignment: center;
             VCenterText { text: "driver: "; font-size: Theme.fs_sm; color: Theme.ink_2; }
             VCenterText { text: root.data.driver; font-size: Theme.fs_sm; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
             Rectangle { horizontal-stretch: 1; }

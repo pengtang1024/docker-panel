@@ -24,9 +24,9 @@ export component TabItem inherits Rectangle {
     }
 
     HorizontalLayout {
+        alignment: center;
         width: 100%; height: 100%;
         padding-left: 14px; padding-right: 14px;
-        spacing: 6px; alignment: center;
 
         if root.glyph != "" : VCenterText {
             text: root.glyph; font-size: 11px; color: root.active ? Theme.ink : Theme.ink_3;
@@ -72,7 +72,6 @@ export component TabBar inherits Rectangle {
     HorizontalLayout {
         width: 100%; height: 100%;
         spacing: 0px;
-        alignment: center;
 
         for t[i] in root.tabs : TabItem {
             label: t.label;
@@ -105,10 +104,10 @@ export component ListItem inherits Rectangle {
     }
 
     HorizontalLayout {
+        alignment: center;
         width: 100%; height: 100%;
         spacing: Theme.s3;
         padding-left: Theme.s4; padding-right: Theme.s4;
-        alignment: center;
 
         if root.icon != "" : CenterText {
             text: root.icon; font-size: Theme.fs_md; width: 20px; height: 100%;
@@ -116,7 +115,6 @@ export component ListItem inherits Rectangle {
         }
 
         VerticalLayout {
-            horizontal-stretch: 1; spacing: 1px; alignment: center;
             VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
             if root.sublabel != "" : VCenterText { text: root.sublabel; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
         }

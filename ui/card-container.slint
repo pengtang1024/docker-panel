@@ -80,7 +80,6 @@ export component ContainerCard inherits Rectangle {
             width: 100%;
             padding-right: 70px;
             padding-left: root.sel_mode ? 26px : 0px;
-            alignment: center;
             VCenterText {
                 text: root.data.name;
                 font-size: 14px;
@@ -121,7 +120,6 @@ export component ContainerCard inherits Rectangle {
             width: 100%;
             spacing: 10px;
             padding-top: 7px;
-            alignment: center;
             Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
             Stat {
                 glyph: "◐";

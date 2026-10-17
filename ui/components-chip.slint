@@ -30,9 +30,9 @@ export component Chip inherits Rectangle {
     }
 
     HorizontalLayout {
+        alignment: center;
         padding-left: root.pad_h; padding-right: root.pad_h;
         padding-top: root.pad_v; padding-bottom: root.pad_v;
-        spacing: 4px; alignment: center;
 
         if root.show_dot : Rectangle {
             width: 6px; height: 6px; border-radius: 3px; background: root.dot_color;
@@ -64,7 +64,7 @@ export component Stat inherits Rectangle {
     in-out property <string> tip: "";
 
     HorizontalLayout {
-        spacing: 4px; alignment: center;
+        alignment: center;
         CenterText {
             text: root.glyph; font-size: 11px; width: 14px; height: 14px;
             color: Theme.ink_3;

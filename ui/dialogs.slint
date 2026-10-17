@@ -25,7 +25,6 @@ component CleanItem inherits Rectangle {
         width: 100%; height: 100%;
         spacing: 12px;
         padding-left: 12px; padding-right: 12px;
-        alignment: center;
 
         CheckBox {
             checked <=> root.checked;
@@ -38,7 +37,6 @@ component CleanItem inherits Rectangle {
         }
 
         VerticalLayout {
-            horizontal-stretch: 1; spacing: 1px; alignment: center;
             VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
             VCenterText { text: root.desc; font-size: Theme.fs; color: Theme.ink_3; overflow: elide; }
         }

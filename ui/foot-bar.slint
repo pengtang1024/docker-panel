@@ -18,7 +18,6 @@ component OvItem inherits Rectangle {
         spacing: Theme.s2;
         padding-left: Theme.s3;
         padding-right: Theme.s3;
-        alignment: center;
         VCenterText { text: root.ic; color: Theme.ink_3; font-size: Theme.fs_sm; }
         VCenterText { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
         VCenterText { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
@@ -45,7 +44,6 @@ export component FootBar inherits Rectangle {
         spacing: 0px;
         padding-left: Theme.s4;
         padding-right: Theme.s4;
-        alignment: center;
 
         Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.docker_ok ? Theme.ok : Theme.stop; }
         Rectangle { width: Theme.s2; }

@@ -21,7 +21,6 @@ component Chip inherits Rectangle {
         spacing: Theme.s2;
         padding-left: Theme.s3;
         padding-right: Theme.s3;
-        alignment: center;
         VCenterText { text: root.label; font-size: Theme.fs_xs; font-weight: 600; color: root.active ? Theme.ok : Theme.ink_2; }
         VCenterText { text: root.n; font-size: Theme.fs_xs; color: root.active ? Theme.ok : Theme.ink_3; }
     }
@@ -39,7 +38,6 @@ component ViewTab inherits Rectangle {
         width: 100%;
         height: 100%;
         padding-left: 13px; padding-right: 13px;
-        spacing: 6px; alignment: center;
         VCenterText { text: root.label; font-size: Theme.fs; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
         VCenterText { text: root.n; font-size: 10px; font-family: Theme.mono; color: root.active ? Theme.ink : Theme.ink_3; }
     }
@@ -84,7 +82,6 @@ export component SubBar inherits Rectangle {
         spacing: Theme.s4;
         padding-left: Theme.s5;
         padding-right: Theme.s5;
-        alignment: center;
 
         Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
         Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
@@ -111,7 +108,6 @@ export component SubBar inherits Rectangle {
                 spacing: Theme.s2;
                 padding-left: Theme.s3;
                 padding-right: Theme.s3;
-                alignment: center;
                 VCenterText { text: "↕"; color: Theme.ink_3; font-size: 12px; }
                 VCenterText {
                     text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];
@@ -142,7 +138,6 @@ export component SubBar inherits Rectangle {
             HorizontalLayout {
                 width: 100%; height: 100%;
                 padding-left: Theme.s3; padding-right: Theme.s3;
-                alignment: center;
                 VCenterText {
                     text: root.sel_mode ? @tr("Exit select") : @tr("Select");
                     font-size: Theme.fs_xs; font-weight: 600;

@@ -60,7 +60,6 @@ export component ImageCard inherits Rectangle {
         HorizontalLayout {
             width: 100%;
             padding-right: 70px;
-            alignment: center;
             VCenterText {
                 text: root.data.name;
                 font-size: 14px;
@@ -76,7 +75,6 @@ export component ImageCard inherits Rectangle {
             width: 100%;
             spacing: 4px;
             padding-top: 4px;
-            alignment: center;
             MonoChip {
                 label: root.data.tag1;
                 fs: Theme.fs_sm;
@@ -113,7 +111,6 @@ export component ImageCard inherits Rectangle {
             width: 100%;
             spacing: 16px;
             padding-top: 7px;
-            alignment: center;
             VerticalLayout {
                 spacing: 1px;
                 VCenterText { text: root.data.size; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }

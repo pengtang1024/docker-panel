@@ -1,38 +1,62 @@
 // components-chip.slint — 数据展示类组件
-// 所有内部 Text 必须是 CenterText / VCenterText / RightText，禁止裸写 Text {}。
+// 架构：Chip 基类（MonoChip + ProjTag 同构）+ Stat 独立（异构垂直布局）
 import { Theme } from "theme.slint";
-import { Tip, VCenterText } from "components-align.slint";
+import { Tip, VCenterText, CenterText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
 
-// ============ 等宽芯片（端口 / 标签 / 计数）============
-export component MonoChip inherits Rectangle {
+// ============ Chip 基类（MonoChip / ProjTag 合并）============
+// variant: 0=filled（默认灰色背景） 1=plain（透明背景） 2=filled_danger（深色背景 浅色字）
+// 所有旧 MonoChip/ProjTag 调用点 API 兼容（label/tip/plain/ink/fs/rad/dot_color 保留）
+export component Chip inherits Rectangle {
     in-out property <string> label: "";
     in-out property <string> tip: "";
     in-out property <bool> plain: false;
     in-out property <color> ink: Theme.ink_2;
     in-out property <length> fs: Theme.fs_xs;
     in-out property <length> rad: Theme.r_xs;
+    in-out property <color> dot_color: Theme.accent;
+    in-out property <bool> show_dot: false;
+    in-out property <bool> mono: true;   // 字重：true=等宽 false=常规
+    in-out property <bool> bold: false;  // 字重加粗（ProjTag 用）
 
     border-radius: root.rad;
     background: root.plain ? transparent : Theme.line_2;
 
+    area := StateArea {
+        width: 100%; height: 100%;
+        layer_color: Theme.row_hover;
+        layer_radius: root.rad;
+    }
+
     HorizontalLayout {
         padding-left: 6px; padding-right: 6px;
         padding-top: 1px; padding-bottom: 2px;
+        spacing: 4px; alignment: center;
+
+        if root.show_dot : Rectangle {
+            width: 6px; height: 6px; border-radius: 3px; background: root.dot_color;
+        }
+
         VCenterText {
             text: root.label; font-size: root.fs;
-            color: root.ink; font-family: Theme.mono;
+            font-family: root.mono ? Theme.mono : "";
+            font-weight: root.bold ? 700 : 400;
+            color: root.ink;
         }
     }
 
-    touch := TouchArea { width: 100%; height: 100%; }
-    private property <bool> tip_hover: touch.has-hover;
+    private property <bool> tip_hover: area.has_hover;
     changed tip_hover => {
-        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
+        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; }
         else if (Tip.text == root.tip) { Tip.text = ""; }
     }
 }
 
-// ============ 资源指标（图标 + 数值）============
+// ============ 向后兼容别名 ============
+export component MonoChip inherits Chip { mono: true; bold: false; show_dot: false; }
+export component ProjTag inherits Chip { mono: false; bold: true; show_dot: true; }
+
+// ============ 资源指标（图标 + 数值，异构垂直布局，独立）============
 export component Stat inherits Rectangle {
     in-out property <string> glyph: "";
     in-out property <string> value: "";
@@ -40,36 +64,14 @@ export component Stat inherits Rectangle {
 
     HorizontalLayout {
         spacing: 4px; alignment: center;
-        VCenterText { text: root.glyph; font-size: 11px; color: Theme.ink_3; }
+        CenterText {
+            text: root.glyph; font-size: 11px; width: 14px; height: 14px;
+            color: Theme.ink_3;
+        }
         VCenterText {
             text: root.value; font-size: Theme.fs_sm; font-weight: 600;
             color: Theme.ink; font-family: Theme.mono;
         }
-    }
-
-    touch := TouchArea { width: 100%; height: 100%; }
-    private property <bool> tip_hover: touch.has-hover;
-    changed tip_hover => {
-        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
-        else if (Tip.text == root.tip) { Tip.text = ""; }
-    }
-}
-
-// ============ Compose 项目标签 ============
-export component ProjTag inherits Rectangle {
-    in-out property <string> label: "";
-    in-out property <string> tip: "";
-    in-out property <color> dot_color: Theme.accent;
-
-    border-radius: Theme.r_xs;
-    background: Theme.line_2;
-
-    HorizontalLayout {
-        padding-left: 6px; padding-right: 7px;
-        padding-top: 2px; padding-bottom: 2px;
-        spacing: 4px; alignment: center;
-        Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.dot_color; }
-        VCenterText { text: root.label; font-size: Theme.fs_xs; font-weight: 700; color: Theme.ink_2; }
     }
 
     touch := TouchArea { width: 100%; height: 100%; }

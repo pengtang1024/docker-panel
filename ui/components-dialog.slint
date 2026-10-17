@@ -1,0 +1,98 @@
+// components-dialog.slint — Dialog 基类（overlay + 居中卡片 + header/body/footer 三段）
+// 子类继承后 override body_slot/footer_slot 的内容，或直接在 @children 里填卡片内容
+// Slint 限制：@children 只能出现一次 → 只在 BodySlot/FooterSlot 子组件里用
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
+
+/// BodySlot — Dialog body 插槽（子类 fill 内容）
+export component BodySlot inherits Rectangle { @children }
+
+/// FooterSlot — Dialog footer 插槽（预置右对齐布局）
+export component FooterSlot inherits Rectangle {
+    HorizontalLayout {
+        width: 100%; spacing: Theme.s3;
+        padding-left: Theme.s6; padding-right: Theme.s6;
+        padding-top: 14px; padding-bottom: 14px;
+        alignment: center;
+        Rectangle { horizontal-stretch: 1; }
+        @children
+    }
+}
+
+/// DialogShell — 通用对话框外壳
+/// 子类设置 title/subtitle + fill body_slot/footer_slot
+export component DialogShell inherits Rectangle {
+    in-out property <bool> open: false;
+    in-out property <string> dlg_title: "";
+    in-out property <string> dlg_subtitle: "";
+    in-out property <length> card_width: 420px;
+    callback close();
+
+    background: Theme.overlay;
+    visible: root.open;
+
+    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
+
+    card := Rectangle {
+        width: root.card_width;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: Theme.r;
+        background: Theme.card;
+        border-width: 1px; border-color: Theme.line;
+        clip: true;
+
+        VerticalLayout {
+            width: 100%; spacing: 0px;
+
+            // Header
+            Rectangle {
+                height: root.card_height != 0 ? 56px : self.preferred-height;
+                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                HorizontalLayout {
+                    width: 100%; height: 100%;
+                    spacing: Theme.s3; padding-left: Theme.s6; padding-right: Theme.s6;
+                    padding-top: 14px; padding-bottom: 14px;
+                    alignment: center;
+
+                    VerticalLayout {
+                        horizontal-stretch: 1; spacing: 3px; alignment: center;
+                        VCenterText {
+                            text: root.dlg_title;
+                            font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
+                        }
+                        if root.dlg_subtitle != "" : VCenterText {
+                            text: root.dlg_subtitle;
+                            font-size: Theme.fs; color: Theme.ink_2;
+                        }
+                    }
+
+                    IconBtn {
+                        size: 28px; glyph_size: 12px; glyph: "✕";
+                        tip: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+
+            // Body（子类 fill）
+            Rectangle {
+                width: 100%;
+                padding-left: Theme.s6; padding-right: Theme.s6;
+                padding-top: Theme.s5; padding-bottom: Theme.s5;
+                body_slot := BodySlot { width: 100%; }
+            }
+
+            // Footer（子类 fill）
+            Rectangle {
+                width: 100%;
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+                footer_slot := FooterSlot { width: 100%; }
+            }
+        }
+    }
+
+    // 供子类传入卡片整体高度（可选，默认由内容撑开）
+    in property <length> card_height: 0px;
+}

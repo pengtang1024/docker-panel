@@ -319,7 +319,7 @@ export component MainWindow inherits Window {
     }
 
     if root.pull_open: PullDialog {
-        input <=> root.pull_input;
+        open <=> root.pull_open; input <=> root.pull_input;
         busy <=> root.pull_busy;
         progress <=> root.pull_progress;
         status <=> root.pull_status;
@@ -327,7 +327,7 @@ export component MainWindow inherits Window {
         submit(v) => { AppActions.pull_submit(v); }
     }
     if root.cleanup_open: CleanupDialog {
-        stopped <=> root.cleanup_stopped;
+        open <=> root.cleanup_open; stopped <=> root.cleanup_stopped;
         dangling <=> root.cleanup_dangling;
         unused_net <=> root.cleanup_unused_net;
         unused_vol <=> root.cleanup_unused_vol;

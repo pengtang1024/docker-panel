@@ -21,9 +21,10 @@ use crate::models::Msg;
 /// status_text 的 msgid 统一为英文，翻译在 i18n 模块按系统 locale 查表。
 pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
     match latest_msg {
+        // 周期性刷新：只更新列表数据，不覆盖 status_text（toast 消息保持到 timer 恢复）
         Some(Msg::Containers(Ok(_))) => UiUpdate {
             docker_ok: true,
-            status_text: trf("Loaded {0} containers", &[&containers_len.to_string()]),
+            status_text: t("Ready"),
             close_pull: false,
             reset_pull_busy: false,
             toast: false,
@@ -33,14 +34,14 @@ pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdat
             status_text: trf("Container refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
-            toast: false,
+            toast: true, // 错误也要提示
         },
         Some(Msg::Images(Err(e))) => UiUpdate {
             docker_ok: false,
             status_text: trf("Image refresh failed: {0}", &[e]),
             close_pull: false,
             reset_pull_busy: false,
-            toast: false,
+            toast: true,
         },
         Some(Msg::ActionDone(desc, Ok(_))) => UiUpdate {
             docker_ok: true,

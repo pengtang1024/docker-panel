@@ -61,6 +61,14 @@ export component CardsArea inherits Rectangle {
     property <length> pitch: (self.width - 2 * pad - (per_row - 1) * gap) / per_row;
     property <length> body_h: row_cnt * (card_h + gap) + 2 * pad - gap;
 
+    // 空白区点击兜底：卡片带 clip 且菜单浮在顶层，点卡片以外区域应收起「···」菜单
+    // （置于最底层：卡片 / 空白态在源码顺序上后绘，命中优先于本层，不影响卡片交互）
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { CardMenu.close(); }
+    }
+
     // 空状态（prototype .empty：无数据 / 无匹配）
     if root.n == 0 : EmptyState {
         width: 100%;

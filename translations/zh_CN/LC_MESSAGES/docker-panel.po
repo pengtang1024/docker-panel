@@ -159,9 +159,21 @@ msgstr "挂载"
 msgid "Pull Image"
 msgstr "拉取镜像"
 
+msgid "Enter image name, optional tag (default latest)"
+msgstr "输入镜像名称，可选 tag（默认 latest）"
+
+msgid "Progress"
+msgstr "进度"
+
+msgid "Waiting to pull..."
+msgstr "等待拉取…"
+
 # ===== 清理对话框 =====
 msgid "Cleanup Resources"
 msgstr "清理资源"
+
+msgid "Select resource types to clean up"
+msgstr "选择要清理的资源类型"
 
 msgid "Stopped Containers"
 msgstr "已停止的容器"

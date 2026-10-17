@@ -141,13 +141,9 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             ui.set_drawer_open(true);
             ui.set_drawer_tab(1);
             bind_inspect(&s, id.clone());
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
-            };
-            rt_handle.spawn(async move {
-                let _ = docker::follow_logs(&id, tx, 200).await;
-            });
+            if let Ok(mut st) = s.lock() {
+                st.ensure_follow(&id);
+            }
         });
     }
 

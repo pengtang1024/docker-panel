@@ -3,7 +3,7 @@
 use slint::{ComponentHandle, ModelRc, SharedString};
 
 use crate::slint_gen::*;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SelKind, SharedState};
 
 pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
@@ -15,9 +15,20 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     }
     {
         let ui_d = ui.as_weak();
+        let s = state.clone();
         actions.on_drawer_tab(move |t: i32| {
             let Some(ui) = ui_d.upgrade() else { return };
             ui.set_drawer_tab(t);
+            // 切到「日志」Tab 时，若当前选中是容器则即时建立日志跟随流
+            // （卡片 ⋯→日志 已走 container_logs；此处覆盖用户手动点 Tab 的路径）
+            if t == 1 {
+                if let Ok(mut st) = s.lock() {
+                    if st.sel == SelKind::Container && !st.sel_key.is_empty() {
+                        let id = st.sel_key.clone();
+                        st.ensure_follow(&id);
+                    }
+                }
+            }
         });
     }
     {

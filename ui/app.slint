@@ -121,6 +121,11 @@ export component MainWindow inherits Window {
     in-out property <bool> cleanup_dangling: true;
     in-out property <bool> cleanup_unused_net: false;
     in-out property <bool> cleanup_unused_vol: false;
+    // 清理弹窗行右侧数量（Rust 侧按当前列表估算后回填）
+    in-out property <string> cleanup_cnt_stopped: "";
+    in-out property <string> cleanup_cnt_dangling: "";
+    in-out property <string> cleanup_cnt_unused_net: "";
+    in-out property <string> cleanup_cnt_unused_vol: "";
 
     // —— 全局快捷键（capture 阶段拦截：必须是所有可聚焦元素的祖先，
     //    否则捕获路径不含此 FocusScope，搜索框聚焦时收不到组合键）——
@@ -219,18 +224,18 @@ export component MainWindow inherits Window {
             images <=> root.image_rows;
             networks <=> root.network_rows;
             volumes <=> root.volume_rows;
-            c_select(id) => { AppActions.container_select(id); }
+            c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
             c_toggle(id) => { AppActions.container_toggle(id); }
             c_restart(id) => { AppActions.container_restart(id); }
             c_logs(id) => { AppActions.container_logs(id); }
             c_remove(id) => { AppActions.container_remove(id); }
             c_box(id) => { AppActions.container_toggle_select(id); }
-            i_select(id) => { AppActions.image_select(id); }
+            i_select(id) => { CardMenu.close(); AppActions.image_select(id); }
             i_run(id) => { AppActions.image_run(id); }
             i_remove(id) => { AppActions.image_remove(id); }
-            n_select(id) => { AppActions.network_select(id); }
+            n_select(id) => { CardMenu.close(); AppActions.network_select(id); }
             n_remove(id) => { AppActions.network_remove(id); }
-            v_select(id) => { AppActions.volume_select(id); }
+            v_select(id) => { CardMenu.close(); AppActions.volume_select(id); }
             v_remove(id) => { AppActions.volume_remove(id); }
         }
 
@@ -314,6 +319,10 @@ export component MainWindow inherits Window {
         dangling <=> root.cleanup_dangling;
         unused_net <=> root.cleanup_unused_net;
         unused_vol <=> root.cleanup_unused_vol;
+        cnt_stopped <=> root.cleanup_cnt_stopped;
+        cnt_dangling <=> root.cleanup_cnt_dangling;
+        cnt_unused_net <=> root.cleanup_cnt_unused_net;
+        cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
         close => { AppActions.cleanup_close(); }
         submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
     }

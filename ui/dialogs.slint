@@ -1,31 +1,99 @@
 // dialogs.slint — 拉取镜像 & 清理资源 对话框
+// 对齐 prototype：.overlay/.dialog 三段式（.dlg-head 标题+副标题 / .dlg-body 内容 / .dlg-foot 顶部线 + 右对齐按钮）
 import { Theme } from "theme.slint";
-import { CheckCell } from "components.slint";
 
+// ============ 清理行（prototype .check-row）============
+// 结构：.cb(18 复选框，选中=深色填充浅色勾) → .ci(20 图标) → .cl(标题+说明) → .cnt(数量)
 component CleanItem inherits Rectangle {
     in property <string> label: "";
     in property <string> desc: "";
+    in property <string> glyph: "";
+    in property <string> cnt: "";
     in-out property <bool> checked: true;
+    callback toggled();
+
     height: 56px;
     border-radius: Theme.r_md;
-    background: Theme.bg;
-    border-width: 1px; border-color: Theme.line;
+    border-width: 1px;
+    border-color: root.checked ? Theme.ink_3 : Theme.line;
+    background: root.checked ? Theme.bg : Theme.card;
+
     HorizontalLayout {
         width: 100%; height: 100%;
-        spacing: Theme.s3;
-        padding-left: Theme.s3; padding-right: Theme.s3;
-        CheckCell {
-            checked: root.checked;
-            toggled => { root.checked = root.checked == false; }
+        spacing: Theme.s4;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+
+        // .cb 复选框（选中态深色填充 + 浅色勾，对齐 prototype .check-row.on .cb）
+        Rectangle {
+            width: 18px; height: 18px;
+            border-radius: Theme.r_xs;
+            border-width: 1.5px;
+            border-color: root.checked ? Theme.ink : Theme.ink_4;
+            background: root.checked ? Theme.ink : Theme.card;
+            if root.checked : Text {
+                text: "✓";
+                font-size: 11px; font-weight: 700;
+                color: Theme.card;
+                width: 100%; height: 100%;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
         }
+
+        // .ci 类型图标
+        Text {
+            text: root.glyph;
+            font-size: Theme.fs_md;
+            color: root.checked ? Theme.ink : Theme.ink_2;
+            width: 20px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
         VerticalLayout {
             horizontal-stretch: 1;
-            spacing: 2px;
-            Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: Theme.ink; }
-            Text { text: root.desc; font-size: Theme.fs_xs; color: Theme.ink_3; }
+            spacing: 1px;
+            alignment: center;
+            Text { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
+            Text { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
         }
-        TouchArea { clicked => { root.checked = root.checked == false; } }
+
+        // .cnt 数量（等宽）
+        Text {
+            text: root.cnt;
+            font-size: Theme.fs_sm;
+            font-family: Theme.mono;
+            color: Theme.ink_3;
+            vertical-alignment: center;
+        }
     }
+
+    TouchArea { clicked => { root.checked = root.checked == false; root.toggled(); } }
+}
+
+// 对话框底部按钮（ghost / filled 两态）
+component DlgButton inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> filled: false;
+    callback clicked();
+
+    height: 32px;
+    border-radius: Theme.r_md;
+    background: root.filled ? Theme.ink : Theme.card;
+    border-width: 1px;
+    border-color: root.filled ? Theme.ink : Theme.line;
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
+        Text {
+            text: root.label;
+            font-size: Theme.fs_md;
+            font-weight: 600;
+            color: root.filled ? Theme.card : Theme.ink_2;
+        }
+    }
+    TouchArea { clicked => { root.clicked(); } }
 }
 
 // 拉取镜像对话框
@@ -39,71 +107,95 @@ export component PullDialog inherits Rectangle {
 
     background: Theme.overlay;
     TouchArea { clicked => { root.close(); } }
+
     Rectangle {
-        width: 420px; height: 240px;
+        width: 420px; height: 300px;
         border-radius: Theme.r;
         background: Theme.card;
         border-width: 1px; border-color: Theme.line;
         VerticalLayout {
             width: 100%; height: 100%;
-            spacing: Theme.s4;
-            padding: Theme.s5;
+            spacing: 0px;
 
-            Text { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
-
+            // .dlg-head
             Rectangle {
-                height: 36px;
-                border-radius: Theme.r_md;
-                background: Theme.bg;
-                border-width: 1px;
-                border-color: Theme.line;
-                TextInput {
+                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                VerticalLayout {
                     width: 100%;
-                    height: 100%;
-                    text <=> root.input;
-                    color: Theme.ink;
+                    padding-left: Theme.s6; padding-right: Theme.s6;
+                    padding-top: 18px; padding-bottom: 14px;
+                    spacing: 3px;
+                    Text { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    Text { text: @tr("Enter image name, optional tag (default latest)"); font-size: Theme.fs; color: Theme.ink_2; }
                 }
             }
 
-            if root.busy : Rectangle {
-                height: 6px;
-                border-radius: 3px;
-                background: Theme.bar_bg;
+            // .dlg-body
+            VerticalLayout {
+                vertical-stretch: 1;
+                width: 100%;
+                padding-left: Theme.s6; padding-right: Theme.s6;
+                padding-top: Theme.s5; padding-bottom: Theme.s5;
+                spacing: Theme.s2;
+
+                Text { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
                 Rectangle {
-                    width: parent.width * root.progress / 100;
-                    height: 100%;
-                    border-radius: 3px;
-                    background: Theme.bar_cpu;
+                    height: 38px;
+                    border-radius: Theme.r_md;
+                    background: Theme.bg;
+                    border-width: 1px; border-color: Theme.line;
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: Theme.s4; padding-right: Theme.s4;
+                        input_edit := TextInput {
+                            width: 100%; height: 100%;
+                            text <=> root.input;
+                            color: Theme.ink;
+                            font-family: Theme.mono;
+                            font-size: Theme.fs_md;
+                        }
+                    }
+                    // TextInput 无内建 placeholder：空值时叠加提示文本
+                    if input_edit.text == "" : Text {
+                        x: Theme.s4;
+                        y: (parent.height - self.height) / 2;
+                        text: "nginx:latest";
+                        color: Theme.ink_4;
+                        font-family: Theme.mono;
+                        font-size: Theme.fs_md;
+                    }
+                }
+
+                Text { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
+                // 进度条常显（prototype .progress 始终可见，值为 0）
+                Rectangle {
+                    height: 6px; border-radius: 3px;
+                    background: Theme.line_2;
+                    Rectangle {
+                        width: parent.width * root.progress / 100;
+                        height: 100%; border-radius: 3px;
+                        background: Theme.ink;
+                    }
+                }
+                Text {
+                    text: root.status == "" ? @tr("Waiting to pull...") : root.status;
+                    font-size: Theme.fs_sm;
+                    font-family: Theme.mono;
+                    color: Theme.ink_3;
                 }
             }
-            if root.status != "" : Text { text: root.status; font-size: Theme.fs_xs; color: Theme.ink_3; }
 
-            Rectangle { vertical-stretch: 1; }
-
-            HorizontalLayout {
-                spacing: Theme.s3;
-                Rectangle { horizontal-stretch: 1; }
-                Rectangle {
-                    height: 32px;
-                    border-radius: Theme.r_sm;
-                    background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                    HorizontalLayout {
-                        width: 100%; height: 100%;
-                        padding-left: Theme.s4; padding-right: Theme.s4;
-                        Text { text: @tr("Cancel"); font-size: Theme.fs_sm; color: Theme.ink_2; }
-                    }
-                    TouchArea { clicked => { root.close(); } }
-                }
-                Rectangle {
-                    height: 32px;
-                    border-radius: Theme.r_sm;
-                    background: Theme.ink;
-                    HorizontalLayout {
-                        width: 100%; height: 100%;
-                        padding-left: Theme.s4; padding-right: Theme.s4;
-                        Text { text: @tr("Pull"); font-size: Theme.fs_sm; font-weight: 600; color: Theme.card; }
-                    }
-                    TouchArea { clicked => { root.submit(root.input); } }
+            // .dlg-foot
+            Rectangle {
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+                HorizontalLayout {
+                    width: 100%; height: 100%;
+                    spacing: Theme.s3;
+                    padding-left: Theme.s6; padding-right: Theme.s6;
+                    padding-top: 14px; padding-bottom: 14px;
+                    Rectangle { horizontal-stretch: 1; }
+                    DlgButton { label: @tr("Cancel"); clicked => { root.close(); } }
+                    DlgButton { label: @tr("Pull"); filled: true; clicked => { root.submit(root.input); } }
                 }
             }
         }
@@ -116,54 +208,63 @@ export component CleanupDialog inherits Rectangle {
     in-out property <bool> dangling: true;
     in-out property <bool> unused_net: false;
     in-out property <bool> unused_vol: false;
+    // 各类可清理数量（Rust 侧按当前列表估算，空串则隐藏）
+    in-out property <string> cnt_stopped: "";
+    in-out property <string> cnt_dangling: "";
+    in-out property <string> cnt_unused_net: "";
+    in-out property <string> cnt_unused_vol: "";
     callback close();
     callback submit(bool, bool, bool, bool);
 
     background: Theme.overlay;
     TouchArea { clicked => { root.close(); } }
+
     Rectangle {
-        width: 420px; height: 340px;
+        width: 420px; height: 420px;
         border-radius: Theme.r;
         background: Theme.card;
         border-width: 1px; border-color: Theme.line;
         VerticalLayout {
             width: 100%; height: 100%;
-            spacing: Theme.s3;
-            padding: Theme.s5;
+            spacing: 0px;
 
-            Text { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
-
-            CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); checked <=> root.stopped; }
-            CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); checked <=> root.dangling; }
-            CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); checked <=> root.unused_net; }
-            CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); checked <=> root.unused_vol; }
-
-            Rectangle { vertical-stretch: 1; }
-
-            HorizontalLayout {
-                spacing: Theme.s3;
-                Rectangle { horizontal-stretch: 1; }
-                Rectangle {
-                    height: 32px;
-                    border-radius: Theme.r_sm;
-                    background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                    HorizontalLayout {
-                        width: 100%; height: 100%;
-                        padding-left: Theme.s4; padding-right: Theme.s4;
-                        Text { text: @tr("Cancel"); font-size: Theme.fs_sm; color: Theme.ink_2; }
-                    }
-                    TouchArea { clicked => { root.close(); } }
+            // .dlg-head
+            Rectangle {
+                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                VerticalLayout {
+                    width: 100%;
+                    padding-left: Theme.s6; padding-right: Theme.s6;
+                    padding-top: 18px; padding-bottom: 14px;
+                    spacing: 3px;
+                    Text { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    Text { text: @tr("Select resource types to clean up"); font-size: Theme.fs; color: Theme.ink_2; }
                 }
-                Rectangle {
-                    height: 32px;
-                    border-radius: Theme.r_sm;
-                    background: Theme.err;
-                    HorizontalLayout {
-                        width: 100%; height: 100%;
-                        padding-left: Theme.s4; padding-right: Theme.s4;
-                        Text { text: @tr("Cleanup"); font-size: Theme.fs_sm; font-weight: 600; color: #fff; }
-                    }
-                    TouchArea { clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
+            }
+
+            // .dlg-body
+            VerticalLayout {
+                vertical-stretch: 1;
+                width: 100%;
+                padding-left: Theme.s6; padding-right: Theme.s6;
+                padding-top: Theme.s5; padding-bottom: Theme.s5;
+                spacing: Theme.s3;
+                CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); glyph: "▢"; cnt: root.cnt_stopped; checked <=> root.stopped; }
+                CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); glyph: "▣"; cnt: root.cnt_dangling; checked <=> root.dangling; }
+                CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); glyph: "◇"; cnt: root.cnt_unused_net; checked <=> root.unused_net; }
+                CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); glyph: "▤"; cnt: root.cnt_unused_vol; checked <=> root.unused_vol; }
+            }
+
+            // .dlg-foot
+            Rectangle {
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+                HorizontalLayout {
+                    width: 100%; height: 100%;
+                    spacing: Theme.s3;
+                    padding-left: Theme.s6; padding-right: Theme.s6;
+                    padding-top: 14px; padding-bottom: 14px;
+                    Rectangle { horizontal-stretch: 1; }
+                    DlgButton { label: @tr("Cancel"); clicked => { root.close(); } }
+                    DlgButton { label: @tr("Cleanup"); filled: true; clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
                 }
             }
         }

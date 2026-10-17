@@ -91,8 +91,17 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     }
     {
         let ui_c = ui.as_weak();
+        let s = state.clone();
         actions.on_cleanup(move || {
             let Some(ui) = ui_c.upgrade() else { return };
+            // 打开前按当前列表回填各类候选数量（弹窗 .cnt 展示）
+            if let Ok(st) = s.lock() {
+                let (a, b, c, d) = st.cleanup_counts();
+                ui.set_cleanup_cnt_stopped(SharedString::from(a.to_string().as_str()));
+                ui.set_cleanup_cnt_dangling(SharedString::from(b.to_string().as_str()));
+                ui.set_cleanup_cnt_unused_net(SharedString::from(c.to_string().as_str()));
+                ui.set_cleanup_cnt_unused_vol(SharedString::from(d.to_string().as_str()));
+            }
             ui.set_cleanup_open(true);
         });
     }

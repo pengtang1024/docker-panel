@@ -81,6 +81,11 @@ export global Theme {
     out property <length> batch_h: 42px;
     out property <length> foot_h: 40px;
     out property <length> drawer_w: 400px;
+    // 抽屉内部布局契约（单一真相源）：内容区高 = 抽屉高 - 头部 -（容器才有）Tab 栏
+    // Drawer.height 为百分比，其后代不能再依赖 height:% → 用这些定值显式推导
+    out property <length> drawer_head: 56px;
+    out property <length> drawer_tabs: 40px;
+    out property <length> drawer_logbar: 40px;
 
     // ===== 阴影 =====
     out property <color> shadow: is_dark ? rgba(0,0,0,0.25) : rgba(14,14,17,0.05);

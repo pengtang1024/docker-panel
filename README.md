@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
 
-文档导航：[架构设计](docs/architecture.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+文档导航：[架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
 
 ## 功能特性
 
@@ -172,7 +172,9 @@ docker-panel/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   # gettext 翻译（编译期嵌入）
 │
 ├── docs/
-│   ├── architecture.md     # 架构设计（线程模型 + Slint 交互图 + 文件规范 + bollard 坑条）
+│   ├── architecture.md     # 架构总纲（技术栈 + 模块地图 + 文件规范 + 主题文档导航）
+│   ├── arch/               # 架构主题文档：threading / ui-interaction / docker-bollard
+│   ├── agents-rules.md     # 规则配置层（规则地图 + 红线约束 + 四阶段门禁 + 冲突记录）
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/
 │   ├── debian/control

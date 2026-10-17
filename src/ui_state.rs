@@ -69,6 +69,8 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
+    /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
+    pub follow_id: String,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -136,6 +138,7 @@ impl AppState {
             volume_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: 500,
+            follow_id: String::new(),
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -227,6 +230,37 @@ impl AppState {
 
     pub fn clear_logs(&mut self) {
         self.logs.clear();
+        // 清空日志即视为放弃当前跟随流，下次需要时重新建立
+        self.follow_id.clear();
+    }
+
+    /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
+    pub fn ensure_follow(&mut self, id: &str) {
+        if self.follow_id == id {
+            return;
+        }
+        self.follow_id = id.to_string();
+        let tx = self.tx.clone();
+        let id = id.to_string();
+        self.rt.spawn(async move {
+            let _ = crate::docker::follow_logs(&id, tx, 200).await;
+        });
+    }
+
+    /// 清理弹窗各类候选数量（按当前列表估算，供弹窗 .cnt 展示）
+    pub fn cleanup_counts(&self) -> (usize, usize, usize, usize) {
+        let stopped = self.containers.iter().filter(|c| !c.is_running()).count();
+        let dangling = self.images.iter().filter(|i| i.dangling).count();
+        // 网络：bollard 不返回连接数，由容器列表反推（与卡片计数同源）
+        let counts = crate::detail_fmt::network_counts(self);
+        let unused_net = self
+            .networks
+            .iter()
+            .filter(|n| !n.builtin && *counts.get(n.name.as_str()).unwrap_or(&0) == 0)
+            .count();
+        // 卷：无引用信息，用"匿名卷"近似可清理候选
+        let anonymous_vol = self.volumes.iter().filter(|v| v.anonymous).count();
+        (stopped, dangling, unused_net, anonymous_vol)
     }
 
     /// 消费一批 Msg，返回 (need_ui_update, latest_msg) — 两阶段：先处理 first、再 try_recv 扫积压

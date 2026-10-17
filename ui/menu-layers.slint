@@ -53,7 +53,7 @@ export component SortMenu inherits Dropdown {
     in property <bool> desc: true;
     callback pick(int);
 
-    dw: 118px;
+    dw: 120px;
 
     SortRow {
         label: @tr("Name");
@@ -118,7 +118,7 @@ export component CardMenuLayer inherits Dropdown {
         clicked => { root.details(root.id); }
     }
     MenuItem {
-        glyph: "🗑";
+        glyph: "⌫";
         label: @tr("Remove");
         danger: true;
         clicked => { root.remove(root.id); }

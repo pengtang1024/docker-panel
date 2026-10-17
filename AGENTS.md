@@ -1,6 +1,6 @@
 # AGENTS.md — docker-panel 开发协作入口
 
-> 给 AI 编码助手看的项目速查手册。首次进入仓库请先读此文件。
+> 给 AI 编码助手看的项目速查手册。首次进入仓库请先读此文件与规则配置层 [docs/agents-rules.md](docs/agents-rules.md)。
 
 ## ⚠️ 硬约束：项目名称禁止出现 dvkit
 
@@ -35,6 +35,26 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 任何文件去除头部与注释后，**正文内容超过 300 行必须按职责拆分**（头部、注释均不计入行数统计）。此限制适用于源码文件与文档，单一文件承担过多职责会导致维护困难与协作冲突。提交前需审查文件长度，若超限应拆分为独立模块。
 
+## 规则地图与红线约束（外部配置层注入）
+
+> 行为规则的权威定义在独立配置层 [docs/agents-rules.md](docs/agents-rules.md)（规则全文 + 四阶段门禁 + 冲突记录），本文件只保留**规则地图**与**红线摘要**，规则与执行主体解耦。规则间冲突按 R3（架构优先）裁决。
+
+| ID | 规则 | 维度 | 权威定义 |
+|----|------|------|----------|
+| R0 | 项目名禁止出现废弃旧名 | 红线 | 本文件顶部硬约束 |
+| R1 | UI 验证只能通过 Slint MCP | 红线 | 本文件顶部硬约束 |
+| R2 | 去头部/注释后正文 >300 行必须拆分 | 红线 | 本文件顶部硬约束 |
+| R3 | 架构设计优先级绝对高于代码实现 | 红线 | agents-rules.md §2.1 |
+| R4 | 复用率 ≥80%，不足触发二次校验 | 红线 | agents-rules.md §2.2 |
+| R5 | 结构设计强制规范 | 红线 | agents-rules.md §2.3 |
+| R6 | 冲突无条件优先架构/结构 + 自动记录 | 红线 | agents-rules.md §2.4 |
+| R7 | 锁纪律 / Receiver 独占 / spawn 走 handle | 红线 | 本文件 代码规范 #2-5 |
+| R8 | 文档同步触发表 | 流程 | agents-rules.md §6 |
+| R9 | 版本号三同步 | 流程 | docs/git-flow.md |
+| R10 | 命名 / 错误处理 / Slint 隔离等惯例 | 惯例 | 本文件 代码规范 #6-9 |
+
+全链路四阶段门禁（S1 需求解析 → S2 方案生成 → S3 代码输出 → S4 最终校验）检查单见 agents-rules.md §3，**任一阶段不达标不得进入下一阶段**。
+
 ## 项目是什么
 
 **docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.2（Phase 2+ 已交付：详情面板 + 实时日志流 + 镜像详情 + 网络/卷 Tab + 网络容器计数）。
@@ -42,14 +62,14 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 ## 技术栈（精确版本 + 版本关键备注）
 
 > **写代码时必须按下方版本的 API 写，禁止凭旧版本记忆。**
-> 不确定的 API 用法，查本文件下方对应技术的"版本特有 API 限制"小节。
+> 不确定的 API 用法：Slint 查本文件「Slint 1.18 已验证的限制」，bollard 查 docs/arch/docker-bollard.md。
 
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
 | Rust | stable | edition 2021 | — |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
-| bollard | **0.21** | — | ⚠️ 版本特有类型坑见下方「bollard 0.21 易踩坑速查」 |
+| bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
 | futures-util | **0.3** | — | 提供 `StreamExt`（`.next().await`），需显式引 |
@@ -97,72 +117,18 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | **`Mutex<T>` 不要进 Mutex**：`tokio::sync::Mutex` 不要包在 `std::sync::Mutex` 里 | 容易产生嵌套死锁；当前架构 std Mutex 用于 AppState + 独立 mpsc Receiver 已足够 |
 | **`mpsc::Receiver<Msg>` 由 consumer 独占**：不放在 Mutex 里 | 阻塞 `recv()` 时不能持有 state 锁，否则主线程 Timer / UI 回调全卡死 |
 
-## 模块地图（当前实际）
+## 模块地图（目录职责速查）
 
-```
-docker-panel/
-├── Cargo.toml              # 依赖 & release profile
-├── Cargo.lock
-├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
-│
-├── ui/                     # Slint UI 声明（纯标记，Rust 侧统一通过 slint_gen 引入）
-│   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 顶/筛/卡/底布局 + Drawer/弹窗
-│   ├── theme.slint         # 全局设计令牌（浅/深双主题 22 语义色 + 字号/间距，theme_mode 三态）
-│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
-│   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
-│   ├── sub-bar.slint       # SubBar：筛选 chips + 排序按钮 + 4 视图 tabs
-│   ├── cards.slint         # 卡片网格：容器/镜像/网络/卷四种卡片
-│   ├── foot-bar.slint      # FootBar：底部 8 项资源概览
-│   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
-│   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab
-│   ├── detail-panel.slint  # DetailRow + 详情 kv section（drawer 复用）
-│   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
-│   ├── delegates.slint     # 容器/镜像表格行（RowGroup/RowContainer/RowImage）
-│   ├── network-views.slint # 网络/卷表格行（RowNetwork/RowVolume）
-│   ├── headers.slint       # 各视图表头（列宽与 delegates 严格对齐）
-│   ├── components.slint    # IconBtn / Dot / CheckCell 等原子组件
-│   ├── prototype.html      # 视觉原型（验收对照基准）
-│   └── PROTOTYPE_SPEC.md   # 原型规格说明
-│
-├── src/
-│   ├── main.rs             # 组装入口：i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
-│   ├── slint_gen.rs        # slint::include_modules!() 集中入口
-│   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t() + slint_language()
-│   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
-│   ├── consumer.rs         # consumer 线程：recv_timeout Msg 泵 pump_and_apply + 3s 刷新 interval
-│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo
-│   ├── ui_state.rs         # AppState(shutdown: AtomicBool, stats_prev: HashMap) + drain_messages + persist
-│   ├── detail_fmt.rs       # 详情/镜像详情 → SharedString 元组格式化（format_bytes 也在此）
-│   ├── ui_update.rs        # derive_update(Msg → UiUpdate) + UiUpdate 结构体
-│   ├── ui_apply.rs         # apply_detail(18-tuple) + apply_lists + refresh_lists_now(搜索/排序即时重建)
-│   ├── ui_rows.rs          # 4 种行构建 + Compose 分组排序 + 网络/卷搜索过滤
-│   ├── batch.rs            # BatchState 多选状态
-│   ├── callbacks.rs        # 回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
-│   ├── callbacks_container.rs  # AppActions container_* 回调（toggle/restart/remove/logs/select）
-│   ├── callbacks_image.rs     # AppActions image_remove 回调
-│   └── docker/
-│       ├── mod.rs          # connect() + pub use 重导出
-│       ├── containers.rs   # list / start / stop / restart / remove
-│       ├── images.rs       # list / pull（含进度回调）/ remove
-│       ├── logs.rs         # inspect_container + follow_logs（Stream → tx.send）
-│       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU% 算法）
-│       ├── netvol.rs       # list_networks + list_volumes（bollard 0.21 API）
-│       ├── image_details.rs # inspect_image → ImageDetail（镜像详情 14 字段）
-│       └── system.rs       # cleanup prune
-│
-├── translations/
-│   └── zh_CN/LC_MESSAGES/docker-panel.po  # gettext 翻译（编译期嵌入，按 locale 选择）
-├── .trae/specs/slint-ui-overhaul/         # UI 重构 spec（tasks.md 进度）
-├── docs/
-│   ├── architecture.md     # 架构设计（线程模型、消息流、模块交互、bollard 坑条）
-│   └── git-flow.md         # Git Flow 分支与发版规范
-├── packaging/
-│   ├── debian/control      # deb 包元信息（Depends 移除 libgl1，软件渲染不需要）
-│   ├── docker-panel.desktop
-│   └── docker-panel.svg
-└── CHANGELOG.md
-```
+逐文件注释见 README「项目结构」（权威、注释齐全），此处只保留目录级职责与关键约束：
+
+| 目录/文件 | 职责 |
+|-----------|------|
+| `ui/` | Slint 声明层（16 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌）/ models / top-bar / sub-bar / cards / foot-bar / batch-bar / drawer / detail-panel / dialogs / delegates / network-views / headers / **components（原子组件库，R4 复用检索起点）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n / config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样）/ models / ui_state（AppState）/ detail_fmt / ui_update / ui_apply / ui_rows / batch / callbacks{,_container,_image} / docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
+| `translations/` | gettext zh_CN（编译期嵌入，按 locale 选择） |
+| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading 线程与消息 · ui-interaction Slint 交互 · docker-bollard Docker 与 bollard 坑条）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
+| `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
+| 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
 
 ## 线程模型（三线程架构，已实现优雅退出）
 
@@ -208,7 +174,7 @@ docker-panel/
 
 ## 代码规范
 
-1. **单文件 ≤ 300 行**——超过必须按职责拆分。当前所有文件均 ≤ 300 行（最大 callbacks.rs 280 / models.rs 273）。
+1. **单文件 ≤ 300 行**——统计口径见顶部硬约束 R2（去除头部与注释后计正文）。当前所有文件均合规（最大 callbacks.rs 280 / models.rs 273）。
 2. **Mutex 锁持有最小化**——锁内**绝不**做任何可能耗时的操作（await、invoke_from_event_loop、长时间迭代）。锁内只做 clone / 取字段 / spawn 启动。
 3. **Receiver 不进 Mutex**——`mpsc::Receiver` 由 consumer 线程独占所有权，绝不能放回 `AppState`。
 4. **所有 spawn 都走 state.rt**——`let (rt, tx) = { let Ok(s) = state.lock() else { return }; (s.rt.handle().clone(), s.tx.clone()) }; drop(s); rt.spawn(async move { ... });`
@@ -217,23 +183,6 @@ docker-panel/
 7. **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸，实例化处硬设。
 8. **命名**：Rust 常规 snake_case / PascalCase；Slint 全局函数 snake_case，结构体 PascalCase。
 9. **错误处理**：Docker API 错误统一转为 `Result<T, String>` 上抛，UI 层展示中文文本。
-
-## bollard 0.21 易踩坑速查
-
-| 项目 | 实际类型 | 备注 |
-|------|----------|------|
-| `LogOutput` | `LogOutput::StdOut { message: Bytes }` | struct 变体，**不是** tuple |
-| `ContainerStateStatusEnum` | 没有 Default | 用 `.as_ref().map(\|e\| e.to_string()).unwrap_or_default()` |
-| `NetworkSettings.ports` | `Option<HashMap<String, Option<Vec<PortBinding>>>>` | 双层 Option |
-| `PortBinding.host_port` | `Option<String>` | 不是 u16 |
-| `LogsOptionsBuilder.tail` | 收 `&str` | 不是 `String` |
-| `StatsOptionsBuilder` 路径 | `bollard::query_parameters::StatsOptionsBuilder` | **不是** `bollard::stats::*` |
-| `list_networks` | 不用泛型参数 | `Some(ListNetworksOptionsBuilder::default().build())` |
-| `list_volumes` | 需要 type annotation | `list_volumes(None::<ListVolumesOptions>)` |
-| `Network` struct 字段 | 没有 `containers` 映射 | driver/scope/name/id 都是 `Option<String>` |
-| `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
-| `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |
-| 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` / `join_all` |
 
 ## 构建命令
 
@@ -275,56 +224,8 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 ## 文档同步规范
 
-> 代码变更后，必须判断是否需要同步文档。以下是**触发时机**和**文档清单**的对应关系。
-
-### 触发事件 → 需要更新的文档
-
-| 触发事件 | 需同步更新的文档 |
-|----------|------------------|
-| 源码文件新增 / 删除 / 重命名 | README 项目结构树、AGENTS.md 模块地图、architecture.md 模块地图 |
-| Slint 文件增删（ui/*.slint） | 同上 + architecture.md 第 4 节 Slint 模块交互 |
-| 依赖版本升级（slint / bollard / tokio / futures） | README 依赖表、AGENTS.md 技术栈表、architecture.md 第 1 节、Wiki Architecture |
-| 架构变更（线程模型、消息流 Msg 变体、模块交互方向调整） | AGENTS.md 线程模型 + 消息类型表、architecture.md 对应章节、README 架构概览 ASCII 图、Wiki Architecture |
-| 功能特性变更（新增 / 删除 / 修改用户可见功能） | CHANGELOG.md、README 功能特性、AGENTS.md 当前已知限制、Wiki Home / Usage |
-| 新增 bollard 类型坑条 | AGENTS.md bollard 易踩坑速查、architecture.md 第 6 节 |
-| 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
-
-### 文档清单与职责
-
-**主仓库内（随主仓库 commit）**：
-
-| 文件 | 职责 | 谁是权威源 |
-|------|------|------------|
-| `AGENTS.md` | AI 协作入口：模块地图、线程模型、消息类型、代码规范、bollard 坑条、已知限制、文档同步规范 | ✅ **本文件**——首次进仓库必须读 |
-| `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览 ASCII 图、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 的精简版 |
-| `docs/architecture.md` | 完整架构设计：7 大章节的深度版（线程模型、消息流、Slint 交互图、Rust/Slint 拆分原则） | ✅ **详细权威源**——与 AGENTS.md 的架构描述需保持一致 |
-| `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
-| `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |
-| `packaging/debian/control` | 版本号（与 Cargo.toml 同步） | ✅ 发版三同步之一 |
-
-**GitHub Wiki（独立 git 仓库）**：
-
-```bash
-# 更新流程（一次性）
-cd /tmp && git clone git@github.com:pengtang1024/docker-panel.wiki.git
-# 修改 .md 文件
-git add -A && git commit -m "docs(wiki): xxx" && git push origin HEAD:master
-rm -rf /tmp/docker-panel-wiki
-```
-
-| Wiki 页面 | 对应 in-tree 文档 | 更新时机 |
-|-----------|------------------|----------|
-| Home.md | README + CHANGELOG | 功能增删 / 发版 |
-| Install.md | README 安装章节 | 安装方式变更 / 二进制名改 |
-| Usage.md | README 使用说明 + 源码 UI 变化 | 用户可见交互变更 |
-| Architecture.md | docs/architecture.md + AGENTS.md 架构章节 | 架构变更（**必须与 in-tree 内容同步**） |
-| FAQ.md | —（独立维护） | 发现新常见问题 / 废弃旧问题 |
-
-### 双份同步原则
-
-- **AGENTS.md ↔ architecture.md**：架构描述两处都有，架构变更时**两边必须同步更新**。AGENTS 放 ASCII 图 + 速查表（AI 读），architecture.md 放完整深度版（人读）。
-- **in-tree ↔ Wiki**：Architecture 页与 `docs/architecture.md`、Install 页与 README 安装章节、Usage 页与 README 使用章节，**同一变更必须两处都改**，避免双源漂移。
-- 提交前快速校验：`grep -ri dvkit .`（零残留）+ 读一遍 README 项目结构树（确认没有已删除文件）。
+> 已迁移至规则配置层 [docs/agents-rules.md](docs/agents-rules.md) §6（触发事件 → 文档清单与职责 → Wiki 流程 → 双份同步原则）。代码变更后按该节执行同步。
+> 提交前快速校验：`grep -ri dvkit .`（零残留）+ 核对 README 项目结构树 + 核对各文件行数（R2 口径）。
 
 ## 当前已知限制
 
@@ -333,7 +234,7 @@ rm -rf /tmp/docker-panel-wiki
 
 ## 文档导航
 
-- [架构设计](docs/architecture.md) — 各文件交互关系、线程模型、消息流、bollard 坑条
+- [规则配置层](docs/agents-rules.md) — 规则地图、红线约束、四阶段门禁、冲突记录、文档同步规范
+- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、Docker/bollard 坑条）
 - [Git Flow 规范](docs/git-flow.md)
 - [更新日志](CHANGELOG.md)
-- [AGENTS.md](AGENTS.md)（本文件）

@@ -134,11 +134,8 @@ export component ImageCard inherits Rectangle {
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
-        size: 26px;
         glyph_size: 13px;
         outline: true;
-        rest_bg: Theme.card;
-        hover_fg: Theme.ok;
         hidden: root.act_show == false;
         glyph: "▶";
         tip: @tr("Run");
@@ -152,10 +149,8 @@ export component ImageCard inherits Rectangle {
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
-        size: 26px;
         glyph_size: 13px;
         outline: true;
-        rest_bg: Theme.card;
         active: root.menu_open;
         hidden: root.act_show == false;
         glyph: "···";

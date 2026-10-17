@@ -154,11 +154,8 @@ export component ContainerCard inherits Rectangle {
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
-        size: 26px;
         glyph_size: 13px;
         outline: true;
-        rest_bg: Theme.card;
-        hover_fg: root.data.is_running ? Theme.warn : Theme.ok;
         hidden: root.act_show == false;
         glyph: root.data.is_running ? "↻" : "▶";
         tip: root.data.is_running ? @tr("Restart") : @tr("Start");
@@ -173,10 +170,8 @@ export component ContainerCard inherits Rectangle {
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
-        size: 26px;
         glyph_size: 13px;
         outline: true;
-        rest_bg: Theme.card;
         active: root.menu_open;
         hidden: root.act_show == false;
         glyph: "···";

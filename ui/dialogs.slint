@@ -1,9 +1,7 @@
 // dialogs.slint — 拉取镜像 & 清理资源 对话框
-// 对齐 prototype：.overlay/.dialog 三段式（.dlg-head 标题+副标题 / .dlg-body 内容 / .dlg-foot 顶部线 + 右对齐按钮）
 import { Theme } from "theme.slint";
+import { VCenterText, CenterText } from "components-align.slint";
 
-// ============ 清理行（prototype .check-row）============
-// 结构：.cb(18 复选框，选中=深色填充浅色勾) → .ci(20 图标) → .cl(标题+说明) → .cnt(数量)
 component CleanItem inherits Rectangle {
     in property <string> label: "";
     in property <string> desc: "";
@@ -22,56 +20,47 @@ component CleanItem inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s4;
         padding-left: Theme.s4; padding-right: Theme.s4;
+        alignment: center;
 
-        // .cb 复选框（选中态深色填充 + 浅色勾，对齐 prototype .check-row.on .cb）
         Rectangle {
             width: 18px; height: 18px;
             border-radius: Theme.r_xs;
             border-width: 1.5px;
             border-color: root.checked ? Theme.ink : Theme.ink_4;
             background: root.checked ? Theme.ink : Theme.card;
-            if root.checked : Text {
-                text: "✓";
-                font-size: 11px; font-weight: 700;
-                color: Theme.card;
-                width: 100%; height: 100%;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            if root.checked : CenterText {
+                text: "✓"; font-size: 11px; font-weight: 700;
+                color: Theme.card; width: 100%; height: 100%;
             }
         }
 
-        // .ci 类型图标
-        Text {
+        CenterText {
             text: root.glyph;
             font-size: Theme.fs_md;
             color: root.checked ? Theme.ink : Theme.ink_2;
             width: 20px;
-            horizontal-alignment: center;
-            vertical-alignment: center;
+            height: 100%;
         }
 
         VerticalLayout {
             horizontal-stretch: 1;
             spacing: 1px;
             alignment: center;
-            Text { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
-            Text { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
+            VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
+            VCenterText { text: root.desc; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
         }
 
-        // .cnt 数量（等宽）
-        Text {
+        VCenterText {
             text: root.cnt;
             font-size: Theme.fs_sm;
             font-family: Theme.mono;
             color: Theme.ink_3;
-            vertical-alignment: center;
         }
     }
 
     TouchArea { clicked => { root.checked = root.checked == false; root.toggled(); } }
 }
 
-// 对话框底部按钮（ghost / filled 两态）
 component DlgButton inherits Rectangle {
     in property <string> label: "";
     in property <bool> filled: false;
@@ -86,7 +75,7 @@ component DlgButton inherits Rectangle {
         width: 100%; height: 100%;
         padding-left: Theme.s4; padding-right: Theme.s4;
         alignment: center;
-        Text {
+        VCenterText {
             text: root.label;
             font-size: Theme.fs_md;
             font-weight: 600;
@@ -96,7 +85,6 @@ component DlgButton inherits Rectangle {
     TouchArea { clicked => { root.clicked(); } }
 }
 
-// 拉取镜像对话框
 export component PullDialog inherits Rectangle {
     in-out property <string> input: "";
     in-out property <bool> busy: false;
@@ -117,7 +105,6 @@ export component PullDialog inherits Rectangle {
             width: 100%; height: 100%;
             spacing: 0px;
 
-            // .dlg-head
             Rectangle {
                 Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
                 VerticalLayout {
@@ -125,20 +112,21 @@ export component PullDialog inherits Rectangle {
                     padding-left: Theme.s6; padding-right: Theme.s6;
                     padding-top: 18px; padding-bottom: 14px;
                     spacing: 3px;
-                    Text { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
-                    Text { text: @tr("Enter image name, optional tag (default latest)"); font-size: Theme.fs; color: Theme.ink_2; }
+                    alignment: center;
+                    VCenterText { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    VCenterText { text: @tr("Enter image name, optional tag (default latest)"); font-size: Theme.fs; color: Theme.ink_2; }
                 }
             }
 
-            // .dlg-body
             VerticalLayout {
                 vertical-stretch: 1;
                 width: 100%;
                 padding-left: Theme.s6; padding-right: Theme.s6;
                 padding-top: Theme.s5; padding-bottom: Theme.s5;
                 spacing: Theme.s2;
+                alignment: start;
 
-                Text { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
+                VCenterText { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
                 Rectangle {
                     height: 38px;
                     border-radius: Theme.r_md;
@@ -147,6 +135,7 @@ export component PullDialog inherits Rectangle {
                     HorizontalLayout {
                         width: 100%; height: 100%;
                         padding-left: Theme.s4; padding-right: Theme.s4;
+                        alignment: center;
                         input_edit := TextInput {
                             width: 100%; height: 100%;
                             text <=> root.input;
@@ -155,10 +144,8 @@ export component PullDialog inherits Rectangle {
                             font-size: Theme.fs_md;
                         }
                     }
-                    // TextInput 无内建 placeholder：空值时叠加提示文本
-                    if input_edit.text == "" : Text {
-                        x: Theme.s4;
-                        y: (parent.height - self.height) / 2;
+                    if input_edit.text == "" : VCenterText {
+                        x: Theme.s4; y: (parent.height - self.height) / 2;
                         text: "nginx:latest";
                         color: Theme.ink_4;
                         font-family: Theme.mono;
@@ -166,8 +153,7 @@ export component PullDialog inherits Rectangle {
                     }
                 }
 
-                Text { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
-                // 进度条常显（prototype .progress 始终可见，值为 0）
+                VCenterText { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
                 Rectangle {
                     height: 6px; border-radius: 3px;
                     background: Theme.line_2;
@@ -177,7 +163,7 @@ export component PullDialog inherits Rectangle {
                         background: Theme.ink;
                     }
                 }
-                Text {
+                VCenterText {
                     text: root.status == "" ? @tr("Waiting to pull...") : root.status;
                     font-size: Theme.fs_sm;
                     font-family: Theme.mono;
@@ -185,7 +171,6 @@ export component PullDialog inherits Rectangle {
                 }
             }
 
-            // .dlg-foot
             Rectangle {
                 Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
                 HorizontalLayout {
@@ -193,6 +178,7 @@ export component PullDialog inherits Rectangle {
                     spacing: Theme.s3;
                     padding-left: Theme.s6; padding-right: Theme.s6;
                     padding-top: 14px; padding-bottom: 14px;
+                    alignment: center;
                     Rectangle { horizontal-stretch: 1; }
                     DlgButton { label: @tr("Cancel"); clicked => { root.close(); } }
                     DlgButton { label: @tr("Pull"); filled: true; clicked => { root.submit(root.input); } }
@@ -202,13 +188,11 @@ export component PullDialog inherits Rectangle {
     }
 }
 
-// 清理资源对话框
 export component CleanupDialog inherits Rectangle {
     in-out property <bool> stopped: true;
     in-out property <bool> dangling: true;
     in-out property <bool> unused_net: false;
     in-out property <bool> unused_vol: false;
-    // 各类可清理数量（Rust 侧按当前列表估算，空串则隐藏）
     in-out property <string> cnt_stopped: "";
     in-out property <string> cnt_dangling: "";
     in-out property <string> cnt_unused_net: "";
@@ -228,7 +212,6 @@ export component CleanupDialog inherits Rectangle {
             width: 100%; height: 100%;
             spacing: 0px;
 
-            // .dlg-head
             Rectangle {
                 Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
                 VerticalLayout {
@@ -236,12 +219,12 @@ export component CleanupDialog inherits Rectangle {
                     padding-left: Theme.s6; padding-right: Theme.s6;
                     padding-top: 18px; padding-bottom: 14px;
                     spacing: 3px;
-                    Text { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
-                    Text { text: @tr("Select resource types to clean up"); font-size: Theme.fs; color: Theme.ink_2; }
+                    alignment: center;
+                    VCenterText { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    VCenterText { text: @tr("Select resource types to clean up"); font-size: Theme.fs; color: Theme.ink_2; }
                 }
             }
 
-            // .dlg-body
             VerticalLayout {
                 vertical-stretch: 1;
                 width: 100%;
@@ -254,7 +237,6 @@ export component CleanupDialog inherits Rectangle {
                 CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); glyph: "▤"; cnt: root.cnt_unused_vol; checked <=> root.unused_vol; }
             }
 
-            // .dlg-foot
             Rectangle {
                 Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
                 HorizontalLayout {
@@ -262,6 +244,7 @@ export component CleanupDialog inherits Rectangle {
                     spacing: Theme.s3;
                     padding-left: Theme.s6; padding-right: Theme.s6;
                     padding-top: 14px; padding-bottom: 14px;
+                    alignment: center;
                     Rectangle { horizontal-stretch: 1; }
                     DlgButton { label: @tr("Cancel"); clicked => { root.close(); } }
                     DlgButton { label: @tr("Cleanup"); filled: true; clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }

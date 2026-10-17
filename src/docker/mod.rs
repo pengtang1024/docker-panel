@@ -24,9 +24,11 @@ pub use containers::{
     list_containers, remove_container, restart_container, start_container, stop_container,
 };
 pub use image_details::inspect_image;
-pub use images::{list_images, pull_image, remove_image};
+pub use images::{image_layer_count, list_images, pull_image, remove_image};
 pub use logs::{follow_logs, inspect_container};
-pub use netvol::{list_networks, list_volumes};
+pub use netvol::{
+    list_networks, list_volumes, remove_network, remove_volume, volume_sizes,
+};
 pub use stats::{compute_cpu_delta, fetch_stats, ContainerStatsSnapshot};
 pub use system::cleanup;
 

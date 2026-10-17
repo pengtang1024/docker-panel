@@ -1,5 +1,8 @@
 // —— 数据 struct：Rust ↔ Slint 桥接 ——
 // Slint 自动生成对应 Rust 类型（snake_case 转换）
+//
+// 纪律：struct 内**禁止嵌套数组**（`[string]` 会让整个 struct 失去 Send，
+// 无法跨线程投递到 invoke_from_event_loop）。多值一律拆成 N 个标量 + 溢出计数。
 
 export struct ContainerRow {
     id: string,
@@ -11,21 +14,36 @@ export struct ContainerRow {
     is_selected: bool,
     // —— Compose 分组 ——
     compose_project: string,       // 空字符串表示非 Compose 容器
+    compose_color: color,          // compose 项目标签配色（按项目名稳定散列）
     compose_service: string,       // Compose 服务名
     is_group_start: bool,          // 是否是某 Compose 项目第一行（渲染分组标题）
     // —— 资源监控 ——
     cpu_percent: string,           // 如 "12.3%"（空字符串 = 未采样）
-    mem_usage: string,              // 如 "512MB / 1GB"
-    net_traffic: string,            // 如 "↓1.2MB ↑345KB"
+    mem_usage: string,             // 如 "512MB"
+    net_traffic: string,           // 如 "↓1.2MB ↑345KB"
+    disk: string,                  // 如 "12MB"（容器可写层占用）
+    // —— 端口（spec 3.1 .c-ports：最多 3 个 +N）——
+    port1: string,                 // 卡片展示的第 1 个端口短标签（空 = 无，如 "6399"）
+    port2: string,
+    port3: string,
+    ports_more: int,               // 超出 3 条的剩余数量（0 = 不显示 +N）
+    ports_text: string,            // 全部端口全文（如 "6399→6379/tcp"），芯片 tooltip
 }
 
 export struct ImageRow {
-    id: string,
+    id: string,                    // "repo:tag"（选中/删除/详情的主键）
     short_id: string,
-    name: string,
-    tag: string,
-    size: string,
-    containers: int,
+    name: string,                  // 仓库名（不含 tag）
+    size: string,                  // 格式化大小
+    layers: string,                // 层数（未回填时 "—"）
+    created: string,               // 相对时间（如 "2 days ago"）
+    containers: int,               // 关联容器数
+    // —— tag 芯片（spec 3.2 .tags：最多 3 个 +N，latest 高亮）——
+    tag1: string,
+    tag2: string,
+    tag3: string,
+    tags_more: int,
+    tags_text: string,             // 全部 tag（搜索/过滤与 tooltip 用）
 }
 
 export struct LogLineRow {
@@ -38,12 +56,30 @@ export struct NetworkRow {
     name: string,
     driver: string,
     scope: string,
+    subnet: string,               // 第一个 IPAM 子网（空 = 无）
     containers: int,
+    builtin: bool,                // bridge / host / none
 }
 
 export struct VolumeRow {
-    name: string,
+    name: string,                 // 原始卷名（详情/删除主键，tooltip 全文）
+    display_name: string,         // 匿名卷截断展示名（12 字符 + …）
     driver: string,
     mountpoint: string,
-    size: string,
+    size: string,                 // 来自低频 /system/df；未采样时 "—"
+    anonymous: bool,
+}
+
+export struct ComposeRow {
+    name: string,
+    n: int,
+    color: color,
+}
+
+// 抽屉 / 详情面板的通用行（对齐 prototype .sec / .kv / .box / .kv-list）
+export struct DetailPair {
+    kind: int,     // 0=kv 行（k 左 v 右） 1=分节标题 2=kv + 代码盒 3=代码盒条目
+    k: string,     // kind 0/2 的键名；kind 1 的节标题；kind 3 的高亮前缀（可空）
+    v: string,     // kind 0/2/3 的值；kind 3 多行按 '\n' 拆成多条
+    mono: bool,    // 值使用等宽字体（ID / 端口 / 路径）
 }

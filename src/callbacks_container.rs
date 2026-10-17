@@ -6,7 +6,7 @@ use crate::docker;
 use crate::i18n::{t, trf};
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SelKind, SharedState};
 
 pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
@@ -107,9 +107,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         });
     }
 
-    // 容器 inspect（锁内）
+    // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染
     let bind_inspect = |s: &SharedState, id: String| {
         if let Ok(mut st) = s.lock() {
+            st.sel = SelKind::Container;
+            st.sel_key = id.clone();
             st.request_detail(id);
             st.clear_logs();
         }

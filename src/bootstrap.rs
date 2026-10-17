@@ -2,9 +2,10 @@
 
 use crate::docker::{
     fetch_stats, inspect_container, list_containers, list_images, list_networks, list_volumes,
+    volume_sizes,
 };
 use crate::models::Msg;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SharedState, VOLUME_SIZE_INTERVAL};
 
 /// 6s stats 采样：对所有运行中容器并发 docker.stats()，双采样 CPU% 在 consumer 侧计算
 pub fn spawn_stats_interval(state: &SharedState) {
@@ -41,6 +42,29 @@ pub fn spawn_stats_interval(state: &SharedState) {
                 })
                 .collect();
             futures::future::join_all(futs).await;
+        }
+    });
+}
+
+/// 30s 卷占用采样：`/system/df?type=volume` 需遍历卷目录，单独低频跑；
+/// 首帧立即执行一次（否则打开卷视图时体积列会空到第一个 30s 周期）
+pub fn spawn_volume_size_interval(state: &SharedState) {
+    let state_s = state.clone();
+    let rt_h = {
+        let Ok(s) = state_s.lock() else { return };
+        s.rt.handle().clone()
+    };
+    rt_h.spawn(async move {
+        let mut tick = tokio::time::interval(VOLUME_SIZE_INTERVAL);
+        loop {
+            tick.tick().await;
+            let tx = {
+                let Ok(s) = state_s.lock() else { continue };
+                s.tx.clone()
+            };
+            if let Ok(sizes) = volume_sizes().await {
+                let _ = tx.send(Msg::VolumeSizes(sizes));
+            }
         }
     });
 }

@@ -1,5 +1,7 @@
-// sub-bar.slint — 筛选栏
+// sub-bar.slint — 筛选栏（状态芯片 + Compose 项目芯片 + 排序菜单 + 视图 Tab）
 import { Theme } from "theme.slint";
+import { Dropdown, MenuItem } from "components.slint";
+import { ComposeRow } from "models.slint";
 
 component Chip inherits Rectangle {
     in property <string> label: "";
@@ -38,7 +40,14 @@ component ViewTab inherits Rectangle {
         height: 2px;
         background: root.active ? Theme.ink : transparent;
     }
-    Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: Theme.s2;
+        alignment: center;
+        Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; vertical-alignment: center; }
+        Text { text: root.n; font-size: Theme.fs_xs; color: root.active ? Theme.ink_2 : Theme.ink_4; vertical-alignment: center; }
+    }
     TouchArea { clicked => { root.clicked(root.idx); } }
 }
 
@@ -56,11 +65,18 @@ export component SubBar inherits Rectangle {
     in-out property <string> filter: "all";
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: true;
+    in-out property <[ComposeRow]> compose_rows: [];
     in-out property <int> total_containers: 0;
     in-out property <int> running_containers: 0;
     in-out property <int> total_images: 0;
     in-out property <int> total_networks: 0;
     in-out property <int> total_volumes: 0;
+
+    /// 排序菜单展开状态与锚点（菜单本体渲染在 app.slint 顶层，
+    /// 否则会被下方 CardsArea 覆盖 —— 与 prototype 的绝对定位下拉一致）
+    in-out property <bool> sort_open: false;
+    out property <length> menu_x: 0;
+    out property <length> menu_y: 0;
 
     callback set_view(int);
     callback set_filter(string);
@@ -77,39 +93,48 @@ export component SubBar inherits Rectangle {
         Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
         Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
         Chip { label: @tr("Stopped"); n: root.total_containers - root.running_containers; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
+        for row[i] in root.compose_rows : Chip {
+            label: row.name;
+            n: row.n;
+            key: row.name;
+            active: root.filter == row.name;
+            clicked(k) => { root.set_filter(k); }
+        }
 
         Rectangle { horizontal-stretch: 1; }
 
-        // 排序按钮
-        Rectangle {
+        // 排序按钮（点击展开菜单；点箭头只切升降序）
+        sort_btn := Rectangle {
             height: 28px;
             border-radius: Theme.r_sm;
-            background: Theme.bg;
+            background: root.sort_open ? Theme.bg : Theme.card;
             border-width: 1px;
-            border-color: Theme.line;
+            border-color: root.sort_open ? Theme.ink_4 : Theme.line;
             HorizontalLayout {
                 width: 100%;
                 height: 100%;
                 spacing: Theme.s2;
                 padding-left: Theme.s3;
                 padding-right: Theme.s3;
-                Text { text: "↕"; color: Theme.ink_3; font-size: 12px; }
+                Text { text: "↕"; color: Theme.ink_3; font-size: 12px; vertical-alignment: center; }
                 Text {
                     text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];
                     font-size: Theme.fs_xs;
                     color: Theme.ink_2;
+                    vertical-alignment: center;
                 }
                 Rectangle {
-                    width: 16px; height: 100%;
-                    Text { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; }
+                    width: 16px;
+                    height: 100%;
+                    Text { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; vertical-alignment: center; }
                     // 点箭头只切升降序（覆盖在按钮 TouchArea 之上）
                     TouchArea { clicked => { root.set_sort_dir(); } }
                 }
             }
-            // 点按钮主体循环切换排序字段
             TouchArea { clicked => {
-                root.sort_field = Math.mod(root.sort_field + 1, 5);
-                root.set_sort(root.sort_field);
+                root.sort_open = root.sort_open == false;
+                root.menu_x = sort_btn.absolute-position.x + sort_btn.width - 132px;
+                root.menu_y = sort_btn.absolute-position.y + sort_btn.height + 6px;
             } }
         }
 

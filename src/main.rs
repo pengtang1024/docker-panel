@@ -15,14 +15,17 @@
 mod batch;
 mod bootstrap;
 mod callbacks;
+mod callbacks_drawer;
 mod callbacks_container;
 mod callbacks_image;
+mod callbacks_netvol;
 mod config;
 mod consumer;
 mod detail_fmt;
 mod docker;
 mod i18n;
 mod models;
+mod render;
 mod slint_gen;
 mod ui_apply;
 mod ui_rows;
@@ -60,6 +63,7 @@ fn main() {
     // 后台定时任务：3s 列表刷新、6s stats 采样
     consumer::spawn_refresh_interval(&state);
     bootstrap::spawn_stats_interval(&state);
+    bootstrap::spawn_volume_size_interval(&state);
     // 首屏数据
     bootstrap::spawn_initial_load(&state);
 

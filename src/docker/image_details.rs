@@ -15,12 +15,19 @@ pub async fn inspect_image(name: &str) -> Result<ImageDetail, String> {
 }
 
 fn map_image_inspect(img: ImageInspect) -> ImageDetail {
-    let id = img.id.unwrap_or_default();
+    let id = img.id.clone().unwrap_or_default();
     let short_id = if id.len() > 12 {
         id[7..19].to_string() // sha256:xxxxxx... 的 12 字符
     } else {
         id.clone()
     };
+    // 层数：RootFS.Layers 长度（借用读取，避免提前移动 img）
+    let layers = img
+        .root_fs
+        .as_ref()
+        .and_then(|r| r.layers.as_ref())
+        .map(|l| l.len())
+        .unwrap_or(0);
 
     let fmt_list = |list: Option<Vec<String>>| -> String { list.unwrap_or_default().join(", ") };
 
@@ -94,6 +101,7 @@ fn map_image_inspect(img: ImageInspect) -> ImageDetail {
         created: img.created.unwrap_or_default(),
         author: img.author.unwrap_or_default(),
         size,
+        layers,
         os: img.os.unwrap_or_default(),
         architecture: img.architecture.unwrap_or_default(),
         entrypoint,

@@ -60,10 +60,20 @@ pub async fn list_images() -> Result<Vec<ImageInfo>, String> {
                 },
                 None => ("<none>".to_string(), "<none>".to_string()),
             };
+            // 多 tag：repo_tag 形如 "registry:5000/name:tag"，取最后一个 ':' 之后部分
+            let tags: Vec<String> = img
+                .repo_tags
+                .iter()
+                .map(|rt| match rt.rsplit_once(':') {
+                    Some((_, t)) if !t.contains('/') => t.to_string(),
+                    _ => "latest".to_string(),
+                })
+                .collect();
             ImageInfo {
                 id,
                 name,
                 tag,
+                tags,
                 size: img.size,
                 created: img.created,
                 containers: by_id + by_name,
@@ -72,6 +82,22 @@ pub async fn list_images() -> Result<Vec<ImageInfo>, String> {
             }
         })
         .collect())
+}
+
+/// 单个镜像的层数（`RootFS.Layers.len()`）
+///
+/// 列表 API 不返回层数，必须 inspect；调用方负责缓存，避免重复 inspect。
+pub async fn image_layer_count(id: &str) -> Result<usize, String> {
+    let docker = connect()?;
+    let img = docker
+        .inspect_image(id)
+        .await
+        .map_err(|e| crate::i18n::trf("Image inspect failed ({0}): {1}", &[id, &e.to_string()]))?;
+    Ok(img
+        .root_fs
+        .and_then(|r| r.layers)
+        .map(|l| l.len())
+        .unwrap_or(0))
 }
 
 /// 删除镜像

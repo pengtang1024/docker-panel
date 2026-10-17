@@ -1,5 +1,6 @@
 // dialogs.slint — 拉取镜像 & 清理资源 对话框
 import { Theme } from "theme.slint";
+import { CheckCell } from "components.slint";
 
 component CleanItem inherits Rectangle {
     in property <string> label: "";
@@ -13,11 +14,9 @@ component CleanItem inherits Rectangle {
         width: 100%; height: 100%;
         spacing: Theme.s3;
         padding-left: Theme.s3; padding-right: Theme.s3;
-        Rectangle {
-            width: 16px; height: 16px; border-radius: 4px;
-            background: root.checked ? Theme.ok : Theme.card;
-            border-width: 1px; border-color: root.checked ? Theme.ok : Theme.line_2;
-            if root.checked : Text { text: "✓"; color: #fff; font-size: 11px; }
+        CheckCell {
+            checked: root.checked;
+            toggled => { root.checked = root.checked == false; }
         }
         VerticalLayout {
             horizontal-stretch: 1;
@@ -25,7 +24,7 @@ component CleanItem inherits Rectangle {
             Text { text: root.label; font-size: Theme.fs_sm; font-weight: 600; color: Theme.ink; }
             Text { text: root.desc; font-size: Theme.fs_xs; color: Theme.ink_3; }
         }
-        TouchArea { clicked => { root.checked = !root.checked; } }
+        TouchArea { clicked => { root.checked = root.checked == false; } }
     }
 }
 

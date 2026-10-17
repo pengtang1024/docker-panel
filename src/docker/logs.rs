@@ -127,6 +127,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
         status,
         pid,
         exit_code,
+        restarts: raw.restart_count.unwrap_or(0),
         started_at,
         finished_at,
         ports,

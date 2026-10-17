@@ -13,6 +13,8 @@
 //!   ActionDone            ← callbacks.rs 所有操作回调 spawn 的任务
 //!   CleanupDone           ← callbacks.rs cleanup_submit spawn 的任务
 
+use std::collections::HashMap;
+
 /// 容器信息（表格一行的数据）
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -82,7 +84,7 @@ impl ContainerInfo {
     }
 }
 
-/// 镜像信息（表格一行的数据）
+/// 镜像信息（卡片一行的数据）
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ImageInfo {
@@ -92,6 +94,8 @@ pub struct ImageInfo {
     pub name: String,
     /// Tag（无 tag 时为 `<none>`）
     pub tag: String,
+    /// 全部 tag（卡片多 tag 芯片：取每个 repo_tag 的最后一个 ':' 之后部分）
+    pub tags: Vec<String>,
     /// 镜像大小（字节）
     pub size: i64,
     /// 创建时间（unix 秒）
@@ -143,6 +147,10 @@ pub enum Msg {
     Volumes(Result<Vec<VolumeInfo>, String>),
     /// 镜像 inspect 结果（镜像详情面板）
     ImageDetail(Result<ImageDetail, String>),
+    /// 镜像层数批量回填（id → RootFS.Layers.len()；列表 API 不返回层数）
+    ImageLayers(Vec<(String, usize)>),
+    /// 卷磁盘占用（name → 字节数；来自 `/system/df`，低频刷新）
+    VolumeSizes(HashMap<String, u64>),
 }
 
 /// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
@@ -158,6 +166,8 @@ pub struct ContainerDetail {
     pub status: String,
     pub pid: i64,
     pub exit_code: i64,
+    /// 重启次数（inspect.restart_count）
+    pub restarts: i64,
     pub started_at: String,
     pub finished_at: String,
     pub ports: Vec<String>,
@@ -173,7 +183,7 @@ pub struct ContainerDetail {
     pub networks: Vec<String>,
 }
 
-/// 网络列表简化视图（网络 Tab 用）
+/// 网络列表简化视图（网络卡片 / 详情用）
 #[derive(Debug, Clone)]
 pub struct NetworkInfo {
     pub id: String,
@@ -181,15 +191,24 @@ pub struct NetworkInfo {
     pub name: String,
     pub driver: String,
     pub scope: String,
+    /// 第一个 IPAM 子网（无则为空）
+    pub subnet: String,
+    /// 第一个 IPAM 网关（无则为空）
+    pub gateway: String,
+    /// 是否 Docker 内置网络（bridge / host / none）
+    pub builtin: bool,
 }
 
-/// 卷列表简化视图（卷 Tab 用）
+/// 卷列表简化视图（卷卡片 / 详情用）
 #[derive(Debug, Clone)]
 pub struct VolumeInfo {
     pub name: String,
     pub driver: String,
     pub mountpoint: String,
-    pub size: String,
+    /// 创建时间（Docker 原始 RFC3339 文本，未启用 time/chrono feature 时为字符串）
+    pub created: String,
+    /// 是否匿名卷（64 位小写十六进制名启发式判定）
+    pub anonymous: bool,
 }
 
 /// inspect_image 结果的精简版本——只取 UI 镜像详情面板需要的字段
@@ -203,6 +222,8 @@ pub struct ImageDetail {
     pub created: String,
     pub author: String,
     pub size: String, // 格式化后的大小
+    /// 层数（RootFS.Layers.len()）
+    pub layers: usize,
     pub os: String,
     pub architecture: String,
     pub entrypoint: String,

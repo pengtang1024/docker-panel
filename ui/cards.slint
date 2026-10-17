@@ -1,141 +1,17 @@
-// cards.slint — 卡片网格区域（自适应多列 + 垂直滚动）
+// cards.slint — 卡片网格区域（自适应列数 + 垂直滚动）
+// 4 个视图共用一套网格几何：按宽度算列数（prototype 1280px 下 = 4 列 310px），
+// 卡片绝对定位在 Flickable 内容层里；空数据显示 EmptyState。
+// 三张卡片组件分别在 card-container / card-image / card-netvol.slint。
 import { Theme } from "theme.slint";
+import { CardMenu, EmptyState } from "components.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
-
-component ContainerCard inherits Rectangle {
-    in property <ContainerRow> data;
-    callback select(string);
-    callback toggle(string);
-    callback logs(string);
-    callback remove(string);
-    border-radius: Theme.r;
-    background: Theme.card;
-    border-width: 1px;
-    border-color: Theme.line;
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: Theme.s2;
-        padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
-        Text { text: data.image; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
-        HorizontalLayout {
-            width: 100%;
-            spacing: Theme.s3;
-            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: data.is_running ? Theme.ok : Theme.stop; }
-            Text { text: data.cpu_percent; font-size: Theme.fs_xs; color: Theme.ink_2; }
-            Text { text: data.mem_usage; font-size: Theme.fs_xs; color: Theme.ink_2; }
-            Text { text: data.net_traffic; font-size: Theme.fs_xs; color: Theme.ink_2; }
-            Rectangle { horizontal-stretch: 1; }
-            if data.compose_project != "" : Text {
-                text: data.compose_project;
-                font-size: Theme.fs_xs;
-                color: Theme.bar_cpu;
-                overflow: elide;
-            }
-        }
-        HorizontalLayout {
-            width: 100%;
-            spacing: Theme.s2;
-            padding-top: Theme.s2;
-            Rectangle {
-                width: 28px; height: 28px; border-radius: Theme.r_sm;
-                background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                Text { text: data.is_running ? "↻" : "▶"; color: Theme.ink_2; font-size: 12px; }
-                TouchArea { clicked => { root.toggle(data.id); } }
-            }
-            Rectangle {
-                width: 28px; height: 28px; border-radius: Theme.r_sm;
-                background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                Text { text: "≡"; color: Theme.ink_2; font-size: 14px; }
-                TouchArea { clicked => { root.logs(data.id); } }
-            }
-            Rectangle { horizontal-stretch: 1; }
-            Rectangle {
-                width: 28px; height: 28px; border-radius: Theme.r_sm;
-                background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                Text { text: "✕"; color: Theme.err; font-size: 12px; }
-                TouchArea { clicked => { root.remove(data.id); } }
-            }
-        }
-    }
-    TouchArea { clicked => { root.select(data.id); } }
-}
-
-component ImageCard inherits Rectangle {
-    in property <ImageRow> data;
-    callback select(string);
-    callback remove(string);
-    border-radius: Theme.r;
-    background: Theme.card;
-    border-width: 1px;
-    border-color: Theme.line;
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: Theme.s2;
-        padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
-        Text { text: data.tag; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
-        HorizontalLayout {
-            spacing: Theme.s4;
-            Text { text: data.size; font-size: Theme.fs_xs; color: Theme.ink_2; }
-            Text { text: @tr("{0} in use", data.containers); font-size: Theme.fs_xs; color: Theme.ink_3; }
-            Rectangle { horizontal-stretch: 1; }
-        }
-        HorizontalLayout {
-            padding-top: Theme.s2;
-            Rectangle {
-                width: 28px; height: 28px; border-radius: Theme.r_sm;
-                background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                Text { text: "▶"; color: Theme.ink_2; font-size: 12px; }
-                TouchArea { clicked => { root.select(data.id); } }
-            }
-            Rectangle { horizontal-stretch: 1; }
-            Rectangle {
-                width: 28px; height: 28px; border-radius: Theme.r_sm;
-                background: Theme.bg; border-width: 1px; border-color: Theme.line;
-                Text { text: "✕"; color: Theme.err; font-size: 12px; }
-                TouchArea { clicked => { root.remove(data.id); } }
-            }
-        }
-    }
-    TouchArea { clicked => { root.select(data.id); } }
-}
-
-component NetworkCard inherits Rectangle {
-    in property <NetworkRow> data;
-    border-radius: Theme.r;
-    background: Theme.card;
-    border-width: 1px;
-    border-color: Theme.line;
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: Theme.s2;
-        padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
-        Text { text: data.driver + " · " + data.scope; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
-        Text { text: @tr("{0} container" | "{0} containers" % data.containers, data.containers); font-size: Theme.fs_xs; color: Theme.ink_2; }
-    }
-}
-
-component VolumeCard inherits Rectangle {
-    in property <VolumeRow> data;
-    border-radius: Theme.r;
-    background: Theme.card;
-    border-width: 1px;
-    border-color: Theme.line;
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: Theme.s2;
-        padding: Theme.s4;
-        Text { text: data.name; font-size: Theme.fs_md; font-weight: 700; color: Theme.ink; overflow: elide; }
-        Text { text: data.mountpoint; font-size: Theme.fs_xs; color: Theme.ink_3; overflow: elide; }
-        Text { text: data.driver + " · " + data.size; font-size: Theme.fs_xs; color: Theme.ink_2; overflow: elide; }
-    }
-}
+import { ContainerCard } from "card-container.slint";
+import { ImageCard } from "card-image.slint";
+import { NetworkCard, VolumeCard } from "card-netvol.slint";
 
 export component CardsArea inherits Rectangle {
     in-out property <int> view: 0;
-    in-out property <string> search_q: "";
+    in-out property <bool> sel_mode: false;
     in-out property <[ContainerRow]> containers: [];
     in-out property <[ImageRow]> images: [];
     in-out property <[NetworkRow]> networks: [];
@@ -147,75 +23,141 @@ export component CardsArea inherits Rectangle {
     callback c_remove(string);
     callback c_box(string);
     callback i_select(string);
+    callback i_run(string);
     callback i_remove(string);
+    callback n_select(string);
+    callback n_remove(string);
+    callback v_select(string);
+    callback v_remove(string);
+    /// 卡片「···」菜单请求（冒泡到本层，由 CardsArea 写 CardMenu 总线单例）
+    callback menu_toggle(string, int, bool, length, length);
 
-    // —— 网格几何：按宽度自适应列数（全部用 float，避免 int/float 隐式转换）——
-    property <length> pad: Theme.s5;
-    property <length> gap: Theme.s4;
-    property <length> card_h: 128px;
-    property <length> card_min: 296px;
+    // 单实例菜单总线：点自己收起、点别的卡片改写锚点（id 必须最后写，
+    // 否则 id 先变会让菜单带着旧锚点先渲染一帧）
+    menu_toggle(id, kind, can_stop, mx, my) => {
+        if (CardMenu.id == id) {
+            CardMenu.close();
+        } else {
+            CardMenu.kind = kind;
+            CardMenu.can_stop = can_stop;
+            CardMenu.mx = mx;
+            CardMenu.my = my;
+            CardMenu.id = id;
+        }
+    }
+
+    // —— 网格几何（prototype .content padding 8px / .grid gap 8px / 卡宽 310px @1280）——
+    property <length> pad: Theme.s3;
+    property <length> gap: Theme.s3;
+    property <length> card_h: 104px;
+    property <length> card_min: 300px;
     property <float> per_row: Math.max(1, Math.floor((self.width - 2 * pad + gap) / (card_min + gap)));
-    property <float> row_cnt: Math.ceil(n / per_row);
     property <int> n: view == 0 ? containers.length
                     : view == 1 ? images.length
                     : view == 2 ? networks.length
                     : volumes.length;
+    property <float> row_cnt: Math.ceil(n / per_row);
     // 单元格宽度：总宽均分后减去列间 gap
     property <length> pitch: (self.width - 2 * pad - (per_row - 1) * gap) / per_row;
+    property <length> body_h: row_cnt * (card_h + gap) + 2 * pad - gap;
 
-    if root.view == 0 : Flickable {
-        width: 100%; height: 100%;
-        viewport-width: self.width;
-        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+    // 空状态（prototype .empty：无数据 / 无匹配）
+    if root.n == 0 : EmptyState {
+        width: 100%;
+        height: 100%;
+        glyph: "▢";
+        title: root.view == 0 ? @tr("No matching containers")
+            : root.view == 1 ? @tr("No matching images")
+            : root.view == 2 ? @tr("No matching networks")
+            : @tr("No matching volumes");
+        desc: root.view == 0 ? @tr("Try adjusting filters or keywords")
+            : root.view == 1 ? @tr("Pull new image or adjust search")
+            : "";
+    }
+
+    if root.view == 0 && root.n > 0 : Flickable {
+        width: 100%;
+        height: 100%;
+        content-width: self.width;
+        content-height: root.body_h;
         for row[i] in root.containers : ContainerCard {
             data: row;
+            sel_mode: root.sel_mode;
+            menu_open: CardMenu.id == row.id;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
             select(id) => { root.c_select(id); }
             toggle(id) => { root.c_toggle(id); }
+            restart(id) => { root.c_restart(id); }
             logs(id) => { root.c_logs(id); }
             remove(id) => { root.c_remove(id); }
+            box(id) => { root.c_box(id); }
+            menu_toggle(id, kind, can_stop, mx, my) => {
+                root.menu_toggle(id, kind, can_stop, mx, my);
+            }
         }
     }
-    if root.view == 1 : Flickable {
-        width: 100%; height: 100%;
-        viewport-width: self.width;
-        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+
+    if root.view == 1 && root.n > 0 : Flickable {
+        width: 100%;
+        height: 100%;
+        content-width: self.width;
+        content-height: root.body_h;
         for row[i] in root.images : ImageCard {
             data: row;
+            menu_open: CardMenu.id == row.id;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
             select(id) => { root.i_select(id); }
+            run(id) => { root.i_run(id); }
             remove(id) => { root.i_remove(id); }
+            menu_toggle(id, kind, can_stop, mx, my) => {
+                root.menu_toggle(id, kind, can_stop, mx, my);
+            }
         }
     }
-    if root.view == 2 : Flickable {
-        width: 100%; height: 100%;
-        viewport-width: self.width;
-        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+
+    if root.view == 2 && root.n > 0 : Flickable {
+        width: 100%;
+        height: 100%;
+        content-width: self.width;
+        content-height: root.body_h;
         for row[i] in root.networks : NetworkCard {
             data: row;
+            menu_open: CardMenu.id == row.id;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
+            select(id) => { root.n_select(id); }
+            remove(id) => { root.n_remove(id); }
+            menu_toggle(id, kind, can_stop, mx, my) => {
+                root.menu_toggle(id, kind, can_stop, mx, my);
+            }
         }
     }
-    if root.view == 3 : Flickable {
-        width: 100%; height: 100%;
-        viewport-width: self.width;
-        viewport-height: root.row_cnt * (root.card_h + root.gap) + 2 * root.pad - root.gap;
+
+    if root.view == 3 && root.n > 0 : Flickable {
+        width: 100%;
+        height: 100%;
+        content-width: self.width;
+        content-height: root.body_h;
         for row[i] in root.volumes : VolumeCard {
             data: row;
+            menu_open: CardMenu.id == row.name;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
+            select(id) => { root.v_select(id); }
+            remove(id) => { root.v_remove(id); }
+            menu_toggle(id, kind, can_stop, mx, my) => {
+                root.menu_toggle(id, kind, can_stop, mx, my);
+            }
         }
     }
 }
-

@@ -11,7 +11,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use slint::{invoke_from_event_loop, ModelRc, SharedString, Weak};
+use slint::{invoke_from_event_loop, SharedString, Weak};
 
 use crate::models::Msg;
 use crate::slint_gen::*;
@@ -59,14 +59,15 @@ fn pump_and_apply(
     let image_rows = crate::ui_rows::build_image_rows(&s);
     let network_rows = crate::ui_rows::build_network_rows(&s);
     let volume_rows = crate::ui_rows::build_volume_rows(&s);
+    let compose_rows = crate::ui_rows::build_compose_rows(&s);
     let running_count = s.containers.iter().filter(|c| c.is_running()).count();
     let containers_len = s.containers.len();
     let images_len = s.images.len();
     let networks_len = s.networks.len();
     let volumes_len = s.volumes.len();
     let update = derive_update(containers_len, &latest_msg);
-    let detail_data = crate::detail_fmt::build_detail_data(&s);
-    let image_detail_data = crate::detail_fmt::build_image_detail_data(&s);
+    // 抽屉内容按当前选中类型生成（容器/镜像/网络/卷四选一）
+    let drawer_data = crate::detail_fmt::build_drawer_data(&s);
     let sort_field_int = s.sort_field.to_ui_index() as i32;
     let sort_desc = s.sort_desc;
 
@@ -91,12 +92,15 @@ fn pump_and_apply(
     let ui_w = ui_weak.clone();
     invoke_from_event_loop(move || {
         let Some(ui) = ui_w.upgrade() else { return };
-        let cm: ModelRc<ContainerRow> = ModelRc::from(container_rows.as_slice());
-        let im: ModelRc<ImageRow> = ModelRc::from(image_rows.as_slice());
-        let nm: ModelRc<NetworkRow> = ModelRc::from(network_rows.as_slice());
-        let vm: ModelRc<VolumeRow> = ModelRc::from(volume_rows.as_slice());
-        let lm: ModelRc<LogLineRow> = ModelRc::from(log_lines.as_slice());
+        // 走 render::*（thread_local 缓存模型就地同步）而非 ModelRc::from：
+        // 后者每次都是新模型对象，Slint 会重置 Repeater 销毁全部行组件
+        let cm = crate::render::containers(container_rows);
+        let im = crate::render::images(image_rows);
+        let nm = crate::render::networks(network_rows);
+        let vm = crate::render::volumes(volume_rows);
+        let lm = crate::render::logs(log_lines);
         crate::ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
+        ui.set_compose_rows(crate::render::compose_rows(compose_rows));
         ui.set_sort_field(sort_field_int);
         ui.set_sort_desc(sort_desc);
         ui.set_batch_count(batch_count as i32);
@@ -113,11 +117,8 @@ fn pump_and_apply(
         if update.close_pull {
             ui.set_pull_open(false);
         }
-        if let Some(ref d) = detail_data {
-            crate::ui_apply::apply_detail(&ui, d);
-        }
-        if let Some(ref fields) = image_detail_data {
-            crate::ui_apply::apply_image_detail(&ui, fields);
+        if let Some(ref d) = drawer_data {
+            crate::ui_apply::apply_drawer(&ui, d);
         }
     })
     .ok();

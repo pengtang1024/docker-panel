@@ -29,6 +29,11 @@ export global Theme {
     out property <color> pill_on_bg: is_dark ? rgba(74,222,128,0.14) : rgba(22,163,74,0.10);
     out property <color> pill_off_bg: is_dark ? rgba(113,113,122,0.18) : rgba(161,161,170,0.14);
 
+    // 交互态（组件层统一引用，禁止各处硬编码）
+    out property <color> row_hover: is_dark ? #232327 : #f4f4f5;
+    out property <color> row_sel: is_dark ? #27272a : #ebeaee;
+    out property <color> err_bg: is_dark ? #3a2024 : #fdecec;
+
     out property <color> bar_bg: is_dark ? #27272a : #f0f0f3;
     out property <color> bar_cpu: is_dark ? #60a5fa : #3b82f6;
     out property <color> bar_mem: is_dark ? #a78bfa : #8b5cf6;
@@ -43,6 +48,10 @@ export global Theme {
 
     out property <color> tip_bg: is_dark ? #18181b : #ffffff;
     out property <color> tip_ink: is_dark ? #fafafa : #0e0e11;
+
+    // ===== 字体族 =====
+    // 拉丁/等宽统一走 JetBrains Mono（系统已装），中文回退由 fontconfig 处理
+    out property <string> mono: "JetBrains Mono";
 
     // ===== 字号 =====
     out property <length> fs_xs: 10px;

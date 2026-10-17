@@ -1,9 +1,16 @@
-//! 网络列表 + 卷列表
+//! 网络列表 + 卷列表 + 网络/卷删除
 
-use bollard::query_parameters::ListNetworksOptionsBuilder;
+use std::collections::HashMap;
+
+use bollard::query_parameters::{
+    DataUsageOptionsBuilder, ListNetworksOptionsBuilder, RemoveVolumeOptionsBuilder,
+};
 
 use super::connect;
 use crate::models::{NetworkInfo, VolumeInfo};
+
+/// Docker 内置网络：不可删除、不可改名
+const BUILTIN_NETS: [&str; 3] = ["bridge", "host", "none"];
 
 pub async fn list_networks() -> Result<Vec<NetworkInfo>, String> {
     let docker = connect()?;
@@ -20,12 +27,22 @@ pub async fn list_networks() -> Result<Vec<NetworkInfo>, String> {
             } else {
                 id.clone()
             };
+            let name = n.name.unwrap_or_default();
+            // IPAM 第一段配置即主网段；host/none 之类内置网络没有 IPAM
+            let cfg = n
+                .ipam
+                .as_ref()
+                .and_then(|i| i.config.as_ref())
+                .and_then(|c| c.first());
             NetworkInfo {
+                builtin: BUILTIN_NETS.contains(&name.as_str()),
                 id,
                 short_id,
-                name: n.name.unwrap_or_default(),
+                name,
                 driver: n.driver.unwrap_or_default(),
                 scope: n.scope.unwrap_or_default(),
+                subnet: cfg.and_then(|c| c.subnet.clone()).unwrap_or_default(),
+                gateway: cfg.and_then(|c| c.gateway.clone()).unwrap_or_default(),
             }
         })
         .collect())
@@ -42,10 +59,73 @@ pub async fn list_volumes() -> Result<Vec<VolumeInfo>, String> {
         .unwrap_or_default()
         .into_iter()
         .map(|v| VolumeInfo {
+            anonymous: is_anonymous(&v.name),
             name: v.name,
             driver: v.driver,
             mountpoint: v.mountpoint,
-            size: String::new(),
+            created: v.created_at.unwrap_or_default(),
         })
         .collect())
+}
+
+/// `/system/df?type=volume` → 每个卷的磁盘占用（name → 字节）
+///
+/// 列表 API 不返回卷大小，必须单独走 system df。该接口会遍历卷目录统计磁盘
+/// 占用（有 I/O 成本），故只由低频 interval 调用，不做 3s 轮询。
+pub async fn volume_sizes() -> Result<HashMap<String, u64>, String> {
+    let docker = connect()?;
+    let opts = DataUsageOptionsBuilder::default()
+        ._type(vec!["volume".to_string()])
+        .build();
+    let resp = docker.df(Some(opts)).await.map_err(|e| {
+        crate::i18n::trf("Failed to list volumes: {0}", &[&e.to_string()])
+    })?;
+    let mut out = HashMap::new();
+    // `VolumeUsage.Items` 为未建模的原始 JSON，逐项取 Name / UsageData.Size
+    let items = resp
+        .volume_usage
+        .and_then(|u| u.items)
+        .unwrap_or_default();
+    for item in items {
+        let name = item.get("Name").and_then(|v| v.as_str());
+        let size = item
+            .get("UsageData")
+            .and_then(|u| u.get("Size"))
+            .and_then(|s| s.as_i64());
+        if let (Some(name), Some(size)) = (name, size) {
+            if size >= 0 {
+                out.insert(name.to_string(), size as u64);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// 匿名卷启发式：Docker 自动生成的卷名为 64 位小写十六进制
+fn is_anonymous(name: &str) -> bool {
+    name.len() == 64
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// 删除网络（Docker 接受网络名或 ID）
+pub async fn remove_network(id: &str) -> Result<String, String> {
+    let docker = connect()?;
+    docker
+        .remove_network(id)
+        .await
+        .map_err(|e| crate::i18n::trf("Failed to remove network: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Network removed"))
+}
+
+/// 删除卷
+pub async fn remove_volume(name: &str) -> Result<String, String> {
+    let docker = connect()?;
+    let opts = RemoveVolumeOptionsBuilder::default().force(false).build();
+    docker
+        .remove_volume(name, Some(opts))
+        .await
+        .map_err(|e| crate::i18n::trf("Failed to remove volume: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Volume removed"))
 }

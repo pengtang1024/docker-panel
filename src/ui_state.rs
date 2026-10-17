@@ -16,36 +16,26 @@ use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
 use crate::docker::{
-    compute_cpu_delta, inspect_container, list_containers, list_images, ContainerStatsSnapshot,
+    compute_cpu_delta, inspect_container, list_containers, list_images, list_networks,
+    list_volumes, ContainerStatsSnapshot,
 };
 use crate::models::{
     ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
 };
-use slint::SharedString;
 
-/// 详情面板 18 字段 SharedString 元组（d_name..d_labels）
-pub type DetailTuple = (
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-    SharedString,
-);
+/// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelKind {
+    #[default]
+    Container,
+    Image,
+    Network,
+    Volume,
+}
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
+/// 卷磁盘占用刷新周期（`/system/df` 会遍历卷目录统计，不能跟着 3s 列表刷新跑）
+pub const VOLUME_SIZE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// 后台可共享状态
 /// 注意：mpsc::Receiver<Msg> 不在这里 — 它由 consumer 线程独占
@@ -66,6 +56,15 @@ pub struct AppState {
     pub detail: Option<ContainerDetail>,
     // —— 镜像详情面板 ——
     pub image_detail: Option<crate::models::ImageDetail>,
+    /// 抽屉当前选中的资源类型与主键（容器 id / 镜像 key / 网络 id / 卷名）
+    pub sel: SelKind,
+    pub sel_key: String,
+
+    /// 镜像层数缓存（id → RootFS.Layers.len()）：列表 API 不返回层数，
+    /// 首次拿到镜像列表后逐个 inspect 回填，此后仅对新增镜像补查
+    pub image_layers: HashMap<String, usize>,
+    /// 卷磁盘占用缓存（name → 字节）：来自低频 `/system/df`
+    pub volume_sizes: HashMap<String, u64>,
 
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
@@ -131,6 +130,10 @@ impl AppState {
             image_query: query,
             detail: None,
             image_detail: None,
+            sel: SelKind::Container,
+            sel_key: String::new(),
+            image_layers: HashMap::new(),
+            volume_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: 500,
             stats_prev: HashMap::new(),
@@ -160,15 +163,48 @@ impl AppState {
         .save();
     }
 
-    /// 触发 Docker 列表刷新（锁内安全：只 spawn，不做 IO）
+    /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）
     pub fn refresh(&mut self) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
-            let (c_res, i_res) = futures::join!(list_containers(true), list_images());
+            let (c_res, i_res, n_res, v_res) = futures::join!(
+                list_containers(true),
+                list_images(),
+                list_networks(),
+                list_volumes(),
+            );
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
+            let _ = tx.send(Msg::Networks(n_res));
+            let _ = tx.send(Msg::Volumes(v_res));
         });
         self.last_refresh = Instant::now();
+    }
+
+    /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）
+    ///
+    /// inspect 失败的镜像按 0 层写入缓存，避免每 3s 反复重试。
+    fn request_missing_layers(&mut self) {
+        let missing: Vec<String> = self
+            .images
+            .iter()
+            .filter(|i| !self.image_layers.contains_key(&i.id))
+            .map(|i| i.id.clone())
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let futs = missing
+                .into_iter()
+                .map(|id| async move {
+                    let n = crate::docker::image_layer_count(&id).await.unwrap_or(0);
+                    (id, n)
+                });
+            let got: Vec<(String, usize)> = futures::future::join_all(futs).await;
+            let _ = tx.send(Msg::ImageLayers(got));
+        });
     }
 
     /// 请求 inspect 一个容器（供 callbacks.rs 在锁内 spawn）
@@ -235,9 +271,19 @@ impl AppState {
                         }
                     }
                 }
-                Msg::Images(Ok(list)) => self.images = list.clone(),
+                Msg::Images(Ok(list)) => {
+                    self.images = list.clone();
+                    // 列表 API 不给层数，首次/新增镜像后台补查一次
+                    self.request_missing_layers();
+                }
                 Msg::Networks(Ok(list)) => self.networks = list.clone(),
                 Msg::Volumes(Ok(list)) => self.volumes = list.clone(),
+                Msg::ImageLayers(pairs) => {
+                    for (id, n) in pairs {
+                        self.image_layers.insert(id.clone(), *n);
+                    }
+                }
+                Msg::VolumeSizes(map) => self.volume_sizes = map.clone(),
                 Msg::ContainerDetail(Ok(d)) => self.detail = Some(d.clone()),
                 Msg::ImageDetail(Ok(d)) => self.image_detail = Some(d.clone()),
                 Msg::LogLine(line) => {

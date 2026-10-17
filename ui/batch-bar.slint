@@ -1,5 +1,6 @@
 // batch-bar.slint — 批量操作栏
 import { Theme } from "theme.slint";
+import { IconBtn } from "components.slint";
 
 export component BatchBar inherits Rectangle {
     height: Theme.batch_h;
@@ -28,40 +29,11 @@ export component BatchBar inherits Rectangle {
 
         Rectangle { horizontal-stretch: 1; }
 
-        Rectangle {
-            width: 32px; height: 28px; border-radius: Theme.r_sm;
-            background: Theme.card; border-width: 1px; border-color: Theme.line;
-            Text { text: "▶"; color: Theme.ink_2; font-size: 12px; }
-            TouchArea { clicked => { root.start(); } }
-        }
-        Rectangle {
-            width: 32px; height: 28px; border-radius: Theme.r_sm;
-            background: Theme.card; border-width: 1px; border-color: Theme.line;
-            Text { text: "■"; color: Theme.ink_2; font-size: 10px; }
-            TouchArea { clicked => { root.stop(); } }
-        }
-        Rectangle {
-            width: 32px; height: 28px; border-radius: Theme.r_sm;
-            background: Theme.card; border-width: 1px; border-color: Theme.line;
-            Text { text: "↻"; color: Theme.ink_2; font-size: 13px; }
-            TouchArea { clicked => { root.restart(); } }
-        }
-        Rectangle {
-            width: 32px; height: 28px; border-radius: Theme.r_sm;
-            background: Theme.card; border-width: 1px; border-color: Theme.line;
-            Text { text: "✕"; color: Theme.err; font-size: 12px; }
-            TouchArea { clicked => { root.remove(); } }
-        }
-        Rectangle {
-            height: 28px;
-            border-radius: Theme.r_sm;
-            background: Theme.card; border-width: 1px; border-color: Theme.line;
-            HorizontalLayout {
-                width: 100%; height: 100%;
-                padding-left: Theme.s4; padding-right: Theme.s4;
-                Text { text: @tr("Cancel"); color: Theme.ink_2; font-size: Theme.fs_sm; }
-            }
-            TouchArea { clicked => { root.clear(); } }
-        }
+        // 全图标 + tooltip（spec 2.3）
+        IconBtn { size: 28px; glyph_size: 12px; glyph: "▶"; tip: @tr("Start"); clicked => { root.start(); } }
+        IconBtn { size: 28px; glyph_size: 10px; glyph: "■"; tip: @tr("Stop"); clicked => { root.stop(); } }
+        IconBtn { size: 28px; glyph_size: 13px; glyph: "↻"; tip: @tr("Restart"); clicked => { root.restart(); } }
+        IconBtn { size: 28px; glyph_size: 13px; glyph: "🗑"; danger: true; tip: @tr("Remove"); clicked => { root.remove(); } }
+        IconBtn { size: 28px; glyph_size: 12px; glyph: "✕"; tip: @tr("Cancel"); clicked => { root.clear(); } }
     }
 }

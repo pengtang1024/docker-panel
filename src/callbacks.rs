@@ -1,7 +1,9 @@
 //! UI 回调绑定
 
+use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_container::bind_container_actions;
 pub use super::callbacks_image::bind_image_actions;
+pub use super::callbacks_netvol::bind_netvol_actions;
 
 use slint::{ComponentHandle, SharedString};
 
@@ -20,6 +22,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     bind_drawer(ui, &actions, state);
     bind_container_actions(ui, state);
     bind_image_actions(ui, state);
+    bind_netvol_actions(ui, state);
 }
 
 /// 启动时把持久化的配置灌回 Slint 属性
@@ -115,7 +118,12 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
 fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let s = state.clone();
+        let ui_f = ui.as_weak();
         actions.on_set_view(move |v: i32| {
+            // 必须同步更新 UI 属性，否则画面冻结在启动恢复值（点击/快捷键切视图均失效）
+            if let Some(ui) = ui_f.upgrade() {
+                ui.set_view(v);
+            }
             if let Ok(mut st) = s.lock() {
                 st.view = v as i64;
                 st.persist();
@@ -245,36 +253,4 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
     }
 }
 
-fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
-    {
-        let ui_d = ui.as_weak();
-        actions.on_drawer_close(move || {
-            let Some(ui) = ui_d.upgrade() else { return };
-            ui.set_drawer_open(false);
-        });
-    }
-    {
-        let ui_d = ui.as_weak();
-        actions.on_drawer_tab(move |t: i32| {
-            let Some(ui) = ui_d.upgrade() else { return };
-            ui.set_drawer_tab(t);
-        });
-    }
-    {
-        let ui_d = ui.as_weak();
-        let s = state.clone();
-        actions.on_log_toggle_follow(move || {
-            let Some(ui) = ui_d.upgrade() else { return };
-            let next = !ui.get_log_follow();
-            ui.set_log_follow(next);
-            if let Ok(mut st) = s.lock() {
-                st.log_follow = next;
-                st.persist();
-            }
-        });
-    }
-    {
-        actions.on_log_copy(move || {});
-        actions.on_log_clear(move || {});
-    }
-}
+

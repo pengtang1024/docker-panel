@@ -6,7 +6,7 @@ use crate::docker;
 use crate::i18n::trf;
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SelKind, SharedState};
 
 pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
@@ -23,8 +23,20 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
                 trf("Inspect image {0}", &[&name]).as_str(),
             ));
             if let Ok(mut st) = s.lock() {
+                st.sel = SelKind::Image;
+                st.sel_key = name.clone();
                 st.request_image_detail(name);
             }
+        });
+    }
+
+    // 镜像卡片「运行」→ 状态栏提示（按原型：不真启动容器）
+    {
+        let ui_a = ui.as_weak();
+        actions.on_image_run(move |row_id: SharedString| {
+            let name = row_id.to_string();
+            let Some(ui) = ui_a.upgrade() else { return };
+            ui.set_status_text(SharedString::from(trf("Run {0}", &[&name]).as_str()));
         });
     }
 

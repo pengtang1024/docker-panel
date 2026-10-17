@@ -1,0 +1,301 @@
+// card-netvol.slint — 网络卡片（spec 3.3）+ 卷卡片（spec 3.4）
+// 两者结构同构：`主导信息 → 副信息 → 芯片 → 底部统计` + .card-actions；
+// 菜单走 CardMenu 总线顶层渲染。
+import { Theme } from "theme.slint";
+import { IconBtn, MonoChip, Tip } from "components.slint";
+import { NetworkRow, VolumeRow } from "models.slint";
+
+// ============ 网络卡片 ============
+export component NetworkCard inherits Rectangle {
+    in property <NetworkRow> data;
+    callback select(string);
+    callback remove(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    in-out property <bool> menu_open: false;
+    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 36px;
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: root.act_show ? Theme.ink_4 : Theme.line;
+    clip: true;
+    drop-shadow-color: root.act_show ? Theme.shadow : transparent;
+    drop-shadow-blur: 10px;
+    drop-shadow-offset-y: 2px;
+
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.ok;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.id, 2, false, 0px, 0px); }
+            else { root.select(root.data.id); }
+        }
+    }
+
+    VerticalLayout {
+        x: 11px;
+        y: 9px;
+        width: parent.width - 20px;
+        height: parent.height - 16px;
+        spacing: 0px;
+
+        // .net-name：名称 + 内置标记（10px ink-3，常规字重）
+        HorizontalLayout {
+            width: 100%;
+            spacing: 6px;
+            padding-right: 70px;
+            Text {
+                text: root.data.name;
+                font-size: 14px;
+                font-weight: 700;
+                color: Theme.ink;
+                overflow: elide;
+            }
+            if root.data.builtin : Text {
+                text: "(" + @tr("Builtin") + ")";
+                font-size: Theme.fs_xs;
+                color: Theme.ink_3;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+
+        // .net-sub：driver · scope · subnet（margin-top 1px）
+        HorizontalLayout {
+            width: 100%;
+            padding-top: 1px;
+            Text {
+                text: root.data.subnet == ""
+                    ? root.data.driver + " · " + root.data.scope
+                    : root.data.driver + " · " + root.data.scope + " · " + root.data.subnet;
+                font-size: Theme.fs_sm;
+                font-family: Theme.mono;
+                color: Theme.ink_2;
+                overflow: elide;
+            }
+        }
+
+        // .net-tags：driver / scope 芯片
+        HorizontalLayout {
+            width: 100%;
+            spacing: 6px;
+            padding-top: 6px;
+            MonoChip { label: root.data.driver; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
+            MonoChip { label: root.data.scope; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
+        }
+
+        // .net-foot：容器数
+        HorizontalLayout {
+            width: 100%;
+            padding-top: 7px;
+            Text {
+                text: @tr("{0} container" | "{0} containers" % root.data.containers, root.data.containers);
+                font-size: Theme.fs_sm;
+                color: Theme.ink_2;
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+
+    // .card-actions：详情（文件图标）
+    main_btn := IconBtn {
+        x: parent.width - 65px;
+        y: 9px;
+        size: 26px;
+        glyph_size: 13px;
+        outline: true;
+        rest_bg: Theme.card;
+        hidden: root.act_show == false;
+        glyph: "≡";
+        tip: @tr("Details");
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.id, 2, false, 0px, 0px); }
+            else { root.select(root.data.id); }
+        }
+    }
+
+    // .card-actions：更多菜单（删除）
+    more_btn := IconBtn {
+        x: parent.width - 35px;
+        y: 9px;
+        size: 26px;
+        glyph_size: 13px;
+        outline: true;
+        rest_bg: Theme.card;
+        active: root.menu_open;
+        hidden: root.act_show == false;
+        glyph: "···";
+        tip: @tr("More");
+        clicked => { root.menu_toggle(root.data.id, 2, false, root.menu_mx, root.menu_my); }
+    }
+}
+
+// ============ 卷卡片 ============
+export component VolumeCard inherits Rectangle {
+    in property <VolumeRow> data;
+    callback select(string);
+    callback remove(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    in-out property <bool> menu_open: false;
+    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 36px;
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: root.act_show ? Theme.ink_4 : Theme.line;
+    clip: true;
+    drop-shadow-color: root.act_show ? Theme.shadow : transparent;
+    drop-shadow-blur: 10px;
+    drop-shadow-offset-y: 2px;
+
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.ok;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.name, 3, false, 0px, 0px); }
+            else { root.select(root.data.name); }
+        }
+    }
+
+    // .vol-name 行独立 hover 命中：匿名卷展示名被截断，hover 出全名（prototype data-tip）
+    name_touch := TouchArea {
+        x: 11px;
+        y: 9px;
+        width: parent.width - 81px;
+        height: 20px;
+        private property <bool> tip_on: self.has-hover;
+        clicked => { root.select(root.data.name); }
+        changed tip_on => {
+            if (self.tip_on && root.data.display_name != root.data.name) {
+                Tip.text = root.data.name;
+                Tip.ax = self.absolute-position.x + self.width / 2;
+                Tip.ay = self.absolute-position.y;
+            } else if (Tip.text == root.data.name) {
+                Tip.text = "";
+            }
+        }
+    }
+
+    VerticalLayout {
+        x: 11px;
+        y: 9px;
+        width: parent.width - 20px;
+        height: parent.height - 16px;
+        spacing: 0px;
+
+        // .vol-name：等宽 13px 700，匿名卷截断展示（名称行 hover 显示全名）
+        HorizontalLayout {
+            width: 100%;
+            padding-right: 70px;
+            Text {
+                text: root.data.display_name;
+                font-size: Theme.fs_md;
+                font-weight: 700;
+                font-family: Theme.mono;
+                color: Theme.ink;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+
+        // .anon-tag：匿名卷标记
+        if root.data.anonymous : HorizontalLayout {
+            width: 100%;
+            padding-top: 2px;
+            MonoChip { label: @tr("Anonymous volume"); plain: false; ink: Theme.ink_3; }
+        }
+
+        // .vol-mount：挂载路径（margin-top 2px）
+        HorizontalLayout {
+            width: 100%;
+            padding-top: 2px;
+            Text {
+                text: root.data.mountpoint;
+                font-size: Theme.fs_xs;
+                font-family: Theme.mono;
+                color: Theme.ink_3;
+                overflow: elide;
+            }
+        }
+
+        // .vol-foot：driver 与体积两端对齐
+        HorizontalLayout {
+            width: 100%;
+            padding-top: 7px;
+            Text { text: "driver: "; font-size: Theme.fs_sm; color: Theme.ink_2; }
+            Text {
+                text: root.data.driver;
+                font-size: Theme.fs_sm;
+                font-weight: 600;
+                font-family: Theme.mono;
+                color: Theme.ink;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: root.data.size;
+                font-size: Theme.fs_sm;
+                font-weight: 600;
+                font-family: Theme.mono;
+                color: Theme.ink;
+            }
+        }
+    }
+
+    // .card-actions：详情
+    main_btn := IconBtn {
+        x: parent.width - 65px;
+        y: 9px;
+        size: 26px;
+        glyph_size: 13px;
+        outline: true;
+        rest_bg: Theme.card;
+        hidden: root.act_show == false;
+        glyph: "≡";
+        tip: @tr("Details");
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.name, 3, false, 0px, 0px); }
+            else { root.select(root.data.name); }
+        }
+    }
+
+    // .card-actions：更多菜单（删除）
+    more_btn := IconBtn {
+        x: parent.width - 35px;
+        y: 9px;
+        size: 26px;
+        glyph_size: 13px;
+        outline: true;
+        rest_bg: Theme.card;
+        active: root.menu_open;
+        hidden: root.act_show == false;
+        glyph: "···";
+        tip: @tr("More");
+        clicked => { root.menu_toggle(root.data.name, 3, false, root.menu_mx, root.menu_my); }
+    }
+}

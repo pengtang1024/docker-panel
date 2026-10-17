@@ -1,6 +1,8 @@
 // app.slint — 主窗口骨架
 // 布局：VerticalLayout(TopBar, SubBar, BatchBar?, GridArea, FootBar) + Drawer
 import { Theme } from "theme.slint";
+import { Tip, TipLayer, CardMenu } from "components.slint";
+import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { TopBar } from "top-bar.slint";
 import { SubBar } from "sub-bar.slint";
 import { BatchBar } from "batch-bar.slint";
@@ -8,7 +10,7 @@ import { CardsArea } from "cards.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LogLineRow } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LogLineRow, ComposeRow, DetailPair } from "models.slint";
 
 export global AppActions {
     callback toggle_theme();
@@ -27,7 +29,12 @@ export global AppActions {
     callback container_select(string);
     callback container_toggle_select(string);
     callback image_select(string);
+    callback image_run(string);
     callback image_remove(string);
+    callback network_select(string);
+    callback network_remove(string);
+    callback volume_select(string);
+    callback volume_remove(string);
     callback batch_start();
     callback batch_stop();
     callback batch_restart();
@@ -46,7 +53,12 @@ export global AppActions {
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
-    width: 1280px; height: 760px;
+    // 用 preferred-* 而非 width/height：显式 width/height 会把 min/max 一起钉死
+    // → 窗口被锁成固定尺寸、无法缩放拖拽。preferred 只给初始尺寸，min 给下限。
+    preferred-width: 1280px;
+    preferred-height: 760px;
+    min-width: 880px;
+    min-height: 560px;
     background: Theme.bg;
 
     // 启动即把键盘焦点交给全局快捷键 FocusScope。
@@ -85,24 +97,18 @@ export component MainWindow inherits Window {
     in-out property <[NetworkRow]> network_rows: [];
     in-out property <[VolumeRow]> volume_rows: [];
     in-out property <[LogLineRow]> log_lines: [];
+    in-out property <[ComposeRow]> compose_rows: [];
 
     // —— 抽屉 ——
     in-out property <bool> drawer_open: false;
     in-out property <int> drawer_tab: 0;    // 0=详情 1=日志 2=环境
     in-out property <bool> log_follow: true;
-    in-out property <string> d_name: ""; in-out property <string> d_state: "";
-    in-out property <string> d_status: ""; in-out property <string> d_image: "";
-    in-out property <string> d_id: ""; in-out property <string> d_pid: "";
-    in-out property <string> d_disk: ""; in-out property <string> d_cpu: "";
-    in-out property <string> d_mem: ""; in-out property <string> d_restart: "";
-    in-out property <string> d_created: ""; in-out property <string> d_started: "";
-    in-out property <string> d_netmode: ""; in-out property <string> d_ports: "";
-    in-out property <string> d_mounts: ""; in-out property <string> d_networks: "";
-    in-out property <string> d_entry: ""; in-out property <string> d_cmd: "";
-    in-out property <string> d_labels: ""; in-out property <string> d_env: "";
-    in-out property <string> i_repo: ""; in-out property <string> i_size: "";
-    in-out property <string> i_layers: ""; in-out property <string> i_created: "";
-    in-out property <string> i_entry: ""; in-out property <string> i_cmd: "";
+    // 抽屉内容统一走 DetailPair 行列表（Rust 侧按选中类型构建，见 detail_fmt.rs）
+    in-out property <string> drawer_title: "";
+    in-out property <string> drawer_sub: "";
+    in-out property <bool> drawer_tabs: true;
+    in-out property <[DetailPair]> detail_rows: [];
+    in-out property <[DetailPair]> env_rows: [];
 
     // —— 弹窗 ——
     in-out property <bool> pull_open: false;
@@ -139,10 +145,21 @@ export component MainWindow inherits Window {
                 } else {
                     reject
                 }
+            } else if (e.text == "/") {
+                // spec 3.5：`/` 直接聚焦搜索框（已在搜索框内输入时由 TextInput 先消费）
+                top-bar.focus_search();
+                accept
             } else if (e.text == Key.Escape) {
-                root.drawer_open = false;
-                root.pull_open = false;
-                root.cleanup_open = false;
+                sub-bar.sort_open = false;
+                CardMenu.close();
+                if (root.drawer_open || root.pull_open || root.cleanup_open) {
+                    root.drawer_open = false;
+                    root.pull_open = false;
+                    root.cleanup_open = false;
+                } else if (root.batch_count > 0) {
+                    // sel-mode 退出：清空多选 → 复选框随之隐藏
+                    AppActions.batch_clear();
+                }
                 // 弹窗/抽屉被条件渲染移除后其内部焦点会悬空，把焦点收回全局快捷键层
                 global-shortcuts.focus();
                 accept
@@ -166,12 +183,13 @@ export component MainWindow inherits Window {
             search(val) => { AppActions.search(val); }
         }
 
-        SubBar {
+        sub-bar := SubBar {
             height: Theme.sub_h;
             view <=> root.view;
             filter <=> root.filter;
             sort_field <=> root.sort_field;
             sort_desc <=> root.sort_desc;
+            compose_rows <=> root.compose_rows;
             total_containers <=> root.total_containers;
             running_containers <=> root.running_containers;
             total_images <=> root.total_images;
@@ -196,7 +214,7 @@ export component MainWindow inherits Window {
         CardsArea {
             vertical-stretch: 1;
             view <=> root.view;
-            search_q <=> root.search_q;
+            sel_mode: root.batch_count > 0;
             containers <=> root.container_rows;
             images <=> root.image_rows;
             networks <=> root.network_rows;
@@ -208,7 +226,12 @@ export component MainWindow inherits Window {
             c_remove(id) => { AppActions.container_remove(id); }
             c_box(id) => { AppActions.container_toggle_select(id); }
             i_select(id) => { AppActions.image_select(id); }
+            i_run(id) => { AppActions.image_run(id); }
             i_remove(id) => { AppActions.image_remove(id); }
+            n_select(id) => { AppActions.network_select(id); }
+            n_remove(id) => { AppActions.network_remove(id); }
+            v_select(id) => { AppActions.volume_select(id); }
+            v_remove(id) => { AppActions.volume_remove(id); }
         }
 
         FootBar {
@@ -226,6 +249,38 @@ export component MainWindow inherits Window {
         }
     }
 
+    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在 CardsArea 之后（同层直接子元素），
+    // 否则会被下方卡片区覆盖 / 裁掉 —— 与 prototype 的绝对定位下拉一致
+    if sub-bar.sort_open : SortMenu {
+        x: sub-bar.menu_x;
+        y: sub-bar.menu_y;
+        field: root.sort_field;
+        desc: root.sort_desc;
+        pick(f) => { sub-bar.sort_open = false; AppActions.set_sort(f); }
+    }
+
+    if CardMenu.id != "" : CardMenuLayer {
+        x: CardMenu.mx;
+        y: CardMenu.my;
+        id: CardMenu.id;
+        kind: CardMenu.kind;
+        can_stop: CardMenu.can_stop;
+        stop_card(id) => { AppActions.container_toggle(id); CardMenu.close(); }
+        logs(id) => { AppActions.container_logs(id); CardMenu.close(); }
+        details(id) => {
+            if (CardMenu.kind == 1) { AppActions.image_select(id); }
+            else if (CardMenu.kind == 2) { AppActions.network_select(id); }
+            else { AppActions.volume_select(id); }
+            CardMenu.close();
+        }
+        remove(id) => {
+            if (CardMenu.kind == 1) { AppActions.image_remove(id); }
+            else if (CardMenu.kind == 2) { AppActions.network_remove(id); }
+            else { AppActions.volume_remove(id); }
+            CardMenu.close();
+        }
+    }
+
     Drawer {
         // 未显式定位的元素默认在父级居中（x=(1280-400)/2=440），必须显式绑定到窗口右侧
         x: root.drawer_open ? root.width - Theme.drawer_w : root.width;
@@ -234,15 +289,11 @@ export component MainWindow inherits Window {
         tab <=> root.drawer_tab;
         log_follow <=> root.log_follow;
         log_lines <=> root.log_lines;
-        d_name <=> root.d_name; d_state <=> root.d_state; d_status <=> root.d_status;
-        d_image <=> root.d_image; d_id <=> root.d_id; d_pid <=> root.d_pid;
-        d_disk <=> root.d_disk; d_cpu <=> root.d_cpu; d_mem <=> root.d_mem;
-        d_restart <=> root.d_restart; d_created <=> root.d_created; d_started <=> root.d_started;
-        d_netmode <=> root.d_netmode; d_ports <=> root.d_ports; d_mounts <=> root.d_mounts;
-        d_networks <=> root.d_networks; d_entry <=> root.d_entry; d_cmd <=> root.d_cmd;
-        d_labels <=> root.d_labels; d_env <=> root.d_env;
-        i_repo <=> root.i_repo; i_size <=> root.i_size; i_layers <=> root.i_layers;
-        i_created <=> root.i_created; i_entry <=> root.i_entry; i_cmd <=> root.i_cmd;
+        title <=> root.drawer_title;
+        sub <=> root.drawer_sub;
+        tabs_visible <=> root.drawer_tabs;
+        detail_rows <=> root.detail_rows;
+        env_rows <=> root.env_rows;
         close => { AppActions.drawer_close(); }
         set_tab(t) => { AppActions.drawer_tab(t); }
         log_follow_click => { AppActions.log_toggle_follow(); }
@@ -265,6 +316,14 @@ export component MainWindow inherits Window {
         unused_vol <=> root.cleanup_unused_vol;
         close => { AppActions.cleanup_close(); }
         submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
+    }
+
+    // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛
+    // prototype: left=clamp(锚点中点-半宽, 8, 宽-宽-8)；top=锚点顶边-高-8
+    // 本层底部还有 4px 箭头，故整体上移 8(间距)+4(箭头)
+    TipLayer {
+        x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
+        y: Math.max(Theme.s1, Tip.ay - self.height - 12px);
     }
     }
 }

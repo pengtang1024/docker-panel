@@ -24,15 +24,11 @@ anyhow = "1"
 # tokio 多线程运行时（不能用 current_thread：单线程下后台 Docker 任务可能无法调度）
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "rt"] }
 
+# 日志复制：Wayland 走 data-control 协议，无需外部 wl-copy 命令
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
 [build-dependencies]
 slint-build = "1.18.1"
-
-# 本地补丁：Wayland 下 softbuffer buffer age 语义不可靠，slint 软件渲染器
-# 依据 age 做部分重绘会导致 buffer 未重绘区域永久黑块。强制全量重绘修复。
-# 见 vendor/i-slint-backend-winit-1.18.1/renderer/sw.rs
-[patch.crates-io]
-i-slint-backend-winit = { path = "vendor/i-slint-backend-winit-1.18.1" }
-i-slint-renderer-software = { path = "vendor/i-slint-renderer-software-1.18.1" }
 
 [profile.release]
 opt-level = "z"      # 体积最小化

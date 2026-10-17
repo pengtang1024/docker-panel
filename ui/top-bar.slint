@@ -1,5 +1,6 @@
 // top-bar.slint — 顶栏
 import { Theme } from "theme.slint";
+import { IconBtn, Dot } from "components.slint";
 
 export component TopBar inherits Rectangle {
     height: Theme.top_h;
@@ -38,12 +39,7 @@ export component TopBar inherits Rectangle {
             color: Theme.ink;
         }
 
-        Rectangle {
-            width: 8px;
-            height: 8px;
-            border-radius: 4px;
-            background: root.docker_ok ? Theme.ok : Theme.stop;
-        }
+        Dot { on: root.docker_ok; }
         Text {
             text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: Theme.fs_sm;
@@ -71,13 +67,29 @@ export component TopBar inherits Rectangle {
                     color: Theme.ink_3;
                     font-size: Theme.fs_md;
                 }
-                search_input := TextInput {
+                // TextInput 无内建 placeholder：用等宽 TextInput + 空值叠加提示文本
+                Rectangle {
                     horizontal-stretch: 1;
-                    text <=> root.search_q;
-                    color: Theme.ink;
-                    font-size: Theme.fs_sm;
-                    accepted() => { root.search(root.search_q); }
-                    edited() => { root.search(root.search_q); }
+                    height: 100%;
+                    search_input := TextInput {
+                        x: 0px;
+                        y: (parent.height - self.height) / 2;
+                        width: 100%;
+                        text <=> root.search_q;
+                        color: Theme.ink;
+                        font-size: Theme.fs_sm;
+                        accepted() => { root.search(root.search_q); }
+                        edited() => { root.search(root.search_q); }
+                    }
+                    Text {
+                        x: 0px;
+                        y: (parent.height - self.height) / 2;
+                        width: 100%;
+                        visible: search_input.text == "";
+                        text: @tr("Search name, image...");
+                        color: Theme.ink_3;
+                        font-size: Theme.fs_sm;
+                    }
                 }
                 Text {
                     text: "Ctrl+K";
@@ -89,38 +101,32 @@ export component TopBar inherits Rectangle {
 
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 
-        // 主题按钮
-        Rectangle {
-            width: 32px;
-            height: 32px;
-            border-radius: Theme.r_sm;
-            background: Theme.bg;
-            Text { text: "◐"; color: Theme.ink_2; font-size: 16px; }
-            TouchArea { clicked => { root.theme_click(); } }
+        // 4 个纯图标按钮（spec 2.1：全图标 + tooltip，无文字）
+        IconBtn {
+            // 三态循环：auto(跟随系统) → light → dark（spec 2.1）
+            glyph: Theme.theme_mode == 1 ? "☀" : Theme.theme_mode == 2 ? "☾" : "◐";
+            glyph_size: 16px;
+            tip: @tr("Theme");
+            clicked => { root.theme_click(); }
         }
-        Rectangle {
-            width: 32px;
-            height: 32px;
-            border-radius: Theme.r_sm;
-            background: Theme.bg;
-            Text { text: "↻"; color: Theme.ink_2; font-size: 16px; }
-            TouchArea { clicked => { root.refresh_click(); } }
+        IconBtn {
+            glyph: "↻";
+            glyph_size: 16px;
+            tip: @tr("Refresh");
+            clicked => { root.refresh_click(); }
         }
-        Rectangle {
-            width: 32px;
-            height: 32px;
-            border-radius: Theme.r_sm;
-            background: Theme.bg;
-            Text { text: "🗑"; color: Theme.ink_2; font-size: 14px; }
-            TouchArea { clicked => { root.cleanup_click(); } }
+        IconBtn {
+            glyph: "🗑";
+            glyph_size: 14px;
+            tip: @tr("Cleanup");
+            clicked => { root.cleanup_click(); }
         }
-        Rectangle {
-            width: 80px;
-            height: 32px;
-            border-radius: Theme.r_sm;
-            background: Theme.ink;
-            Text { text: @tr("Pull"); color: Theme.card; font-size: Theme.fs_sm; font-weight: 600; }
-            TouchArea { clicked => { root.pull_click(); } }
+        IconBtn {
+            glyph: "⤓";
+            glyph_size: 16px;
+            primary: true;
+            tip: @tr("Pull");
+            clicked => { root.pull_click(); }
         }
     }
 }

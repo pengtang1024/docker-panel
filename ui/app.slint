@@ -272,6 +272,7 @@ export component MainWindow inherits Window {
     if sub-bar.sort_open : SortMenu {
         x: sub-bar.menu_x;
         y: sub-bar.menu_y;
+        height: 170px;
         field: root.sort_field;
         desc: root.sort_desc;
         pick(f) => { sub-bar.sort_open = false; AppActions.set_sort(f); }

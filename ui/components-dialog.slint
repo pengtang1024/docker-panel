@@ -1,4 +1,10 @@
-// components-dialog.slint — Dialog 基类（严格对齐 prototype .dlg-head/.dlg-body/.dlg-footer）
+// components-dialog.slint — Dialog 基类（基于 Material Modal 1.1.0）
+// 核心约束（Slint 1.18 已验证）：
+//   1. Modal 提供 backdrop TouchArea + clicked 回调 + Material 动画
+//   2. VerticalLayout 子元素显式 height 被忽略！必须用 min-height
+//   3. Modal 不是 Rectangle，DialogShell 必须显式 width:100% height:100%
+//   4. card 直接硬值 width + height（内容驱动的 layout.min_width/min_height 在 TouchArea 包装下失效）
+import { Modal } from "@material";
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
@@ -7,7 +13,6 @@ import { IconBtn } from "components-interact.slint";
 export component BodySlot inherits Rectangle { @children }
 
 /// FooterSlot — Dialog footer 插槽（预置右对齐布局）
-/// prototype: .dlg-footer{padding:14px 20px;justify-content:flex-end;gap:8px}
 export component FooterSlot inherits Rectangle {
     HorizontalLayout {
         width: 100%; height: 100%;
@@ -18,103 +23,112 @@ export component FooterSlot inherits Rectangle {
 }
 
 /// DialogShell — 通用对话框外壳
-/// prototype: .overlay{position:absolute;inset:0;align-items:center;justify-content:center;z-index:30}
-///           .dialog{background:var(--card);border-radius:16px;width:420px;box-shadow:var(--shadow-hover)}
-/// 关键：作为 conditionally rendered overlay 必须显式 100%×100%，
-/// 否则默认 0×0 导致遮罩不覆盖、居中公式算出负值。
-export component DialogShell inherits Rectangle {
-    width: 100%;
-    height: 100%;
+/// 结构：Material Modal（全屏遮罩 + blocking TouchArea） + 居中 card（硬值尺寸）
+///   Modal { background_layer := Rectangle {
+///     TouchArea {           ← 点击遮罩关闭
+///       Rectangle { card }  ← 居中小卡片，硬值 width + height
+///     }
+///   }}
+export component DialogShell inherits Modal {
     in-out property <bool> open: false;
     in-out property <string> dlg_title: "";
     in-out property <string> dlg_subtitle: "";
     in-out property <length> card_width: 420px;
-    in-out property <length> card_height: 400px;  // 默认值覆盖最大需求，子类可覆盖
+    in-out property <length> card_height: 300px;  // 默认 300px，子类可按需覆盖（Slint 1.18 子类 in-out property 覆盖）
     callback close();
 
-    background: Theme.overlay;
+    width: 100%;
+    height: 100%;
     visible: root.open;
+    clicked => { root.close(); }
 
-    TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
+    // 覆盖 Material Modal 默认的 background_layer（空 Rectangle）
+    // 改成全屏半透明遮罩 + 居中 card
+    background_layer := Rectangle {
+        background: Theme.overlay;
+        clip: true;
+        width: parent.width;
+        height: parent.height;
 
-    // Slint 1.18 不支持 backdrop-filter；居中用 VerticalLayout + HorizontalLayout 双重 alignment:center
-    // ⚠️ 内层 layout 绝对不能设 100% 宽高——否则永远填满外层、alignment:center 失效
-    HorizontalLayout {
-            width: 100%; height: 100%;
-            alignment: center;
-            VerticalLayout {
-                alignment: center;
+        // 点击遮罩空白处关闭
+        TouchArea {
+            clicked => { root.close(); }
 
-            card := Rectangle {
+            // 居中 card（硬值尺寸，内容驱动在 Slint 1.18 + TouchArea 下不可靠）
+            Rectangle {
                 width: root.card_width;
-                height: root.card_height;  // ⚠️ 显式 height——Slint 1.18 preferred-height 传播断链，必须子类覆盖
+                height: root.card_height;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+
                 border-radius: Theme.r_dialog;
                 background: Theme.card;
                 border-width: 1px; border-color: Theme.line;
                 clip: true;
-                // drop-shadow-color: Theme.shadow_hover;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-                // drop-shadow-blur: 32px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-                // drop-shadow-offset-y: 4px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
 
-                // Dialog 内部三段式：Header + Body + Footer
-                // ⚠️ 三段子元素都加 vertical-stretch:0——防止 VerticalLayout 拉伸
-                VerticalLayout {
-                    width: 100%; spacing: 0px;
-
-                    // .dlg-head{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
-                    Rectangle {
-                        vertical-stretch: 0;
-                        height: 60px;  // 显式 height：padding 18+14 + IconBtn 28 = 60px
-                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
-                        HorizontalLayout {
-                            width: 100%; height: 100%;  // ✅ 现在父 Rectangle 有显式 height，height:100% 安全
-                            spacing: 0px; padding-left: 20px; padding-right: 20px;
-                            padding-top: 18px; padding-bottom: 14px;
-
-                            VerticalLayout {
-                                horizontal-stretch: 1; spacing: 3px; alignment: start;
-                                VCenterText {
-                                    text: root.dlg_title;
-                                    font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
-                                }
-                                if root.dlg_subtitle != "" : VCenterText {
-                                    text: root.dlg_subtitle;
-                                    font-size: Theme.fs; color: Theme.ink_2;
-                                }
-                            }
-
-                            IconBtn {
-                                size: 28px; icon_size: 12px; icon_name: "x";
-                                tip: @tr("Close");
-                                clicked => { root.close(); }
-                            }
-                        }
-                    }
-
-                    // .dlg-body{padding:16px 20px}
+                // ⚠️ 必须 TouchArea 包裹 card 内容——否则点击 card 会穿透到父 TouchArea 触发关闭
+                TouchArea {
                     VerticalLayout {
                         width: 100%;
-                        vertical-stretch: 0;  // ⚠️ 关键：防止 Body 被拉伸
-                        padding-left: 20px; padding-right: 20px;
-                        padding-top: 16px; padding-bottom: 16px;
-                        body_slot := BodySlot { width: 100%; }
-                    }
+                        height: 100%;
+                        spacing: 0px;
 
-                    // .dlg-footer{padding:14px 20px;border-top:1px solid var(--line);justify-content:flex-end;gap:8px}
-                    Rectangle {
-                        width: 100%;
-                        height: 56px;  // 显式 height：padding 14+14 + TextButton 28 = 56px
-                        vertical-stretch: 0;
-                        Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
-                        HorizontalLayout {
-                            width: 100%; height: 100%;  // ✅ 父 Rectangle 有显式 height
-                            padding-left: 20px; padding-right: 20px;
-                            padding-top: 14px; padding-bottom: 14px;
-                            footer_slot := FooterSlot { width: 100%; height: 100%; }
+                        // Header
+                        Rectangle {
+                            min-height: 60px;  // ✅ Slint 1.18 min-height 生效，height 被忽略
+                            vertical-stretch: 0;
+                            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                            HorizontalLayout {
+                                width: 100%; height: 100%;
+                                spacing: 0px; padding-left: 20px; padding-right: 20px;
+                                padding-top: 18px; padding-bottom: 14px;
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1; spacing: 3px; alignment: start;
+                                    VCenterText {
+                                        text: root.dlg_title;
+                                        font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
+                                    }
+                                    if root.dlg_subtitle != "" : VCenterText {
+                                        text: root.dlg_subtitle;
+                                        font-size: Theme.fs; color: Theme.ink_2;
+                                    }
+                                }
+
+                                IconBtn {
+                                    size: 28px; icon_size: 12px; icon_name: "x";
+                                    tip: @tr("Close");
+                                    clicked => { root.close(); }
+                                }
+                            }
+                        }
+
+                        // Body（vertical-stretch:1 占满剩余空间）
+                        Rectangle {
+                            vertical-stretch: 1;
+                            HorizontalLayout { width: 100%; height: 100%;
+                                spacing: 0px;
+                                padding-left: 20px; padding-right: 20px;
+                                padding-top: 16px; padding-bottom: 16px;
+                                body_slot := BodySlot { width: 100%; }
+                            }
+                        }
+
+                        // Footer
+                        Rectangle {
+                            min-height: 56px;  // ✅ Slint 1.18 min-height 生效
+                            vertical-stretch: 0;
+                            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+                            HorizontalLayout {
+                                width: 100%; height: 100%;
+                                padding-left: 20px; padding-right: 20px;
+                                padding-top: 14px; padding-bottom: 14px;
+                                footer_slot := FooterSlot { width: 100%; height: 100%; }
+                            }
                         }
                     }
                 }
-            }  // card
-        }  // inner VerticalLayout (alignment:center)
-    }  // outer HorizontalLayout (alignment:center)
-}  // DialogShell
+            }
+        }
+    }
+}

@@ -130,6 +130,7 @@ export component CleanupDialog inherits DialogShell {
 
     dlg_title: @tr("Cleanup Resources");
     dlg_subtitle: @tr("Select resource types to clean up");
+    card_height: 420px;  // Header 60 + Body ~300 + Footer 56 ≈ 416px
 
     body_slot := BodySlot {
         width: 100%;

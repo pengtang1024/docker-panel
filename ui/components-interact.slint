@@ -277,18 +277,24 @@ export component MenuItem inherits Rectangle {
         spacing: 8px;
         padding-left: 10px; padding-right: 10px;
         cross-axis-alignment: center;
-        Path {
-            width: 14px; height: 14px;
-            commands: icon_commands;
-            stroke: root.danger ? Theme.err : Theme.ink_3;
-            stroke-width: 1.5px;
-            stroke-line-cap: round;
-            stroke-line-join: round;
-        viewbox-x: 0;
-        viewbox-y: 0;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        fill: transparent;
+        // ⚠️ Path 必须 Rectangle 包裹 + x/y 手动居中——HorizontalLayout 的 cross-axis-alignment 对 Path 不生效
+        Rectangle {
+            width: 14px; height: 100%;
+            Path {
+                width: 14px; height: 14px;
+                commands: icon_commands;
+                stroke: root.danger ? Theme.err : Theme.ink_3;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
             visible: icon_commands != "";
         }
         VCenterText {

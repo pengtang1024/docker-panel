@@ -129,13 +129,17 @@ export component TopBar inherits Rectangle {
                     }
                 }
 
+                // Ctrl+K 快捷键标签：必须显式 width + horizontal-stretch:0
+                // （Rectangle 无固有尺寸，alignment:stretch 下无 width 会被拉满或塌缩）
                 Rectangle {
+                    horizontal-stretch: 0;
+                    width: 46px; height: 20px;
                     border-width: 1px; border-color: Theme.line;
                     border-radius: Theme.r_xs;
+                    background: transparent;
                     VerticalLayout {
                         width: 100%; height: 100%;
                         padding-left: 6px; padding-right: 6px;
-                        padding-top: 1px; padding-bottom: 1px;
                         VCenterText {
                             text: "Ctrl+K"; font-size: 10px; color: Theme.ink_3; font-family: Theme.mono;
                         }

@@ -1,7 +1,8 @@
 // card-netvol.slint — 网络卡片 + 卷卡片
+// 规范：NetworkCard/VolumeCard 操作 ≤2（select/remove），不再显示右上角按钮；
+//       touch.clicked 直接 select，删除走 Drawer 详情页的删除按钮。
 import { Theme } from "theme.slint";
 import { Tip, VCenterText } from "components-align.slint";
-import { IconBtn } from "components-interact.slint";
 import { MonoChip } from "components-chip.slint";
 import { NetworkRow, VolumeRow } from "models.slint";
 
@@ -9,23 +10,12 @@ export component NetworkCard inherits Rectangle {
     in property <NetworkRow> data;
     callback select(string);
     callback remove(string);
-    callback menu_toggle(string, int, bool, length, length);
-
-    in-out property <bool> menu_open: false;
-    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
-    private property <length> menu_my: root.absolute-position.y + 36px;
-    private property <bool> act_show: touch.has-hover || root.menu_open
-        || main_btn.hovered || more_btn.hovered;
 
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
-    border-color: root.act_show ? Theme.ink_4 : Theme.line;
+    border-color: touch.has-hover ? Theme.ink_4 : Theme.line;
     clip: true;
-    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
-    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
-    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
-    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -34,24 +24,23 @@ export component NetworkCard inherits Rectangle {
 
     touch := TouchArea {
         width: 100%; height: 100%;
-        clicked => {
-            if (root.menu_open) { root.menu_toggle(root.data.id, 2, false, 0px, 0px); }
-            else { root.select(root.data.id); }
-        }
+        clicked => { root.select(root.data.id); }
     }
 
+    // 每行 height 固定，VL height 精确 = 总和
+    // 18 + 14 + 22 + 14 = 68px（spacing=0）
     VerticalLayout {
-        x: 11px; y: 9px; width: parent.width - 20px; spacing: 0px;
+        x: 11px; y: 9px; width: parent.width - 20px; height: 68px; spacing: 0px;
 
         HorizontalLayout {
-            width: 100%; vertical-stretch: 0; spacing: 6px; padding-right: 70px;
+            width: 100%; height: 18px; spacing: 6px;
             VCenterText { text: root.data.name; font-size: 14px; font-weight: 700; color: Theme.ink; overflow: elide; }
             if root.data.builtin : VCenterText { text: "(" + @tr("Builtin") + ")"; font-size: Theme.fs_xs; color: Theme.ink_3; }
             Rectangle { horizontal-stretch: 1; }
         }
 
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 14px;
             VCenterText {
                 text: root.data.subnet == ""
                     ? root.data.driver + " · " + root.data.scope
@@ -62,7 +51,7 @@ export component NetworkCard inherits Rectangle {
 
         // driver/scope 胶囊行（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 22px;
             alignment: start;
             spacing: 4px;
             MonoChip { label: root.data.driver; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
@@ -70,7 +59,7 @@ export component NetworkCard inherits Rectangle {
         }
 
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 14px;
             VCenterText {
                 text: @tr("{0} container" | "{0} containers" % root.data.containers, root.data.containers);
                 font-size: Theme.fs_sm; color: Theme.ink_2;
@@ -78,43 +67,18 @@ export component NetworkCard inherits Rectangle {
             Rectangle { horizontal-stretch: 1; }
         }
     }
-
-    main_btn := IconBtn {
-        x: parent.width - 65px; y: 9px; size: 26px; icon_size: 13px;
-        icon_name: "more"; tip: @tr("Details");
-        clicked => {
-            if (root.menu_open) { root.menu_toggle(root.data.id, 2, false, 0px, 0px); }
-            else { root.select(root.data.id); }
-        }
-    }
-    more_btn := IconBtn {
-        x: parent.width - 35px; y: 9px; size: 26px; icon_size: 13px;
-        icon_name: "more"; tip: @tr("More");
-        clicked => { root.menu_toggle(root.data.id, 2, false, root.menu_mx, root.menu_my); }
-    }
 }
 
 export component VolumeCard inherits Rectangle {
     in property <VolumeRow> data;
     callback select(string);
     callback remove(string);
-    callback menu_toggle(string, int, bool, length, length);
-
-    in-out property <bool> menu_open: false;
-    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
-    private property <length> menu_my: root.absolute-position.y + 36px;
-    private property <bool> act_show: touch.has-hover || root.menu_open
-        || main_btn.hovered || more_btn.hovered;
 
     border-radius: Theme.r;
     background: Theme.card;
     border-width: 1px;
-    border-color: root.act_show ? Theme.ink_4 : Theme.line;
+    border-color: touch.has-hover ? Theme.ink_4 : Theme.line;
     clip: true;
-    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
-    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
-    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
-    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -123,14 +87,11 @@ export component VolumeCard inherits Rectangle {
 
     touch := TouchArea {
         width: 100%; height: 100%;
-        clicked => {
-            if (root.menu_open) { root.menu_toggle(root.data.name, 3, false, 0px, 0px); }
-            else { root.select(root.data.name); }
-        }
+        clicked => { root.select(root.data.name); }
     }
 
     name_touch := TouchArea {
-        x: 11px; y: 9px; width: parent.width - 81px; height: 20px;
+        x: 11px; y: 9px; width: parent.width - 20px; height: 18px;
         private property <bool> tip_on: self.has-hover;
         clicked => { root.select(root.data.name); }
         changed tip_on => {
@@ -140,11 +101,13 @@ export component VolumeCard inherits Rectangle {
         }
     }
 
+    // 每行 height 固定，VL height 精确 = 总和
+    // 18 + 22(if anonymous) + 14 + 14 = 68px
     VerticalLayout {
-        x: 11px; y: 9px; width: parent.width - 20px; spacing: 0px;
+        x: 11px; y: 9px; width: parent.width - 20px; height: 68px; spacing: 0px;
 
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 18px;
             VCenterText {
                 text: root.data.display_name; font-size: Theme.fs_md; font-weight: 700;
                 font-family: Theme.mono; color: Theme.ink; horizontal-stretch: 1; overflow: elide;
@@ -152,12 +115,12 @@ export component VolumeCard inherits Rectangle {
         }
 
         if root.data.anonymous : HorizontalLayout {
-            vertical-stretch: 0;
+            height: 22px;
             MonoChip { label: @tr("Anonymous volume"); plain: false; ink: Theme.ink_3; }
         }
 
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 14px;
             VCenterText {
                 text: root.data.mountpoint; font-size: Theme.fs_xs; font-family: Theme.mono;
                 color: Theme.ink_3; overflow: elide;
@@ -165,25 +128,11 @@ export component VolumeCard inherits Rectangle {
         }
 
         HorizontalLayout {
-            vertical-stretch: 0;
+            height: 14px;
             VCenterText { text: "driver: "; font-size: Theme.fs_sm; color: Theme.ink_2; }
             VCenterText { text: root.data.driver; font-size: Theme.fs_sm; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
             Rectangle { horizontal-stretch: 1; }
             VCenterText { text: root.data.size; font-size: Theme.fs_sm; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
         }
-    }
-
-    main_btn := IconBtn {
-        x: parent.width - 65px; y: 9px; size: 26px; icon_size: 13px;
-        icon_name: "more"; tip: @tr("Details");
-        clicked => {
-            if (root.menu_open) { root.menu_toggle(root.data.name, 3, false, 0px, 0px); }
-            else { root.select(root.data.name); }
-        }
-    }
-    more_btn := IconBtn {
-        x: parent.width - 35px; y: 9px; size: 26px; icon_size: 13px;
-        icon_name: "more"; tip: @tr("More");
-        clicked => { root.menu_toggle(root.data.name, 3, false, root.menu_mx, root.menu_my); }
     }
 }

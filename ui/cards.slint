@@ -53,7 +53,7 @@ export component CardsArea inherits Rectangle {
     // —— 网格几何（prototype .content padding 8px / .grid gap 8px / 卡宽 310px @1280）——
     property <length> pad: Theme.s3;
     property <length> gap: Theme.s3;
-    property <length> card_h: 160px;  // children 自然高度≈151px + top padding 9px = 160，保证 .img-stats bottom 不被 clip
+    property <length> card_h: 95px;  // VL heights: Container=77 Image=74 Network=68 Volume=68; + top y=9 + bottom buffer
     property <length> card_min: 300px;
     property <float> per_row: Math.max(1, Math.floor((self.width - 2 * pad + gap) / (card_min + gap)));
     property <int> n: view == 0 ? containers.length
@@ -145,16 +145,12 @@ export component CardsArea inherits Rectangle {
         content-height: root.body_h;
         for row[i] in root.networks : NetworkCard {
             data: row;
-            menu_open: CardMenu.id == row.id;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
             select(id) => { root.n_select(id); }
             remove(id) => { root.n_remove(id); }
-            menu_toggle(id, kind, can_stop, mx, my) => {
-                root.menu_toggle(id, kind, can_stop, mx, my);
-            }
         }
     }
 
@@ -166,16 +162,12 @@ export component CardsArea inherits Rectangle {
         content-height: root.body_h;
         for row[i] in root.volumes : VolumeCard {
             data: row;
-            menu_open: CardMenu.id == row.name;
             x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
             y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
             width: root.pitch;
             height: root.card_h;
             select(id) => { root.v_select(id); }
             remove(id) => { root.v_remove(id); }
-            menu_toggle(id, kind, can_stop, mx, my) => {
-                root.menu_toggle(id, kind, can_stop, mx, my);
-            }
         }
     }
 }

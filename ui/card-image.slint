@@ -50,16 +50,19 @@ export component ImageCard inherits Rectangle {
         }
     }
 
+    // 每行 height 固定，VL height 精确 = 总和，不拉伸不压缩
+    // .repo=18 + 1 + .tags=22 + 1 + .img-stats=32 = 74px
     VerticalLayout {
         x: 11px;
         y: 9px;
         width: parent.width - 20px;
+        height: 74px;
         spacing: 1px;
 
         // .repo（右留 70px 给动作浮层）
         HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 18px;
             padding-right: 70px;
             VCenterText {
                 text: root.data.name;
@@ -74,10 +77,10 @@ export component ImageCard inherits Rectangle {
         // .tags：最多 3 个芯片 + 溢出计数（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 22px;
             alignment: start;
             spacing: 4px;
-            padding-top: 4px;
+            padding-top: 2px;
             MonoChip {
                 label: root.data.tag1;
                 fs: Theme.fs_sm;
@@ -109,24 +112,27 @@ export component ImageCard inherits Rectangle {
             }
         }
 
-        // .img-stats：值在上、标签在下
+        // .img-stats：值在上、标签在下（padding-top 让 VL 内部两行上下紧凑）
         HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 32px;
             spacing: 16px;
-            padding-top: 7px;
+            padding-top: 4px;
             VerticalLayout {
                 spacing: 1px;
+                height: 100%;
                 VCenterText { text: root.data.size; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
                 VCenterText { text: @tr("Size"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }
             VerticalLayout {
                 spacing: 1px;
+                height: 100%;
                 VCenterText { text: root.data.layers; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
                 VCenterText { text: @tr("Layers"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }
             VerticalLayout {
                 spacing: 1px;
+                height: 100%;
                 VCenterText { text: root.data.created; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
                 VCenterText { text: @tr("Created"); font-size: Theme.fs_sm; color: Theme.ink_2; }
             }

@@ -79,6 +79,19 @@ fn main() {
 
     callbacks::bind_callbacks(&ui, &state);
 
+    // === 调试：启动后 5s 自动打开抽屉（验证滚动 + 文字裁切修复）===
+    let ui_dbg = ui.as_weak();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(ui) = ui_dbg.upgrade() {
+                ui.set_drawer_open(true);
+                ui.set_drawer_tab(2); // 2 = 环境 tab
+            }
+        });
+    });
+    // ================================================================
+
     let _ = ui.run();
 
     // 优雅退出：shutdown flag → consumer / theme-monitor 轮询发现后 break → join

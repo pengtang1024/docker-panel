@@ -68,16 +68,19 @@ export component ContainerCard inherits Rectangle {
         }
     }
 
+    // 每行 height 固定，VL height 精确 = 总和，不拉伸不压缩
+    // 0:c-name=18 + 1 + 1:c-img=14 + 1 + 2:c-ports=22 + 1 + 3:c-res=20 = 77px
     VerticalLayout {
         x: 11px;
         y: 9px;
         width: parent.width - 20px;
+        height: 77px;
         spacing: 1px;
 
         // .c-name（右留 70px 给动作浮层；勾选模式左侧让位给复选框）
         HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 18px;
             padding-right: 70px;
             padding-left: root.sel_mode ? 26px : 0px;
             VCenterText {
@@ -92,8 +95,8 @@ export component ContainerCard inherits Rectangle {
 
         // .c-img（11px mono）
         VCenterText {
+            height: 14px;
             text: root.data.image;
-            vertical-stretch: 0;
             font-size: Theme.fs_sm;
             font-family: Theme.mono;
             color: Theme.ink_2;
@@ -103,10 +106,10 @@ export component ContainerCard inherits Rectangle {
         // .c-ports（最多 3 个 +N，超出部分进 tooltip；.port{font-size:10px;padding:1px 6px;border-radius:var(--r-xs)}）
         if root.data.port1 != "" : HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 22px;
             alignment: start;
             spacing: 4px;
-            padding-top: 5px;
+            padding-top: 3px;
             MonoChip { label: root.data.port1; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
             if root.data.port2 != "" : MonoChip { label: root.data.port2; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
             if root.data.port3 != "" : MonoChip { label: root.data.port3; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
@@ -122,9 +125,9 @@ export component ContainerCard inherits Rectangle {
         // .c-res：状态点 + CPU/MEM/DISK + compose 项目标签（margin-left:auto）
         HorizontalLayout {
             width: 100%;
-            vertical-stretch: 0;
+            height: 20px;
             spacing: 10px;
-            padding-top: 7px;
+            padding-top: 2px;
             cross-axis-alignment: center;
             Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
             Stat {

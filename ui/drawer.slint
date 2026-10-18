@@ -26,22 +26,17 @@ export component Drawer inherits Rectangle {
     callback log_copy_click();
     callback log_clear_click();
 
-    property <length> content_h: root.height - 79px - (root.tabs_visible ? 36px : 0px);
-
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    // 软件渲染器下 drop-shadow 产生 artifact（边缘竖线），暂不启用
-    // drop-shadow-color: rgba(14,14,17,0.08);
-    // drop-shadow-blur: 40px;
-    // drop-shadow-offset-x: -20px;
 
     body := VerticalLayout {
         visible: root.open;
         width: 100%;
-        height: root.height;
+        height: 100%;
         spacing: 0px;
 
+        // 顶部标题栏（高度由内容决定，不参与剩余空间分配）
         Rectangle {
             vertical-stretch: 0;
             HorizontalLayout {
@@ -55,7 +50,6 @@ export component Drawer inherits Rectangle {
                     VCenterText { text: root.sub; font-size: 12px; color: Theme.ink_2; font-family: Theme.mono; overflow: elide; }
                 }
             }
-            // .d-close{position:absolute;top:14px;right:14px;width:28px;height:28px}
             IconBtn {
                 x: parent.width - 14px - 28px; y: 14px;
                 size: 28px; icon_size: 12px; icon_name: "x";
@@ -64,8 +58,9 @@ export component Drawer inherits Rectangle {
             }
         }
 
-        // Tab 栏（严格对齐 prototype .d-tabs{d-tab）
+        // Tab 栏（36px 固定高）
         if root.tabs_visible : Rectangle {
+            vertical-stretch: 0;
             height: 36px;
             HorizontalLayout {
                 width: 100%; height: 100%;
@@ -76,27 +71,34 @@ export component Drawer inherits Rectangle {
             }
         }
 
+        // 内容区（占剩余空间）
         content_box := Rectangle {
+            vertical-stretch: 1;
             width: 100%;
-            height: root.content_h;
 
+            // ====== 详情 tab ======
             detail_scroll := ScrollView {
                 visible: (root.tabs_visible == false) || root.tab == 0;
                 width: 100%;
-                height: root.content_h;
+                height: 100%;
                 vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
-                    width: 100%; spacing: 0px;
+                    width: 100%;
+                    vertical-stretch: 0;
+                    spacing: 0px;
                     for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }
                 }
             }
 
+            // ====== 日志 tab ======
             logsec := VerticalLayout {
                 visible: root.tabs_visible && root.tab == 1;
-                height: root.content_h;
+                width: 100%;
+                height: 100%;
                 spacing: 0px;
                 Rectangle {
+                    vertical-stretch: 0;
                     height: 36px;
                     HorizontalLayout {
                         width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
@@ -105,8 +107,9 @@ export component Drawer inherits Rectangle {
                         IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                     }
                 }
-                logbox := Rectangle {
-                    height: root.content_h - 36px;
+                Rectangle {
+                    vertical-stretch: 1;
+                    width: 100%;
                     background: Theme.log_bg;
                     ScrollView {
                         mouse-drag-pan-enabled: false;
@@ -131,19 +134,20 @@ export component Drawer inherits Rectangle {
                 }
             }
 
+            // ====== 环境 tab ======
             env_scroll := ScrollView {
                 visible: root.tabs_visible && root.tab == 2;
                 width: 100%;
-                height: root.content_h;
+                height: 100%;
                 vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
-                    width: 100%; spacing: 0px;
+                    width: 100%;
+                    vertical-stretch: 0;
+                    spacing: 0px;
                     for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }
                 }
             }
         }
     }
-
-    // 左边框已移除——旧渲染器下 1px Rectangle 在 Drawer 边缘 artifact
 }

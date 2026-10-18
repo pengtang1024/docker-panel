@@ -18,7 +18,13 @@ export component FooterSlot inherits Rectangle {
 }
 
 /// DialogShell — 通用对话框外壳
+/// prototype: .overlay{position:absolute;inset:0;align-items:center;justify-content:center;z-index:30}
+///           .dialog{background:var(--card);border-radius:16px;width:420px;box-shadow:var(--shadow-hover)}
+/// 关键：作为 conditionally rendered overlay 必须显式 100%×100%，
+/// 否则默认 0×0 导致遮罩不覆盖、居中公式算出负值。
 export component DialogShell inherits Rectangle {
+    width: 100%;
+    height: 100%;
     in-out property <bool> open: false;
     in-out property <string> dlg_title: "";
     in-out property <string> dlg_subtitle: "";
@@ -30,69 +36,77 @@ export component DialogShell inherits Rectangle {
 
     TouchArea { width: 100%; height: 100%; clicked => { root.close(); } }
 
-    card := Rectangle {
-        width: root.card_width;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        border-radius: Theme.r_dialog;
-        background: Theme.card;
-        border-width: 1px; border-color: Theme.line;
-        clip: true;
-        // prototype: .dialog{box-shadow:var(--shadow-hover)}
-        drop-shadow-color: Theme.shadow_hover;
-        drop-shadow-blur: 32px;
-        drop-shadow-offset-y: 4px;
-
+    // Slint 1.18 不支持 backdrop-filter；居中用 VerticalLayout + HorizontalLayout 双重 alignment:center
+    // ⚠️ 内层 layout 绝对不能设 100% 宽高——否则永远填满外层、alignment:center 失效
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        alignment: center;
         VerticalLayout {
-            width: 100%; spacing: 0px;
+            alignment: center;
 
-            // Header（.dlg-head{padding:18px 20px 14px;border-bottom:1px solid var(--line)}）
-            Rectangle {
-                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
-                HorizontalLayout {
-                    width: 100%; height: 100%;
-                    spacing: 0px; padding-left: 20px; padding-right: 20px;
-                    padding-top: 18px; padding-bottom: 14px;
+            card := Rectangle {
+                width: root.card_width;
+                border-radius: Theme.r_dialog;
+                background: Theme.card;
+                border-width: 1px; border-color: Theme.line;
+                clip: true;
+                drop-shadow-color: Theme.shadow_hover;
+                drop-shadow-blur: 32px;
+                drop-shadow-offset-y: 4px;
 
+                // Dialog 内部三段式：Header + Body + Footer
+                VerticalLayout {
+                    width: 100%; spacing: 0px;
+
+                    // .dlg-head{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+                    Rectangle {
+                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+                        HorizontalLayout {
+                            width: 100%; height: 100%;
+                            spacing: 0px; padding-left: 20px; padding-right: 20px;
+                            padding-top: 18px; padding-bottom: 14px;
+
+                            VerticalLayout {
+                                horizontal-stretch: 1; spacing: 3px; alignment: start;
+                                VCenterText {
+                                    text: root.dlg_title;
+                                    font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
+                                }
+                                if root.dlg_subtitle != "" : VCenterText {
+                                    text: root.dlg_subtitle;
+                                    font-size: Theme.fs; color: Theme.ink_2;
+                                }
+                            }
+
+                            IconBtn {
+                                size: 28px; icon_size: 12px; icon_name: "x";
+                                tip: @tr("Close");
+                                clicked => { root.close(); }
+                            }
+                        }
+                    }
+
+                    // .dlg-body{padding:16px 20px}
                     VerticalLayout {
-                        horizontal-stretch: 1; spacing: 3px; alignment: start;
-                        VCenterText {
-                            text: root.dlg_title;
-                            font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
-                        }
-                        if root.dlg_subtitle != "" : VCenterText {
-                            text: root.dlg_subtitle;
-                            font-size: Theme.fs; color: Theme.ink_2;
-                        }
+                        width: 100%;
+                        padding-left: 20px; padding-right: 20px;
+                        padding-top: 16px; padding-bottom: 16px;
+                        body_slot := BodySlot { width: 100%; }
                     }
 
-                    IconBtn {
-                        size: 28px; icon_size: 12px; icon_name: "x";
-                        tip: @tr("Close");
-                        clicked => { root.close(); }
+                    // .dlg-footer{padding:14px 20px;border-top:1px solid var(--line);justify-content:flex-end;gap:8px}
+                    Rectangle {
+                        width: 100%;
+                        Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+                        HorizontalLayout {
+                            width: 100%; height: 100%;
+                            padding-left: 20px; padding-right: 20px;
+                            padding-top: 14px; padding-bottom: 14px;
+                            footer_slot := FooterSlot { width: 100%; height: 100%; }
+                        }
                     }
                 }
-            }
-
-            // Body（.dlg-body{padding:16px 20px}）
-            VerticalLayout {
-                width: 100%;
-                padding-left: 20px; padding-right: 20px;
-                padding-top: 16px; padding-bottom: 16px;
-                body_slot := BodySlot { width: 100%; }
-            }
-
-            // Footer（.dlg-footer{padding:14px 20px;border-top:1px solid var(--line);justify-content:flex-end;gap:8px}）
-            Rectangle {
-                width: 100%;
-                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
-                HorizontalLayout {
-                    width: 100%; height: 100%;
-                    padding-left: 20px; padding-right: 20px;
-                    padding-top: 14px; padding-bottom: 14px;
-                    footer_slot := FooterSlot { width: 100%; height: 100%; }
-                }
-            }
-        }
-    }
-}
+            }  // card
+        }  // inner VerticalLayout (alignment:center)
+    }  // outer HorizontalLayout (alignment:center)
+}  // DialogShell

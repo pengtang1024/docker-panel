@@ -3,6 +3,7 @@ import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { Dropdown, MenuItem, IconBtn } from "components-interact.slint";
 import { ComposeRow } from "models.slint";
+import { StateArea } from "components-state.slint";
 
 // ============ Chip（严格对齐 prototype .chip{height:28px;padding:0 12px;border-radius:14px;font-size:12px;font-weight:600}）============
 component Chip inherits Rectangle {
@@ -13,14 +14,18 @@ component Chip inherits Rectangle {
     callback clicked(string);
     height: 28px;
     border-radius: 14px;
-    background: root.active ? Theme.ink : Theme.card;
+    background: root.active ? Theme.ink : Theme.line_2;
+    area := StateArea {
+        layer_color: Theme.row_hover;
+        layer_radius: root.border-radius;
+        clicked => { root.clicked(root.key); }
+    }
     HorizontalLayout {
         width: 100%; height: 100%;
         spacing: 5px; padding-left: 12px; padding-right: 12px;
         VCenterText { text: root.label; font-size: Theme.fs; font-weight: 600; color: root.active ? Theme.card : Theme.ink_2; }
         VCenterText { text: root.n; font-size: 11px; font-family: Theme.mono; color: root.active ? Theme.card : Theme.ink_3; }
     }
-    TouchArea { clicked => { root.clicked(root.key); } }
 }
 
 // ============ ViewTab（严格对齐 prototype .view-tab{height:30px;padding:0 13px;font-size:12px;font-weight:600}）============
@@ -33,6 +38,11 @@ component ViewTab inherits Rectangle {
     height: 100%;
     border-radius: Theme.r_sm;
     background: root.active ? Theme.card : transparent;
+    area := StateArea {
+        layer_color: Theme.row_hover;
+        layer_radius: root.border-radius;
+        clicked => { root.clicked(root.idx); }
+    }
     HorizontalLayout {
         width: 100%; height: 100%;
         padding-left: 13px; padding-right: 13px;
@@ -40,7 +50,6 @@ component ViewTab inherits Rectangle {
         VCenterText { text: root.label; font-size: Theme.fs; font-weight: 600; color: root.active ? Theme.ink : Theme.ink_3; }
         VCenterText { text: root.n; font-size: 10px; font-family: Theme.mono; color: root.active ? Theme.ink : Theme.ink_3; }
     }
-    TouchArea { clicked => { root.clicked(root.idx); } }
 }
 
 export component SubBar inherits Rectangle {

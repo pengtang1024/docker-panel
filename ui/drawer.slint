@@ -5,6 +5,7 @@ import { IconBtn } from "components-interact.slint";
 import { TabItem } from "components-nav.slint";
 import { LogLineRow, DetailPair } from "models.slint";
 import { DetailRow } from "drawer-detail-row.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export component Drawer inherits Rectangle {
     in-out property <bool> open: false;
@@ -79,10 +80,11 @@ export component Drawer inherits Rectangle {
             width: 100%;
             height: root.content_h;
 
-            detail_scroll := Flickable {
+            detail_scroll := ScrollView {
                 visible: (root.tabs_visible == false) || root.tab == 0;
                 width: 100%;
                 height: root.content_h;
+                vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
                     width: 100%; spacing: 0px;
                     for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
@@ -106,24 +108,34 @@ export component Drawer inherits Rectangle {
                 logbox := Rectangle {
                     height: root.content_h - 36px;
                     background: Theme.log_bg;
-                    TextInput {
-                        x: 16px; y: 14px;
-                        width: parent.width - 32px;
-                        height: parent.height - 28px;
-                        read-only: true;
-                        text: root.log_text;
-                        font-size: 12px;
-                        font-family: Theme.mono;
-                        color: Theme.log_ink;
-                        wrap: word-wrap;
+                    ScrollView {
+                        mouse-drag-pan-enabled: false;
+                        width: 100%; height: 100%;
+                        vertical-scrollbar-policy: as-needed;
+                        VerticalLayout {
+                            width: 100%;
+                            spacing: 0px;
+                            padding-left: 16px; padding-right: 16px;
+                            padding-top: 14px; padding-bottom: 14px;
+                            TextInput {
+                                width: 100%;
+                                read-only: true;
+                                text: root.log_text;
+                                font-size: 12px;
+                                font-family: Theme.mono;
+                                color: Theme.log_ink;
+                                wrap: word-wrap;
+                            }
+                        }
                     }
                 }
             }
 
-            env_scroll := Flickable {
+            env_scroll := ScrollView {
                 visible: root.tabs_visible && root.tab == 2;
                 width: 100%;
                 height: root.content_h;
+                vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
                     width: 100%; spacing: 0px;
                     for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }

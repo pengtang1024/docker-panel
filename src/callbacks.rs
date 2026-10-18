@@ -144,6 +144,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let ui_f = ui.as_weak();
         actions.on_set_filter(move |f: SharedString| {
             let Some(ui) = ui_f.upgrade() else { return };
+            ui.set_filter(f.clone());
             {
                 let key = f.to_string();
                 let Ok(mut st) = s.lock() else { return };

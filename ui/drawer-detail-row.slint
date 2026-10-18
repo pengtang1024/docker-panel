@@ -7,6 +7,8 @@ export component DetailRow inherits Rectangle {
     in property <DetailPair> data;
     in property <bool> head_gap: false;
 
+    vertical-stretch: 0;
+
     if root.data.kind == 1 : VerticalLayout {
         width: 100%;
         spacing: 0px;

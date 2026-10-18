@@ -75,6 +75,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             }
             let empty: Vec<LogLineRow> = Vec::new();
             ui.set_log_lines(ModelRc::from(empty.as_slice()));
+            ui.set_log_text(SharedString::from(""));
             ui.set_status_text(SharedString::from(crate::i18n::t("Log cleared")));
         });
     }

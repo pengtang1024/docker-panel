@@ -10,7 +10,6 @@ export component DetailRow inherits Rectangle {
     if root.data.kind == 1 : VerticalLayout {
         width: 100%;
         spacing: 0px;
-        if root.head_gap : Rectangle { height: 1px; background: Theme.line; }
         Rectangle { height: Theme.s5; }
         HorizontalLayout {
             width: 100%;
@@ -55,7 +54,6 @@ export component DetailRow inherits Rectangle {
         Rectangle {
             horizontal-stretch: 1;
             border-radius: Theme.r_md; background: Theme.bg;
-            border-width: 1px; border-color: Theme.line;
             HorizontalLayout {
                 width: 100%;
                 padding-left: 11px; padding-right: 11px;
@@ -77,7 +75,6 @@ export component DetailRow inherits Rectangle {
         Rectangle {
             width: 100%;
             border-radius: Theme.r_xs; background: Theme.bg;
-            border-width: 1px; border-color: Theme.line;
             HorizontalLayout {
                 width: 100%;
                 padding-left: Theme.s3; padding-right: Theme.s3;

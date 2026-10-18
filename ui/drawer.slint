@@ -30,9 +30,11 @@ export component Drawer inherits Rectangle {
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    drop-shadow-color: rgba(14,14,17,0.08);
-    drop-shadow-blur: 40px;
-    drop-shadow-offset-x: -20px;
+    // 软件渲染器下 drop-shadow 会在 Drawer 内部渲染一条 x=width/2 的竖线 artifact
+    // 见 commit 2a45636 的误判——软件渲染器并不支持正确的 drop-shadow
+    // drop-shadow-color: rgba(14,14,17,0.08);
+    // drop-shadow-blur: 40px;
+    // drop-shadow-offset-x: -20px;
 
     body := VerticalLayout {
         visible: root.open;
@@ -41,7 +43,6 @@ export component Drawer inherits Rectangle {
         spacing: 0px;
 
         Rectangle {
-            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 0px; padding-left: 20px; padding-right: 20px;
@@ -65,7 +66,6 @@ export component Drawer inherits Rectangle {
         // Tab 栏（严格对齐 prototype .d-tabs{d-tab）
         if root.tabs_visible : Rectangle {
             height: 36px;
-            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 2px; padding-left: 12px; padding-right: 12px;
@@ -81,6 +81,7 @@ export component Drawer inherits Rectangle {
 
             detail_scroll := Flickable {
                 visible: (root.tabs_visible == false) || root.tab == 0;
+                width: 100%;
                 height: root.content_h;
                 VerticalLayout {
                     width: 100%; spacing: 0px;
@@ -95,7 +96,6 @@ export component Drawer inherits Rectangle {
                 spacing: 0px;
                 Rectangle {
                     height: 36px;
-                    Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.ink_4; }
                     HorizontalLayout {
                         width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
                         IconBtn { size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
@@ -128,6 +128,7 @@ export component Drawer inherits Rectangle {
 
             env_scroll := Flickable {
                 visible: root.tabs_visible && root.tab == 2;
+                width: 100%;
                 height: root.content_h;
                 VerticalLayout {
                     width: 100%; spacing: 0px;
@@ -138,6 +139,5 @@ export component Drawer inherits Rectangle {
         }
     }
 
-    // 左边框放在 body 之后声明，确保绘制在最上层作为真正的左边缘分隔线
-    Rectangle { width: 1px; height: 100%; background: Theme.line; }
+    // 左边框已移除——软件渲染器下 1px Rectangle 在 Drawer 边缘无意义且可能 artifact
 }

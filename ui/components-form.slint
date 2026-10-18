@@ -94,9 +94,9 @@ export component Switch inherits Rectangle {
         y: 1px;
         border-radius: 9px;
         background: Theme.card;
-        drop-shadow-color: Theme.shadow;
-        drop-shadow-blur: 4px;
-        drop-shadow-offset-y: 1px;
+        // drop-shadow-color: Theme.shadow;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+        // drop-shadow-blur: 4px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+        // drop-shadow-offset-y: 1px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
         animate x { duration: 150ms; easing: ease-out; }
     }
 }

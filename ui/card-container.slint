@@ -37,10 +37,10 @@ export component ContainerCard inherits Rectangle {
     border-color: root.data.is_selected ? Theme.ink : (root.act_show ? Theme.ink_4 : Theme.line);
     clip: true;
     // .card:hover → box-shadow:var(--shadow-hover), transform:translateY(-2px)
-    drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;
-    drop-shadow-blur: 12px;
-    drop-shadow-offset-y: 2px;
-    animate drop-shadow-color { duration: 180ms; easing: ease-out; }
+    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     // 左侧状态条（prototype .card::before，--state = ok/stop）
     Rectangle {
@@ -76,19 +76,12 @@ export component ContainerCard inherits Rectangle {
         width: parent.width - 20px;
         spacing: 1px;
 
-        // .c-name（右留 70px 给动作浮层；CheckCell 内嵌，cross-axis-alignment:center 自动垂直对齐）
+        // .c-name（右留 70px 给动作浮层；勾选模式左侧让位给复选框）
         HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             padding-right: 70px;
-            spacing: 8px;
-            cross-axis-alignment: center;
-            // 非条件渲染：始终参与布局，用 visible 控制显隐（if 条件渲染不参与 cross-axis 对齐）
-            CheckCell {
-                visible: root.sel_mode;
-                box: 18px;
-                checked: root.data.is_selected;
-                toggled => { root.box(root.data.id); }
-            }
+            padding-left: root.sel_mode ? 26px : 0px;
             VCenterText {
                 text: root.data.name;
                 font-size: 14px;
@@ -102,6 +95,7 @@ export component ContainerCard inherits Rectangle {
         // .c-img（11px mono）
         VCenterText {
             text: root.data.image;
+            vertical-stretch: 0;
             font-size: Theme.fs_sm;
             font-family: Theme.mono;
             color: Theme.ink_2;
@@ -111,6 +105,7 @@ export component ContainerCard inherits Rectangle {
         // .c-ports（最多 3 个 +N，超出部分进 tooltip；.port{font-size:10px;padding:1px 6px;border-radius:var(--r-xs)}）
         if root.data.port1 != "" : HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             alignment: start;
             spacing: 4px;
             padding-top: 5px;
@@ -129,6 +124,7 @@ export component ContainerCard inherits Rectangle {
         // .c-res：状态点 + CPU/MEM/DISK + compose 项目标签（margin-left:auto）
         HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             spacing: 10px;
             padding-top: 7px;
             cross-axis-alignment: center;
@@ -153,6 +149,15 @@ export component ContainerCard inherits Rectangle {
                 tip: @tr("Compose project") + ": " + root.data.compose_project;
             }
         }
+    }
+
+    // .check（sel-mode 才出现；y 对齐 HorizontalLayout center 而非 top:9，让 CheckBox 和名字文字垂直居中）
+    if root.sel_mode : CheckCell {
+        x: 11px;
+        y: 19.5px;
+        box: 18px;
+        checked: root.data.is_selected;
+        toggled => { root.box(root.data.id); }
     }
 
     // .card-actions 主按钮（.ca-main{width:26px;height:26px;border-radius:var(--r-sm)}；top:9 right:9 gap:4）

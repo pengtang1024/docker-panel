@@ -22,10 +22,10 @@ export component NetworkCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;
-    drop-shadow-blur: 12px;
-    drop-shadow-offset-y: 2px;
-    animate drop-shadow-color { duration: 180ms; easing: ease-out; }
+    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -108,10 +108,10 @@ export component VolumeCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;
-    drop-shadow-blur: 12px;
-    drop-shadow-offset-y: 2px;
-    animate drop-shadow-color { duration: 180ms; easing: ease-out; }
+    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;

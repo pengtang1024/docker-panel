@@ -50,9 +50,9 @@ export component DialogShell inherits Rectangle {
                 background: Theme.card;
                 border-width: 1px; border-color: Theme.line;
                 clip: true;
-                drop-shadow-color: Theme.shadow_hover;
-                drop-shadow-blur: 32px;
-                drop-shadow-offset-y: 4px;
+                // drop-shadow-color: Theme.shadow_hover;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+                // drop-shadow-blur: 32px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+                // drop-shadow-offset-y: 4px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
 
                 // Dialog 内部三段式：Header + Body + Footer
                 VerticalLayout {

@@ -114,7 +114,7 @@ export component Drawer inherits Rectangle {
                         padding-top: 14px; padding-bottom: 14px;
                         TextInput {
                             width: parent.width;
-                            min-height: 100%;
+                            height: 100%;
                             read-only: true;
                             text: root.log_text;
                             font-size: 12px;
@@ -122,6 +122,9 @@ export component Drawer inherits Rectangle {
                             color: Theme.log_ink;
                             wrap: word-wrap;
                         }
+                    }
+                }
+            }
 
             env_scroll := Flickable {
                 visible: root.tabs_visible && root.tab == 2;

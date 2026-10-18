@@ -96,6 +96,7 @@ export component SubBar inherits Rectangle {
         Rectangle { horizontal-stretch: 1; }
 
         sort_btn := Rectangle {
+            horizontal-stretch: 0;
             height: 28px;
             border-radius: Theme.r_sm;
             background: root.sort_open ? Theme.bg : Theme.card;
@@ -108,16 +109,22 @@ export component SubBar inherits Rectangle {
                 spacing: 6px;
                 padding-left: 10px;
                 padding-right: 10px;
-                // 前置 sort 类型图标（固定 arrow-up-down / box）
-                Path {
-                    width: 12px; height: 12px;
-                    commands: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12";
-                    viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
-                    stroke: Theme.ink_3;
-                    stroke-width: 1.5px;
-                    stroke-line-cap: round;
-                    stroke-line-join: round;
-                    fill: transparent;
+                // 前置 sort 类型图标（固定 arrow-up-down），Rectangle 包裹实现垂直居中
+                Rectangle {
+                    width: 12px;
+                    height: 100%;
+                    Path {
+                        width: 12px; height: 12px;
+                        commands: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12";
+                        viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                        stroke: Theme.ink_3;
+                        stroke-width: 1.5px;
+                        stroke-line-cap: round;
+                        stroke-line-join: round;
+                        fill: transparent;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
                 }
                 VCenterText {
                     text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];

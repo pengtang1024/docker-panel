@@ -84,8 +84,7 @@ export component Drawer inherits Rectangle {
                 vertical-scrollbar-policy: as-needed;
                 horizontal-scrollbar-policy: always-off;
                 VerticalLayout {
-                    width: parent.width; min-width: 0px;
-                    vertical-stretch: 0;
+                    width: parent.width;
                     spacing: 0px;
                     for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }
@@ -144,8 +143,7 @@ export component Drawer inherits Rectangle {
                 vertical-scrollbar-policy: as-needed;
                 horizontal-scrollbar-policy: always-off;
                 VerticalLayout {
-                    width: parent.width; min-width: 0px;
-                    vertical-stretch: 0;
+                    width: parent.width;
                     spacing: 0px;
                     for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }
                     Rectangle { height: Theme.s5; }

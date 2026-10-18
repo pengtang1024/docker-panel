@@ -32,24 +32,31 @@ component CleanItem inherits Rectangle {
         spacing: 12px;
         padding-left: 12px; padding-right: 12px;
         alignment: center;
+        cross-axis-alignment: center;
 
         CheckBox {
             checked <=> root.checked;
             toggled => { root.toggled(); }
         }
 
-        Path {
-            width: 20px; height: 20px;
-            commands: icon_commands;
-            stroke: root.checked ? Theme.ink : Theme.ink_2;
-            stroke-width: 1.5px;
-            stroke-line-cap: round;
-            stroke-line-join: round;
-        viewbox-x: 0;
-        viewbox-y: 0;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        fill: transparent;
+        // ⚠️ Path 必须 Rectangle 包裹 + x/y 手动居中——HorizontalLayout 对 Path 不自动居中
+        Rectangle {
+            width: 20px; height: 100%;
+            Path {
+                width: 20px; height: 20px;
+                commands: icon_commands;
+                stroke: root.checked ? Theme.ink : Theme.ink_2;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
             visible: icon_commands != "";
         }
 

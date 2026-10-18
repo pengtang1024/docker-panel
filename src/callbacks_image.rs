@@ -19,9 +19,6 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
-            ui.set_status_text(SharedString::from(
-                trf("Inspect image {0}", &[&name]).as_str(),
-            ));
             if let Ok(mut st) = s.lock() {
                 st.sel = SelKind::Image;
                 st.sel_key = name.clone();

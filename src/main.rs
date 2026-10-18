@@ -79,18 +79,29 @@ fn main() {
 
     callbacks::bind_callbacks(&ui, &state);
 
-    // === 调试：启动后 5s 自动打开抽屉（验证滚动 + 文字裁切修复）===
-    let ui_dbg = ui.as_weak();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        let _ = slint::invoke_from_event_loop(move || {
-            if let Some(ui) = ui_dbg.upgrade() {
-                ui.set_drawer_open(true);
-                ui.set_drawer_tab(2); // 2 = 环境 tab
+    // === 调试：自动打开抽屉详情 tab ===
+    {
+        let arc = state.clone();
+        let w = ui.as_weak();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let id = {
+                let Ok(s) = arc.lock() else { return };
+                s.containers.first().map(|c| c.id.clone())
+            };
+            let Some(id) = id else { return };
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(u) = w.upgrade() {
+                    u.set_drawer_open(true);
+                    u.set_drawer_tab(0);
+                }
+            });
+            std::thread::sleep(std::time::Duration::from_millis(600));
+            if let Ok(mut s) = arc.lock() {
+                s.request_detail(id);
             }
         });
-    });
-    // ================================================================
+    }
 
     let _ = ui.run();
 

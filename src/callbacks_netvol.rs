@@ -6,7 +6,6 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
-use crate::i18n::trf;
 use crate::models::Msg;
 use crate::slint_gen::*;
 use crate::ui_state::{SelKind, SharedState};
@@ -21,7 +20,6 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_network_select(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from(trf("Inspect {0}", &[&id]).as_str()));
             open_selected(&ui, &s, SelKind::Network, id);
         });
     }
@@ -33,7 +31,6 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_volume_select(move |row_name: SharedString| {
             let name = row_name.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from(trf("Inspect {0}", &[&name]).as_str()));
             open_selected(&ui, &s, SelKind::Volume, name);
         });
     }

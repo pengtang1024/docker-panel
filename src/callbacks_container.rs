@@ -126,7 +126,6 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
-            ui.set_status_text(SharedString::from(trf("Inspect {0}", &[&id]).as_str()));
             bind_inspect(&s, id);
         });
     }

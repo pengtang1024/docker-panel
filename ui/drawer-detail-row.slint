@@ -1,4 +1,5 @@
 // drawer-detail-row.slint — Drawer 详情/环境行（四种 kind 变体）
+// 值区用只读 TextInput 而非普通 Text：Text 不支持选中复制，TextInput 原生支持。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
 import { DetailPair } from "models.slint";
@@ -9,21 +10,23 @@ export component DetailRow inherits Rectangle {
 
     vertical-stretch: 0;
 
-    // kind == 1: 分节标题
+    // kind == 1: 分节标题（只用普通 Text，不需要选中）
     if root.data.kind == 1 : VerticalLayout {
-        width: 100%;
+        width: parent.width;
         vertical-stretch: 0;
         spacing: 0px;
         Rectangle { height: Theme.s5; }
         HorizontalLayout {
-            width: 100%;
+            width: parent.width;
             vertical-stretch: 0;
             padding-left: Theme.s6; padding-right: Theme.s6;
-            VCenterText {
+            TextInput {
                 text: root.data.k;
                 font-size: Theme.fs_xs; font-weight: 700;
-                color: Theme.ink_3; letter-spacing: 1.1px;
-                horizontal-stretch: 1; wrap: word-wrap;
+                color: Theme.ink_3;
+                font-family: ""; single-line: false; wrap: word-wrap;
+                read-only: true;
+                horizontal-stretch: 1; min-width: 0px;
             }
         }
         Rectangle { height: 10px; }
@@ -31,79 +34,87 @@ export component DetailRow inherits Rectangle {
 
     // kind == 0: 普通 kv 行
     if root.data.kind == 0 : HorizontalLayout {
-        width: 100%;
+        width: parent.width;
         vertical-stretch: 0;
         spacing: Theme.s4;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 5px; padding-bottom: 5px;
         RightText {
-            text: root.data.k; min-width: 80px;
+            text: root.data.k; width: 88px; horizontal-stretch: 0;
             font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
         }
-        VCenterText {
+        TextInput {
             text: root.data.v;
             font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
             font-family: root.data.mono ? Theme.mono : "";
             color: root.data.mono ? Theme.ink_2 : Theme.ink;
-            font-weight: 500; horizontal-stretch: 1; wrap: word-wrap;
+            font-weight: 500; single-line: false; wrap: word-wrap;
+            read-only: true;
+            horizontal-stretch: 1; min-width: 0px;
         }
     }
 
     // kind == 2: kv + 代码盒（带浅灰背景）
     if root.data.kind == 2 : HorizontalLayout {
-        width: 100%;
+        width: parent.width;
         vertical-stretch: 0;
         spacing: Theme.s4;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 5px; padding-bottom: 5px;
         RightText {
-            text: root.data.k; min-width: 80px;
+            text: root.data.k; width: 88px; horizontal-stretch: 0;
             font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
         }
         Rectangle {
             horizontal-stretch: 1;
             vertical-stretch: 0;
+            min-width: 0px;
             border-radius: Theme.r_md; background: Theme.bg;
             HorizontalLayout {
-                width: 100%;
+                width: parent.width;
                 vertical-stretch: 0;
                 padding-left: 11px; padding-right: 11px;
                 padding-top: 9px; padding-bottom: 9px;
-                VCenterText {
+                TextInput {
                     text: root.data.v;
                     font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2; horizontal-stretch: 1; wrap: word-wrap;
+                    color: Theme.ink_2; single-line: false; wrap: word-wrap;
+                    horizontal-stretch: 1; min-width: 0px;
                 }
             }
         }
     }
 
-    // kind == 3: 环境变量代码盒条目
+    // kind == 3: 环境变量代码盒条目（key=value 两段都可复制）
     if root.data.kind == 3 : VerticalLayout {
-        width: 100%;
+        width: parent.width;
         vertical-stretch: 0;
         spacing: 0px;
         padding-left: Theme.s6; padding-right: Theme.s6;
         padding-top: 2px; padding-bottom: 2px;
         Rectangle {
-            width: 100%;
+            width: parent.width;
             vertical-stretch: 0;
             border-radius: Theme.r_xs; background: Theme.bg;
             HorizontalLayout {
-                width: 100%;
+                width: parent.width;
                 vertical-stretch: 0;
                 padding-left: Theme.s3; padding-right: Theme.s3;
                 padding-top: Theme.s1; padding-bottom: Theme.s1;
-                VCenterText {
+                TextInput {
                     text: root.data.k == "" ? root.data.v : root.data.k + "=";
                     font-size: Theme.fs_sm; font-family: Theme.mono;
                     color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
-                    horizontal-stretch: root.data.k == "" ? 1 : 0; wrap: word-wrap;
+                    single-line: false; wrap: word-wrap;
+                    read-only: true;
+                    horizontal-stretch: root.data.k == "" ? 1 : 0; min-width: 0px;
                 }
-                if root.data.k != "" : VCenterText {
+                if root.data.k != "" : TextInput {
                     text: root.data.v;
                     font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2; horizontal-stretch: 1; wrap: word-wrap;
+                    color: Theme.ink_2; single-line: false; wrap: word-wrap;
+                    read-only: true;
+                    horizontal-stretch: 1; min-width: 0px;
                 }
             }
         }

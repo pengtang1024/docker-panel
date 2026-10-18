@@ -82,8 +82,9 @@ export component Drawer inherits Rectangle {
                 width: 100%;
                 height: 100%;
                 vertical-scrollbar-policy: as-needed;
+                horizontal-scrollbar-policy: always-off;
                 VerticalLayout {
-                    width: 100%;
+                    width: parent.width; min-width: 0px;
                     vertical-stretch: 0;
                     spacing: 0px;
                     for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
@@ -115,6 +116,7 @@ export component Drawer inherits Rectangle {
                         mouse-drag-pan-enabled: false;
                         width: 100%; height: 100%;
                         vertical-scrollbar-policy: as-needed;
+                        horizontal-scrollbar-policy: always-off;
                         VerticalLayout {
                             width: 100%;
                             spacing: 0px;
@@ -140,8 +142,9 @@ export component Drawer inherits Rectangle {
                 width: 100%;
                 height: 100%;
                 vertical-scrollbar-policy: as-needed;
+                horizontal-scrollbar-policy: always-off;
                 VerticalLayout {
-                    width: 100%;
+                    width: parent.width; min-width: 0px;
                     vertical-stretch: 0;
                     spacing: 0px;
                     for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }

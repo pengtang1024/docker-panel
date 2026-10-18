@@ -75,23 +75,29 @@ export component Stat inherits Rectangle {
         : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
         : "";
 
-    // ⚠️ cross-axis-alignment:center 让 Path 和 Text 垂直居中
+    // ⚠️ cross-axis-alignment:center 让 Rectangle 包裹的 Path 和 Text 垂直居中；
+    // Path 必须 Rectangle 包裹 + x/y 手动居中——HorizontalLayout 对 Path 不自动居中
     HorizontalLayout {
         alignment: center;
         cross-axis-alignment: center;
         spacing: 4px;  // .stat{gap:4px}
-        Path {
-            width: 14px; height: 14px;
-            commands: icon_commands;
-            stroke: Theme.ink_3;
-            stroke-width: 1.5px;
-            stroke-line-cap: round;
-            stroke-line-join: round;
-        viewbox-x: 0;
-        viewbox-y: 0;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        fill: transparent;
+        Rectangle {
+            width: 14px; height: 100%;
+            Path {
+                width: 14px; height: 14px;
+                commands: icon_commands;
+                stroke: Theme.ink_3;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
             visible: icon_commands != "";
         }
         VCenterText {

@@ -2,7 +2,7 @@
 
 use slint::SharedString;
 
-use crate::detail_fmt::format_bytes;
+use crate::detail_fmt::{format_bytes, format_bytes_compact};
 use crate::models::{ContainerInfo, SortField};
 use crate::slint_gen::ContainerRow;
 use crate::ui_state::AppState;
@@ -161,13 +161,14 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 compose_color: proj_color(c.compose_project.as_deref().unwrap_or_default()),
                 compose_service: SharedString::from(c.compose_service.clone().unwrap_or_default()),
                 is_group_start: is_group,
+                // prototype .stat 数值风格：整数百分比（"3%"）+ 紧凑字节（"8M"）
                 cpu_percent: if c.cpu_percent > 0.0 {
-                    SharedString::from(format!("{:.1}%", c.cpu_percent))
+                    SharedString::from(format!("{:.0}%", c.cpu_percent))
                 } else {
                     SharedString::default()
                 },
                 mem_usage: if c.mem_usage > 0 {
-                    SharedString::from(format_bytes(c.mem_usage))
+                    SharedString::from(format_bytes_compact(c.mem_usage))
                 } else {
                     SharedString::default()
                 },
@@ -180,7 +181,7 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 } else {
                     SharedString::default()
                 },
-                disk: SharedString::from(format_bytes(c.size_rw)),
+                disk: SharedString::from(format_bytes_compact(c.size_rw)),
                 port1: SharedString::from(shown.first().copied().unwrap_or_default()),
                 port2: SharedString::from(shown.get(1).copied().unwrap_or_default()),
                 port3: SharedString::from(shown.get(2).copied().unwrap_or_default()),

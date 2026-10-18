@@ -53,6 +53,19 @@ pub fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// 卡片紧凑字节格式（prototype .stat b 风格：8M / 512K / 1.2G，无空格）
+pub fn format_bytes_compact(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes}B")
+    } else if bytes < 1024 * 1024 {
+        format!("{}K", bytes / 1024)
+    } else if bytes < 1024 * 1024 * 1024 {
+        format!("{}M", bytes / (1024 * 1024))
+    } else {
+        format!("{:.1}G", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
 /// unix 秒 → 相对时间文本（"2 days ago"）
 pub fn rel_time(secs: i64) -> String {
     if secs <= 0 {

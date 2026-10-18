@@ -28,6 +28,9 @@
 - **图标字形 tofu**：日志工具栏/顶栏/卡片菜单的 `⏸`/`⧉`/`🗑` 等字形系统字体缺失（仅 Noto Color Emoji/Math 覆盖 → 显示豆腐块），换为系统可渲染字形（`‖`/`❐`/`⌫`）。
 - **网络详情容器数英文回退**：Rust 侧 `trf("{0} containers")` 命中 po 的复数条目（键为 `msgid\0msgid_plural`）失败而回落英文；新增 `i18n::trfp`（复数翻译，对齐 Slint `@tr("sing" | "plural" % n)`），网络详情容器数现为「N 个容器」。
 - **Esc 关闭弹层后焦点悬空**：条件渲染移除弹窗后其内部焦点丢失导致快捷键失效，Esc 分支末尾 `global-shortcuts.focus()` 归还焦点。
+- **顶栏/底栏/Chip/Stat 垂直对齐**：Slint 1.18 HorizontalLayout 默认 `cross-axis-alignment: stretch` 只让 Text 撑满居中，有固定尺寸的 Rectangle/Dot/Path/IconBtn 贴顶。给 TopBar/FootBar 根、OvItem、Chip 基类、Stat 内部、容器卡片 `.c-res` 等 HorizontalLayout 统一加 `cross-axis-alignment: center`；同时去掉 VCenterText 的 `vertical-stretch: 1`（center 模式下无效）。
+- **卡片底部内容被切割**：四张卡片的 VerticalLayout 设了 `height: parent.height - 16px` 固定约束 + `clip: true`。cross-axis:center 后子元素按 preferred-height 计算，最挤情况（ports 行 + compose 标签）恰满 73px 零余量被切。修复：① card_h 从 89px 增到 140px；② 四张卡片 VerticalLayout 全部去掉固定 height 改 preferred-height 自适应。装饰元素（状态条/分隔线）保留 `parent.height - Npx` 正确用法。
+- **drawer.slint 编译阻断**：TextInput 非法属性 `min-height(100%)` → `height(100%)`（Slint 只允许 width/height/preferred-* 百分比）；Flickable/logbox/Rectangle 缺失 3 个闭合大括号；文件末尾多余 1 个闭合大括号。
 
 ### 移除
 

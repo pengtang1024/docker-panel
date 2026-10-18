@@ -30,10 +30,9 @@ export component Drawer inherits Rectangle {
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    // drop-shadow 在软件渲染器下可能渲染异常，暂关闭
-    // drop-shadow-color: rgba(14,14,17,0.08);
-    // drop-shadow-blur: 40px;
-    // drop-shadow-offset-x: -20px;
+    drop-shadow-color: rgba(14,14,17,0.08);
+    drop-shadow-blur: 40px;
+    drop-shadow-offset-x: -20px;
 
     body := VerticalLayout {
         visible: root.open;

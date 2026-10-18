@@ -123,10 +123,10 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（15 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ foot-bar / batch-bar / drawer / dialogs / menu-layers（浮动菜单层）/ **components（原子组件库，R4 复用检索起点）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样）/ models / ui_state（AppState + `follow_id` 日志流 + `cleanup_counts`）/ render（CachedModel 差量同步）/ ui_update / ui_apply / batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol} / ui_rows/{containers,images,netvol} / docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
-| `translations/` | gettext zh_CN（编译期嵌入，按 locale 选择） |
-| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading 线程与消息 · ui-interaction Slint 交互 · docker-bollard Docker 与 bollard 坑条）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
+| `ui/` | Slint 声明层（25 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / dialogs（基于 components-dialog）/ menu-layers（浮动菜单层）/ **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 壳）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样启动）/ models / ui_state（AppState + `follow_id` 日志流 + `cleanup_counts`）/ render（CachedModel 差量同步）/ ui_update / ui_apply / batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
+| `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
+| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
 | 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
 

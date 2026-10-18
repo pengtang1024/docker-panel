@@ -26,8 +26,6 @@ export component Drawer inherits Rectangle {
     callback log_copy_click();
     callback log_clear_click();
 
-    property <length> content_h: root.height - 62px - (root.tabs_visible ? 36px : 0px);
-
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
@@ -79,12 +77,12 @@ export component Drawer inherits Rectangle {
 
         content_box := Rectangle {
             width: 100%;
-            height: root.content_h;
+            vertical-stretch: 1;
 
             detail_scroll := ScrollView {
                 visible: (root.tabs_visible == false) || root.tab == 0;
                 width: 100%;
-                height: root.content_h;
+                height: 100%;
                 vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
                     width: 100%; spacing: 0px;
@@ -95,7 +93,7 @@ export component Drawer inherits Rectangle {
 
             logsec := VerticalLayout {
                 visible: root.tabs_visible && root.tab == 1;
-                height: root.content_h;
+                height: 100%;
                 spacing: 0px;
                 Rectangle {
                     height: 36px;
@@ -107,7 +105,7 @@ export component Drawer inherits Rectangle {
                     }
                 }
                 logbox := Rectangle {
-                    height: root.content_h - 36px;
+                    height: 100%;
                     background: Theme.log_bg;
                     ScrollView {
                         mouse-drag-pan-enabled: false;
@@ -135,7 +133,7 @@ export component Drawer inherits Rectangle {
             env_scroll := ScrollView {
                 visible: root.tabs_visible && root.tab == 2;
                 width: 100%;
-                height: root.content_h;
+                height: 100%;
                 vertical-scrollbar-policy: as-needed;
                 VerticalLayout {
                     width: 100%; spacing: 0px;

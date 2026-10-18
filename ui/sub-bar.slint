@@ -90,6 +90,7 @@ export component SubBar inherits Rectangle {
         spacing: 6px;
         padding-left: 14px;
         padding-right: 14px;
+        cross-axis-alignment: center;
 
         Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
         Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }

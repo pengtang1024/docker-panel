@@ -204,16 +204,23 @@ export component CheckBox inherits Rectangle {
         area_enabled: root.enabled;
         layer_color: root.checked ? (root.error ? Theme.err : Theme.ink) : Theme.ink;
         layer_radius: Theme.r_xs;
-        clicked => { root.checked = !root.checked; root.toggled(); }
+        clicked => { root.checked = root.checked == false; root.toggled(); }
     }
 
     border-color: area.has-hover ? Theme.ink_2 : border_base;
     background: area.has-hover && root.checked == false ? Theme.bg : bg_base;
 
-    if root.checked : CenterText {
-        text: "✓"; font-size: 11px; font-weight: 700;
-        color: root.error ? Theme.card : Theme.card;
-        width: 100%; height: 100%;
+    if root.checked : Path {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 12px; height: 12px;
+        commands: "M20 6L9 17l-5-5";
+        viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+        stroke: root.error ? Theme.card : Theme.card;
+        stroke-width: 2px;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        fill: transparent;
     }
 }
 

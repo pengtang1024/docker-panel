@@ -107,7 +107,16 @@ export component SubBar inherits Rectangle {
                 spacing: 6px;
                 padding-left: 10px;
                 padding-right: 10px;
-                VCenterText { text: "↕"; color: Theme.ink_3; font-size: 12px; }
+                Path {
+                    width: 12px; height: 12px;
+                    commands: root.sort_desc ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6";
+                    viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                    stroke: Theme.ink_3;
+                    stroke-width: 1.5px;
+                    stroke-line-cap: round;
+                    stroke-line-join: round;
+                    fill: transparent;
+                }
                 VCenterText {
                     text: [@tr("Name"),@tr("CPU"),@tr("Memory"),@tr("Disk"),@tr("Status")][root.sort_field];
                     font-size: 12px;
@@ -116,7 +125,16 @@ export component SubBar inherits Rectangle {
                 Rectangle {
                     width: 16px;
                     height: 100%;
-                    VCenterText { text: root.sort_desc ? "↓" : "↑"; color: Theme.ink_3; font-size: 10px; }
+                    Path {
+                        width: 10px; height: 10px;
+                        commands: root.sort_desc ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6";
+                        viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                        stroke: Theme.ink_3;
+                        stroke-width: 1.5px;
+                        stroke-line-cap: round;
+                        stroke-line-join: round;
+                        fill: transparent;
+                    }
                     TouchArea { clicked => { root.set_sort_dir(); } }
                 }
             }

@@ -18,7 +18,7 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
             match s.filter.as_str() {
                 "" | "all" => {}
                 "running" => {
-                    if c.is_running() == false {
+                    if !c.is_running() {
                         return false;
                     }
                 }

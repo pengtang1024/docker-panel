@@ -19,7 +19,7 @@ use crate::models::Msg;
 /// 在 invoke_from_event_loop 里一次性应用到 Slint Model。
 ///
 /// status_text 的 msgid 统一为英文，翻译在 i18n 模块按系统 locale 查表。
-pub fn derive_update(containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
+pub fn derive_update(_containers_len: usize, latest_msg: &Option<Msg>) -> UiUpdate {
     match latest_msg {
         // 周期性刷新：只更新列表数据，不覆盖 status_text（toast 消息保持到 timer 恢复）
         Some(Msg::Containers(Ok(_))) => UiUpdate {

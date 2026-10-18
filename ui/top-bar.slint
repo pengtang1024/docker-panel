@@ -32,7 +32,18 @@ export component TopBar inherits Rectangle {
             width: 26px; height: 26px;
             border-radius: Theme.r_md;
             background: Theme.ink;
-            CenterText { text: "◎"; font-size: 16px; color: Theme.card; width: 100%; height: 100%; }
+            Path {
+                width: 18px; height: 18px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: "M3 3h18v18H3z M3 9h18 M9 21V9";
+                viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                stroke: Theme.card;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+            }
         }
 
         VCenterText { text: "Docker Panel"; font-size: 15px; font-weight: 800; color: Theme.ink; }
@@ -47,13 +58,13 @@ export component TopBar inherits Rectangle {
 
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 
-        // .search{margin-left:auto;width:300px;height:32px;padding:0 10px;gap:8px}
+        // .search{margin-left:auto;width:300px;height:32px;padding:0 10px;gap:8px;background:var(--line-2)}
         Rectangle {
             height: 32px;
+            width: 300px;
             border-radius: Theme.r_md;
-            background: Theme.bg;
+            background: Theme.line_2;
             border-width: 1px; border-color: Theme.line;
-            horizontal-stretch: 1;
 
             HorizontalLayout {
                 width: 100%; height: 100%;
@@ -61,7 +72,16 @@ export component TopBar inherits Rectangle {
                 padding-left: 10px; padding-right: 10px;
                 alignment: center;
 
-                CenterText { text: "⌕"; color: Theme.ink_3; font-size: 13px; }
+                Path {
+                    width: 14px; height: 14px;
+                    commands: "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35";
+                    viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                    stroke: Theme.ink_3;
+                    stroke-width: 1.5px;
+                    stroke-line-cap: round;
+                    stroke-line-join: round;
+                    fill: transparent;
+                }
 
                 Rectangle {
                     horizontal-stretch: 1;
@@ -84,12 +104,15 @@ export component TopBar inherits Rectangle {
                 }
 
                 Rectangle {
-                    padding-left: 6px; padding-right: 6px;
-                    padding-top: 1px; padding-bottom: 1px;
                     border-width: 1px; border-color: Theme.line;
                     border-radius: Theme.r_xs;
-                    VCenterText {
-                        text: "Ctrl+K"; font-size: 10px; color: Theme.ink_3; font-family: Theme.mono;
+                    VerticalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: 6px; padding-right: 6px;
+                        padding-top: 1px; padding-bottom: 1px;
+                        VCenterText {
+                            text: "Ctrl+K"; font-size: 10px; color: Theme.ink_3; font-family: Theme.mono;
+                        }
                     }
                 }
             }

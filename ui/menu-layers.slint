@@ -33,10 +33,15 @@ component SortRow inherits Rectangle {
             horizontal-stretch: 1;
             overflow: elide;
         }
-        if root.active : CenterText {
-            text: root.desc ? "↓" : "↑";
-            font-size: Theme.fs_sm;
-            color: Theme.ink_3;
+        if root.active : Path {
+            width: 12px; height: 12px;
+            commands: root.desc ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6";
+            viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+            stroke: Theme.ink_3;
+            stroke-width: 1.5px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
         }
     }
 }

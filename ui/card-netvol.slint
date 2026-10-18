@@ -22,9 +22,10 @@ export component NetworkCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    drop-shadow-color: root.act_show ? Theme.shadow : transparent;
-    drop-shadow-blur: 10px;
+    drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;
+    drop-shadow-blur: 12px;
     drop-shadow-offset-y: 2px;
+    animate drop-shadow-color { duration: 180ms; easing: ease-out; }
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -104,9 +105,10 @@ export component VolumeCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    drop-shadow-color: root.act_show ? Theme.shadow : transparent;
-    drop-shadow-blur: 10px;
+    drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;
+    drop-shadow-blur: 12px;
     drop-shadow-offset-y: 2px;
+    animate drop-shadow-color { duration: 180ms; easing: ease-out; }
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;

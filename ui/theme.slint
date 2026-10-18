@@ -66,6 +66,7 @@ export global Theme {
     out property <length> r_sm: 6px;
     out property <length> r_md: 8px;
     out property <length> r: 14px;
+    out property <length> r_dialog: 16px;
 
     // ===== 间距 =====
     out property <length> s1: 4px;
@@ -76,9 +77,9 @@ export global Theme {
     out property <length> s6: 20px;
 
     // ===== 结构尺寸 =====
-    out property <length> top_h: 52px;
+    out property <length> top_h: 48px;
     out property <length> sub_h: 40px;
-    out property <length> batch_h: 42px;
+    out property <length> batch_h: 44px;
     out property <length> foot_h: 40px;
     out property <length> drawer_w: 400px;
     // 抽屉内部布局契约（单一真相源）：内容区高 = 抽屉高 - 头部 -（容器才有）Tab 栏
@@ -88,5 +89,8 @@ export global Theme {
     out property <length> drawer_logbar: 40px;
 
     // ===== 阴影 =====
+    // prototype: --shadow = 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25)
+    // prototype: --shadow-hover = 0 2px 4px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.45)
     out property <color> shadow: is_dark ? rgba(0,0,0,0.25) : rgba(14,14,17,0.05);
+    out property <color> shadow_hover: is_dark ? rgba(0,0,0,0.45) : rgba(14,14,17,0.10);
 }

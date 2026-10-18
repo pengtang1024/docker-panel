@@ -52,7 +52,7 @@ pub(crate) fn short_port(compact: &str) -> &str {
 /// Compose 项目名 → 稳定散列配色（FNV-1a）
 pub(crate) fn proj_color(name: &str) -> slint::Color {
     const PALETTE: [u32; 8] = [
-        0x38bd_f8, 0xa78b_fa, 0x34d3_99, 0xfbbf_24, 0xf472_b6, 0x60a5_fa, 0xfb92_3c, 0x4ade_80,
+        0x38bdf8, 0xa78bfa, 0x34d399, 0xfbbf24, 0xf472b6, 0x60a5fa, 0xfb923c, 0x4ade80,
     ];
     if name.is_empty() {
         return slint::Color::from_rgb_u8(0xa7, 0x8b, 0xfa);

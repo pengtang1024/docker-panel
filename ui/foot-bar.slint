@@ -7,6 +7,17 @@ component OvItem inherits Rectangle {
     in property <string> val: "";
     in property <string> ic: "";
     in property <bool> show_border: true;
+
+    property <string> ic_path: root.ic == "docker" ? "M3 3h18v18H3z M3 9h18 M9 21V9"
+        : root.ic == "container" ? "M3 3h18v18H3z M3 9h18 M9 21V9"
+        : root.ic == "image" ? "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5"
+        : root.ic == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
+        : root.ic == "volume" ? "M12 5a9 3 0 1 1-18 0 9 3 0 0 1 18 0z M3 5v14a9 3 0 0 0 18 0V5 M3 12a9 3 0 0 0 18 0"
+        : root.ic == "cpu" ? "M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3"
+        : root.ic == "memory" ? "M2 6h20v12H2z M6 10v4 M10 10v4 M14 10v4 M18 10v4"
+        : root.ic == "disk" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20"
+        : "";
+
     if root.show_border : Rectangle {
         x: parent.width - 1px;
         width: 1px;
@@ -18,7 +29,17 @@ component OvItem inherits Rectangle {
         spacing: Theme.s2;
         padding-left: Theme.s3;
         padding-right: Theme.s3;
-        VCenterText { text: root.ic; color: Theme.ink_3; font-size: Theme.fs_sm; }
+        Path {
+            width: 14px; height: 14px;
+            commands: ic_path;
+            viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+            stroke: Theme.ink_3;
+            stroke-width: 1.5px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            visible: ic_path != "";
+        }
         VCenterText { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
         VCenterText { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
     }
@@ -55,14 +76,14 @@ export component FootBar inherits Rectangle {
 
         Rectangle { width: 1px; height: 16px; background: Theme.line_2; }
 
-        OvItem { label: @tr("Docker"); val: "v26.1"; ic: "▣"; }
-        OvItem { label: @tr("Containers"); val: root.running_containers + "/" + root.total_containers; ic: "▢"; }
-        OvItem { label: @tr("Images"); val: root.total_images; ic: "▤"; }
-        OvItem { label: @tr("Networks"); val: root.total_networks; ic: "⬡"; }
-        OvItem { label: @tr("Volumes"); val: root.total_volumes; ic: "▦"; }
-        OvItem { label: @tr("CPU"); val: root.cpu_total; ic: "◐"; }
-        OvItem { label: @tr("Memory"); val: root.mem_total; ic: "▥"; }
-        OvItem { label: @tr("Disk"); val: root.disk_total; ic: "▣"; show_border: false; }
+        OvItem { label: @tr("Docker"); val: "v26.1"; ic: "docker"; }
+        OvItem { label: @tr("Containers"); val: root.running_containers + "/" + root.total_containers; ic: "container"; }
+        OvItem { label: @tr("Images"); val: root.total_images; ic: "image"; }
+        OvItem { label: @tr("Networks"); val: root.total_networks; ic: "network"; }
+        OvItem { label: @tr("Volumes"); val: root.total_volumes; ic: "volume"; }
+        OvItem { label: @tr("CPU"); val: root.cpu_total; ic: "cpu"; }
+        OvItem { label: @tr("Memory"); val: root.mem_total; ic: "memory"; }
+        OvItem { label: @tr("Disk"); val: root.disk_total; ic: "disk"; show_border: false; }
 
         Rectangle { horizontal-stretch: 1; }
 

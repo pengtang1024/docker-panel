@@ -55,7 +55,7 @@ pub fn build_volume_rows(s: &AppState) -> Vec<VolumeRow> {
 }
 
 fn display_name(name: &str, anonymous: bool) -> String {
-    if anonymous == false {
+    if !anonymous {
         return name.to_string();
     }
     let head: String = name.chars().take(ANON_KEEP).collect();

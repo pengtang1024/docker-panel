@@ -34,7 +34,7 @@ export component DialogShell inherits Rectangle {
         width: root.card_width;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
-        border-radius: Theme.r;
+        border-radius: Theme.r_dialog;
         background: Theme.card;
         border-width: 1px; border-color: Theme.line;
         clip: true;
@@ -71,7 +71,7 @@ export component DialogShell inherits Rectangle {
             }
 
             // Body（.dlg-body{padding:16px 20px}）
-            Rectangle {
+            VerticalLayout {
                 width: 100%;
                 padding-left: 20px; padding-right: 20px;
                 padding-top: 16px; padding-bottom: 16px;

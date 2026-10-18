@@ -11,7 +11,7 @@ pub fn build_image_rows(s: &AppState) -> Vec<ImageRow> {
         .iter()
         .filter(|img| {
             let tags_join = img.tags.join(" ");
-            hit_any(&s.image_query, &[&img.name, &img.short_id(), &tags_join])
+            hit_any(&s.image_query, &[&img.name, img.short_id(), &tags_join])
         })
         .map(|img| {
             // 列表 API 不返回层数，由后台 inspect 回填；未回填时占位

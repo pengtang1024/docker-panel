@@ -38,6 +38,10 @@ export component DialogShell inherits Rectangle {
         background: Theme.card;
         border-width: 1px; border-color: Theme.line;
         clip: true;
+        // prototype: .dialog{box-shadow:var(--shadow-hover)}
+        drop-shadow-color: Theme.shadow_hover;
+        drop-shadow-blur: 32px;
+        drop-shadow-offset-y: 4px;
 
         VerticalLayout {
             width: 100%; spacing: 0px;

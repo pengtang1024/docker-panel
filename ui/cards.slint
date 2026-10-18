@@ -52,7 +52,7 @@ export component CardsArea inherits Rectangle {
     // —— 网格几何（prototype .content padding 8px / .grid gap 8px / 卡宽 310px @1280）——
     property <length> pad: Theme.s3;
     property <length> gap: Theme.s3;
-    property <length> card_h: 104px;
+    property <length> card_h: 89px;  // prototype .card 实测高（1280 宽 4 列布局）
     property <length> card_min: 300px;
     property <float> per_row: Math.max(1, Math.floor((self.width - 2 * pad + gap) / (card_min + gap)));
     property <int> n: view == 0 ? containers.length

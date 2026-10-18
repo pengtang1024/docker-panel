@@ -4,9 +4,11 @@ import { Tip, CenterText, VCenterText } from "components-align.slint";
 import { StateArea } from "components-state.slint";
 
 // ============ Tooltip 泡泡层 ============
+// 默认向上弹出（箭头朝下），flip=true 时向下弹出（箭头朝上，用于 TopBar 顶部按钮等）
 export component TipLayer inherits Rectangle {
     width: row.preferred-width;
     height: row.preferred-height;
+    in-out property <bool> flip: false;
     background: Theme.tip_bg;
     border-radius: Theme.r_xs;
     drop-shadow-color: Theme.shadow;
@@ -19,10 +21,19 @@ export component TipLayer inherits Rectangle {
         padding-left: 9px; padding-right: 9px; padding-top: 5px; padding-bottom: 5px;
         VCenterText { text: Tip.text; color: Theme.tip_ink; font-size: Theme.fs_sm; font-weight: 500; }
     }
+    // 箭头：flip=false 时朝下（正常向上弹），flip=true 时朝上（向下弹）
+    // prototype: .tip::after { border: 4px solid transparent; border-top-color: var(--tip-arrow); bottom: -4px; }
+    // 对应 Slint Path：8px 宽 × 4px 高的等腰三角形
     Path {
         x: (parent.width - 8px) / 2;
-        y: parent.height;
-        commands: "M 0 0 L 8 0 L 4 4 Z";
+        y: flip ? -4px : parent.height;
+        width: 8px;
+        height: 4px;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: 8;
+        viewbox-height: 4;
+        commands: flip ? "M 0 4 L 8 4 L 4 0 Z" : "M 0 0 L 8 0 L 4 4 Z";
         fill: Theme.tip_bg;
     }
 }

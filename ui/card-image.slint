@@ -71,9 +71,10 @@ export component ImageCard inherits Rectangle {
             }
         }
 
-        // .tags：最多 3 个芯片 + 溢出计数
+        // .tags：最多 3 个芯片 + 溢出计数（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
             width: 100%;
+            alignment: start;
             spacing: 4px;
             padding-top: 4px;
             MonoChip {
@@ -131,10 +132,11 @@ export component ImageCard inherits Rectangle {
         }
     }
 
-    // .card-actions 运行（prototype：仅状态栏提示，不真启动容器）
+    // .card-actions 运行（.ca-main{width:26px;height:26px}；仅状态栏提示，不真启动容器）
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
+        size: 26px;
         icon_size: 13px;
         outline: true;
         hidden: root.act_show == false;
@@ -146,10 +148,11 @@ export component ImageCard inherits Rectangle {
         }
     }
 
-    // .card-actions 更多菜单（详情 / 删除）
+    // .card-actions 更多菜单（.ca-menu{width:26px;height:26px}；详情 / 删除）
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
+        size: 26px;
         icon_size: 13px;
         outline: true;
         active: root.menu_open;

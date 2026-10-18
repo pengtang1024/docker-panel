@@ -104,6 +104,8 @@ export component SubBar inherits Rectangle {
             HorizontalLayout {
                 width: 100%;
                 height: 100%;
+                // ⚠️ 无 alignment 会使 preferred-width 污染，sort_btn 被外层 stretch 拉到 300px+
+                alignment: center;
                 spacing: 6px;
                 padding-left: 10px;
                 padding-right: 10px;

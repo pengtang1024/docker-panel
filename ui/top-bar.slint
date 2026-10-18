@@ -21,7 +21,9 @@ export component TopBar inherits Rectangle {
     callback focus_search();
     focus_search() => { search_input.focus(); }
 
-    // alignment:center 确保所有子元素垂直居中（Slint HorizontalLayout 默认 start 会让元素靠顶）
+    // ⚠️ Slint HorizontalLayout 默认 stretch：Text 的 horizontal-stretch>0 会被均分剩余宽度
+    // （实测 brand/conn 各吞 300+px 把"已连接"顶到窗口中央）。全部 stretch:0，
+    // 只留一个弹性 spacer 把搜索框与按钮组钉在右侧（对齐 prototype .search{margin-left:auto}）。
     HorizontalLayout {
         width: 100%; height: 100%;
         spacing: 10px;
@@ -46,15 +48,18 @@ export component TopBar inherits Rectangle {
             }
         }
 
-        VCenterText { text: "Docker Panel"; font-size: 15px; font-weight: 800; color: Theme.ink; }
+        VCenterText { text: "Docker Panel"; horizontal-stretch: 0; font-size: 15px; font-weight: 800; color: Theme.ink; }
 
         // .conn{gap:5px;font-size:11px;margin-left:2px}
         Rectangle { width: 2px; }  // margin-left:2px 等效间距
         Dot { on: root.docker_ok; dot_size: 6px; }
         VCenterText {
+            horizontal-stretch: 0;
             text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: 11px; font-weight: 600; color: Theme.ink_3;
         }
+
+        Rectangle { horizontal-stretch: 1; }
 
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 

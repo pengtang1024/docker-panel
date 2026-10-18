@@ -340,11 +340,11 @@ export component MainWindow inherits Window {
     }
 
     // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛
-    // prototype: left=clamp(锚点中点-半宽, 8, 宽-宽-8)；top=锚点顶边-高-8
-    // 本层底部还有 4px 箭头，故整体上移 8(间距)+4(箭头)
+    // flip=true 时向下弹（锚点上方不够空间，如 TopBar 顶部按钮）
     TipLayer {
+        flip: Tip.ay - self.height - 12px < Theme.s1;
         x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
-        y: Math.max(Theme.s1, Tip.ay - self.height - 12px);
+        y: self.flip ? Tip.ay + Tip.btn_h + 4px : Math.max(Theme.s1, Tip.ay - self.height - 12px);
     }
     }
 }

@@ -145,9 +145,12 @@ fn pump_and_apply(
             rt_t.spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 invoke_from_event_loop(move || {
-                    let Some(ui) = ui_weak_t.upgrade() else { return };
+                    let Some(ui) = ui_weak_t.upgrade() else {
+                        return;
+                    };
                     ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
-                }).ok();
+                })
+                .ok();
             });
         }
     })

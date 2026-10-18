@@ -59,7 +59,10 @@ export component NetworkCard inherits Rectangle {
             }
         }
 
+        // driver/scope 胶囊行（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
+            alignment: start;
+            spacing: 4px;
             MonoChip { label: root.data.driver; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
             MonoChip { label: root.data.scope; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
         }

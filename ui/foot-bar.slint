@@ -24,8 +24,10 @@ component OvItem inherits Rectangle {
         height: 16px;
         background: Theme.line_2;
     }
+    // ⚠️ alignment:center 必须显式：缺失会让内层 preferred-width 污染，OvItem 被均分拉伸
     HorizontalLayout {
         width: 100%; height: 100%;
+        alignment: center;
         spacing: Theme.s2;
         padding-left: Theme.s3;
         padding-right: Theme.s3;
@@ -40,14 +42,17 @@ component OvItem inherits Rectangle {
             fill: transparent;
             visible: ic_path != "";
         }
-        VCenterText { text: root.val; color: Theme.ink; font-size: Theme.fs_sm; font-weight: 700; }
-        VCenterText { text: root.label; color: Theme.ink_3; font-size: Theme.fs_xs; }
+        // .ov-val{font-size:13px;font-weight:700;font-family:var(--m)} / .ov-lbl{font-size:11px}
+        VCenterText { text: root.val; color: Theme.ink; font-size: Theme.fs_md; font-weight: 700; font-family: Theme.mono; }
+        VCenterText { text: root.label; color: Theme.ink_3; font-size: Theme.fs_sm; }
     }
 }
 
 export component FootBar inherits Rectangle {
     height: Theme.foot_h;
     background: Theme.card;
+    // prototype: .foot{border-top:1px solid var(--line)}
+    Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
 
     in-out property <bool> docker_ok: false;
     in-out property <string> status: "";

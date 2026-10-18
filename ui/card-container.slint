@@ -101,17 +101,19 @@ export component ContainerCard inherits Rectangle {
             overflow: elide;
         }
 
-        // .c-ports（最多 3 个 +N，超出部分进 tooltip）
+        // .c-ports（最多 3 个 +N，超出部分进 tooltip；.port{font-size:10px;padding:1px 6px;border-radius:var(--r-xs)}）
         if root.data.port1 != "" : HorizontalLayout {
             width: 100%;
+            alignment: start;
             spacing: 4px;
             padding-top: 5px;
-            MonoChip { label: root.data.port1; tip: root.data.ports_text; }
-            if root.data.port2 != "" : MonoChip { label: root.data.port2; tip: root.data.ports_text; }
-            if root.data.port3 != "" : MonoChip { label: root.data.port3; tip: root.data.ports_text; }
+            MonoChip { label: root.data.port1; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
+            if root.data.port2 != "" : MonoChip { label: root.data.port2; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
+            if root.data.port3 != "" : MonoChip { label: root.data.port3; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
             if root.data.ports_more > 0 : MonoChip {
                 label: "+" + root.data.ports_more;
                 plain: true;
+                pad_h: 5px; pad_v: 1px; fs: 10px; rad: Theme.r_xs;
                 ink: Theme.ink_3;
                 tip: root.data.ports_text;
             }
@@ -124,16 +126,16 @@ export component ContainerCard inherits Rectangle {
             padding-top: 7px;
             Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
             Stat {
-                icon_name: "monitor";
+                icon_name: "cpu";
                 value: (root.data.is_running && root.data.cpu_percent != "") ? root.data.cpu_percent : "—";
                 tip: @tr("CPU usage");
             }
             Stat {
-                icon_name: "";
+                icon_name: "memory";
                 value: (root.data.is_running && root.data.mem_usage != "") ? root.data.mem_usage : "—";
                 tip: @tr("Memory usage");
             }
-            Stat { icon_name: ""; value: root.data.disk; tip: @tr("Disk usage"); }
+            Stat { icon_name: "disk"; value: root.data.disk; tip: @tr("Disk usage"); }
             Rectangle { horizontal-stretch: 1; }
             if root.data.compose_project != "" : ProjTag {
                 label: root.data.compose_project;
@@ -152,10 +154,11 @@ export component ContainerCard inherits Rectangle {
         toggled => { root.box(root.data.id); }
     }
 
-    // .card-actions 主按钮（运行中→重启，停止→启动）
+    // .card-actions 主按钮（.ca-main{width:26px;height:26px;border-radius:var(--r-sm)}；top:9 right:9 gap:4）
     main_btn := IconBtn {
         x: parent.width - 65px;
         y: 9px;
+        size: 26px;
         icon_size: 13px;
         outline: true;
         hidden: root.act_show == false;
@@ -168,10 +171,11 @@ export component ContainerCard inherits Rectangle {
         }
     }
 
-    // .card-actions 更多菜单（停止 / 日志 / 删除在顶层渲染）
+    // .card-actions 更多菜单（.ca-menu{width:26px;height:26px}；停止 / 日志 / 删除在顶层渲染）
     more_btn := IconBtn {
         x: parent.width - 35px;
         y: 9px;
+        size: 26px;
         icon_size: 13px;
         outline: true;
         active: root.menu_open;

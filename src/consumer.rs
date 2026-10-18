@@ -78,6 +78,7 @@ fn pump_and_apply(
             text: SharedString::from(l),
         })
         .collect();
+    let log_text = SharedString::from(s.logs.join("\n"));
 
     // —— 操作完成立即刷新 —— 不等 3s Timer
     if matches!(
@@ -111,6 +112,7 @@ fn pump_and_apply(
         let vm = crate::render::volumes(volume_rows);
         let lm = crate::render::logs(log_lines);
         crate::ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);
+        ui.set_log_text(log_text);
         ui.set_compose_rows(crate::render::compose_rows(compose_rows));
         ui.set_sort_field(sort_field_int);
         ui.set_sort_desc(sort_desc);

@@ -38,6 +38,7 @@ export component Chip inherits Rectangle {
 
         if root.show_dot : Rectangle {
             width: 6px; height: 6px; border-radius: 3px; background: root.dot_color;
+           
         }
 
         VCenterText {
@@ -45,6 +46,7 @@ export component Chip inherits Rectangle {
             font-family: root.mono ? Theme.mono : "";
             font-weight: root.bold ? 600 : 400;
             color: root.ink;
+            vertical-stretch: 1;
         }
     }
 
@@ -93,6 +95,7 @@ export component Stat inherits Rectangle {
         VCenterText {
             text: root.value; font-size: Theme.fs_sm; font-weight: 600;
             color: Theme.ink; font-family: Theme.mono;
+            vertical-stretch: 1;
         }
     }
 

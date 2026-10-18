@@ -28,14 +28,14 @@ export component TopBar inherits Rectangle {
         width: 100%; height: 100%;
         spacing: 10px;
         padding-left: 14px; padding-right: 14px;
+        alignment: center;
 
         // .brand .mark{width:26px;height:26px;background:var(--ink);border-radius:var(--r-md)}
         Rectangle {
             width: 26px; height: 26px;
             border-radius: Theme.r_md;
             background: Theme.ink;
-            Path {
-                width: 18px; height: 18px;
+            Path {   width: 18px; height: 18px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 commands: "M3 3h18v18H3z M3 9h18 M9 21V9";
@@ -64,12 +64,14 @@ export component TopBar inherits Rectangle {
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 
         // .search{margin-left:auto;width:300px;height:32px;padding:0 10px;gap:8px;background:var(--line-2)}
-        Rectangle {
+        // .search:focus-within{border-color:var(--ink-3);background:var(--card)}
+        search_box := Rectangle {
             height: 32px;
             width: 300px;
             border-radius: Theme.r_md;
-            background: Theme.line_2;
-            border-width: 1px; border-color: Theme.line;
+            background: search_input.has-focus ? Theme.card : Theme.line_2;
+            border-width: 1px;
+            border-color: search_input.has-focus ? Theme.ink_3 : Theme.line;
 
             HorizontalLayout {
                 width: 100%; height: 100%;
@@ -77,35 +79,35 @@ export component TopBar inherits Rectangle {
                 padding-left: 10px; padding-right: 10px;
                 alignment: center;
 
-                Path {
+                // 放大镜图标 — 点击也能聚焦（包在 Rectangle 里放 MouseArea）
+                Rectangle {
                     width: 14px; height: 14px;
-                    commands: "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35";
-                    viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
-                    stroke: Theme.ink_3;
-                    stroke-width: 1.5px;
-                    stroke-line-cap: round;
-                    stroke-line-join: round;
-                    fill: transparent;
+                    background: transparent;
+                    Path {
+                        width: 14px; height: 14px;
+                        commands: "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35";
+                        viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                        stroke: Theme.ink_3;
+                        stroke-width: 1.5px;
+                        stroke-line-cap: round;
+                        stroke-line-join: round;
+                        fill: transparent;
+                    }
+                    TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { search_input.focus(); }
+                    }
                 }
 
-                Rectangle {
+                // TextInput：必须显式 height:100%，否则 Slint 会折叠为 0 高度导致不可见
+                // Slint 1.18 无内置 placeholder-text，用 text 为空时的空状态显示
+                search_input := TextInput {
                     horizontal-stretch: 1;
                     height: 100%;
-                    search_input := TextInput {
-                        x: 0px; y: (parent.height - self.height) / 2;
-                        width: 100%;
-                        text <=> root.search_q;
-                        color: Theme.ink; font-size: 12px;
-                        accepted() => { root.search(root.search_q); }
-                        edited() => { root.search(root.search_q); }
-                    }
-                    VCenterText {
-                        x: 0px; y: (parent.height - self.height) / 2;
-                        width: 100%;
-                        visible: search_input.text == "";
-                        text: @tr("Search name, image...");
-                        color: Theme.ink_3; font-size: 12px;
-                    }
+                    text <=> root.search_q;
+                    color: Theme.ink; font-size: 12px;
+                    accepted() => { root.search(root.search_q); }
+                    edited() => { root.search(root.search_q); }
                 }
 
                 Rectangle {
@@ -128,6 +130,6 @@ export component TopBar inherits Rectangle {
         IconBtn { icon_name: Theme.theme_mode == 1 ? "sun" : Theme.theme_mode == 2 ? "moon" : "monitor"; icon_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
         IconBtn { icon_name: "refresh"; icon_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
         IconBtn { icon_name: "trash"; icon_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
-        IconBtn { icon_name: "download"; icon_size: 16px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
+        IconBtn { icon_name: "download"; icon_size: 13px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
     }
 }

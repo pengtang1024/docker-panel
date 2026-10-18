@@ -129,11 +129,13 @@ export component ContainerCard inherits Rectangle {
                 icon_name: "cpu";
                 value: (root.data.is_running && root.data.cpu_percent != "") ? root.data.cpu_percent : "—";
                 tip: @tr("CPU usage");
+               
             }
             Stat {
                 icon_name: "memory";
                 value: (root.data.is_running && root.data.mem_usage != "") ? root.data.mem_usage : "—";
                 tip: @tr("Memory usage");
+               
             }
             Stat { icon_name: "disk"; value: root.data.disk; tip: @tr("Disk usage"); }
             Rectangle { horizontal-stretch: 1; }

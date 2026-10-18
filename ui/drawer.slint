@@ -17,6 +17,7 @@ export component Drawer inherits Rectangle {
     in-out property <bool> tabs_visible: true;
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
+    in-out property <string> log_text: "";
 
     callback close();
     callback set_tab(int);
@@ -107,17 +108,20 @@ export component Drawer inherits Rectangle {
                 logbox := Rectangle {
                     height: root.content_h - 36px;
                     background: Theme.log_bg;
-                    VerticalLayout {
+                    Flickable {
                         width: 100%; height: 100%;
                         padding-left: 16px; padding-right: 16px;
                         padding-top: 14px; padding-bottom: 14px;
-                        for line in root.log_lines : VCenterText {
-                            text: line.text; font-size: 12px; font-family: Theme.mono;
-                            color: Theme.log_ink; wrap: word-wrap;
+                        TextInput {
+                            width: parent.width;
+                            min-height: 100%;
+                            read-only: true;
+                            text: root.log_text;
+                            font-size: 12px;
+                            font-family: Theme.mono;
+                            color: Theme.log_ink;
+                            wrap: word-wrap;
                         }
-                    }
-                }
-            }
 
             env_scroll := Flickable {
                 visible: root.tabs_visible && root.tab == 2;

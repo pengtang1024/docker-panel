@@ -102,6 +102,7 @@ export component MainWindow inherits Window {
     in-out property <[NetworkRow]> network_rows: [];
     in-out property <[VolumeRow]> volume_rows: [];
     in-out property <[LogLineRow]> log_lines: [];
+    in-out property <string> log_text: "";
     in-out property <[ComposeRow]> compose_rows: [];
 
     // —— 抽屉 ——
@@ -306,6 +307,7 @@ export component MainWindow inherits Window {
         tab <=> root.drawer_tab;
         log_follow <=> root.log_follow;
         log_lines <=> root.log_lines;
+        log_text <=> root.log_text;
         title <=> root.drawer_title;
         sub <=> root.drawer_sub;
         tabs_visible <=> root.drawer_tabs;

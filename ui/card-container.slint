@@ -76,11 +76,19 @@ export component ContainerCard inherits Rectangle {
         width: parent.width - 20px;
         spacing: 1px;
 
-        // .c-name（右留 70px 给动作浮层；勾选模式左侧让位给复选框）
+        // .c-name（右留 70px 给动作浮层；CheckCell 内嵌，cross-axis-alignment:center 自动垂直对齐）
         HorizontalLayout {
             width: 100%;
             padding-right: 70px;
-            padding-left: root.sel_mode ? 26px : 0px;
+            spacing: 8px;
+            cross-axis-alignment: center;
+            // 非条件渲染：始终参与布局，用 visible 控制显隐（if 条件渲染不参与 cross-axis 对齐）
+            CheckCell {
+                visible: root.sel_mode;
+                box: 18px;
+                checked: root.data.is_selected;
+                toggled => { root.box(root.data.id); }
+            }
             VCenterText {
                 text: root.data.name;
                 font-size: 14px;
@@ -145,15 +153,6 @@ export component ContainerCard inherits Rectangle {
                 tip: @tr("Compose project") + ": " + root.data.compose_project;
             }
         }
-    }
-
-    // .check（sel-mode 才出现）
-    if root.sel_mode : CheckCell {
-        x: 11px;
-        y: 9px;
-        box: 18px;
-        checked: root.data.is_selected;
-        toggled => { root.box(root.data.id); }
     }
 
     // .card-actions 主按钮（.ca-main{width:26px;height:26px;border-radius:var(--r-sm)}；top:9 right:9 gap:4）

@@ -106,7 +106,7 @@ export component MainWindow inherits Window {
     in-out property <[ComposeRow]> compose_rows: [];
 
     // —— 抽屉 ——
-    in-out property <bool> drawer_open: false;
+    in-out property <bool> drawer_open: true;
     in-out property <int> drawer_tab: 0;    // 0=详情 1=日志 2=环境
     in-out property <bool> log_follow: true;
     // 抽屉内容统一走 DetailPair 行列表（Rust 侧按选中类型构建，见 detail_fmt.rs）

@@ -87,7 +87,9 @@ export component PullDialog inherits DialogShell {
     body_slot := BodySlot {
         width: 100%;
         VerticalLayout {
-            width: 100%; spacing: Theme.s2; alignment: start;
+            width: 100%;
+            vertical-stretch: 0;  // ⚠️ 防止被外层 VerticalLayout 拉伸
+            spacing: Theme.s2; alignment: start;
 
             VCenterText { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
             TextField {
@@ -132,7 +134,9 @@ export component CleanupDialog inherits DialogShell {
     body_slot := BodySlot {
         width: 100%;
         VerticalLayout {
-            width: 100%; spacing: Theme.s3; alignment: start;
+            width: 100%;
+            vertical-stretch: 0;  // ⚠️ 防止 CleanItem 行被拉伸
+            spacing: Theme.s3; alignment: start;
             CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); icon_name: ""; cnt: root.cnt_stopped; checked <=> root.stopped; toggled => { } }
             CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); icon_name: ""; cnt: root.cnt_dangling; checked <=> root.dangling; toggled => { } }
             CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); icon_name: ""; cnt: root.cnt_unused_net; checked <=> root.unused_net; toggled => { } }

@@ -27,6 +27,7 @@ mod i18n;
 mod models;
 mod render;
 mod slint_gen;
+mod theme;
 mod ui_apply;
 mod ui_rows;
 mod ui_state;
@@ -57,6 +58,11 @@ fn main() {
             eprintln!("select translation {lang} failed: {e:?}");
         }
     }
+
+    // 检测系统主题偏好，灌给 Theme.system_dark —
+    // 必须在 bind_callbacks（restore_config 会设置 theme_mode）之前，
+    // 否则 theme_mode=auto 时 is_dark 计算不到正确值。
+    ui.set_system_dark(theme::detect_system_dark());
 
     // consumer 线程：Msg 泵 → UI 更新
     let consumer_handle = consumer::spawn(state.clone(), rx, ui.as_weak());

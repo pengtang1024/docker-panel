@@ -31,8 +31,10 @@ export component Chip inherits Rectangle {
         layer_radius: root.rad;
     }
 
+    // ⚠️ cross-axis-alignment:center 让 dot Rectangle 和 Text 垂直居中
     HorizontalLayout {
         alignment: center;
+        cross-axis-alignment: center;
         padding-left: root.pad_h; padding-right: root.pad_h;
         padding-top: root.pad_v; padding-bottom: root.pad_v;
 
@@ -45,7 +47,6 @@ export component Chip inherits Rectangle {
             font-family: root.mono ? Theme.mono : "";
             font-weight: root.bold ? 600 : 400;
             color: root.ink;
-            vertical-stretch: 1;
         }
     }
 
@@ -74,8 +75,10 @@ export component Stat inherits Rectangle {
         : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
         : "";
 
+    // ⚠️ cross-axis-alignment:center 让 Path 和 Text 垂直居中
     HorizontalLayout {
         alignment: center;
+        cross-axis-alignment: center;
         spacing: 4px;  // .stat{gap:4px}
         Path {
             width: 14px; height: 14px;
@@ -94,7 +97,6 @@ export component Stat inherits Rectangle {
         VCenterText {
             text: root.value; font-size: Theme.fs_sm; font-weight: 600;
             color: Theme.ink; font-family: Theme.mono;
-            vertical-stretch: 1;
         }
     }
 

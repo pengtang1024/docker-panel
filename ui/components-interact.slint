@@ -61,9 +61,10 @@ export component IconBtn inherits Rectangle {
     opacity: root.hidden ? 0.0 : 1.0;
     animate opacity { duration: 120ms; easing: ease-out; }
 
-    property <color> base_bg: root.primary ? Theme.ink : root.active ? Theme.pill_on_bg : Theme.card;
-    property <color> hover_bg: root.primary ? Theme.ink : Theme.bg;
-    property <color> icon_color: root.primary ? Theme.bg
+    // primary 模式（主按钮，如拉取）：始终深色底+浅色图标，不随主题反转
+    property <color> base_bg: root.primary ? #0e0e11 : root.active ? Theme.pill_on_bg : Theme.card;
+    property <color> hover_bg: root.primary ? #1f1f23 : Theme.bg;
+    property <color> icon_color: root.primary ? #f7f7f8
         : root.active ? Theme.ok
         : root.danger ? Theme.err
         : area.has-hover ? Theme.ink

@@ -74,7 +74,6 @@ export component ContainerCard inherits Rectangle {
         x: 11px;
         y: 9px;
         width: parent.width - 20px;
-        height: parent.height - 16px;
         spacing: 1px;
 
         // .c-name（右留 70px 给动作浮层；勾选模式左侧让位给复选框）
@@ -124,6 +123,7 @@ export component ContainerCard inherits Rectangle {
             width: 100%;
             spacing: 10px;
             padding-top: 7px;
+            cross-axis-alignment: center;
             Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
             Stat {
                 icon_name: "cpu";

@@ -30,8 +30,6 @@ export component Drawer inherits Rectangle {
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    // prototype: .drawer{border-left:1px solid var(--line);box-shadow:-20px 0 40px rgba(14,14,17,.08)}
-    Rectangle { width: 1px; height: 100%; background: Theme.line; }
     drop-shadow-color: rgba(14,14,17,0.08);
     drop-shadow-blur: 40px;
     drop-shadow-offset-x: -20px;
@@ -137,4 +135,7 @@ export component Drawer inherits Rectangle {
             }
         }
     }
+
+    // 左边框放在 body 之后声明，确保绘制在最上层作为真正的左边缘分隔线
+    Rectangle { width: 1px; height: 100%; background: Theme.line; }
 }

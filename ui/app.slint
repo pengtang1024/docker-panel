@@ -84,7 +84,7 @@ export component MainWindow inherits Window {
     /// 首次数据拉取期间显示骨架屏（强制 true 单独验证骨架屏渲染效果）
     in-out property <bool> loading: true;
     /// 多选模式独立开关（与 batch_count 解耦：进入 sel-mode 后可先不选任何项）
-    in-out property <bool> sel_mode: false;
+    in-out property <bool> sel_mode: true;
 
     // —— 统计 ——
     in-out property <int> total_containers: 0;

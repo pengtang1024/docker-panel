@@ -31,8 +31,7 @@ export component Drawer inherits Rectangle {
     width: Theme.drawer_w;
     height: 100%;
     background: Theme.card;
-    // 软件渲染器下 drop-shadow 会在 Drawer 内部渲染一条 x=width/2 的竖线 artifact
-    // 见 commit 2a45636 的误判——软件渲染器并不支持正确的 drop-shadow
+    // 软件渲染器下 drop-shadow 产生 artifact（边缘竖线），暂不启用
     // drop-shadow-color: rgba(14,14,17,0.08);
     // drop-shadow-blur: 40px;
     // drop-shadow-offset-x: -20px;
@@ -146,5 +145,5 @@ export component Drawer inherits Rectangle {
         }
     }
 
-    // 左边框已移除——软件渲染器下 1px Rectangle 在 Drawer 边缘无意义且可能 artifact
+    // 左边框已移除——旧渲染器下 1px Rectangle 在 Drawer 边缘 artifact
 }

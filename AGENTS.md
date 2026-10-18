@@ -69,6 +69,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | Rust | stable | edition 2021 | — |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
+| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。用了 Modal（inherits Modal），没用到 Dialog 内置组件——项目自己的 DialogShell 在 Modal 上盖了自定义 card |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
@@ -100,6 +101,19 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | **条件渲染移除焦点元素后焦点悬空** | 弹窗/抽屉关闭后其内部焦点丢失，后续按键无人处理 | 关闭处主动调 `global-shortcuts.focus()` 归还焦点（app.slint Esc 分支） |
 | **`select_bundled_translation` 必须在首个组件创建之后调用** | 之前调用 GLOBAL_CONTEXT 未初始化 → 恒报 `NoTranslationsBundled`（debug/release 都一样） | 放在 `MainWindow::new()` 之后；切换后 `translations_dirty` 自动重算 `@tr` 属性 |
 
+#### Material Modal / Dialog 踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
+
+> DialogShell（`components-dialog.slint`）继承 Material Modal 1.1.0，以下是踩过的真实坑条。
+
+| 坑 | 正确做法 |
+|----|----------|
+| **Material Modal 不是 Rectangle 组件** | 必须显式 `width: 100%; height: 100%`，它没有默认 `parent.width` |
+| **Material Modal 默认 `background_layer` 是空 Rectangle** | 覆盖它加全屏半透明遮罩：`background_layer := Rectangle { background: Theme.overlay; width/height: parent.width/height; TouchArea { ... } }` |
+| **VerticalLayout 子元素显式 `height` 被忽略** | 必须用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
+| **Modal 外层 TouchArea 会吞所有子内容点击** | card 内部必须再包一层 TouchArea，否则点击按钮/CheckBox 会穿透触发遮罩关闭 |
+| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 Material BaseDialog 的 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **Dialog 内三段 VerticalLayout 必须显式 `height: 100%`** | `VerticalLayout { width:100%; height:100%; ... Header/min-height:60 ... Body/stretch:1 ... Footer/min-height:56 }` |
+
 #### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
 
 | 规则 | 旧写法（禁止） | 正确写法 | 验证状态 |
@@ -123,7 +137,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（25 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / dialogs（基于 components-dialog）/ menu-layers（浮动菜单层）/ **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 壳）** |
+| `ui/` | Slint 声明层（25 文件按职责拆分）：app（MainWindow 唯一组装入口）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈）** |
 | `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（Msg 泵）/ bootstrap（定时采样启动）/ models / ui_state（AppState + `follow_id` 日志流 + `cleanup_counts`）/ render（CachedModel 差量同步）/ ui_update / ui_apply / batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
@@ -147,7 +161,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
      + shutdown: AtomicBool
 ```
 
-**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式不触发，改 tokio interval）· pump_and_apply 两阶段铁律（锁内 drain + build → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
+**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式下 Slint Timer 不触发，改 tokio interval）· pump_and_apply 两阶段铁律（锁内 drain + build → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
 
 ## 消息类型（`models::Msg`）
 

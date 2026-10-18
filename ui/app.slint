@@ -323,7 +323,7 @@ export component MainWindow inherits Window {
         log_clear_click => { AppActions.log_clear(); }
     }
 
-    if root.pull_open: PullDialog {
+    PullDialog {
         open <=> root.pull_open; input <=> root.pull_input;
         busy <=> root.pull_busy;
         progress <=> root.pull_progress;
@@ -331,7 +331,7 @@ export component MainWindow inherits Window {
         close => { AppActions.pull_close(); }
         submit(v) => { AppActions.pull_submit(v); }
     }
-    if root.cleanup_open: CleanupDialog {
+    CleanupDialog {
         open <=> root.cleanup_open; stopped <=> root.cleanup_stopped;
         dangling <=> root.cleanup_dangling;
         unused_net <=> root.cleanup_unused_net;

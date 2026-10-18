@@ -1,12 +1,12 @@
 // dialogs.slint — PullDialog / CleanupDialog（继承 DialogShell 基类）
+// 结构：每个子类直接写 VerticalLayout { Header + Body + Footer } 落到 @children
 import { Theme } from "theme.slint";
-import { VCenterText, RightText } from "components-align.slint";
+import { VCenterText } from "components-align.slint";
 import { TextButton, CheckBox, ProgressBar } from "components-interact.slint";
 import { TextField } from "components-form.slint";
-import { DialogShell, BodySlot, FooterSlot } from "components-dialog.slint";
+import { DialogShell } from "components-dialog.slint";
 
-// ============ CleanItem — 清理行（严格对齐 prototype .check-row）============
-// .check-row{padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px;display:flex;align-items:center;gap:12px}
+// ============ CleanItem — 清理行 ============
 component CleanItem inherits Rectangle {
     in-out property <bool> checked: true;
     in-out property <string> label: "";
@@ -21,50 +21,34 @@ component CleanItem inherits Rectangle {
     border-color: root.checked ? Theme.ink_3 : Theme.line;
     background: root.checked ? Theme.bg : Theme.card;
 
-    property <string> icon_commands: root.icon_name == "box" ? "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12"
-        : root.icon_name == "container" ? "M3 3h18v18H3z M3 9h18 M9 21V9"
-        : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
-        : root.icon_name == "disk" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20"
-        : "";
-
     HorizontalLayout {
         width: 100%; height: 100%;
         spacing: 12px;
         padding-left: 12px; padding-right: 12px;
-        alignment: center;
-        cross-axis-alignment: center;
+        alignment: center; cross-axis-alignment: center;
 
-        CheckBox {
-            checked <=> root.checked;
-            toggled => { root.toggled(); }
-        }
-
-        // ⚠️ Path 必须 Rectangle 包裹 + x/y 手动居中——HorizontalLayout 对 Path 不自动居中
+        CheckBox { checked <=> root.checked; toggled => { root.toggled(); } }
         Rectangle {
             width: 20px; height: 100%;
             Path {
                 width: 20px; height: 20px;
-                commands: icon_commands;
                 stroke: root.checked ? Theme.ink : Theme.ink_2;
-                stroke-width: 1.5px;
-                stroke-line-cap: round;
-                stroke-line-join: round;
-                viewbox-x: 0;
-                viewbox-y: 0;
-                viewbox-width: 24;
-                viewbox-height: 24;
+                stroke-width: 1.5px; stroke-line-cap: round; stroke-line-join: round;
+                viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
                 fill: transparent;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
+                commands: root.icon_name == "" ? "M0 0" :
+                    root.icon_name == "container" ? "M3 3h18v18H3z M3 9h18 M9 21V9" :
+                    root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2" :
+                    "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20";
             }
-            visible: icon_commands != "";
+            visible: root.icon_name != "";
         }
-
         VerticalLayout {
             VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
             VCenterText { text: root.desc; font-size: Theme.fs; color: Theme.ink_3; overflow: elide; }
         }
-
         VCenterText {
             text: root.cnt; font-size: Theme.fs;
             font-family: Theme.mono; color: Theme.ink_3;
@@ -80,39 +64,62 @@ export component PullDialog inherits DialogShell {
     in-out property <string> status: "";
     callback submit(string);
 
-    dlg_title: @tr("Pull Image");
-    dlg_subtitle: @tr("Enter image name, optional tag (default latest)");
+    card_height: 360px;
 
-    // 填充 body_slot
-    body_slot := BodySlot {
-        width: 100%;
-        VerticalLayout {
-            width: 100%;
-            vertical-stretch: 0;  // ⚠️ 防止被外层 VerticalLayout 拉伸
-            spacing: Theme.s2; alignment: start;
+    // —— 完整 VerticalLayout（Header + Body + Footer）落到 DialogShell 的 @children ——
+    VerticalLayout {
+        width: 100%; height: 100%; spacing: 0px;
 
-            VCenterText { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
-            TextField {
-                text <=> root.input;
-                placeholder: "nginx:latest";
-                font_family: Theme.mono;
-                font_size: Theme.fs_md;
-            }
-
-            VCenterText { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
-            ProgressBar {
-                value: root.progress / 100.0;
-            }
-            VCenterText {
-                text: root.status == "" ? @tr("Waiting to pull...") : root.status;
-                font-size: Theme.fs_sm; font-family: Theme.mono; color: Theme.ink_3;
+        // Header
+        Rectangle {
+            min-height: 60px; vertical-stretch: 0;
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%; spacing: 0px;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 18px; padding-bottom: 14px;
+                VerticalLayout {
+                    horizontal-stretch: 1; spacing: 3px; alignment: start;
+                    VCenterText { text: @tr("Pull Image"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    VCenterText { text: @tr("Enter image name, optional tag (default latest)"); font-size: Theme.fs; color: Theme.ink_2; }
+                }
             }
         }
-    }
 
-    footer_slot := FooterSlot {
-        TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
-        TextButton { label: @tr("Pull"); filled: true; clicked => { root.submit(root.input); } }
+        // Body
+        Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+                width: 100%; height: 100%; spacing: 0px;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 16px; padding-bottom: 16px;
+                VerticalLayout {
+                    width: 100%; spacing: Theme.s2; alignment: start;
+                    VCenterText { text: @tr("Image"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
+                    TextField { text <=> root.input; placeholder: "nginx:latest"; font_family: Theme.mono; font_size: Theme.fs_md; }
+                    VCenterText { text: @tr("Progress"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; letter-spacing: 0.8px; }
+                    ProgressBar { value: root.progress / 100.0; }
+                    VCenterText {
+                        text: root.status == "" ? @tr("Waiting to pull...") : root.status;
+                        font-size: Theme.fs_sm; font-family: Theme.mono; color: Theme.ink_3;
+                    }
+                }
+            }
+        }
+
+        // Footer
+        Rectangle {
+            min-height: 56px; vertical-stretch: 0;
+            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 14px;
+                Rectangle { horizontal-stretch: 1; }
+                TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
+                TextButton { label: @tr("Pull"); filled: true; clicked => { root.submit(root.input); } }
+            }
+        }
     }
 }
 
@@ -128,25 +135,56 @@ export component CleanupDialog inherits DialogShell {
     in-out property <string> cnt_unused_vol: "";
     callback submit(bool, bool, bool, bool);
 
-    dlg_title: @tr("Cleanup Resources");
-    dlg_subtitle: @tr("Select resource types to clean up");
-    card_height: 420px;  // Header 60 + Body ~300 + Footer 56 ≈ 416px
+    card_height: 420px;
 
-    body_slot := BodySlot {
-        width: 100%;
-        VerticalLayout {
-            width: 100%;
-            vertical-stretch: 0;  // ⚠️ 防止 CleanItem 行被拉伸
-            spacing: Theme.s3; alignment: start;
-            CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); icon_name: ""; cnt: root.cnt_stopped; checked <=> root.stopped; toggled => { } }
-            CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); icon_name: ""; cnt: root.cnt_dangling; checked <=> root.dangling; toggled => { } }
-            CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); icon_name: ""; cnt: root.cnt_unused_net; checked <=> root.unused_net; toggled => { } }
-            CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); icon_name: ""; cnt: root.cnt_unused_vol; checked <=> root.unused_vol; toggled => { } }
+    VerticalLayout {
+        width: 100%; height: 100%; spacing: 0px;
+
+        // Header
+        Rectangle {
+            min-height: 60px; vertical-stretch: 0;
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%; spacing: 0px;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 18px; padding-bottom: 14px;
+                VerticalLayout {
+                    horizontal-stretch: 1; spacing: 3px; alignment: start;
+                    VCenterText { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
+                    VCenterText { text: @tr("Select resource types to clean up"); font-size: Theme.fs; color: Theme.ink_2; }
+                }
+            }
         }
-    }
 
-    footer_slot := FooterSlot {
-        TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
-        TextButton { label: @tr("Cleanup"); filled: true; clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
+        // Body
+        Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+                width: 100%; height: 100%; spacing: 0px;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 16px; padding-bottom: 16px;
+                VerticalLayout {
+                    width: 100%; spacing: Theme.s3; alignment: start;
+                    CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); cnt: root.cnt_stopped; checked <=> root.stopped; }
+                    CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); cnt: root.cnt_dangling; checked <=> root.dangling; }
+                    CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); cnt: root.cnt_unused_net; checked <=> root.unused_net; }
+                    CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); cnt: root.cnt_unused_vol; checked <=> root.unused_vol; }
+                }
+            }
+        }
+
+        // Footer
+        Rectangle {
+            min-height: 56px; vertical-stretch: 0;
+            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 14px;
+                Rectangle { horizontal-stretch: 1; }
+                TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
+                TextButton { label: @tr("Cleanup"); filled: true; clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
+            }
+        }
     }
 }

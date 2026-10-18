@@ -22,10 +22,10 @@ export component NetworkCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
+    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
+    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -44,13 +44,14 @@ export component NetworkCard inherits Rectangle {
         x: 11px; y: 9px; width: parent.width - 20px; spacing: 0px;
 
         HorizontalLayout {
-            width: 100%; spacing: 6px; padding-right: 70px;
+            width: 100%; vertical-stretch: 0; spacing: 6px; padding-right: 70px;
             VCenterText { text: root.data.name; font-size: 14px; font-weight: 700; color: Theme.ink; overflow: elide; }
             if root.data.builtin : VCenterText { text: "(" + @tr("Builtin") + ")"; font-size: Theme.fs_xs; color: Theme.ink_3; }
             Rectangle { horizontal-stretch: 1; }
         }
 
         HorizontalLayout {
+            vertical-stretch: 0;
             VCenterText {
                 text: root.data.subnet == ""
                     ? root.data.driver + " · " + root.data.scope
@@ -61,6 +62,7 @@ export component NetworkCard inherits Rectangle {
 
         // driver/scope 胶囊行（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
+            vertical-stretch: 0;
             alignment: start;
             spacing: 4px;
             MonoChip { label: root.data.driver; fs: Theme.fs_sm; rad: Theme.r_sm; ink: Theme.ink_2; }
@@ -68,6 +70,7 @@ export component NetworkCard inherits Rectangle {
         }
 
         HorizontalLayout {
+            vertical-stretch: 0;
             VCenterText {
                 text: @tr("{0} container" | "{0} containers" % root.data.containers, root.data.containers);
                 font-size: Theme.fs_sm; color: Theme.ink_2;
@@ -108,10 +111,10 @@ export component VolumeCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
+    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
+    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     Rectangle {
         x: 0px; y: 9px; width: 3px; height: parent.height - 16px;
@@ -141,6 +144,7 @@ export component VolumeCard inherits Rectangle {
         x: 11px; y: 9px; width: parent.width - 20px; spacing: 0px;
 
         HorizontalLayout {
+            vertical-stretch: 0;
             VCenterText {
                 text: root.data.display_name; font-size: Theme.fs_md; font-weight: 700;
                 font-family: Theme.mono; color: Theme.ink; horizontal-stretch: 1; overflow: elide;
@@ -148,10 +152,12 @@ export component VolumeCard inherits Rectangle {
         }
 
         if root.data.anonymous : HorizontalLayout {
+            vertical-stretch: 0;
             MonoChip { label: @tr("Anonymous volume"); plain: false; ink: Theme.ink_3; }
         }
 
         HorizontalLayout {
+            vertical-stretch: 0;
             VCenterText {
                 text: root.data.mountpoint; font-size: Theme.fs_xs; font-family: Theme.mono;
                 color: Theme.ink_3; overflow: elide;
@@ -159,6 +165,7 @@ export component VolumeCard inherits Rectangle {
         }
 
         HorizontalLayout {
+            vertical-stretch: 0;
             VCenterText { text: "driver: "; font-size: Theme.fs_sm; color: Theme.ink_2; }
             VCenterText { text: root.data.driver; font-size: Theme.fs_sm; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
             Rectangle { horizontal-stretch: 1; }

@@ -26,10 +26,10 @@ export component ImageCard inherits Rectangle {
     border-width: 1px;
     border-color: root.act_show ? Theme.ink_4 : Theme.line;
     clip: true;
-    // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
+    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
+    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
 
     // 左侧状态条（prototype .card::before 默认 --ok）
     Rectangle {
@@ -59,6 +59,7 @@ export component ImageCard inherits Rectangle {
         // .repo（右留 70px 给动作浮层）
         HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             padding-right: 70px;
             VCenterText {
                 text: root.data.name;
@@ -73,6 +74,7 @@ export component ImageCard inherits Rectangle {
         // .tags：最多 3 个芯片 + 溢出计数（alignment:start 防止 preferred 污染导致均分拉伸）
         HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             alignment: start;
             spacing: 4px;
             padding-top: 4px;
@@ -110,6 +112,7 @@ export component ImageCard inherits Rectangle {
         // .img-stats：值在上、标签在下
         HorizontalLayout {
             width: 100%;
+            vertical-stretch: 0;
             spacing: 16px;
             padding-top: 7px;
             VerticalLayout {

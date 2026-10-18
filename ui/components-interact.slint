@@ -11,9 +11,9 @@ export component TipLayer inherits Rectangle {
     in-out property <bool> flip: false;
     background: Theme.tip_bg;
     border-radius: Theme.r_xs;
-    // drop-shadow-color: Theme.shadow;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-offset-y: 4px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // // drop-shadow-color: Theme.shadow;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 4px;  // SOFTWARE_RENDERER
     opacity: Tip.text == "" ? 0.0 : 1.0;
     animate opacity { duration: 120ms; delay: Tip.text == "" ? 0ms : 300ms; easing: ease-out; }
 
@@ -313,9 +313,9 @@ export component Dropdown inherits Rectangle {
     border-radius: Theme.r_md;
     background: Theme.card;
     border-width: 1px; border-color: Theme.line;
-    // drop-shadow-color: Theme.shadow;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
-    // drop-shadow-offset-y: 3px;  // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // // drop-shadow-color: Theme.shadow;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 3px;  // SOFTWARE_RENDERER
 
     VerticalLayout { width: 100%; spacing: 1px; padding: 4px; @children }
 }

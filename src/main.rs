@@ -62,7 +62,8 @@ fn main() {
     // 检测系统主题偏好，灌给 Theme.system_dark —
     // 必须在 bind_callbacks（restore_config 会设置 theme_mode）之前，
     // 否则 theme_mode=auto 时 is_dark 计算不到正确值。
-    ui.set_system_dark(theme::detect_system_dark());
+    let initial_dark = theme::detect_system_dark().unwrap_or(false);
+    ui.set_system_dark(initial_dark);
 
     // consumer 线程：Msg 泵 → UI 更新
     let consumer_handle = consumer::spawn(state.clone(), rx, ui.as_weak());
@@ -73,14 +74,18 @@ fn main() {
     // 首屏数据
     bootstrap::spawn_initial_load(&state);
 
+    // 系统主题热切换监听（auto 模式下每 5s poll gsettings，值翻转才推给 UI）
+    let theme_monitor = bootstrap::spawn_theme_monitor(&ui, &state);
+
     callbacks::bind_callbacks(&ui, &state);
 
     let _ = ui.run();
 
-    // 优雅退出：shutdown flag → consumer 200ms 轮询发现后 break → join
+    // 优雅退出：shutdown flag → consumer / theme-monitor 轮询发现后 break → join
     if let Ok(s) = state.lock() {
         s.shutdown.store(true, Ordering::Relaxed);
         s.persist(); // 退出落盘（搜索词等高频变更项只在此处保存）
     }
     let _ = consumer_handle.join();
+    let _ = theme_monitor.join();
 }

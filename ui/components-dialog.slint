@@ -1,133 +1,53 @@
-// components-dialog.slint — Dialog 基类（基于 Material Modal 1.1.0）
-// 核心约束（Slint 1.18 已验证）：
-//   1. Modal 提供 backdrop TouchArea + clicked 回调 + Material 动画
-//   2. VerticalLayout 子元素显式 height 被忽略！必须用 min-height
-//   3. Modal 不是 Rectangle，DialogShell 必须显式 width:100% height:100%
-//   4. card 直接硬值 width + height（内容驱动的 layout.min_width/min_height 在 TouchArea 包装下失效）
-import { Modal } from "@material";
+// components-dialog.slint — Dialog 基类
+// ⚠️ Slint 1.18 关键约束（已验证）：
+//   1. DialogShell 必须 inherits Rectangle！Material Modal 是裸组件，Window 层级不给 100% 尺寸
+//   2. TouchArea 的 width/height:100% 不能正确解析父级 Rectangle，必须显式 root.width/height
+//   3. 子类覆盖 slot 元素（:=）必须和父类声明在同一层级——否则 Slint 在根级新建实例
+//      → 所以 DialogShell 只提供 card 容器 + @children，子类写完整 Header/Body/Footer
+//   4. Slint 一个组件只能有一个 @children 入口
 import { Theme } from "theme.slint";
-import { VCenterText } from "components-align.slint";
-import { IconBtn } from "components-interact.slint";
-
-/// BodySlot — Dialog body 插槽（子类 fill 内容）
-export component BodySlot inherits Rectangle { @children }
-
-/// FooterSlot — Dialog footer 插槽（预置右对齐布局）
-export component FooterSlot inherits Rectangle {
-    HorizontalLayout {
-        width: 100%; height: 100%;
-        spacing: 8px;
-        Rectangle { horizontal-stretch: 1; }
-        @children
-    }
-}
 
 /// DialogShell — 通用对话框外壳
-/// 结构：Material Modal（全屏遮罩 + blocking TouchArea） + 居中 card（硬值尺寸）
-///   Modal { background_layer := Rectangle {
-///     TouchArea {           ← 点击遮罩关闭
-///       Rectangle { card }  ← 居中小卡片，硬值 width + height
-///     }
-///   }}
-export component DialogShell inherits Modal {
+/// 结构：全屏遮罩 TouchArea → 居中 card（硬值宽高）→ TouchArea 防穿透 → @children
+/// 子类 inherits DialogShell 后，在根级写的 VerticalLayout（Header + Body + Footer）
+/// 会被 @children 接收到 card 内部。
+export component DialogShell inherits Rectangle {
     in-out property <bool> open: false;
-    in-out property <string> dlg_title: "";
-    in-out property <string> dlg_subtitle: "";
     in-out property <length> card_width: 420px;
-    in-out property <length> card_height: 300px;  // 默认 300px，子类可按需覆盖（Slint 1.18 子类 in-out property 覆盖）
+    in-out property <length> card_height: 300px;
     callback close();
 
     width: 100%;
     height: 100%;
     visible: root.open;
-    clicked => { root.close(); }
+    background: Theme.overlay;
 
-    // 覆盖 Material Modal 默认的 background_layer（空 Rectangle）
-    // 改成全屏半透明遮罩 + 居中 card
-    background_layer := Rectangle {
-        background: Theme.overlay;
-        clip: true;
-        width: parent.width;
-        height: parent.height;
+    // 全屏 TouchArea（点击遮罩空白处关闭）
+    // ⚠️ 必须显式 root.width/height——TouchArea 的 100% 对 Rectangle 父级不可靠
+    TouchArea {
+        width: root.width;
+        height: root.height;
+        clicked => { root.close(); }
 
-        // 点击遮罩空白处关闭
-        TouchArea {
-            clicked => { root.close(); }
+        // 居中 card（硬值宽高，内容驱动的 layout.min_width/min_height 在 TouchArea 包装下不可靠）
+        Rectangle {
+            width: root.card_width;
+            height: root.card_height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
 
-            // 居中 card（硬值尺寸，内容驱动在 Slint 1.18 + TouchArea 下不可靠）
-            Rectangle {
-                width: root.card_width;
-                height: root.card_height;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
+            border-radius: Theme.r_dialog;
+            background: Theme.card;
+            border-width: 1px; border-color: Theme.line;
+            clip: true;
 
-                border-radius: Theme.r_dialog;
-                background: Theme.card;
-                border-width: 1px; border-color: Theme.line;
-                clip: true;
+            // 内层 TouchArea 防穿透（card 内点击不会触发遮罩关闭）
+            TouchArea {
+                width: 100%;
+                height: 100%;
 
-                // ⚠️ 必须 TouchArea 包裹 card 内容——否则点击 card 会穿透到父 TouchArea 触发关闭
-                TouchArea {
-                    VerticalLayout {
-                        width: 100%;
-                        height: 100%;
-                        spacing: 0px;
-
-                        // Header
-                        Rectangle {
-                            min-height: 60px;  // ✅ Slint 1.18 min-height 生效，height 被忽略
-                            vertical-stretch: 0;
-                            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
-                            HorizontalLayout {
-                                width: 100%; height: 100%;
-                                spacing: 0px; padding-left: 20px; padding-right: 20px;
-                                padding-top: 18px; padding-bottom: 14px;
-
-                                VerticalLayout {
-                                    horizontal-stretch: 1; spacing: 3px; alignment: start;
-                                    VCenterText {
-                                        text: root.dlg_title;
-                                        font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
-                                    }
-                                    if root.dlg_subtitle != "" : VCenterText {
-                                        text: root.dlg_subtitle;
-                                        font-size: Theme.fs; color: Theme.ink_2;
-                                    }
-                                }
-
-                                IconBtn {
-                                    size: 28px; icon_size: 12px; icon_name: "x";
-                                    tip: @tr("Close");
-                                    clicked => { root.close(); }
-                                }
-                            }
-                        }
-
-                        // Body（vertical-stretch:1 占满剩余空间）
-                        Rectangle {
-                            vertical-stretch: 1;
-                            HorizontalLayout { width: 100%; height: 100%;
-                                spacing: 0px;
-                                padding-left: 20px; padding-right: 20px;
-                                padding-top: 16px; padding-bottom: 16px;
-                                body_slot := BodySlot { width: 100%; }
-                            }
-                        }
-
-                        // Footer
-                        Rectangle {
-                            min-height: 56px;  // ✅ Slint 1.18 min-height 生效
-                            vertical-stretch: 0;
-                            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
-                            HorizontalLayout {
-                                width: 100%; height: 100%;
-                                padding-left: 20px; padding-right: 20px;
-                                padding-top: 14px; padding-bottom: 14px;
-                                footer_slot := FooterSlot { width: 100%; height: 100%; }
-                            }
-                        }
-                    }
-                }
+                // @children：子类 inherits DialogShell 后写的完整 Header+Body+Footer 落到这里
+                @children
             }
         }
     }

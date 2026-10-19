@@ -176,8 +176,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记 `refresh_now`（apply_ui 统一 `s.refresh()`） |
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
-| `LogLine(u64, String)` | follow_logs Stream | `(epoch, line)`；epoch 不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
-| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 epoch 时清空 `follow_id`，允许下次重新建流 |
+| `LogLine(u64, String)` | follow_logs Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
+| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |

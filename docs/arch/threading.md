@@ -83,7 +83,8 @@ invoke_from_event_loop(move || {
 - **UI 节流**：`UI_MIN_INTERVAL = 120ms`（约 8 次/秒）；有待更新时 `poll_timeout` 只睡到窗口结束（≤100ms，兼顾 shutdown），把最坏 UI 应用延迟从约 200ms 收敛到约 120ms。
 - **变化区域**：`DrainResult` 只标记 `lists_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。`has_ui_changes()` 为 false 时不 apply（被 epoch 丢弃的旧日志不会触发空 invoke）。
 - **日志缓冲**：`LogLine(epoch, line)` 先推入 `AppState.logs`，整批 drain 后一次性裁剪到 500 行；UI 侧是一整个 `log_text` string，不再有逐行 Model/ListView。
-- **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
+- **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 stream epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
+- **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI `log_text` 过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。流自然结束后缓冲仍在，`ensure_follow` 用 `tail=0` 续流，避免重放最近 200 行造成重复。
 - **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断文本是否已过期。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
@@ -113,8 +114,8 @@ invoke_from_event_loop(move || {
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记立即刷新 |
 | **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
-| **`LogLine(u64, String)`** | `follow_logs` Stream | `(epoch, line)`；epoch 不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
-| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 epoch 时清空 `follow_id`，允许下次重新建流 |
+| **`LogLine(u64, String)`** | `follow_logs` Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
+| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -172,9 +173,9 @@ rt_handle.spawn(async move {
 });
 ```
 
-`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：递增 epoch、drop 旧 sender，并以 `tail=0` 重启当前流，只保留清空之后的新日志。
+`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启当前流，只保留清空之后的新日志。
 
-流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 epoch 仍为当前流时清空 `follow_id`，下一次切到日志 Tab 会重新建流。
+流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流时清空 `follow_id` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。
 
 环形缓冲在 `drain_messages` 里整批裁剪（`drain(0..excess)`），避免逐行 `drain` 在洪峰下被放大；UI 侧只接收合并后的 `log_text`，不再逐行建 Model。
 

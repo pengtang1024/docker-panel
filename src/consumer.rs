@@ -11,6 +11,7 @@
 //!  2. UI 最多每 UI_MIN_INTERVAL 应用一次，把上千次 invoke 合并成每秒 ~8 次；
 //!  3. 只重建本批真正变化的区域（日志洪峰不再重算容器/镜像/网络/卷/抽屉）。
 
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -119,9 +120,14 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     } else {
         None
     };
-    let log_text = res
-        .logs_changed
-        .then(|| SharedString::from(s.logs.join("\n")));
+    let log_data = res.logs_changed.then(|| {
+        let epoch = s.log_epoch.load(Ordering::Acquire);
+        (
+            SharedString::from(s.logs.join("\n")),
+            s.log_epoch.clone(),
+            epoch,
+        )
+    });
 
     let batch_count = if res.lists_changed {
         let live: Vec<String> = s.containers.iter().map(|c| c.id.clone()).collect();
@@ -161,8 +167,11 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(rows) = compose_rows {
             ui.set_compose_rows(crate::render::compose_rows(rows));
         }
-        if let Some(text) = log_text {
-            ui.set_log_text(text);
+        if let Some((text, epoch_ref, epoch)) = log_data {
+            // 构建 log_text 后 UI 线程可能已经 Clear/切容器；epoch 变了就丢弃旧文本
+            if epoch_ref.load(Ordering::Acquire) == epoch {
+                ui.set_log_text(text);
+            }
         }
         ui.set_sort_field(sort_field_int);
         ui.set_sort_desc(sort_desc);

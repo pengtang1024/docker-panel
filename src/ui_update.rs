@@ -192,7 +192,7 @@ impl AppState {
             }
             Msg::LogLine(epoch, line) => {
                 // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
-                if *epoch == self.log_epoch {
+                if *epoch == self.log_epoch.load(Ordering::Acquire) {
                     self.logs.push(line.clone());
                     res.logs_changed = true;
                 }
@@ -233,5 +233,31 @@ impl AppState {
             // 已在上方统一处理
             Msg::Stats(..) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_log_epoch_is_dropped_after_clear() {
+        let (state, rx) = AppState::new();
+        let mut s = state.lock().unwrap();
+        s.logs.push("old".into());
+        s.log_epoch.store(5, Ordering::Release);
+        s.clear_logs(); // epoch → 6，缓冲清空
+        assert!(s.logs.is_empty());
+
+        let tx = s.tx.clone();
+        tx.send(Msg::LogLine(5, "stale".into())).unwrap();
+        let res = s.drain_messages(&rx, None, 10);
+        assert!(s.logs.is_empty(), "旧 epoch 日志必须被丢弃");
+        assert!(!res.logs_changed);
+
+        tx.send(Msg::LogLine(6, "fresh".into())).unwrap();
+        let res = s.drain_messages(&rx, None, 10);
+        assert_eq!(s.logs, vec!["fresh".to_string()]);
+        assert!(res.logs_changed);
     }
 }

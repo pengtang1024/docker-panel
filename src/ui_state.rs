@@ -7,7 +7,7 @@
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -70,8 +70,9 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
-    /// 当前日志流 epoch：切换容器/清空日志时递增；consumer 只接受当前 epoch 的日志行
-    pub log_epoch: u64,
+    /// 当前日志流 epoch：切换容器/清空日志时递增；consumer 只接受当前 epoch 的日志行。
+    /// 用共享 AtomicU64 让主线程的 invoke 闭包也能在锁外丢弃过期 log_text。
+    pub log_epoch: Arc<AtomicU64>,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
     pub follow_id: String,
     /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
@@ -143,7 +144,7 @@ impl AppState {
             volume_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: 500,
-            log_epoch: 0,
+            log_epoch: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
             follow_cancel: None,
             stats_prev: HashMap::new(),
@@ -246,7 +247,7 @@ impl AppState {
     pub fn clear_logs(&mut self) {
         self.logs.clear();
         self.follow_id.clear();
-        self.log_epoch = self.log_epoch.wrapping_add(1);
+        self.log_epoch.fetch_add(1, Ordering::AcqRel);
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
     }
@@ -274,8 +275,10 @@ impl AppState {
     /// 建流并递增 epoch：旧流随后被取消，其已入队日志会因 epoch 不匹配被丢弃。
     fn spawn_follow(&mut self, id: &str, tail: i64) {
         self.follow_id = id.to_string();
-        self.log_epoch = self.log_epoch.wrapping_add(1);
-        let epoch = self.log_epoch;
+        let epoch = self
+            .log_epoch
+            .fetch_add(1, Ordering::AcqRel)
+            .wrapping_add(1);
         // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
         self.follow_cancel = Some(cancel_tx);

@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "stage": "fixed",
+  "stage": "reviewed",
   "baseline_tag": "baseline-continuous-optimization",
   "dod": [
     "consumer 待更新消息的最长 UI 应用延迟收敛到约 120ms（原最坏约 200ms），并有单元测试",
@@ -10,7 +10,7 @@
     "release + MCP 70k 请求洪峰 0 失败、最慢截图 <0.5s；日志切换/清空验证通过",
     "cargo fmt --check / cargo clippy -D warnings / cargo check --all-targets 全部通过"
   ],
-  "round": 4,
+  "round": 5,
   "issues": {
     "1": "fixed",
     "2": "fixed",
@@ -26,7 +26,11 @@
     "12": "fixed",
     "13": "fixed",
     "14": "fixed",
-    "15": "fixed"
+    "15": "fixed",
+    "16": "open",
+    "17": "waived",
+    "18": "open",
+    "19": "open"
   },
   "tests": {
     "L1": "pass",
@@ -40,5 +44,5 @@
     "version": "skipped"
   },
   "awaiting": "none",
-  "updated_at": "2026-10-20T00:50:44+08:00"
+  "updated_at": "2026-10-20T01:03:07+08:00"
 }

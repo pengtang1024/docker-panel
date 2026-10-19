@@ -83,6 +83,8 @@ pub struct AppState {
     pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
     /// 当前日志流存活标志（每条流独立）：旧流退出不会误标新流
     pub follow_active: Option<Arc<AtomicBool>>,
+    /// 被跟随容器是否仍在运行（随列表刷新更新）：运行中却 EOF 时按可恢复处理
+    pub follow_running: Arc<AtomicBool>,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -156,6 +158,7 @@ impl AppState {
             follow_id: String::new(),
             follow_cancel: None,
             follow_active: None,
+            follow_running: Arc::new(AtomicBool::new(false)),
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -262,6 +265,7 @@ impl AppState {
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
         self.follow_active = None;
+        self.follow_running.store(false, Ordering::Release);
     }
 
     /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
@@ -298,7 +302,7 @@ impl AppState {
         }
         // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
         // history_done 在收到首条日志或 Clear 时才置位，空历史/首流失败可重试。
-        let tail = follow_tail(self.history_done);
+        let tail = crate::follow_runtime::follow_tail(self.history_done);
         self.spawn_follow(id, tail);
     }
 
@@ -315,60 +319,23 @@ impl AppState {
 
     /// 建流并递增 stream epoch；不推进 buffer epoch，续流时保留已缓冲日志与待应用文本。
     ///
-    /// 流异常（Docker 错误）时按指数退避自动重连；容器停止（EOF）不重连，
-    /// 由下一次 ensure_follow 决定是否重建。
+    /// 异步运行时（退避重连、存活标志、结束通知）全部在 `follow_runtime` 模块，
+    /// 本方法只负责写入状态字段。
     fn spawn_follow(&mut self, id: &str, tail: i64) {
         self.follow_id = id.to_string();
         self.stream_epoch = self.stream_epoch.wrapping_add(1);
         let epoch = self.stream_epoch;
-        // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
-        let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(());
-        self.follow_cancel = Some(cancel_tx);
-        // 每条流独立存活标志：旧流退出不会误标新流
-        let active = Arc::new(AtomicBool::new(true));
-        self.follow_active = Some(active.clone());
-        let tx = self.tx.clone();
-        let tx_end = self.tx.clone();
-        let id = id.to_string();
-        self.rt.spawn(async move {
-            let mut attempt: u32 = 0;
-            // 本流是否已推送过日志：决定重连时是否重放历史（避免重复行）
-            let mut sent_any = false;
-            let mut retry_tail = tail;
-            loop {
-                let (end, lines) = crate::docker::follow_logs(
-                    &id,
-                    tx.clone(),
-                    retry_tail,
-                    epoch,
-                    cancel_rx.clone(),
-                )
-                .await;
-                sent_any |= lines > 0;
-                match end {
-                    crate::docker::LogStreamEnd::Cancelled | crate::docker::LogStreamEnd::Eof => {
-                        break;
-                    }
-                    crate::docker::LogStreamEnd::Error(e) => {
-                        let delay = crate::docker::retry_delay(attempt);
-                        attempt = attempt.saturating_add(1);
-                        // 已推送过日志则只接续新行，避免重放历史造成重复
-                        if sent_any {
-                            retry_tail = 0;
-                        }
-                        eprintln!("[log-stream] {id} follow failed: {e}; retry in {delay:?}");
-                        // 退避等待可被取消：切容器/Clear 时立即退出
-                        tokio::select! {
-                            _ = cancel_rx.changed() => break,
-                            _ = tokio::time::sleep(delay) => {}
-                        }
-                    }
-                }
-            }
-            active.store(false, Ordering::Release);
-            // 流结束通知 consumer；旧 epoch 的结束消息会被忽略
-            let _ = tx_end.send(Msg::LogStreamEnded(epoch));
-        });
+        let handle = crate::follow_runtime::spawn_follow(
+            &self.rt,
+            id.to_string(),
+            tail,
+            epoch,
+            self.follow_running.clone(),
+            self.tx.clone(),
+            self.tx.clone(),
+        );
+        self.follow_cancel = Some(handle.cancel);
+        self.follow_active = Some(handle.active);
     }
 
     /// 清理弹窗各类候选数量（按当前列表估算，供弹窗 .cnt 展示）
@@ -388,15 +355,6 @@ impl AppState {
     }
 }
 
-/// 续流 tail：历史未加载时拉最近 200 行；已加载过则只接续新行，避免 Clear 后历史复活。
-fn follow_tail(history_done: bool) -> i64 {
-    if history_done {
-        0
-    } else {
-        200
-    }
-}
-
 pub type SharedState = Arc<Mutex<AppState>>;
 
 #[cfg(test)]
@@ -405,8 +363,8 @@ mod tests {
 
     #[test]
     fn follow_tail_avoids_replaying_history() {
-        assert_eq!(follow_tail(false), 200);
-        assert_eq!(follow_tail(true), 0);
+        assert_eq!(crate::follow_runtime::follow_tail(false), 200);
+        assert_eq!(crate::follow_runtime::follow_tail(true), 0);
     }
 
     #[test]
@@ -423,14 +381,12 @@ mod tests {
     }
 
     #[test]
-    fn failed_follow_keeps_stream_alive_for_retry() {
-        // 容器不存在 → follow_logs 返回 Error → 任务进入退避重连，
-        // 期间流仍算「存活」，ensure_follow 不会另建一条流。
+    fn unrecoverable_follow_ends_stream_without_retry() {
+        // 容器不存在 → 不可恢复错误（404）→ 直接结束流，不做僵尸式无限重试
         let (state, _rx) = AppState::new();
         let mut s = state.lock().unwrap();
         s.spawn_follow("zz-dp-nonexistent-container", 0);
         std::thread::sleep(Duration::from_millis(400));
-        assert!(s.follow_is_alive(), "失败后退避重连期间仍应视为存活");
-        assert_eq!(s.follow_id, "zz-dp-nonexistent-container");
+        assert!(!s.follow_is_alive(), "不可恢复错误应结束流");
     }
 }

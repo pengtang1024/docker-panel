@@ -148,6 +148,13 @@ impl AppState {
                                 (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
                             }
                         }
+                        // 更新被跟随容器的运行状态：日志流 EOF 时据此判断是否可恢复
+                        let follow_id = self.follow_id.clone();
+                        let running = self
+                            .containers
+                            .iter()
+                            .any(|c| c.id == follow_id && c.is_running());
+                        self.follow_running.store(running, Ordering::Release);
                     }
                     Err(e) => {
                         res.status_text =
@@ -215,12 +222,16 @@ impl AppState {
                 }
             }
             Msg::LogStreamEnded(epoch) => {
-                // 流自然结束（容器停止/Docker 异常）：允许下次 ensure_follow 重新建流
+                // 流结束（Eof / Cancelled）：清空 follow_id，允许下次 ensure_follow 重新建流
                 if *epoch == self.stream_epoch {
                     self.follow_id.clear();
                     self.follow_cancel = None;
                     self.follow_active = None;
                 }
+            }
+            Msg::LogStreamStatus(text) => {
+                // 日志流状态提示（重连中 / 已恢复 / 已停止）：写入状态栏，不弹 toast
+                res.status_text = Some(text.clone());
             }
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);

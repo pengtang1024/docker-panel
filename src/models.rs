@@ -143,6 +143,8 @@ pub enum Msg {
     /// 日志流结束（stream_epoch）；仅当仍是当前流时清空 follow_id 并释放 cancel sender，
     /// 允许下次重新建流
     LogStreamEnded(u64),
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止），直接写入状态栏
+    LogStreamStatus(String),
     /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
     Stats(String, crate::docker::ContainerStatsSnapshot),
     /// 网络列表

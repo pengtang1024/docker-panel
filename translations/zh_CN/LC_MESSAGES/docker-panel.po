@@ -209,6 +209,15 @@ msgstr "就绪"
 msgid "Docker API timeout"
 msgstr "Docker API 请求超时"
 
+msgid "Log stream interrupted, reconnecting…"
+msgstr "日志流中断，正在重连…"
+
+msgid "Log stream reconnected"
+msgstr "日志流已恢复连接"
+
+msgid "Log stream stopped"
+msgstr "日志流已停止"
+
 msgid "Loaded {0} containers"
 msgstr "已加载 {0} 个容器"
 

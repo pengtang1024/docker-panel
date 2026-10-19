@@ -177,7 +177,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
 | `LogLine(u64, String)` | follow_logs Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
-| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
+| `LogStreamEnded(u64)` | 日志流结束（Eof / Cancelled） | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active`，允许下次重新建流；Docker 异常由流内部退避重连消化，不会产生 Ended |
+| `LogStreamStatus(String)` | 日志流运行时 | 写入状态栏（重连中 / 已恢复 / 已停止），不弹 toast |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |

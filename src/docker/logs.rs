@@ -168,10 +168,17 @@ pub fn retry_delay(attempt: u32) -> Duration {
 
 /// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine(epoch, line)) 推给 consumer
 ///
+/// 返回 `(LogStreamEnd, lines)`：
+/// - `LogStreamEnd::Cancelled`：被取消（切容器 / Clear）
+/// - `LogStreamEnd::Eof`：日志流自然结束（容器停止 / Docker 侧干净关闭）
+/// - `LogStreamEnd::Error(String)`：Docker 侧错误，可退避重连
+/// - `lines`：本次连接推送出的日志行数，调用方据此决定重连时是否重放历史
+///
 /// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
 /// 本任务会在下一次 `select!` 立即退出，避免旧容器的日志流泄漏并污染新容器。
 /// `epoch` 随每条日志回传；consumer 只接受与 AppState 当前 stream epoch 相同的行，
 /// 用来丢弃切换/清空瞬间已经排进 mpsc 队列的旧日志。
+/// 重连与退避策略由调用方（`follow_runtime`）负责。
 pub async fn follow_logs(
     id: &str,
     tx: std::sync::mpsc::Sender<Msg>,

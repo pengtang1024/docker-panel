@@ -23,6 +23,7 @@ mod config;
 mod consumer;
 mod detail_fmt;
 mod docker;
+mod follow_runtime;
 mod i18n;
 mod models;
 mod render;

@@ -232,4 +232,24 @@ mod tests {
         assert_eq!(retry_delay(4), Duration::from_secs(10));
         assert_eq!(retry_delay(99), Duration::from_secs(10));
     }
+
+    #[test]
+    fn follow_logs_reports_error_for_unknown_container() {
+        // 需要本机 Docker 守护进程；容器不存在时日志流返回 Error（可退避重连），
+        // 而不是 Eof（容器停止，不重连）。
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
+        let end = rt.block_on(follow_logs(
+            "zz-dp-nonexistent-container",
+            tx,
+            0,
+            1,
+            cancel_rx,
+        ));
+        assert!(matches!(end, LogStreamEnd::Error(_)), "应判定为可重连错误");
+    }
 }

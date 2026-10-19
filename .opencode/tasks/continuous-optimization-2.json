@@ -6,7 +6,7 @@
     "ensure_follow 依据流存活标志判定幂等：Ended 未 drain 的窗口内切 Tab 也能重建流（消除 #8/#17）",
     "Docker 流异常(Error)按指数退避自动重连（1s→2s→4s…上限 10s，可取消）；容器停止(EOF)不重连",
     "单测覆盖退避序列、EOF/Error/Cancelled 结局与存活判定",
-    "MCP 集成：删除正在跟随的容器后应用日志出现退避重连记录；日志切换/Clear 行为不回归",
+    "MCP 集成：跟随中删除容器 → 判定 Eof 不重连（设计如此）；Docker 侧 Error 路径由单测覆盖（未知容器 → Error）；daemon 级故障需中断 Docker 才能端到端复现，记录为限制",
     "cargo fmt --check / clippy -D warnings / check / test 全绿；L4 洪峰 0 失败"
   ],
   "round": 0,
@@ -16,5 +16,5 @@
   },
   "sync": {},
   "awaiting": "none",
-  "updated_at": "2026-10-20T01:41:37+08:00"
+  "updated_at": "2026-10-20T01:45:32+08:00"
 }

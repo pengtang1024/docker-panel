@@ -1,7 +1,9 @@
 // drawer-detail-row.slint — Drawer 详情/环境行（四种 kind 变体）
-// 值区用只读 TextInput 而非普通 Text：Text 不支持选中复制，TextInput 原生支持。
+// 值区用 Slint 原生 wrap: word-wrap 自动折行。
+// 每行（除分节标题）右侧有 copy icon，点击触发 copy_request(value)。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
 import { DetailPair } from "models.slint";
 
 export component DetailRow inherits Rectangle {
@@ -10,7 +12,10 @@ export component DetailRow inherits Rectangle {
 
     vertical-stretch: 0;
 
-    // kind == 1: 分节标题（只用普通 Text，不需要选中）
+    // 点击复制该行的值（Rust 侧用 arboard 写入剪贴板）
+    callback copy_request(string);
+
+    // kind == 1: 分节标题（不显示复制按钮）
     if root.data.kind == 1 : VerticalLayout {
         width: parent.width;
         vertical-stretch: 0;
@@ -18,15 +23,13 @@ export component DetailRow inherits Rectangle {
         Rectangle { height: Theme.s5; }
         HorizontalLayout {
             width: parent.width;
-            vertical-stretch: 0;
             padding-left: Theme.s6; padding-right: Theme.s6;
-            TextInput {
+            padding-top: 4px;
+            VCenterText {
+                width: parent.width;
                 text: root.data.k;
                 font-size: Theme.fs_xs; font-weight: 700;
                 color: Theme.ink_3;
-                font-family: ""; single-line: false; wrap: word-wrap;
-                read-only: true;
-                horizontal-stretch: 1; min-width: 0px;
             }
         }
         Rectangle { height: 10px; }
@@ -41,16 +44,21 @@ export component DetailRow inherits Rectangle {
         padding-top: 5px; padding-bottom: 5px;
         RightText {
             text: root.data.k; width: 88px; horizontal-stretch: 0;
-            font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
+            font-size: Theme.fs; color: Theme.ink_3;
         }
-        TextInput {
+        VCenterText {
             text: root.data.v;
             font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
             font-family: root.data.mono ? Theme.mono : "";
             color: root.data.mono ? Theme.ink_2 : Theme.ink;
-            font-weight: 500; single-line: false; wrap: word-wrap;
-            read-only: true;
+            font-weight: 500;
             horizontal-stretch: 1; min-width: 0px;
+            wrap: word-wrap;
+        }
+        IconBtn {
+            size: 22px; icon_size: 11px; icon_name: "copy";
+            active: false;
+            clicked => { root.copy_request(root.data.v); }
         }
     }
 
@@ -63,29 +71,33 @@ export component DetailRow inherits Rectangle {
         padding-top: 5px; padding-bottom: 5px;
         RightText {
             text: root.data.k; width: 88px; horizontal-stretch: 0;
-            font-size: Theme.fs; color: Theme.ink_3; wrap: word-wrap;
+            font-size: Theme.fs; color: Theme.ink_3;
         }
         Rectangle {
             horizontal-stretch: 1;
-            vertical-stretch: 0;
             min-width: 0px;
             border-radius: Theme.r_md; background: Theme.bg;
             HorizontalLayout {
                 width: parent.width;
-                vertical-stretch: 0;
                 padding-left: 11px; padding-right: 11px;
                 padding-top: 9px; padding-bottom: 9px;
-                TextInput {
+                VCenterText {
+                    width: 100%;
                     text: root.data.v;
                     font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2; single-line: false; wrap: word-wrap;
-                    horizontal-stretch: 1; min-width: 0px;
+                    color: Theme.ink_2;
+                    wrap: word-wrap;
                 }
             }
         }
+        IconBtn {
+            size: 22px; icon_size: 11px; icon_name: "copy";
+            active: false;
+            clicked => { root.copy_request(root.data.v); }
+        }
     }
 
-    // kind == 3: 环境变量代码盒条目（key=value 两段都可复制）
+    // kind == 3: 环境变量代码盒条目（复制完整 KEY=VALUE）
     if root.data.kind == 3 : VerticalLayout {
         width: parent.width;
         vertical-stretch: 0;
@@ -98,23 +110,28 @@ export component DetailRow inherits Rectangle {
             border-radius: Theme.r_xs; background: Theme.bg;
             HorizontalLayout {
                 width: parent.width;
-                vertical-stretch: 0;
                 padding-left: Theme.s3; padding-right: Theme.s3;
                 padding-top: Theme.s1; padding-bottom: Theme.s1;
-                TextInput {
+                VCenterText {
                     text: root.data.k == "" ? root.data.v : root.data.k + "=";
                     font-size: Theme.fs_sm; font-family: Theme.mono;
                     color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
-                    single-line: false; wrap: word-wrap;
-                    read-only: true;
                     horizontal-stretch: root.data.k == "" ? 1 : 0; min-width: 0px;
+                    wrap: word-wrap;
                 }
-                if root.data.k != "" : TextInput {
+                if root.data.k != "" : VCenterText {
                     text: root.data.v;
                     font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2; single-line: false; wrap: word-wrap;
-                    read-only: true;
+                    color: Theme.ink_2;
                     horizontal-stretch: 1; min-width: 0px;
+                    wrap: word-wrap;
+                }
+                IconBtn {
+                    size: 22px; icon_size: 11px; icon_name: "copy";
+                    active: false;
+                    clicked => {
+                        root.copy_request(root.data.k == "" ? root.data.v : root.data.k + "=" + root.data.v);
+                    }
                 }
             }
         }

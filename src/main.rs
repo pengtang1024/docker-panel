@@ -79,27 +79,22 @@ fn main() {
 
     callbacks::bind_callbacks(&ui, &state);
 
-    // === 调试：自动打开抽屉详情 tab ===
+    // [DEBUG] 自动打开 Drawer（详情 tab）—— 清理时删除
     {
         let arc = state.clone();
         let w = ui.as_weak();
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            let id = {
-                let Ok(s) = arc.lock() else { return };
-                s.containers.first().map(|c| c.id.clone())
-            };
-            let Some(id) = id else { return };
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(u) = w.upgrade() {
-                    u.set_drawer_open(true);
-                    u.set_drawer_tab(0);
-                }
-            });
-            std::thread::sleep(std::time::Duration::from_millis(600));
+            std::thread::sleep(std::time::Duration::from_secs(6));
+            let first_id = arc.lock().ok().and_then(|s| s.containers.first().map(|c| c.id.clone()));
+            let Some(id) = first_id else { return };
             if let Ok(mut s) = arc.lock() {
+                s.sel = crate::ui_state::SelKind::Container;
+                s.sel_key = id.clone();
                 s.request_detail(id);
             }
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(u) = w.upgrade() { u.set_drawer_open(true); u.set_drawer_tab(2); }
+            });
         });
     }
 

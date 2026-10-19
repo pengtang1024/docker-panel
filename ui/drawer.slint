@@ -1,11 +1,16 @@
 // drawer.slint — 右侧抽屉（详情 / 日志 / 环境）
+//
+// 滚动容器统一使用 Material 3 组件库（@material）的 ScrollView：
+//   它内部封装 Flickable，并声明 vertical-stretch:1 + preferred-height:100%，
+//   必须作为 VerticalLayout 的「直接子元素」才能由布局引擎分配高度。
+//   切勿再包一层 Rectangle + height:parent.height —— 那样 viewport 高度会解析失败。
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
 import { TabItem } from "components-nav.slint";
 import { LogLineRow, DetailPair } from "models.slint";
 import { DetailRow } from "drawer-detail-row.slint";
-import { ScrollView } from "std-widgets.slint";
+import { ScrollView } from "@material";
 
 export component Drawer inherits Rectangle {
     in-out property <bool> open: false;
@@ -25,6 +30,7 @@ export component Drawer inherits Rectangle {
     callback log_follow_click();
     callback log_copy_click();
     callback log_clear_click();
+    callback value_copy(string);
 
     width: Theme.drawer_w;
     height: 100%;
@@ -36,7 +42,7 @@ export component Drawer inherits Rectangle {
         height: 100%;
         spacing: 0px;
 
-        // 顶部标题栏（高度由内容决定，不参与剩余空间分配）
+        // 顶部标题栏
         Rectangle {
             vertical-stretch: 0;
             HorizontalLayout {
@@ -58,7 +64,7 @@ export component Drawer inherits Rectangle {
             }
         }
 
-        // Tab 栏（36px 固定高）
+        // Tab 栏
         if root.tabs_visible : Rectangle {
             vertical-stretch: 0;
             height: 36px;
@@ -71,83 +77,70 @@ export component Drawer inherits Rectangle {
             }
         }
 
-        // 内容区（占剩余空间）
-        content_box := Rectangle {
-            vertical-stretch: 1;
+        // ====== 详情 tab（ScrollView 作为布局直接子元素，自动吃满剩余高度）======
+        if (root.tabs_visible == false) || root.tab == 0 : detail_scroll := ScrollView {
             width: 100%;
-
-            // ====== 详情 tab ======
-            detail_scroll := ScrollView {
-                visible: (root.tabs_visible == false) || root.tab == 0;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            VerticalLayout {
                 width: 100%;
-                height: 100%;
-                vertical-scrollbar-policy: as-needed;
-                horizontal-scrollbar-policy: always-off;
-                VerticalLayout {
-                    width: parent.width;
-                    spacing: 0px;
-                    for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; }
-                    Rectangle { height: Theme.s5; }
+                spacing: 0px;
+                for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; width: 100%; copy_request(v) => { root.value_copy(v); } }
+                Rectangle { height: Theme.s5; }
+            }
+        }
+
+        // ====== 日志 tab ======
+        if root.tabs_visible && root.tab == 1 : VerticalLayout {
+            width: 100%;
+            spacing: 0px;
+            Rectangle {
+                vertical-stretch: 0;
+                height: 36px;
+                HorizontalLayout {
+                    width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
+                    IconBtn { size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
+                    IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
+                    IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                 }
             }
-
-            // ====== 日志 tab ======
-            logsec := VerticalLayout {
-                visible: root.tabs_visible && root.tab == 1;
+            Rectangle {
+                vertical-stretch: 1;
                 width: 100%;
-                height: 100%;
-                spacing: 0px;
-                Rectangle {
-                    vertical-stretch: 0;
-                    height: 36px;
-                    HorizontalLayout {
-                        width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
-                        IconBtn { size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
-                        IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
-                        IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
-                    }
-                }
-                Rectangle {
-                    vertical-stretch: 1;
-                    width: 100%;
-                    background: Theme.log_bg;
-                    ScrollView {
-                        mouse-drag-pan-enabled: false;
-                        width: 100%; height: 100%;
-                        vertical-scrollbar-policy: as-needed;
-                        horizontal-scrollbar-policy: always-off;
-                        VerticalLayout {
+                background: Theme.log_bg;
+                ScrollView {
+                    width: 100%; height: 100%;
+                    vertical-scrollbar-policy: as-needed;
+                    horizontal-scrollbar-policy: always-off;
+                    VerticalLayout {
+                        width: 100%;
+                        spacing: 0px;
+                        padding-left: 16px; padding-right: 16px;
+                        padding-top: 14px; padding-bottom: 14px;
+                        TextInput {
                             width: 100%;
-                            spacing: 0px;
-                            padding-left: 16px; padding-right: 16px;
-                            padding-top: 14px; padding-bottom: 14px;
-                            TextInput {
-                                width: 100%;
-                                read-only: true;
-                                text: root.log_text;
-                                font-size: 12px;
-                                font-family: Theme.mono;
-                                color: Theme.log_ink;
-                                wrap: word-wrap;
-                            }
+                            read-only: true;
+                            text: root.log_text;
+                            font-size: 12px;
+                            font-family: Theme.mono;
+                            color: Theme.log_ink;
+                            wrap: word-wrap;
                         }
                     }
                 }
             }
+        }
 
-            // ====== 环境 tab ======
-            env_scroll := ScrollView {
-                visible: root.tabs_visible && root.tab == 2;
+        // ====== 环境 tab ======
+        if root.tabs_visible && root.tab == 2 : env_scroll := ScrollView {
+            width: 100%;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            VerticalLayout {
                 width: 100%;
-                height: 100%;
-                vertical-scrollbar-policy: as-needed;
-                horizontal-scrollbar-policy: always-off;
-                VerticalLayout {
-                    width: parent.width;
-                    spacing: 0px;
-                    for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; }
-                    Rectangle { height: Theme.s5; }
-                }
+                spacing: 0px;
+                for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; width: 100%; copy_request(v) => { root.value_copy(v); } }
+                Rectangle { height: Theme.s5; }
             }
         }
     }

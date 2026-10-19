@@ -46,6 +46,7 @@ export global AppActions {
     callback log_toggle_follow();
     callback log_copy();
     callback log_clear();
+    callback value_copy(string);
     callback pull_submit(string);
     callback pull_close();
     callback cleanup_submit(bool, bool, bool, bool);
@@ -305,6 +306,7 @@ export component MainWindow inherits Window {
     Drawer {
         // 未显式定位的元素默认在父级居中（x=(1280-400)/2=440），必须显式绑定到窗口右侧
         x: root.drawer_open ? root.width - Theme.drawer_w : root.width;
+        y: 0;
         animate x { duration: 180ms; easing: ease-out; }
         open <=> root.drawer_open;
         tab <=> root.drawer_tab;
@@ -321,6 +323,7 @@ export component MainWindow inherits Window {
         log_follow_click => { AppActions.log_toggle_follow(); }
         log_copy_click => { AppActions.log_copy(); }
         log_clear_click => { AppActions.log_clear(); }
+        value_copy(v) => { AppActions.value_copy(v); }
     }
 
     PullDialog {

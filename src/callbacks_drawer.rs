@@ -79,4 +79,17 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             ui.set_status_text(SharedString::from(crate::i18n::t("Log cleared")));
         });
     }
+    {
+        let ui_d = ui.as_weak();
+        actions.on_value_copy(move |v: SharedString| {
+            let Some(ui) = ui_d.upgrade() else { return };
+            let text = v.as_str().to_string();
+            let n = text.chars().count();
+            let msg = match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
+                Ok(()) => crate::i18n::trf("Copied {0} chars", &[&n.to_string()]),
+                Err(_) => crate::i18n::t("Copy failed"),
+            };
+            ui.set_status_text(SharedString::from(msg));
+        });
+    }
 }

@@ -1,22 +1,26 @@
 // drawer.slint — 右侧抽屉（详情 / 日志 / 环境）
 //
-// 滚动容器统一使用 Material 3 组件库（@material）的 ScrollView：
-//   它内部封装 Flickable，并声明 vertical-stretch:1 + preferred-height:100%，
-//   必须作为 VerticalLayout 的「直接子元素」才能由布局引擎分配高度。
+// 定位方式：由 app.slint 的根 HorizontalLayout 作为正式子元素承载
+//   （if root.drawer_open : Drawer），高度由布局引擎分配；不再使用绝对定位 overlay。
+//
+// 滚动容器统一使用 Material 3 组件库（@material）：
+//   行列表（详情 / 环境）用 ListView —— 运行时逐项读 delegate.height 累加内容高，
+//     delegate 必须显式 height: self.min-height，且 DetailRow 提供 min-height。
+//   连续文本（日志）用 ScrollView —— 内容高由 Flickable 依子布局 min-height 自动推导。
+//   两者都作为所在布局的直接子元素，由布局引擎分配视口高度，
 //   切勿再包一层 Rectangle + height:parent.height —— 那样 viewport 高度会解析失败。
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
 import { TabItem } from "components-nav.slint";
-import { LogLineRow, DetailPair } from "models.slint";
+import { DetailPair } from "models.slint";
 import { DetailRow } from "drawer-detail-row.slint";
-import { ScrollView } from "@material";
+import { ScrollView, ListView } from "@material";
 
 export component Drawer inherits Rectangle {
     in-out property <bool> open: false;
     in-out property <int> tab: 0;
     in-out property <bool> log_follow: true;
-    in-out property <[LogLineRow]> log_lines: [];
 
     in-out property <string> title: "";
     in-out property <string> sub: "";
@@ -32,15 +36,22 @@ export component Drawer inherits Rectangle {
     callback log_clear_click();
     callback value_copy(string);
 
+    // 宽度固定；高度由父级 HorizontalLayout 跨轴拉伸分配（不要再写 height:100%，
+    // 布局子元素上显式高度会触发 Slint 1.18 的布局循环/塌陷问题）
     width: Theme.drawer_w;
-    height: 100%;
     background: Theme.card;
+    // 子元素溢出 Drawer 矩形时裁剪：ListView 内容超出视口时，
+    // 溢出行默认会穿透 Drawer 右边界画到窗口外（Slint Rectangle 默认不裁剪）
+    clip: true;
 
     body := VerticalLayout {
         visible: root.open;
         width: 100%;
         height: 100%;
         spacing: 0px;
+        // 底部 16px 不可滚动留白：三 tab 滚动视口统一缩短，
+        // 保证最后一行内容不贴 Drawer 底边
+        padding-bottom: Theme.s5;
 
         // 顶部标题栏
         Rectangle {
@@ -77,16 +88,30 @@ export component Drawer inherits Rectangle {
             }
         }
 
-        // ====== 详情 tab（ScrollView 作为布局直接子元素，自动吃满剩余高度）======
-        if (root.tabs_visible == false) || root.tab == 0 : detail_scroll := ScrollView {
+        // ====== 详情 tab（ListView：逐项行高 + 内容高由 Slint 运行时列表布局计算）======
+        // 为什么必须用 ListView 而不是 ScrollView + VerticalLayout：
+        //   Flickable 的非布局子元素高度默认吃到 100% 视口高，Slint 布局引擎会把
+        //   N 行等比压缩进视口 → 内容永不溢出、无法滚动（实测 67 行被压成 9.388px/行）。
+        //   ListView 由运行时逐项读取 delegate.height 累加内容高，绕开该缺陷。
+        if (root.tabs_visible == false) || root.tab == 0 : detail_scroll := ListView {
             width: 100%;
             vertical-scrollbar-policy: as-needed;
             horizontal-scrollbar-policy: always-off;
-            VerticalLayout {
-                width: 100%;
-                spacing: 0px;
-                for row[i] in root.detail_rows : DetailRow { data: row; head_gap: i > 0; width: 100%; copy_request(v) => { root.value_copy(v); } }
-                Rectangle { height: Theme.s5; }
+            // 锁死横向 viewport：禁止横向拖拽
+            // horizontal-scrollbar-policy:always-off 只隐藏滚动条 UI，不禁手势；
+            // Flickable 从子元素首选宽度（未折行文本宽）算 viewport-width，
+            // 即使渲染时文字折行，viewport-width 仍比可见宽度大 → 允许横向拖拽。
+            // 必须绑定 visible_width（= flickable.width，即扣除滚动条后的视口宽），
+            // 不能用 self.width：ScrollView 在竖向策略非 always-off 时会把
+            // flickable.width 缩掉 scroll_bar_size（6px），self.width 仍留 6px 横向余量，
+            // 表现为"还能左右拖一点点"。visible_width 相等 → 横向行程为 0。
+            content_width: self.visible_width;
+            // 同日志 tab：避免滚动容器抢鼠标拖拽
+            mouse_drag_pan_enabled: false;
+            for row[i] in root.detail_rows : DetailRow {
+                data: row; width: 100%;
+                height: self.min-height;
+                copy_request(v) => { root.value_copy(v); }
             }
         }
 
@@ -99,7 +124,16 @@ export component Drawer inherits Rectangle {
                 height: 36px;
                 HorizontalLayout {
                     width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
-                    IconBtn { size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs"); clicked => { root.log_follow_click(); } }
+                    IconBtn {
+                        size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs");
+                        clicked => {
+                            root.log_follow_click();
+                            // 重新开启跟随时立即贴底，不必等下一行日志到达
+                            if root.log_follow {
+                                log_scroll.content_y = log_scroll.visible_height - log_scroll.content_height;
+                            }
+                        }
+                    }
                     IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
                     IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
                 }
@@ -108,15 +142,26 @@ export component Drawer inherits Rectangle {
                 vertical-stretch: 1;
                 width: 100%;
                 background: Theme.log_bg;
-                ScrollView {
+                log_scroll := ScrollView {
                     width: 100%; height: 100%;
                     vertical-scrollbar-policy: as-needed;
                     horizontal-scrollbar-policy: always-off;
+                    content_width: self.visible_width;
+                    // 关闭 Flickable 的鼠标拖拽平移：否则按住拖动会被滚动容器抢走，
+                    // 日志 TextInput 的选词/选中手势时有时无（滚轮/触摸板滚动不受影响）
+                    mouse_drag_pan_enabled: false;
+                    // 自动跟随：content_y 为负值表示向下滚，贴底 = visible_height - content_height。
+                    // 1) 首次打开 / 内容变高（未满 500 行缓冲）
+                    changed content_height => {
+                        if root.log_follow {
+                            self.content_y = self.visible_height - self.content_height;
+                        }
+                    }
                     VerticalLayout {
                         width: 100%;
                         spacing: 0px;
                         padding-left: 16px; padding-right: 16px;
-                        padding-top: 14px; padding-bottom: 14px;
+                        padding-top: Theme.s4; padding-bottom: Theme.s5;
                         TextInput {
                             width: 100%;
                             read-only: true;
@@ -124,23 +169,35 @@ export component Drawer inherits Rectangle {
                             font-size: 12px;
                             font-family: Theme.mono;
                             color: Theme.log_ink;
-                            wrap: word-wrap;
+                            // 日志按字符断行：word-wrap 遇到放不下的单词会整词换行，右侧留大片空白
+                            // （char-wrap 在软件渲染器下可用，1.18.1 已实测）
+                            wrap: char-wrap;
+                            // 2) 文本变化但内容高度不变（500 行缓冲已满，旧行被顶掉）时也要贴底
+                            changed text => {
+                                if root.log_follow {
+                                    log_scroll.content_y = log_scroll.visible_height - log_scroll.content_height;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ====== 环境 tab ======
-        if root.tabs_visible && root.tab == 2 : env_scroll := ScrollView {
+        // ====== 环境 tab（ListView：行位置与内容高度由 Slint 运行时列表布局计算）======
+        if root.tabs_visible && root.tab == 2 : env_scroll := ListView {
             width: 100%;
             vertical-scrollbar-policy: as-needed;
             horizontal-scrollbar-policy: always-off;
-            VerticalLayout {
-                width: 100%;
-                spacing: 0px;
-                for row[i] in root.env_rows : DetailRow { data: row; head_gap: i > 0; width: 100%; copy_request(v) => { root.value_copy(v); } }
-                Rectangle { height: Theme.s5; }
+            // 锁死横向 viewport（同 detail tab，见上注释）：
+            // 此处原先漏了绑定 → Flickable 视口宽取子元素首选宽 → 环境 tab 可自由左右拖
+            content_width: self.visible_width;
+            // 同日志 tab：避免滚动容器抢鼠标拖拽（复制按钮/文本交互更稳定）
+            mouse_drag_pan_enabled: false;
+            for row[i] in root.env_rows : DetailRow {
+                data: row; width: 100%;
+                height: self.min-height;
+                copy_request(v) => { root.value_copy(v); }
             }
         }
     }

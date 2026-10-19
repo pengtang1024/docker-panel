@@ -206,6 +206,9 @@ msgstr "清理"
 msgid "Ready"
 msgstr "就绪"
 
+msgid "Docker API timeout"
+msgstr "Docker API 请求超时"
+
 msgid "Loaded {0} containers"
 msgstr "已加载 {0} 个容器"
 

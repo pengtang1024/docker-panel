@@ -3,13 +3,14 @@
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use slint::ComponentHandle;
 
 use crate::docker::{
     fetch_stats, inspect_container, list_containers, list_images, list_networks, list_volumes,
-    volume_sizes,
+    volume_sizes, with_timeout,
 };
 use crate::models::Msg;
 use crate::slint_gen::MainWindow;
@@ -43,7 +44,7 @@ pub fn spawn_stats_interval(state: &SharedState) {
                 .map(|id| {
                     let tx = tx.clone();
                     async move {
-                        if let Ok(snap) = fetch_stats(&id).await {
+                        if let Ok(snap) = with_timeout(fetch_stats(&id)).await {
                             let _ = tx.send(Msg::Stats(id, snap));
                         }
                     }
@@ -70,7 +71,7 @@ pub fn spawn_volume_size_interval(state: &SharedState) {
                 let Ok(s) = state_s.lock() else { continue };
                 s.tx.clone()
             };
-            if let Ok(sizes) = volume_sizes().await {
+            if let Ok(sizes) = with_timeout(volume_sizes()).await {
                 let _ = tx.send(Msg::VolumeSizes(sizes));
             }
         }
@@ -86,10 +87,10 @@ pub fn spawn_initial_load(state: &SharedState) {
     rt.spawn(async move {
         let _ = crate::docker::connect();
         let (c_res, i_res, n_res, v_res) = futures::join!(
-            list_containers(true),
-            list_images(),
-            list_networks(),
-            list_volumes(),
+            with_timeout(list_containers(true)),
+            with_timeout(list_images()),
+            with_timeout(list_networks()),
+            with_timeout(list_volumes()),
         );
         let first_id = c_res
             .as_ref()
@@ -100,7 +101,7 @@ pub fn spawn_initial_load(state: &SharedState) {
         let _ = tx.send(Msg::Networks(n_res));
         let _ = tx.send(Msg::Volumes(v_res));
         if let Some(id) = first_id {
-            if let Ok(detail) = inspect_container(&id).await {
+            if let Ok(detail) = with_timeout(inspect_container(&id)).await {
                 let _ = tx.send(Msg::ContainerDetail(Ok(detail)));
             }
         }
@@ -150,20 +151,37 @@ pub fn spawn_theme_monitor(ui: &MainWindow, state: &SharedState) -> std::thread:
 
             // ===== 轨 1：dconf watch 事件驱动 =====
             if let Some(mut child) = try_spawn_dconf_watch() {
-                let stdout = match child.stdout.take() {
-                    Some(s) => s,
-                    None => {
-                        let _ = child.kill();
-                        return poll_loop(
-                            &state_s,
-                            &weak,
-                            &mut last,
-                            &mut check_state,
-                            &mut push_if_changed,
-                        );
-                    }
+                let Some(stdout) = child.stdout.take() else {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return poll_loop(
+                        &state_s,
+                        &weak,
+                        &mut last,
+                        &mut check_state,
+                        &mut push_if_changed,
+                    );
                 };
-                let mut reader = BufReader::new(stdout).lines();
+                // ⚠️ 读操作必须放独立线程：本线程若阻塞在 reader.next()，
+                // 关窗时 join 会一直等不到 shutdown（表现为进程卡死）。
+                let (line_tx, line_rx) = mpsc::channel();
+                let _ = std::thread::Builder::new()
+                    .name("dconf-reader".into())
+                    .spawn(move || {
+                        for line in BufReader::new(stdout).lines() {
+                            match line {
+                                Ok(l) => {
+                                    if line_tx.send(Ok(l)).is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ = line_tx.send(Err(e));
+                                    break;
+                                }
+                            }
+                        }
+                    });
                 loop {
                     let (shutdown, skip) = state_s
                         .lock()
@@ -171,6 +189,7 @@ pub fn spawn_theme_monitor(ui: &MainWindow, state: &SharedState) -> std::thread:
                         .unwrap_or((false, true));
                     if shutdown {
                         let _ = child.kill();
+                        let _ = child.wait();
                         return;
                     }
                     if skip {
@@ -180,11 +199,19 @@ pub fn spawn_theme_monitor(ui: &MainWindow, state: &SharedState) -> std::thread:
                         continue;
                     }
 
-                    // auto 模式：阻塞读下一行（dconf 事件到来时毫秒级返回）
-                    let line = match reader.next() {
-                        None | Some(Err(_)) => {
+                    // auto 模式：最多等 200ms（dconf 事件通常毫秒级到达），
+                    // 超时后回到循环顶部检查 shutdown。
+                    match line_rx.recv_timeout(Duration::from_millis(200)) {
+                        Ok(Ok(line)) => {
+                            if line.contains("color-scheme") || line.contains("gtk-theme") {
+                                push_if_changed(&mut last, &weak);
+                            }
+                            // 其他键（font-name / icon-theme 等）忽略
+                        }
+                        Ok(Err(_)) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                             // 子进程退出了（dconf 服务重启、权限问题等）→ fallback
                             let _ = child.kill();
+                            let _ = child.wait();
                             eprintln!(
                                 "[theme-monitor] dconf watch exited, falling back to 5s poll"
                             );
@@ -196,13 +223,8 @@ pub fn spawn_theme_monitor(ui: &MainWindow, state: &SharedState) -> std::thread:
                                 &mut push_if_changed,
                             );
                         }
-                        Some(Ok(l)) => l,
-                    };
-
-                    if line.contains("color-scheme") || line.contains("gtk-theme") {
-                        push_if_changed(&mut last, &weak);
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
                     }
-                    // 其他键（font-name / icon-theme 等）忽略
                 }
             }
 
@@ -248,8 +270,11 @@ fn poll_loop<F1, F2>(
     F1: FnMut(&std::sync::MutexGuard<'_, crate::ui_state::AppState>) -> (bool, bool),
     F2: FnMut(&mut Option<bool>, &slint::Weak<MainWindow>),
 {
+    let mut since_check = Duration::ZERO;
     loop {
-        std::thread::sleep(Duration::from_secs(5));
+        // 200ms 醒一次只为及时响应 shutdown；gsettings 仍然每 5s 才探测一次
+        std::thread::sleep(Duration::from_millis(200));
+        since_check += Duration::from_millis(200);
 
         let (shutdown, skip) = state_s
             .lock()
@@ -261,6 +286,9 @@ fn poll_loop<F1, F2>(
         if skip {
             continue;
         }
-        push_if_changed(last, weak);
+        if since_check >= Duration::from_secs(5) {
+            since_check = Duration::ZERO;
+            push_if_changed(last, weak);
+        }
     }
 }

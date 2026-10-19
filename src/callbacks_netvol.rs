@@ -74,6 +74,7 @@ fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
         let Ok(mut st) = s.lock() else { return };
         st.sel = kind;
         st.sel_key = key;
+        st.clear_logs();
         crate::detail_fmt::build_drawer_data(&st)
     };
     ui.set_drawer_open(true);

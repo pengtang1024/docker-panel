@@ -107,8 +107,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         });
     }
 
-    // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染
-    let bind_inspect = |s: &SharedState, id: String| {
+    // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染。
+    // 同时清空 UI 上的旧日志文本：clear_logs 不发 Msg，若只清 state，
+    // 新容器还没产生日志时日志页会一直显示上一个容器的内容。
+    let bind_inspect = |ui: &MainWindow, s: &SharedState, id: String| {
+        ui.set_log_text(SharedString::from(""));
         if let Ok(mut st) = s.lock() {
             st.sel = SelKind::Container;
             st.sel_key = id.clone();
@@ -126,7 +129,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
-            bind_inspect(&s, id);
+            bind_inspect(&ui, &s, id);
         });
     }
 
@@ -139,7 +142,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(1);
-            bind_inspect(&s, id.clone());
+            bind_inspect(&ui, &s, id.clone());
             if let Ok(mut st) = s.lock() {
                 st.ensure_follow(&id);
             }

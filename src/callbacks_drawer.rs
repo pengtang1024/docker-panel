@@ -1,6 +1,6 @@
 //! Drawer 回调绑定（Tab 切换 + 日志工具条：跟随/复制/清空）
 
-use slint::{ComponentHandle, ModelRc, SharedString};
+use slint::{ComponentHandle, SharedString};
 
 use crate::slint_gen::*;
 use crate::ui_state::{SelKind, SharedState};
@@ -71,10 +71,8 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_log_clear(move || {
             let Some(ui) = ui_d.upgrade() else { return };
             if let Ok(mut st) = s.lock() {
-                st.clear_logs();
+                st.clear_log_buffer();
             }
-            let empty: Vec<LogLineRow> = Vec::new();
-            ui.set_log_lines(ModelRc::from(empty.as_slice()));
             ui.set_log_text(SharedString::from(""));
             ui.set_status_text(SharedString::from(crate::i18n::t("Log cleared")));
         });

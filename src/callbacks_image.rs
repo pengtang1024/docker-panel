@@ -22,6 +22,7 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
             if let Ok(mut st) = s.lock() {
                 st.sel = SelKind::Image;
                 st.sel_key = name.clone();
+                st.clear_logs();
                 st.request_image_detail(name);
             }
         });

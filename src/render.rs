@@ -16,16 +16,13 @@ use std::rc::Rc;
 
 use slint::{Model, ModelRc, VecModel};
 
-use crate::slint_gen::{
-    ComposeRow, ContainerRow, DetailPair, ImageRow, LogLineRow, NetworkRow, VolumeRow,
-};
+use crate::slint_gen::{ComposeRow, ContainerRow, DetailPair, ImageRow, NetworkRow, VolumeRow};
 
 thread_local! {
     static CONTAINERS: Rc<VecModel<ContainerRow>> = Rc::new(VecModel::default());
     static IMAGES: Rc<VecModel<ImageRow>> = Rc::new(VecModel::default());
     static NETWORKS: Rc<VecModel<NetworkRow>> = Rc::new(VecModel::default());
     static VOLUMES: Rc<VecModel<VolumeRow>> = Rc::new(VecModel::default());
-    static LOGS: Rc<VecModel<LogLineRow>> = Rc::new(VecModel::default());
     static DETAIL: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static ENV: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static COMPOSE: Rc<VecModel<ComposeRow>> = Rc::new(VecModel::default());
@@ -68,11 +65,6 @@ pub fn networks(data: Vec<NetworkRow>) -> ModelRc<NetworkRow> {
 /// 卷列表模型（须在 UI 线程调用）
 pub fn volumes(data: Vec<VolumeRow>) -> ModelRc<VolumeRow> {
     VOLUMES.with(|m| sync(Rc::clone(m), data))
-}
-
-/// 日志列表模型（须在 UI 线程调用）
-pub fn logs(data: Vec<LogLineRow>) -> ModelRc<LogLineRow> {
-    LOGS.with(|m| sync(Rc::clone(m), data))
 }
 
 /// 抽屉详情行模型（须在 UI 线程调用）

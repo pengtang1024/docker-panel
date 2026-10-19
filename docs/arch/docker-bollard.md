@@ -8,7 +8,8 @@
 - 错误统一转中文 `String` 上抛，UI 层展示
 - 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
-- `follow_logs`：`.follow(true).tail("200")` 返回 Stream，逐行 `tx.send(Msg::LogLine)`
+- `follow_logs`：`.follow(true).tail("200")` 返回 Stream，逐行 `tx.send(Msg::LogLine)`；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出
+- 可重试调用统一 `docker::with_timeout`（10s）：列表 / stats / inspect / 卷占用；`refresh_inflight` 防止 3s 刷新叠加
 - 清理：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused→prune_images(-a)`，可任意组合
 
 ## 2. bollard 0.21 易踩坑速查

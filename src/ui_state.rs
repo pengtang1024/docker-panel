@@ -7,7 +7,7 @@
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -16,8 +16,8 @@ use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
 use crate::docker::{
-    compute_cpu_delta, inspect_container, list_containers, list_images, list_networks,
-    list_volumes, ContainerStatsSnapshot,
+    inspect_container, list_containers, list_images, list_networks, list_volumes,
+    ContainerStatsSnapshot,
 };
 use crate::models::{
     ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
@@ -49,6 +49,8 @@ pub struct AppState {
     pub volumes: Vec<VolumeInfo>,
 
     pub last_refresh: Instant,
+    /// 3s 刷新是否已有任务在跑：Docker 慢时避免每 3s 叠加一批新任务
+    pub refresh_inflight: Arc<AtomicBool>,
     pub container_query: String,
     pub image_query: String,
 
@@ -71,6 +73,8 @@ pub struct AppState {
     pub logs_cap: usize,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
     pub follow_id: String,
+    /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
+    pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -128,6 +132,7 @@ impl AppState {
             networks: Vec::new(),
             volumes: Vec::new(),
             last_refresh: Instant::now() - Duration::from_secs(10),
+            refresh_inflight: Arc::new(AtomicBool::new(false)),
             container_query: query.clone(),
             image_query: query,
             detail: None,
@@ -139,6 +144,7 @@ impl AppState {
             logs: Vec::new(),
             logs_cap: 500,
             follow_id: String::new(),
+            follow_cancel: None,
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -166,20 +172,28 @@ impl AppState {
         .save();
     }
 
-    /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）
+    /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。
+    ///
+    /// 上一次刷新未完成时直接跳过：Docker 慢/无响应时，3s interval 不能
+    /// 每 tick 再叠 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）。
     pub fn refresh(&mut self) {
+        if self.refresh_inflight.swap(true, Ordering::AcqRel) {
+            return;
+        }
         let tx = self.tx.clone();
+        let inflight = self.refresh_inflight.clone();
         self.rt.spawn(async move {
             let (c_res, i_res, n_res, v_res) = futures::join!(
-                list_containers(true),
-                list_images(),
-                list_networks(),
-                list_volumes(),
+                crate::docker::with_timeout(list_containers(true)),
+                crate::docker::with_timeout(list_images()),
+                crate::docker::with_timeout(list_networks()),
+                crate::docker::with_timeout(list_volumes()),
             );
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
             let _ = tx.send(Msg::Networks(n_res));
             let _ = tx.send(Msg::Volumes(v_res));
+            inflight.store(false, Ordering::Release);
         });
         self.last_refresh = Instant::now();
     }
@@ -187,7 +201,7 @@ impl AppState {
     /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）
     ///
     /// inspect 失败的镜像按 0 层写入缓存，避免每 3s 反复重试。
-    fn request_missing_layers(&mut self) {
+    pub(crate) fn request_missing_layers(&mut self) {
         let missing: Vec<String> = self
             .images
             .iter()
@@ -200,7 +214,9 @@ impl AppState {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
             let futs = missing.into_iter().map(|id| async move {
-                let n = crate::docker::image_layer_count(&id).await.unwrap_or(0);
+                let n = crate::docker::with_timeout(crate::docker::image_layer_count(&id))
+                    .await
+                    .unwrap_or(0);
                 (id, n)
             });
             let got: Vec<(String, usize)> = futures::future::join_all(futs).await;
@@ -212,7 +228,7 @@ impl AppState {
     pub fn request_detail(&mut self, id: String) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
-            let res = inspect_container(&id).await;
+            let res = crate::docker::with_timeout(inspect_container(&id)).await;
             let _ = tx.send(Msg::ContainerDetail(res));
         });
     }
@@ -221,15 +237,22 @@ impl AppState {
     pub fn request_image_detail(&mut self, name: String) {
         let tx = self.tx.clone();
         self.rt.spawn(async move {
-            let res = crate::docker::inspect_image(&name).await;
+            let res = crate::docker::with_timeout(crate::docker::inspect_image(&name)).await;
             let _ = tx.send(Msg::ImageDetail(res));
         });
     }
 
+    /// 切换选中资源：清空日志缓冲，并取消旧容器的跟随流（避免旧流继续往新容器日志里写）。
     pub fn clear_logs(&mut self) {
         self.logs.clear();
-        // 清空日志即视为放弃当前跟随流，下次需要时重新建立
         self.follow_id.clear();
+        // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
+        self.follow_cancel = None;
+    }
+
+    /// 仅清空当前日志缓冲，保留跟随流（日志工具条 Clear 使用）。
+    pub fn clear_log_buffer(&mut self) {
+        self.logs.clear();
     }
 
     /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
@@ -238,10 +261,13 @@ impl AppState {
             return;
         }
         self.follow_id = id.to_string();
+        // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
+        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
+        self.follow_cancel = Some(cancel_tx);
         let tx = self.tx.clone();
         let id = id.to_string();
         self.rt.spawn(async move {
-            let _ = crate::docker::follow_logs(&id, tx, 200).await;
+            let _ = crate::docker::follow_logs(&id, tx, 200, cancel_rx).await;
         });
     }
 
@@ -259,84 +285,6 @@ impl AppState {
         // 卷：无引用信息，用"匿名卷"近似可清理候选
         let anonymous_vol = self.volumes.iter().filter(|v| v.anonymous).count();
         (stopped, dangling, unused_net, anonymous_vol)
-    }
-
-    /// 消费一批 Msg，返回 (need_ui_update, latest_msg) — 两阶段：先处理 first、再 try_recv 扫积压
-    pub fn drain_messages(
-        &mut self,
-        rx: &mpsc::Receiver<Msg>,
-        first: Option<Msg>,
-    ) -> (bool, Option<Msg>) {
-        let mut need_ui_update = false;
-        let mut latest_msg: Option<Msg> = None;
-
-        let mut handle_one = |msg: Msg| {
-            // Stats：每条都写回 containers（累加）
-            if let Msg::Stats(id, curr) = &msg {
-                let cpu = compute_cpu_delta(self.stats_prev.get(id), curr);
-                self.stats_prev.insert(id.clone(), curr.clone());
-                if let Some(c) = self.containers.iter_mut().find(|c| c.id == *id) {
-                    c.cpu_percent = cpu;
-                    c.mem_usage = curr.mem_usage;
-                    c.mem_limit = curr.mem_limit;
-                    c.net_rx = curr.net_rx;
-                    c.net_tx = curr.net_tx;
-                }
-            }
-            match &msg {
-                Msg::Containers(Ok(list)) => {
-                    // ⚠️ 保留旧容器 stats，避免 3s 列表刷新冲掉 6s stats 写入
-                    let mut old: HashMap<String, (f64, u64, u64, u64, u64)> = self
-                        .containers
-                        .iter()
-                        .map(|c| {
-                            (
-                                c.id.clone(),
-                                (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx),
-                            )
-                        })
-                        .collect();
-                    self.containers = list.clone();
-                    for c in &mut self.containers {
-                        if let Some(v) = old.remove(&c.id) {
-                            (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
-                        }
-                    }
-                }
-                Msg::Images(Ok(list)) => {
-                    self.images = list.clone();
-                    // 列表 API 不给层数，首次/新增镜像后台补查一次
-                    self.request_missing_layers();
-                }
-                Msg::Networks(Ok(list)) => self.networks = list.clone(),
-                Msg::Volumes(Ok(list)) => self.volumes = list.clone(),
-                Msg::ImageLayers(pairs) => {
-                    for (id, n) in pairs {
-                        self.image_layers.insert(id.clone(), *n);
-                    }
-                }
-                Msg::VolumeSizes(map) => self.volume_sizes = map.clone(),
-                Msg::ContainerDetail(Ok(d)) => self.detail = Some(d.clone()),
-                Msg::ImageDetail(Ok(d)) => self.image_detail = Some(d.clone()),
-                Msg::LogLine(line) => {
-                    self.logs.push(line.clone());
-                    if self.logs.len() > self.logs_cap {
-                        self.logs.drain(0..self.logs.len() - self.logs_cap);
-                    }
-                }
-                _ => {}
-            }
-            latest_msg = Some(msg);
-            need_ui_update = true;
-        };
-
-        if let Some(msg) = first {
-            handle_one(msg);
-        }
-        while let Ok(msg) = rx.try_recv() {
-            handle_one(msg);
-        }
-        (need_ui_update, latest_msg)
     }
 }
 

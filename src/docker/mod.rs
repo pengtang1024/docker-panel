@@ -10,6 +10,9 @@
 //!   images.rs      → 镜像列表 + 拉取 + 删除（拉取含进度回调）
 //!   system.rs      → prune 清理
 
+use std::future::Future;
+use std::time::Duration;
+
 use bollard::Docker;
 
 mod containers;
@@ -29,6 +32,19 @@ pub use logs::{follow_logs, inspect_container};
 pub use netvol::{list_networks, list_volumes, remove_network, remove_volume, volume_sizes};
 pub use stats::{compute_cpu_delta, fetch_stats, ContainerStatsSnapshot};
 pub use system::cleanup;
+
+/// 单次 Docker API 调用上限：守护进程无响应时不能让后台任务无限挂起，
+/// 否则 3s/6s interval 会反复叠加任务，最终把 tokio 工作线程耗尽
+///（表现为列表/日志停止更新，看起来像"卡死"）。
+pub const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 给任意 Docker 调用套统一超时（仅用于可重试的列表/采样/inspect）。
+pub async fn with_timeout<T>(fut: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+    match tokio::time::timeout(CALL_TIMEOUT, fut).await {
+        Ok(res) => res,
+        Err(_) => Err(crate::i18n::t("Docker API timeout")),
+    }
+}
 
 /// 建立本机 Docker 连接
 pub fn connect() -> Result<Docker, String> {

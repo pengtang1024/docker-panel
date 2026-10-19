@@ -97,13 +97,13 @@ cargo build --release
 ```
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
-│ UI 回调（搜索/排序/    │       │ recv_timeout(200ms) 循环 │       │ 3s 刷新 interval    │
-│  操作/快捷键）──lock─▶│ drain_messages            │       │ 6s stats interval   │
-│ 窗口关闭 → shutdown   │ build_*_rows ×4           │       │ spawn 异步任务      │
-│   flag                │ detail_fmt::build_detail  │◀──────│ bollard API 调用    │
+│ UI 回调（搜索/排序/    │       │ recv_timeout(100ms) 循环 │       │ 3s 刷新 interval    │
+│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
+│ 窗口关闭 → shutdown   │ 按 120ms 窗口合并 UI 更新  │       │ spawn 异步任务      │
+│   flag                │ 只重建变化区域（日志/列表）│◀──────│ bollard API 调用    │
 │                        │ drop(s) ──────────────────lock rel│ tx.send(Msg)        │
 │                        │ invoke_from_event_loop     │       │ follow_logs 流      │
-│                        │   apply_lists / apply_detail       │                     │
+│                        │   render 缓存 + apply_drawer       │                     │
 └──────────────────────┘       └────────────────────────┘       └───────────────────┘
      Mutex<AppState>                 mpsc::Receiver<Msg>          spawn(async { ... })
    + shutdown: AtomicBool            （consumer 独占，不进 Mutex）
@@ -111,7 +111,9 @@ cargo build --release
 
 **关键设计**：
 - `Receiver<Msg>` 由 consumer 独占所有权，**不**放进 Mutex。这样 `rx.recv_timeout()` 永远不阻塞主线程拿 state 锁。
-- **pump_and_apply 两阶段铁律**：锁内只做 drain + build（微秒级）→ drop lock → 锁外 `invoke_from_event_loop` 更新 Slint Model。闭包里绝不碰 state。
+- **两阶段铁律**：锁内只做分片 drain（单批 ≤2048 条）+ build → drop lock → 锁外 `invoke_from_event_loop` 更新 Slint Model。闭包里绝不碰 state。
+- **UI 更新节流**：consumer 最多每 120ms 应用一次 UI；日志洪峰时只更新 `log_text`，不重算容器/镜像/网络/卷/抽屉，避免无界 invoke 与重排把 UI 线程压死。
+- **Docker 调用有超时 + 刷新去重**：单次调用 10s 超时；上一次 3s 刷新未完成时跳过下一轮，防止守护进程无响应时任务叠加耗尽 tokio 线程。
 - **所有 Docker 结果走 `tx.send(Msg)`**——不直接碰 Slint Model，统一由 consumer pump 更新。
 
 详见 [docs/architecture.md](docs/architecture.md)。
@@ -124,37 +126,40 @@ docker-panel/
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
-├── ui/                     # Slint UI 声明（15 文件按职责拆分，app.slint 唯一组装入口）
+├── ui/                     # Slint UI 声明（26 文件按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
+│   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
-│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
+│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
 │   ├── sub-bar.slint       # SubBar：筛选 chips + 排序 + 4 视图 tabs
 │   ├── cards.slint         # 卡片网格容器（四种视图共用，含空状态与背景点击层）
 │   ├── card-container.slint # 容器卡片（含多选勾选 + 启停/重启/日志操作）
 │   ├── card-image.slint    # 镜像卡片（含运行/删除操作）
 │   ├── card-netvol.slint   # 网络/卷卡片（共用布局，内建标记 + 容器数）
+│   ├── skel.slint          # 骨架屏占位
 │   ├── foot-bar.slint      # 底部 8 项资源概览
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
 │   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
+│   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
 │   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染）
-│   └── components.slint    # IconBtn / Dot / CheckCell / MenuItem / Dropdown / TipLayer 等原子组件
+│   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）
 │   ├── main.rs             # 组装入口：i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
-│   ├── consumer.rs         # consumer 线程：recv_timeout Msg 泵 pump_and_apply + 3s 刷新 interval
+│   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
 │   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
-│   ├── ui_state.rs         # AppState + drain_messages + ensure_follow（日志流）+ cleanup_counts + persist
+│   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ ensure_follow（日志流）+ cleanup_counts + persist
 │   ├── render.rs           # CachedModel 差量同步（sync_model：数据未变则跳过 set_vec）
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers / images / netvol（网络/卷）
-│   ├── ui_update.rs        # derive_update(Msg → UiUpdate)
-│   ├── ui_apply.rs         # apply_detail / apply_lists / refresh_lists_now
+│   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now（搜索排序即时重建）
 │   ├── batch.rs            # BatchState 多选状态
 │   ├── callbacks.rs        # 回调绑定中枢 + restore_config
 │   ├── callbacks_container.rs  # AppActions container_* 回调
@@ -162,7 +167,7 @@ docker-panel/
 │   ├── callbacks_image.rs      # AppActions image_* 回调
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
 │   └── docker/
-│       ├── mod.rs          # connect() + pub use 重导出
+│       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度闭包）/ remove
 │       ├── logs.rs         # inspect_container / follow_logs（Stream → tx.send）

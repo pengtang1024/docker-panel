@@ -145,10 +145,14 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
 }
 
 /// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine) 推给 consumer
+///
+/// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
+/// 本任务会在下一次 `select!` 立即退出，避免旧容器的日志流泄漏并污染新容器。
 pub async fn follow_logs(
     id: &str,
     tx: std::sync::mpsc::Sender<Msg>,
     tail_lines: i64,
+    mut cancel: tokio::sync::watch::Receiver<()>,
 ) -> Result<(), String> {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
@@ -164,14 +168,21 @@ pub async fn follow_logs(
 
     let mut stream = docker.logs(id, Some(options));
 
-    while let Some(Ok(msg)) = stream.next().await {
-        let data = match msg {
-            LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
-            _ => continue,
-        };
-        let line = String::from_utf8_lossy(&data).trim().to_string();
-        if !line.is_empty() {
-            let _ = tx.send(Msg::LogLine(line));
+    loop {
+        tokio::select! {
+            biased;
+            _ = cancel.changed() => break,
+            item = stream.next() => {
+                let Some(Ok(msg)) = item else { break };
+                let data = match msg {
+                    LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
+                    _ => continue,
+                };
+                let line = String::from_utf8_lossy(&data).trim().to_string();
+                if !line.is_empty() {
+                    let _ = tx.send(Msg::LogLine(line));
+                }
+            }
         }
     }
     Ok(())

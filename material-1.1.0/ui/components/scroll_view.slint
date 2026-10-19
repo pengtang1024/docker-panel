@@ -114,6 +114,9 @@ export component ScrollView {
     in_out property <length> content_height <=> flickable.content_height;
     in_out property <length> content_x <=> flickable.content_x;
     in_out property <length> content_y <=> flickable.content_y;
+    // 鼠标拖拽平移开关（透传内置 Flickable）：Slint 官方各风格 ScrollView 均默认关闭，
+    // 否则拖动会抢走子元素（TextInput 选词/选中）的拖拽手势。
+    in property <bool> mouse_drag_pan_enabled <=> flickable.mouse-drag-pan-enabled;
     // Compatibility aliases for the former names of the content_* properties.
     // FIXME: mark these as @deprecated once that annotation is no longer experimental.
     in_out property <length> viewport_width <=> content_width;
@@ -142,7 +145,7 @@ export component ScrollView {
         y: 0;
         content_y <=> vertical_bar.value;
         content_x <=> horizontal_bar.value;
-        width: root.width - (root.vertical_scrollbar_policy != ScrollBarPolicy.always_off ? root.scroll_bar_size - 2 * root.scroll_bar_padding : 0);
+        width: root.width - (root.vertical_scrollbar_policy != ScrollBarPolicy.always_off ? root.scroll_bar_size : 0);
         height: root.height - (root.horizontal_scrollbar_policy != ScrollBarPolicy.always_off ? root.scroll_bar_size : 0);
 
         @children
@@ -150,7 +153,9 @@ export component ScrollView {
 
     vertical_bar := ScrollBar {
         enabled: root.enabled;
-        x: flickable.width + root.scroll_bar_padding;
+        // 贴住 flickable 右侧预留的 8px 槽位，不能再加 padding：
+        // 旧公式（flickable.width + padding，宽度 8）会让滚动条右溢 3px 被 Drawer 裁掉
+        x: flickable.width;
         y: 0;
         width: root.visible ? root.scroll_bar_size : 0;
         height: root.vertical_scrollbar_policy != ScrollBarPolicy.always_off ? parent.height - horizontal_bar.height : parent.height;

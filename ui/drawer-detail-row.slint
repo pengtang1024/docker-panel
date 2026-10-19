@@ -1,4 +1,8 @@
 // drawer-detail-row.slint — Drawer 详情/环境行（四种 kind 变体）
+//
+// 行高：根节点声明 min-height: body.min-height（内容自然高度）。
+//   ListView 的 delegate 必须显式行高（Slint 列表布局逐项读 delegate.height），
+//   实例处用 height: self.min-height 取用；绝不能写成 100%（会退化为视口高）。
 // 值区用 Slint 原生 wrap: word-wrap 自动折行。
 // 每行（除分节标题）右侧有 copy icon，点击触发 copy_request(value)。
 import { Theme } from "theme.slint";
@@ -8,129 +12,138 @@ import { DetailPair } from "models.slint";
 
 export component DetailRow inherits Rectangle {
     in property <DetailPair> data;
-    in property <bool> head_gap: false;
 
     vertical-stretch: 0;
+    min-height: body.min-height;
 
     // 点击复制该行的值（Rust 侧用 arboard 写入剪贴板）
     callback copy_request(string);
 
-    // kind == 1: 分节标题（不显示复制按钮）
-    if root.data.kind == 1 : VerticalLayout {
+    body := VerticalLayout {
         width: parent.width;
-        vertical-stretch: 0;
         spacing: 0px;
-        Rectangle { height: Theme.s5; }
-        HorizontalLayout {
-            width: parent.width;
-            padding-left: Theme.s6; padding-right: Theme.s6;
-            padding-top: 4px;
-            VCenterText {
-                width: parent.width;
-                text: root.data.k;
-                font-size: Theme.fs_xs; font-weight: 700;
-                color: Theme.ink_3;
-            }
-        }
-        Rectangle { height: 10px; }
-    }
 
-    // kind == 0: 普通 kv 行
-    if root.data.kind == 0 : HorizontalLayout {
-        width: parent.width;
-        vertical-stretch: 0;
-        spacing: Theme.s4;
-        padding-left: Theme.s6; padding-right: Theme.s6;
-        padding-top: 5px; padding-bottom: 5px;
-        RightText {
-            text: root.data.k; width: 88px; horizontal-stretch: 0;
-            font-size: Theme.fs; color: Theme.ink_3;
-        }
-        VCenterText {
-            text: root.data.v;
-            font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
-            font-family: root.data.mono ? Theme.mono : "";
-            color: root.data.mono ? Theme.ink_2 : Theme.ink;
-            font-weight: 500;
-            horizontal-stretch: 1; min-width: 0px;
-            wrap: word-wrap;
-        }
-        IconBtn {
-            size: 22px; icon_size: 11px; icon_name: "copy";
-            active: false;
-            clicked => { root.copy_request(root.data.v); }
-        }
-    }
-
-    // kind == 2: kv + 代码盒（带浅灰背景）
-    if root.data.kind == 2 : HorizontalLayout {
-        width: parent.width;
-        vertical-stretch: 0;
-        spacing: Theme.s4;
-        padding-left: Theme.s6; padding-right: Theme.s6;
-        padding-top: 5px; padding-bottom: 5px;
-        RightText {
-            text: root.data.k; width: 88px; horizontal-stretch: 0;
-            font-size: Theme.fs; color: Theme.ink_3;
-        }
-        Rectangle {
-            horizontal-stretch: 1;
-            min-width: 0px;
-            border-radius: Theme.r_md; background: Theme.bg;
-            HorizontalLayout {
-                width: parent.width;
-                padding-left: 11px; padding-right: 11px;
-                padding-top: 9px; padding-bottom: 9px;
-                VCenterText {
-                    width: 100%;
-                    text: root.data.v;
-                    font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2;
-                    wrap: word-wrap;
-                }
-            }
-        }
-        IconBtn {
-            size: 22px; icon_size: 11px; icon_name: "copy";
-            active: false;
-            clicked => { root.copy_request(root.data.v); }
-        }
-    }
-
-    // kind == 3: 环境变量代码盒条目（复制完整 KEY=VALUE）
-    if root.data.kind == 3 : VerticalLayout {
-        width: parent.width;
-        vertical-stretch: 0;
-        spacing: 0px;
-        padding-left: Theme.s6; padding-right: Theme.s6;
-        padding-top: 2px; padding-bottom: 2px;
-        Rectangle {
-            width: parent.width;
+        // kind == 1: 分节标题（不显示复制按钮）
+        if root.data.kind == 1 : VerticalLayout {
+            spacing: 0px;
             vertical-stretch: 0;
-            border-radius: Theme.r_xs; background: Theme.bg;
+            Rectangle { height: Theme.s5; }
             HorizontalLayout {
-                width: parent.width;
-                padding-left: Theme.s3; padding-right: Theme.s3;
-                padding-top: Theme.s1; padding-bottom: Theme.s1;
+                padding-left: Theme.s6; padding-right: Theme.s6;
+                padding-top: 4px;
                 VCenterText {
-                    text: root.data.k == "" ? root.data.v : root.data.k + "=";
-                    font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
-                    horizontal-stretch: root.data.k == "" ? 1 : 0; min-width: 0px;
-                    wrap: word-wrap;
-                }
-                if root.data.k != "" : VCenterText {
-                    text: root.data.v;
-                    font-size: Theme.fs_sm; font-family: Theme.mono;
-                    color: Theme.ink_2;
+                    // 布局子元素不要写 width: parent.width：父布局的 padding 不会从
+                    // parent.width 里扣除 → 文本/内容会向右溢出 20px（被 Drawer clip 截断）
                     horizontal-stretch: 1; min-width: 0px;
-                    wrap: word-wrap;
+                    text: root.data.k;
+                    font-size: Theme.fs_xs; font-weight: 700;
+                    color: Theme.ink_3;
+                    overflow: elide;
                 }
-                IconBtn {
-                    size: 22px; icon_size: 11px; icon_name: "copy";
-                    active: false;
-                    clicked => {
-                        root.copy_request(root.data.k == "" ? root.data.v : root.data.k + "=" + root.data.v);
+            }
+            Rectangle { height: 10px; }
+        }
+
+        // kind == 0: 普通 kv 行
+        if root.data.kind == 0 : HorizontalLayout {
+            vertical-stretch: 0;
+            spacing: Theme.s4;
+            padding-left: Theme.s6; padding-right: Theme.s6;
+            padding-top: 5px; padding-bottom: 5px;
+            RightText {
+                text: root.data.k; width: 88px; horizontal-stretch: 0;
+                font-size: Theme.fs; color: Theme.ink_3;
+            }
+            VCenterText {
+                text: root.data.v;
+                font-size: root.data.mono ? Theme.fs_sm : Theme.fs;
+                font-family: root.data.mono ? Theme.mono : "";
+                color: root.data.mono ? Theme.ink_2 : Theme.ink;
+                font-weight: 500;
+                horizontal-stretch: 1; min-width: 0px;
+                wrap: word-wrap;
+            }
+            IconBtn {
+                size: 22px; icon_size: 11px; icon_name: "copy";
+                active: false;
+                clicked => { root.copy_request(root.data.v); }
+            }
+        }
+
+        // kind == 2: kv + 代码盒（带浅灰背景 + 折行）
+        // k 为空时（如环境 tab 的挂载）不保留 88px 标签列，代码盒直接铺满行宽。
+        // 背景/圆角由 Rectangle 提供（Rectangle 在布局中支持 horizontal-stretch，
+        // 见 Slint 1.18 builtin 文档），内部布局负责 padding 与折行。
+        if root.data.kind == 2 : HorizontalLayout {
+            vertical-stretch: 0;
+            spacing: Theme.s4;
+            padding-left: Theme.s6; padding-right: Theme.s6;
+            padding-top: 5px; padding-bottom: 5px;
+            if root.data.k != "" : RightText {
+                text: root.data.k; width: 88px; horizontal-stretch: 0;
+                font-size: Theme.fs; color: Theme.ink_3;
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+                min-width: 0px;
+                border-radius: Theme.r_md; background: Theme.bg;
+                HorizontalLayout {
+                    width: 100%;
+                    padding-left: 11px; padding-right: 11px;
+                    padding-top: 9px; padding-bottom: 9px;
+                    VCenterText {
+                        horizontal-stretch: 1; min-width: 0px;
+                        text: root.data.v;
+                        font-size: Theme.fs_sm; font-family: Theme.mono;
+                        color: Theme.ink_2;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+            IconBtn {
+                size: 22px; icon_size: 11px; icon_name: "copy";
+                active: false;
+                clicked => { root.copy_request(root.data.v); }
+            }
+        }
+
+        // kind == 3: 环境变量代码盒条目（复制完整 KEY=VALUE）
+        if root.data.kind == 3 : VerticalLayout {
+            vertical-stretch: 0;
+            spacing: 0px;
+            padding-left: Theme.s6; padding-right: Theme.s6;
+            padding-top: 1px; padding-bottom: 1px;
+            Rectangle {
+                // 同上：这里是带 padding 的 VerticalLayout 的子元素，
+                // width: parent.width 会忽略左右各 Theme.s6 的 padding → 代码盒右溢，
+                // 复制按钮被推到 Drawer 边界外裁掉。交给布局分配宽度即可。
+                vertical-stretch: 0;
+                clip: true;
+                border-radius: Theme.r_xs; background: Theme.bg;
+                HorizontalLayout {
+                    width: parent.width;
+                    padding-left: Theme.s3; padding-right: Theme.s3;
+                    padding-top: 2px; padding-bottom: 2px;
+                    VCenterText {
+                        text: root.data.k == "" ? root.data.v : root.data.k + "=";
+                        font-size: Theme.fs_sm; font-family: Theme.mono;
+                        color: root.data.k == "" ? Theme.ink_2 : Theme.bar_cpu;
+                        horizontal-stretch: root.data.k == "" ? 1 : 0; min-width: 0px;
+                        wrap: word-wrap;
+                    }
+                    if root.data.k != "" : VCenterText {
+                        text: root.data.v;
+                        font-size: Theme.fs_sm; font-family: Theme.mono;
+                        color: Theme.ink_2;
+                        horizontal-stretch: 1; min-width: 0px;
+                        wrap: word-wrap;
+                    }
+                    IconBtn {
+                        size: 22px; icon_size: 11px; icon_name: "copy";
+                        active: false;
+                        clicked => {
+                            root.copy_request(root.data.k == "" ? root.data.v : root.data.k + "=" + root.data.v);
+                        }
                     }
                 }
             }

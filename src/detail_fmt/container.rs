@@ -65,9 +65,15 @@ fn detail_rows(d: &ContainerDetail, c: Option<&ContainerInfo>) -> Vec<DetailPair
 
     rows.push(head(&t("Network")));
     rows.push(kv(&t("Mode"), or_dash(&d.network_mode), false));
-    rows.push(kv(&t("Ports"), join_or(&d.ports, " · "), true));
-    rows.push(kv(&t("Networks"), join_or(&d.networks, ", "), false));
-    rows.push(kv(&t("Mounts"), join_or(&d.mounts, " · "), true));
+    if !d.ports.is_empty() {
+        rows.push(kv(&t("Ports"), join_or(&d.ports, " · "), true));
+    }
+    if !d.networks.is_empty() {
+        rows.push(kv(&t("Networks"), join_or(&d.networks, ", "), false));
+    }
+    if !d.mounts.is_empty() {
+        rows.push(kv(&t("Mounts"), join_or(&d.mounts, " · "), true));
+    }
 
     rows.push(head(&t("Config")));
     rows.push(kbox(&t("Entrypoint"), or_dash(&d.entrypoint)));
@@ -89,26 +95,27 @@ fn env_rows(d: &ContainerDetail) -> Vec<DetailPair> {
         }
     }
 
-    rows.push(head(&t("Port Mappings")));
-    if d.ports.is_empty() {
-        rows.push(chip("", t("No ports")));
-    } else {
+    if !d.ports.is_empty() {
+        rows.push(head(&t("Port Mappings")));
         for p in &d.ports {
             rows.push(chip("", p.clone()));
         }
     }
 
-    rows.push(head(&t("Networks")));
-    if d.networks.is_empty() {
-        rows.push(chip("", t("None")));
-    } else {
+    if !d.networks.is_empty() {
+        rows.push(head(&t("Networks")));
         for n in &d.networks {
             rows.push(chip("", n.clone()));
         }
     }
 
-    rows.push(head(&t("Mounts")));
-    rows.push(kbox("", join_or(&d.mounts, "\n")));
+    if !d.mounts.is_empty() {
+        rows.push(head(&t("Mounts")));
+        // 与端口映射 / 网络保持同一种代码盒样式（kind 3）：
+        // kbox 的 88px 标签列 + 盒外复制按钮会让挂载行比同 tab 其它盒子窄一截、图标错位。
+        rows.push(chip("", join_or(&d.mounts, "\n")));
+    }
+
     rows
 }
 

@@ -42,18 +42,18 @@ docker-panel/
 │   ├── i18n.rs                locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp()（复数，对齐 @tr 的 `"sing" | "plural" % n`）+ slint_language()
 │   ├── config.rs              AppConfig 持久化（directories + 手写 JSON 原子写）
 │   │
-│   ├── consumer.rs            consumer 线程：recv_timeout(200ms) Msg 泵 pump_and_apply + 3s 刷新 interval
-│   ├── bootstrap.rs           6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
+│   ├── consumer.rs            consumer 线程：recv_timeout(100ms) + 分批 drain（≤2048）+ 120ms UI 节流 + 3s 刷新 interval
+│   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 主题监听
 │   │
-│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo
+│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
-│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ drain_messages + ensure_follow（日志流幂等建流）+ cleanup_counts + persist
+│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + ensure_follow + cleanup_counts + persist
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
-│   ├── ui_update.rs           derive_update(Msg → UiUpdate)
-│   ├── ui_apply.rs            apply_detail / apply_lists / refresh_lists_now（搜索排序即时重建）
+│   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
 │   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
@@ -62,7 +62,7 @@ docker-panel/
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
 │   │
 │   └── docker/
-│       ├── mod.rs             connect() + pub use 重导出
+│       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
 │       ├── containers.rs      list / start / stop / restart / remove
 │       ├── images.rs          list / pull（含进度闭包）/ remove
 │       ├── logs.rs            inspect_container / follow_logs（Stream → tx.send）
@@ -77,7 +77,7 @@ docker-panel/
 └── ui/                        Slint 层（所有 ≤ 300 行）
     ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
     ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态
-    ├── models.slint           ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
+    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair struct（日志走 string 属性）
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
     ├── cards.slint             卡片网格容器（四种视图共用，含空状态 + 背景点击层）
@@ -96,10 +96,11 @@ docker-panel/
 
 ```
 main.rs
-  ├── consumer.rs    → ui_state + ui_rows + ui_update + ui_apply + slint_gen
-  ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*}
-  ├── ui_state.rs    → models.rs + docker::{compute_cpu_delta, inspect_container, list_*}
-  ├── ui_apply.rs    → slint_gen (MainWindow) + ui_state::DetailTuple + ui_rows
+  ├── consumer.rs    → ui_state + ui_update + ui_rows + detail_fmt + render + ui_apply + slint_gen
+  ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, with_timeout}
+  ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout}
+  ├── ui_update.rs   → ui_state + models::Msg + docker::compute_cpu_delta
+  ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   └── docker/        → 纯 async 层，不反依赖任何上层模块
@@ -110,11 +111,11 @@ ui/*.slint           app.slint 是唯一组装入口，import 其余子文件，
 
 ## 3. 文件规范
 
-所有源码文件 ≤ 300 行（当前最大 components.slint 294 / callbacks.rs 280）。
+所有源码文件正文（去除头部/注释/空行）≤ 300 行。
 
 **Slint 拆分原则**详见 [arch/ui-interaction.md](arch/ui-interaction.md) §2；**Rust 拆分原则**详见 [arch/threading.md](arch/threading.md) §4。核心口径：
 
 - app.slint 做组装层，子文件之间不互相 import
-- consumer.rs 独占 Receiver，pump_and_apply 两阶段泵
+- consumer.rs 独占 Receiver，分批 drain + 120ms 节流两阶段泵
 - 所有 spawn 都走 state.rt（锁内 clone handle → drop → spawn）
 - 所有 Docker 操作结果都走 `tx.send(Msg)`，不直接碰 Slint Model

@@ -7,14 +7,13 @@
 ```
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
-│ UI 回调（搜索/排序/    │       │ recv_timeout(200ms) 循环 │       │ 3s 刷新 interval    │
-│  操作/快捷键）──lock─▶│ drain_messages            │       │ 6s stats interval   │
-│ 窗口关闭 → shutdown   │ build_*_rows ×4           │       │ spawn 异步任务      │
-│   flag                │ detail_fmt::build_detail  │◀──────│ bollard API 调用    │
-│                        │ drop(s) ──────────────────lock rel│ tx.send(Msg)        │
+│ UI 回调（搜索/排序/    │       │ recv_timeout(100ms) 循环 │       │ 3s 刷新 interval    │
+│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
+│ 窗口关闭 → shutdown   │ pending.merge 聚合        │       │ 30s 卷占用 interval │
+│   flag                │ 120ms 节流 apply          │◀──────│ bollard API 调用    │
+│                        │ 只重建变化区域 → drop lock│       │ tx.send(Msg)        │
 │                        │ invoke_from_event_loop     │       │ follow_logs 流      │
-│                        │   apply_lists ×5 模型      │       │ inspect_container   │
-│                        │   apply_detail / counts    │       │                     │
+│                        │   render 缓存 + apply_drawer│      │ inspect_container   │
 └──────────────────────┘       └────────────────────────┘       └───────────────────┘
      Mutex<AppState>                 mpsc::Receiver<Msg>          spawn(async { ... })
    + shutdown: AtomicBool            （consumer 独占，不进 Mutex）
@@ -23,57 +22,91 @@
 ### Receiver 不进 Mutex — 死锁唯一保证
 
 `mpsc::Receiver<Msg>` 由 consumer 线程独占所有权，**不**放在 `AppState` 里。
-这样 `rx.recv_timeout(200ms)` 永远不会阻塞主线程拿 state 锁。
+这样 `rx.recv_timeout(100ms)` 永远不会阻塞主线程拿 state 锁。
 如果 Receiver 放进 Mutex，consumer 阻塞 `recv()` 时持有锁 → 主线程任何 `state.lock()`（UI 回调、interval tick）全卡死。
 
-### pump_and_apply 两阶段铁律（consumer.rs）
+### 分批 drain + 120ms 节流（consumer.rs）
+
+日志洪峰下，旧实现"每条 Msg 一次 invoke + 重建全部列表"会把 UI 线程压死，也会因长时间持锁饿死点击回调。当前实现分三层防护：
 
 ```rust
-// Phase 1 — 锁内（微秒级）：
+// Phase 1 — 锁外等待，锁内分批消费
+let first = rx.recv_timeout(RECV_TIMEOUT)?;       // 100ms
+loop {
+    let res = {
+        let Ok(mut s) = state.lock() else { return };
+        s.drain_messages(&rx, first.take(), MAX_DRAIN_BATCH) // 单批 ≤2048
+    };
+    pending.merge(res);                            // 多批合并成一个 DrainResult
+    if pending.shutdown { return; }
+    if !pending.has_more || last_apply.elapsed() >= UI_MIN_INTERVAL { break; }
+}
+
+// Phase 2 — 每 120ms 最多应用一次 UI
+if pending.processed > 0 && last_apply.elapsed() >= UI_MIN_INTERVAL {
+    apply_ui(&state, &ui, &mut pending);
+}
+```
+
+```rust
+// apply_ui：锁内只 build 真正变化的区域 → drop lock → 锁外 invoke
+let res = std::mem::take(pending);
 let Ok(mut s) = state.lock() else { return };
-let (need_update, latest_msg) = s.drain_messages(rx, first);
-let (cm, im, nm, vm) = (build_container_rows(&s), build_image_rows(&s),
-                        build_network_rows(&s), build_volume_rows(&s));
-let detail_data = detail_fmt::build_detail_data(&s);        // 18 字段 SharedString 元组
-let image_detail_data = detail_fmt::build_image_detail_data(&s);
-let log_lines: Vec<LogLineRow> = s.logs.iter().map(...).collect();
-// 操作完成立即刷新（ActionDone / PullDone / CleanupDone）→ 锁内 s.refresh()
+if res.refresh_now { s.refresh(); }
+let container_rows = res.lists_changed.then(|| ui_rows::build_container_rows(&s));
+// ... image / network / volume / compose 同理
+let drawer = (res.drawer_changed || res.lists_changed)
+    .then(|| detail_fmt::build_drawer_data(&s));
+let log_text = res.logs_changed.then(|| SharedString::from(s.logs.join("\n")));
 drop(s);  // ⚠️ 必须在 invoke_from_event_loop 之前释放
 
-// Phase 2 — 锁外：
 invoke_from_event_loop(move || {
-    let Some(ui) = ui_w.upgrade() else { return };
-    ui_apply::apply_lists(&ui, cm, im, nm, vm, lm);   // 5 个 ModelRc 一次灌入
-    // ... counts / sort_field / status_text / docker_ok / pull_open ...
-    ui_apply::apply_detail(&ui, &detail_data);        // None 时无操作
-    ui_apply::apply_image_detail(&ui, &image_detail_data);
+    // render::containers(rows) 走 thread_local 缓存模型，只 set 变化的列表
+    ui_apply::apply_drawer(&ui, &drawer);
+    ui.set_log_text(log_text);
 }).ok();
 ```
+
+关键点：
+
+- **单批上限**：`MAX_DRAIN_BATCH = 2048`，避免日志洪峰时无界 `try_recv` 长时间占锁。
+- **UI 节流**：`UI_MIN_INTERVAL = 120ms`（约 8 次/秒），上千条日志合并成一次 `set_log_text`。
+- **变化区域**：`DrainResult` 只标记 `lists_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。
+- **日志缓冲**：`LogLine` 先推入 `AppState.logs`，整批 drain 后一次性裁剪到 500 行；UI 侧是一整个 `log_text` string，不再有逐行 Model/ListView。
+- **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出，避免旧容器的流继续写入新容器日志或长期占用 tokio 任务。工具条 Clear 只清缓冲、不取消当前流，新日志仍会继续出现。
+- **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
 
 软件渲染器 + MCP 模式下 Slint Timer 不触发（连 debug eprintln 都没有），定时任务全部改为 tokio interval：
 
-- **3s 列表刷新**（`consumer::spawn_refresh_interval`）：锁内 clone handle → drop → spawn `interval(REFRESH_INTERVAL)` 循环，每 tick `s.refresh()` 发起容器/镜像列表任务，结果走 `tx.send(Msg::*)`。网络/卷不在 3s 周期内，由操作后刷新与搜索/排序回调即时重建（`ui_apply::refresh_lists_now`）。
+- **3s 列表刷新**（`consumer::spawn_refresh_interval`）：锁内 clone handle → drop → spawn `interval(REFRESH_INTERVAL)` 循环，每 tick `s.refresh()` 并发刷新容器/镜像/网络/卷，结果走 `tx.send(Msg::*)`。
+  - `refresh()` 带 in-flight 去重：上一轮未完成时本轮直接跳过，避免慢 Docker 下每 3s 再叠 4 个调用。
+  - 所有列表/统计/inspect 调用都经 `docker::with_timeout`（10s），防止守护进程无响应时后台任务无限挂起、耗尽 tokio 工作线程。
 - **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats，首帧跳过——双采样 CPU% 算法需要前一帧。
+- **30s 卷占用**（`bootstrap::spawn_volume_size_interval`）：`/system/df` 遍历卷目录，低频单独跑。
 - UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
 - 这符合 Slint 线程安全模型：只有主线程可以修改 Model。
+- **主题监听可退出**：`dconf watch` 的阻塞读放在独立 reader 线程，监控线程用 `recv_timeout(200ms)` 轮询 shutdown；轮询回退路径也按 200ms 醒来检查。窗口关闭时 `theme-monitor` 能在 200ms 内 join，不会因 `reader.next()` 永久阻塞而让进程挂住。
 
 ## 2. 消息流（Msg 变体一览）
 
 | 变体 | 触发源 | UI 行为 |
 |------|--------|---------|
-| `Containers(Result<Vec<ContainerInfo>>)` | 3s interval / 手动刷新 | 替换容器列表 + 剪失效选择 |
-| `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 剪失效选择 |
-| **`Networks(Result<Vec<NetworkInfo>>)`** | 3s interval / 手动刷新 / 操作后刷新 | 替换网络列表（网络视图） |
-| **`Volumes(Result<Vec<VolumeInfo>>)`** | 3s interval / 手动刷新 / 操作后刷新 | 替换卷列表（卷视图） |
+| `Containers(Result<Vec<ContainerInfo>>)` | 3s interval / 手动刷新 | 替换容器列表（保留旧 stats） |
+| `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 后台补查层数 |
+| `Networks(Result<Vec<NetworkInfo>>)` | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
+| `Volumes(Result<Vec<VolumeInfo>>)` | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
 | **`Stats(String id, ContainerStatsSnapshot)`** | 6s stats interval | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列 |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
-| `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + **锁内立即 `s.refresh()`** |
-| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + **锁内立即 `s.refresh()`** |
-| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + **锁内立即 `s.refresh()`** |
-| **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail`，pump_and_apply 灌入 Drawer 详情 Tab |
-| **`LogLine(String)`** | `follow_logs` Stream | 推入 `AppState.logs`（环形缓冲 cap=500），pump_and_apply 灌入日志 Tab |
+| `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
+| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |
+| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记立即刷新 |
+| **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
+| **`LogLine(String)`** | `follow_logs` Stream | 推入 `AppState.logs`（环形缓冲 cap=500）→ `log_text` string |
+| `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
+| `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
+| `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
 
 ### 消息处理流水线
 
@@ -87,27 +120,29 @@ invoke_from_event_loop(move || {
                                                                        │
                    ┌──────────────────────────────────────────────────┘
                    ▼
-         ┌────────────────┐
-         │ lock state      │
-         │ drain_messages  │  逐条更新 containers / images / networks / volumes / detail / logs
-         │ build rows ×4   │  （ui_rows::build_*_rows + detail_fmt::build_detail_data）
-         │ drop lock       │
-         └────────┬───────┘
-                  │ invoke_from_event_loop
-                  ▼
+         ┌──────────────────────────┐
+         │ lock state               │
+         │ drain_messages ≤2048/批   │  逐条更新 containers / images / networks / volumes / detail / logs
+         │ 整批裁剪 logs 到 500 行    │  （ui_update.rs，每条只做 O(1) 状态更新）
+         │ drop lock                │
+         └────────────┬─────────────┘
+                      │ pending.merge（最多每 120ms 一次）
+                      ▼
+         ┌──────────────────────────┐
+         │ lock state               │
+         │ 只 build 变化区域          │  lists_changed → ui_rows::build_*_rows
+         │ drop lock                │  drawer_changed → detail_fmt::build_drawer_data
+         └────────────┬─────────────┘  logs_changed → logs.join("\n")
+                      │ invoke_from_event_loop
+                      ▼
          ┌──────────────────────────────────────────────────┐
          │ 主线程（闭包在 Slint 事件队列里执行）                 │
          │                                                    │
-         │  ui_apply::apply_lists(&ui, cm, im, nm, vm, lm)   │
-         │    └ ui.set_container_rows(ModelRc::from(...))     │
-         │    └ ui.set_image_rows / set_network_rows / ...    │
-         │    └ ui.set_log_lines(ModelRc::from(...))         │
-         │                                                    │
-         │  if let Some(ref d) = detail_data:                 │
-         │    ui_apply::apply_detail(&ui, d)                  │
-         │      └ ui.set_d_name / set_d_state / set_d_... ×18│
-         │                                                    │
-         │  ui.set_total_* / set_running_containers / ...    │
+         │  render::containers(rows) 等 thread_local 缓存同步  │
+         │    └ ui.set_container_rows / set_image_rows / ...  │
+         │  ui.set_log_text(log_text)                         │
+         │  ui_apply::apply_drawer(&ui, drawer)               │
+         │  ui.set_total_* / set_running_containers / ...     │
          └──────────────────────────────────────────────────┘
 ```
 
@@ -120,12 +155,15 @@ invoke_from_event_loop(move || {
 // LogOutput::StdOut { message: Bytes } | LogOutput::StdErr { message: Bytes }
 
 rt_handle.spawn(async move {
-    let _ = docker::follow_logs(&id, tx, 200).await;
-    // 内部：stream.next().await → LogOutput::StdOut { message } → Bytes → String → tx.send(Msg::LogLine(line))
+    let _ = docker::follow_logs(&id, tx, 200, cancel_rx).await;
+    // 内部：select! { cancel.changed() => break, item = stream.next() => ... }
+    //       LogOutput::StdOut { message } → Bytes → String → tx.send(Msg::LogLine(line))
 });
 ```
 
-环形缓冲在 `drain_messages` 里做（`drain(0..excess)`），避免 `push` 无限增长。
+`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`，只清缓冲、保留当前流。
+
+环形缓冲在 `drain_messages` 里整批裁剪（`drain(0..excess)`），避免逐行 `drain` 在洪峰下被放大；UI 侧只接收合并后的 `log_text`，不再逐行建 Model。
 
 ## 3. Rust 回调绑定三段式
 
@@ -179,9 +217,10 @@ ui.on_xxx_requested(move || {
 ## 4. Rust 拆分原则
 
 - 组装层分离：main.rs（i18n → AppState → MainWindow → 各模块启动 → ui.run() → 优雅退出）纯组装不写业务
-- **consumer.rs 独占 Receiver + pump_and_apply 两阶段泵**——3s 刷新 interval 也在 consumer.rs；6s stats 与首屏加载在 bootstrap.rs
-- **详情字段格式化抽成 detail_fmt.rs**——ui_state.rs 只管状态变更与消息排空
-- **derive_update match 抽成独立 ui_update.rs**——update 推导单独一个文件
+- **consumer.rs 独占 Receiver + 分批 drain/节流 apply 两阶段泵**——3s 刷新 interval 也在 consumer.rs；6s stats、30s 卷占用与首屏加载在 bootstrap.rs
+- **详情字段格式化抽成 detail_fmt/**——ui_state.rs 只管状态变更与后台任务
+- **ui_update.rs 只做 Msg 聚合**——`DrainResult` + 有上限 `drain_messages` + 单条 `apply_msg`，保持日志洪峰防护逻辑独立
+- **ui_state.rs 只做状态与后台任务**——刷新去重/超时、follow 建流、清理计数、配置持久化
 - 回调按实体分：callbacks.rs（顶栏+弹窗+配置恢复）+ callbacks_container.rs + callbacks_image.rs
 - 类型集中入口：`slint_gen.rs` 只做 `include_modules!()` 一次展开
 - **所有 spawn 都走 state.rt（锁内 clone handle → drop → spawn）**——主线程不持有独立 tokio runtime

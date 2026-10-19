@@ -107,6 +107,15 @@ pub fn spawn_follow(
                 follow_logs(&id, tx.clone(), retry_tail, epoch, cancel_rx.clone()).await;
             sent_any |= lines > 0;
 
+            // 不可恢复错误（容器被删除等）：直接结束并提示，不再僵尸式重试
+            if let LogStreamEnd::Error(e) = &end {
+                if is_unrecoverable(e) {
+                    eprintln!("[log-stream] {id} stream ended: {e}");
+                    let _ = tx.send(Msg::LogStreamStatus(crate::i18n::t(NOTICE_STOPPED)));
+                    break;
+                }
+            }
+
             // 可恢复原因：None 表示本轮结束（取消 / 容器停止 / 不可恢复错误）
             let reason = classify_end(&end, running.load(Ordering::Acquire));
 

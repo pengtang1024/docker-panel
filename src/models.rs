@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 /// 容器信息（表格一行的数据）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct ContainerInfo {
     /// 完整容器 ID

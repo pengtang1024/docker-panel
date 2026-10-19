@@ -2,6 +2,49 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use super::*;
+use crate::models::ContainerInfo;
+
+#[test]
+fn log_stream_status_sets_status_text() {
+    let (state, rx) = AppState::new();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+    tx.send(Msg::LogStreamStatus("日志流中断".into())).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.status_text.as_deref(), Some("日志流中断"));
+}
+
+#[test]
+fn follow_running_flag_tracks_container_state() {
+    let (state, rx) = AppState::new();
+    let mut s = state.lock().unwrap();
+    s.follow_id = "c1".into();
+    let tx = s.tx.clone();
+
+    let running = ContainerInfo {
+        id: "c1".into(),
+        state: "running".into(),
+        ..Default::default()
+    };
+    tx.send(Msg::Containers(Ok(vec![running]))).unwrap();
+    s.drain_messages(&rx, None, 10);
+    assert!(
+        s.follow_running.load(Ordering::Acquire),
+        "运行中应标记为可恢复"
+    );
+
+    let stopped = ContainerInfo {
+        id: "c1".into(),
+        state: "exited".into(),
+        ..Default::default()
+    };
+    tx.send(Msg::Containers(Ok(vec![stopped]))).unwrap();
+    s.drain_messages(&rx, None, 10);
+    assert!(
+        !s.follow_running.load(Ordering::Acquire),
+        "已停止不应触发 EOF 自愈"
+    );
+}
 
 #[test]
 fn stale_processing_is_not_a_ui_change() {

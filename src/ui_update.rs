@@ -207,15 +207,16 @@ impl AppState {
             }
             Msg::LogLine(epoch, line) => {
                 // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
-                if *epoch == self.log_epoch.load(Ordering::Acquire) {
+                if *epoch == self.stream_epoch {
                     self.logs.push(line.clone());
                     res.logs_changed = true;
                 }
             }
             Msg::LogStreamEnded(epoch) => {
                 // 流自然结束（容器停止/Docker 异常）：允许下次 ensure_follow 重新建流
-                if *epoch == self.log_epoch.load(Ordering::Acquire) {
+                if *epoch == self.stream_epoch {
                     self.follow_id.clear();
+                    self.follow_cancel = None;
                 }
             }
             Msg::ActionDone(desc, r) => {
@@ -280,9 +281,10 @@ mod tests {
         let (state, rx) = AppState::new();
         let mut s = state.lock().unwrap();
         s.logs.push("old".into());
-        s.log_epoch.store(5, Ordering::Release);
-        s.clear_logs(); // epoch → 6，缓冲清空
+        s.stream_epoch = 5;
+        s.clear_logs(); // stream epoch → 6，缓冲清空
         assert!(s.logs.is_empty());
+        assert_eq!(s.stream_epoch, 6);
 
         let tx = s.tx.clone();
         tx.send(Msg::LogLine(5, "stale".into())).unwrap();

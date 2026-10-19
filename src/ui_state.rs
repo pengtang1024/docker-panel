@@ -70,8 +70,9 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
-    /// 当前日志流 epoch：切换容器/清空日志时递增；consumer 只接受当前 epoch 的日志行。
-    /// 用共享 AtomicU64 让主线程的 invoke 闭包也能在锁外丢弃过期 log_text。
+    /// 当前日志流 epoch：用于 Msg::LogLine / LogStreamEnded 的流代际过滤
+    pub stream_epoch: u64,
+    /// 日志缓冲 epoch：仅用于 UI log_text 的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
     pub follow_id: String,
@@ -144,6 +145,7 @@ impl AppState {
             volume_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: 500,
+            stream_epoch: 0,
             log_epoch: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
             follow_cancel: None,
@@ -248,6 +250,7 @@ impl AppState {
         self.logs.clear();
         self.follow_id.clear();
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
+        self.stream_epoch = self.stream_epoch.wrapping_add(1);
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
     }
@@ -272,16 +275,16 @@ impl AppState {
         if self.follow_id == id {
             return;
         }
-        self.spawn_follow(id, 200);
+        // 流自然结束后缓冲仍在：tail=0 续流，避免重放最近 200 行造成重复
+        let tail = follow_tail(self.logs.is_empty());
+        self.spawn_follow(id, tail);
     }
 
-    /// 建流并递增 epoch：旧流随后被取消，其已入队日志会因 epoch 不匹配被丢弃。
+    /// 建流并递增 stream epoch；不推进 buffer epoch，续流时保留已缓冲日志与待应用文本。
     fn spawn_follow(&mut self, id: &str, tail: i64) {
         self.follow_id = id.to_string();
-        let epoch = self
-            .log_epoch
-            .fetch_add(1, Ordering::AcqRel)
-            .wrapping_add(1);
+        self.stream_epoch = self.stream_epoch.wrapping_add(1);
+        let epoch = self.stream_epoch;
         // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
         self.follow_cancel = Some(cancel_tx);
@@ -312,4 +315,24 @@ impl AppState {
     }
 }
 
+/// 续流 tail：空缓冲拉最近 200 行；已有缓冲只接续新行，避免重放造成重复。
+fn follow_tail(logs_empty: bool) -> i64 {
+    if logs_empty {
+        200
+    } else {
+        0
+    }
+}
+
 pub type SharedState = Arc<Mutex<AppState>>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn follow_tail_avoids_replaying_history() {
+        assert_eq!(follow_tail(true), 200);
+        assert_eq!(follow_tail(false), 0);
+    }
+}

@@ -18,7 +18,7 @@
     "4": "fixed",
     "5": "fixed",
     "6": "fixed",
-    "7": "open",
+    "7": "fixed",
     "8": "open"
   },
   "tests": {
@@ -33,5 +33,5 @@
     "version": "skipped"
   },
   "awaiting": "none",
-  "updated_at": "2026-10-19T23:54:54+08:00"
+  "updated_at": "2026-10-19T23:58:17+08:00"
 }

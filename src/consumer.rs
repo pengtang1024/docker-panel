@@ -52,7 +52,7 @@ pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> Joi
 
         loop {
             // 锁外阻塞！超时后检查 shutdown；空闲时也用于 flush pending
-            let wait = poll_timeout(pending.processed > 0, last_apply.elapsed());
+            let wait = poll_timeout(pending.has_ui_changes(), last_apply.elapsed());
             let first = match rx.recv_timeout(wait) {
                 Ok(msg) => Some(msg),
                 Err(RecvTimeoutError::Timeout) => None,
@@ -79,7 +79,7 @@ pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> Joi
             }
 
             // 节流应用：洪峰中多批状态更新合并成一次 UI invoke
-            if pending.processed > 0 && last_apply.elapsed() >= UI_MIN_INTERVAL {
+            if pending.has_ui_changes() && last_apply.elapsed() >= UI_MIN_INTERVAL {
                 apply_ui(&state, &ui, &mut pending);
                 last_apply = Instant::now();
             }

@@ -40,6 +40,21 @@ pub struct DrainResult {
 }
 
 impl DrainResult {
+    /// 本批是否产生了需要落到 UI 的变化。
+    ///
+    /// 被 epoch 丢弃的旧日志只会增加 `processed`，不应触发无意义的 `apply_ui`/invoke。
+    pub fn has_ui_changes(&self) -> bool {
+        self.lists_changed
+            || self.drawer_changed
+            || self.logs_changed
+            || self.docker_ok.is_some()
+            || self.status_text.is_some()
+            || self.toast
+            || self.close_pull
+            || self.reset_pull_busy
+            || self.refresh_now
+    }
+
     /// 把下一批结果并入累计结果（UI 刷新按时间窗口节流时会连续 drain 多批）
     pub fn merge(&mut self, o: DrainResult) {
         self.processed += o.processed;
@@ -245,6 +260,20 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_processing_is_not_a_ui_change() {
+        let mut res = DrainResult {
+            processed: 42,
+            ..Default::default()
+        };
+        assert!(!res.has_ui_changes());
+        res.logs_changed = true;
+        assert!(res.has_ui_changes());
+        res.logs_changed = false;
+        res.status_text = Some("x".into());
+        assert!(res.has_ui_changes());
+    }
 
     #[test]
     fn stale_log_epoch_is_dropped_after_clear() {

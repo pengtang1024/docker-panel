@@ -16,7 +16,7 @@
     "2": "open",
     "3": "fixed",
     "4": "fixed",
-    "5": "open"
+    "5": "fixed"
   },
   "tests": {
     "L1": "pass",
@@ -25,5 +25,5 @@
   },
   "sync": {},
   "awaiting": "none",
-  "updated_at": "2026-10-19T23:34:59+08:00"
+  "updated_at": "2026-10-19T23:38:45+08:00"
 }

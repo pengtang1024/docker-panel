@@ -97,7 +97,7 @@ cargo build --release
 ```
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
-│ UI 回调（搜索/排序/    │       │ recv_timeout(100ms) 循环 │       │ 3s 刷新 interval    │
+│ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ 3s 刷新 interval    │
 │  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
 │ 窗口关闭 → shutdown   │ 按 120ms 窗口合并 UI 更新  │       │ spawn 异步任务      │
 │   flag                │ 只重建变化区域（日志/列表）│◀──────│ bollard API 调用    │

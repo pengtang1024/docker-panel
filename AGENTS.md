@@ -149,7 +149,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 ```
 主线程 (ui.run() 阻塞)       consumer 线程               tokio runtime (multi-thread)
 ┌───────────────────┐      ┌────────────────────┐      ┌──────────────────┐
-│ 3s tokio interval ┼──lock▶│ recv_timeout(100ms)│      │ 3s refresh join!  │
+│ 3s tokio interval ┼──lock▶│ recv_timeout(≤100ms)│      │ 3s refresh join!  │
 │ 6s stats interval ┼──lock▶│ 分批 drain ≤2048/批 │      │ 6s stats join_all │
 │ UI 回调 ───────────┼──lock▶│ pending.merge       │      │ 30s volume df     │
 │                     │      │ 120ms 节流 apply    │      │ bollard API 调用   │
@@ -176,7 +176,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记 `refresh_now`（apply_ui 统一 `s.refresh()`） |
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
-| `LogLine(String)` | follow_logs Stream | 推入 `AppState.logs`（环形缓冲 cap=500）→ 合并为 `log_text` string |
+| `LogLine(u64, String)` | follow_logs Stream | `(epoch, line)`；epoch 不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
+| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 epoch 时清空 `follow_id`，允许下次重新建流 |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |

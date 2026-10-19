@@ -108,10 +108,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     }
 
     // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染。
-    // 同时清空 UI 上的旧日志文本：clear_logs 不发 Msg，若只清 state，
+    // 同时清空 UI 上的旧日志文本与状态提示：clear_logs 不发 Msg，若只清 state，
     // 新容器还没产生日志时日志页会一直显示上一个容器的内容。
     let bind_inspect = |ui: &MainWindow, s: &SharedState, id: String| {
-        ui.set_log_text(SharedString::from(""));
+        crate::ui_apply::clear_log_panel(ui);
         if let Ok(mut st) = s.lock() {
             st.sel = SelKind::Container;
             st.sel_key = id.clone();
@@ -143,8 +143,13 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             ui.set_drawer_open(true);
             ui.set_drawer_tab(1);
             bind_inspect(&ui, &s, id.clone());
-            if let Ok(mut st) = s.lock() {
-                st.ensure_follow(&id);
+            let new_stream = match s.lock() {
+                Ok(mut st) => st.ensure_follow(&id),
+                Err(_) => false,
+            };
+            // 新建的流没有「正在重连」之类的历史状态，清掉残留提示
+            if new_stream {
+                crate::ui_apply::clear_log_status(&ui);
             }
         });
     }

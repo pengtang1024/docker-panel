@@ -154,13 +154,6 @@ impl AppState {
                                 (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
                             }
                         }
-                        // 更新被跟随容器的运行状态：日志流 EOF 时据此判断是否可恢复
-                        let follow_id = self.follow_id.clone();
-                        let running = self
-                            .containers
-                            .iter()
-                            .any(|c| c.id == follow_id && c.is_running());
-                        self.follow_running.store(running, Ordering::Release);
                     }
                     Err(e) => {
                         res.status_text =
@@ -233,11 +226,11 @@ impl AppState {
                     self.follow_id.clear();
                     self.follow_cancel = None;
                     self.follow_active = None;
-                    self.follow_running.store(false, Ordering::Release);
                 }
             }
             Msg::LogStreamStatus(epoch, text) => {
-                // 日志流状态提示（重连中 / 已恢复 / 已停止）：独立通道，不占用状态栏
+                // 日志流状态提示（重连中 / 已恢复 / 已停止）：独立通道，不占用状态栏。
+                // 运行时就只在状态**变化**时发消息，这里直接透传给 UI。
                 if *epoch == self.stream_epoch {
                     res.log_status = Some(text.clone());
                 }

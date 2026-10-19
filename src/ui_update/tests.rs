@@ -2,7 +2,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use super::*;
-use crate::models::ContainerInfo;
 
 #[test]
 fn log_stream_status_sets_status_text() {
@@ -23,35 +22,27 @@ fn log_stream_status_sets_status_text() {
 }
 
 #[test]
-fn follow_running_flag_tracks_container_state() {
+fn log_status_is_passed_through_without_dedupe() {
     let (state, rx) = AppState::new();
     let mut s = state.lock().unwrap();
-    s.follow_id = "c1".into();
     let tx = s.tx.clone();
 
-    let running = ContainerInfo {
-        id: "c1".into(),
-        state: "running".into(),
-        ..Default::default()
-    };
-    tx.send(Msg::Containers(Ok(vec![running]))).unwrap();
-    s.drain_messages(&rx, None, 10);
-    assert!(
-        s.follow_running.load(Ordering::Acquire),
-        "运行中应标记为可恢复"
-    );
+    tx.send(Msg::LogStreamStatus(0, "正在重连".into())).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.log_status.as_deref(), Some("正在重连"));
 
-    let stopped = ContainerInfo {
-        id: "c1".into(),
-        state: "exited".into(),
-        ..Default::default()
-    };
-    tx.send(Msg::Containers(Ok(vec![stopped]))).unwrap();
-    s.drain_messages(&rx, None, 10);
-    assert!(
-        !s.follow_running.load(Ordering::Acquire),
-        "已停止不应触发 EOF 自愈"
-    );
+    // 提示变化：推送
+    tx.send(Msg::LogStreamStatus(0, "已恢复连接".into()))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.log_status.as_deref(), Some("已恢复连接"));
+
+    // 相同文案再次到达也照常透传：清空旧提示的责任在 UI 侧
+    // （ui_apply::clear_log_panel / clear_log_status），state 不再镜像 UI 文案。
+    tx.send(Msg::LogStreamStatus(0, "已恢复连接".into()))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.log_status.as_deref(), Some("已恢复连接"));
 }
 
 #[test]

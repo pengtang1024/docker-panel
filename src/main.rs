@@ -25,6 +25,7 @@ mod detail_fmt;
 mod docker;
 mod follow_runtime;
 mod i18n;
+mod log_status;
 mod models;
 mod render;
 mod slint_gen;

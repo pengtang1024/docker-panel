@@ -41,3 +41,20 @@ pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
     let vm = crate::render::volumes(crate::ui_rows::build_volume_rows(s));
     apply_lists(ui, cm, im, nm, vm);
 }
+
+/// 清空整个日志面板（日志文本 + 状态提示）。
+///
+/// 切换选中资源（容器 / 镜像 / 网络 / 卷）或按 Clear 时调用：
+/// 日志上下文已经变了，旧文本与旧提示都不再属于当前对象。
+pub fn clear_log_panel(ui: &MainWindow) {
+    ui.set_log_text(SharedString::from(""));
+    ui.set_log_status(SharedString::from(""));
+}
+
+/// 只清空状态提示，保留日志文本。
+///
+/// 同一容器重建日志流时调用：流是新的，没有「正在重连」之类的历史状态，
+/// 但已缓冲的日志文本仍然有效。
+pub fn clear_log_status(ui: &MainWindow) {
+    ui.set_log_status(SharedString::from(""));
+}

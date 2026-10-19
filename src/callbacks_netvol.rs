@@ -70,6 +70,8 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
 
 /// 写 sel/sel_key → 立即按当前 AppState 重建抽屉内容并灌入 UI
 fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
+    // 选中对象变了：旧日志文本与状态提示都不再属于当前对象
+    crate::ui_apply::clear_log_panel(ui);
     let data = {
         let Ok(mut st) = s.lock() else { return };
         st.sel = kind;

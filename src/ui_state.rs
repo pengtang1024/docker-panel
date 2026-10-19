@@ -83,8 +83,6 @@ pub struct AppState {
     pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
     /// 当前日志流存活标志（每条流独立）：旧流退出不会误标新流
     pub follow_active: Option<Arc<AtomicBool>>,
-    /// 被跟随容器是否仍在运行（随列表刷新更新）：运行中却 EOF 时按可恢复处理
-    pub follow_running: Arc<AtomicBool>,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -158,7 +156,6 @@ impl AppState {
             follow_id: String::new(),
             follow_cancel: None,
             follow_active: None,
-            follow_running: Arc::new(AtomicBool::new(false)),
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -265,7 +262,6 @@ impl AppState {
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
         self.follow_active = None;
-        self.follow_running.store(false, Ordering::Release);
     }
 
     /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
@@ -292,22 +288,22 @@ impl AppState {
     }
 
     /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
-    pub fn ensure_follow(&mut self, id: &str) {
+    ///
+    /// 返回 `true` 表示**新建了一条流**：调用方需要据此清掉 UI 上的旧状态提示
+    /// （新流没有「正在重连」的历史状态，旧提示会滞留误导用户）。
+    pub fn ensure_follow(&mut self, id: &str) -> bool {
         // 防御调用方绕过 clear_logs 直接切到另一个容器：先清掉旧缓冲，避免串台
         if !self.follow_id.is_empty() && self.follow_id != id {
             self.clear_logs();
         }
         if self.follow_id == id && self.follow_is_alive() {
-            return;
+            return false;
         }
-        // 现场计算被跟随容器是否在运行：列表刷新最多滞后 3s，
-        // 直接用最新列表判断可避免「已停止容器被误判为可恢复」而空转重连
-        let running = self.containers.iter().any(|c| c.id == id && c.is_running());
-        self.follow_running.store(running, Ordering::Release);
         // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
         // history_done 在收到首条日志或 Clear 时才置位，空历史/首流失败可重试。
         let tail = crate::follow_runtime::follow_tail(self.history_done);
         self.spawn_follow(id, tail);
+        true
     }
 
     /// 当前日志流是否仍在运行：每条流独立标志，旧流退出不会误标新流。
@@ -334,7 +330,6 @@ impl AppState {
             id.to_string(),
             tail,
             epoch,
-            self.follow_running.clone(),
             self.tx.clone(),
         );
         self.follow_cancel = Some(handle.cancel);

@@ -22,11 +22,18 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             // 切到「日志」Tab 时，若当前选中是容器则即时建立日志跟随流
             // （卡片 ⋯→日志 已走 container_logs；此处覆盖用户手动点 Tab 的路径）
             if t == 1 {
-                if let Ok(mut st) = s.lock() {
+                let new_stream = {
+                    let Ok(mut st) = s.lock() else { return };
                     if st.sel == SelKind::Container && !st.sel_key.is_empty() {
                         let id = st.sel_key.clone();
-                        st.ensure_follow(&id);
+                        st.ensure_follow(&id)
+                    } else {
+                        false
                     }
+                };
+                // 新建的流没有「正在重连」之类的历史状态，清掉残留提示（保留日志文本）
+                if new_stream {
+                    crate::ui_apply::clear_log_status(&ui);
                 }
             }
         });
@@ -73,7 +80,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             if let Ok(mut st) = s.lock() {
                 st.clear_log_buffer();
             }
-            ui.set_log_text(SharedString::from(""));
+            crate::ui_apply::clear_log_panel(&ui);
             ui.set_status_text(SharedString::from(crate::i18n::t("Log cleared")));
         });
     }

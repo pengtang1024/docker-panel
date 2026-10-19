@@ -148,7 +148,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
 ///
 /// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
 /// 本任务会在下一次 `select!` 立即退出，避免旧容器的日志流泄漏并污染新容器。
-/// `epoch` 随每条日志回传；consumer 只接受与 AppState 当前 epoch 相同的行，
+/// `epoch` 随每条日志回传；consumer 只接受与 AppState 当前 stream epoch 相同的行，
 /// 用来丢弃切换/清空瞬间已经排进 mpsc 队列的旧日志。
 pub async fn follow_logs(
     id: &str,

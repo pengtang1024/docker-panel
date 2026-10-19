@@ -84,7 +84,7 @@ invoke_from_event_loop(move || {
 - **变化区域**：`DrainResult` 只标记 `lists_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。`has_ui_changes()` 为 false 时不 apply（被 epoch 丢弃的旧日志不会触发空 invoke）。
 - **日志缓冲**：`LogLine(epoch, line)` 先推入 `AppState.logs`，整批 drain 后一次性裁剪到 500 行；UI 侧是一整个 `log_text` string，不再有逐行 Model/ListView。
 - **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 stream epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
-- **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI `log_text` 过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。流自然结束后缓冲仍在，`ensure_follow` 用 `tail=0` 续流，避免重放最近 200 行造成重复。
+- **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI `log_text` 过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。`history_done` 记录当前容器是否已拉过历史：首次 `ensure_follow` 用 `tail=200`，之后（含 Clear 后）用 `tail=0`，避免重放或让已清空的历史复活。
 - **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断文本是否已过期。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
@@ -167,15 +167,17 @@ invoke_from_event_loop(move || {
 // LogOutput::StdOut { message: Bytes } | LogOutput::StdErr { message: Bytes }
 
 rt_handle.spawn(async move {
-    let _ = docker::follow_logs(&id, tx, 200, epoch, cancel_rx).await;
+    let _ = docker::follow_logs(&id, tx, tail, epoch, cancel_rx).await;
     // 内部：select! { biased; cancel.changed() => break, item = stream.next() => ... }
     //       LogOutput::StdOut { message } → Bytes → String → tx.send(Msg::LogLine(epoch, line))
 });
 ```
 
-`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启当前流，只保留清空之后的新日志。
+`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：有活动流时递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启；无活动流时只清缓冲并递增 log_epoch，`history_done` 保留，切回日志 Tab 不会重拉历史。
 
 流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流时清空 `follow_id` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。
+
+> 已知限制：异常断流后 tail=0 从当前时刻接续，断流窗口内产生的日志不会补回；若需补齐，应使用 timestamps + `since` 游标，而不是回到 tail=200。
 
 环形缓冲在 `drain_messages` 里整批裁剪（`drain(0..excess)`），避免逐行 `drain` 在洪峰下被放大；UI 侧只接收合并后的 `log_text`，不再逐行建 Model。
 

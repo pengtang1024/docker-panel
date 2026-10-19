@@ -17,7 +17,8 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use crate::docker::{
-    follow_logs, retry_delay, LogError, LogStreamEnd, LogStreamOutcome, LOG_IDLE_TIMEOUT,
+    follow_logs, retry_delay, LogError, LogStreamEnd, LogStreamOutcome, RecoverNotice,
+    LOG_IDLE_TIMEOUT,
 };
 use crate::models::Msg;
 
@@ -27,8 +28,6 @@ pub const MAX_RETRY_ATTEMPTS: u32 = 8;
 
 /// 首次失败提示（i18n key）
 const NOTICE_INTERRUPTED: &str = "Log stream interrupted, reconnecting…";
-/// 重连提示（i18n key）
-const NOTICE_RECOVERED: &str = "Log stream reconnected";
 /// 放弃重连提示（i18n key）
 const NOTICE_STOPPED: &str = "Log stream stopped";
 
@@ -115,10 +114,28 @@ pub fn spawn_follow(
         let mut retry_tail = tail;
         // 是否已经向用户提示过「正在重连」
         let mut notified = false;
+        // 是否已经提示过「已恢复连接」
+        let recovered = Arc::new(AtomicBool::new(false));
 
         loop {
-            let outcome: LogStreamOutcome =
-                follow_logs(&id, tx.clone(), retry_tail, epoch, cancel_rx.clone()).await;
+            // 仅在「正在重连」状态下，于本次尝试收到首行日志时提示已恢复
+            let notice = if notified {
+                Some(RecoverNotice {
+                    epoch,
+                    sent: recovered.clone(),
+                })
+            } else {
+                None
+            };
+            let outcome: LogStreamOutcome = follow_logs(
+                &id,
+                tx.clone(),
+                retry_tail,
+                epoch,
+                cancel_rx.clone(),
+                notice,
+            )
+            .await;
             sent_any |= outcome.lines > 0;
 
             match classify_end(&outcome.end, running.load(Ordering::Acquire)) {
@@ -166,14 +183,7 @@ pub fn spawn_follow(
                         _ = tokio::time::sleep(delay) => {}
                     }
 
-                    // 即将重连：先恢复状态提示（若本次仍失败会再次提示「正在重连」）
-                    if notified {
-                        let _ = tx.send(Msg::LogStreamStatus(
-                            epoch,
-                            crate::i18n::t(NOTICE_RECOVERED),
-                        ));
-                        notified = false;
-                    }
+                    // 即将重连：等待本次尝试收到首行日志后再提示「已恢复连接」
                 }
             }
         }

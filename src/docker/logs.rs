@@ -196,6 +196,15 @@ pub enum LogStreamEnd {
     Error(LogError),
 }
 
+/// 重连提示：恢复连接后收到首行日志时，向 UI 提示「已恢复连接」
+#[derive(Clone)]
+pub struct RecoverNotice {
+    /// 当前流的 epoch
+    pub epoch: u64,
+    /// 是否已发出提示（供运行时判断是否已恢复）
+    pub sent: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
 /// 日志流一次连接的结果
 #[derive(Debug, Clone)]
 pub struct LogStreamOutcome {
@@ -235,6 +244,7 @@ pub async fn follow_logs(
     tail_lines: i64,
     epoch: u64,
     mut cancel: tokio::sync::watch::Receiver<()>,
+    mut notice: Option<RecoverNotice>,
 ) -> LogStreamOutcome {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
@@ -296,6 +306,14 @@ pub async fn follow_logs(
                 if !line.is_empty() {
                     let _ = tx.send(Msg::LogLine(epoch, line));
                     lines += 1;
+                    // 重连后的首行日志：确认连接已恢复，提示用户
+                    if let Some(n) = notice.take() {
+                        let _ = tx.send(Msg::LogStreamStatus(
+                            n.epoch,
+                            crate::i18n::t("Log stream reconnected"),
+                        ));
+                        n.sent.store(true, std::sync::atomic::Ordering::Release);
+                    }
                 }
             }
         }
@@ -347,6 +365,7 @@ mod tests {
             0,
             1,
             cancel_rx,
+            None,
         ));
         assert!(
             matches!(out.end, LogStreamEnd::Error(_)),

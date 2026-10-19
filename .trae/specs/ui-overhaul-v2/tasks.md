@@ -186,7 +186,7 @@
 
 - **TR-7.1 (rule)**: cargo fmt --all -- --check → 零 diff
 - **TR-7.2 (rule)**: cargo clippy --all-targets --all-features -- -D warnings → 零 warnings
-- **TR-7.3 (rule)**: grep -rn 'dvkit' src/ ui/ Cargo.toml packaging/ → 零残留
+- **TR-7.3 (rule)**: grep -rnE 'd[v]kit' src/ ui/ Cargo.toml packaging/ → 零残留
 - **TR-7.4 (rule)**: wc -l 所有 src/*.rs + ui/*.slint → 全部 ≤ 300 行
 - **TR-7.5 (rule)**: cargo build --release → Finished
 - **TR-7.6 (rule)**: timeout 3 ./target/release/docker-panel → exit=124

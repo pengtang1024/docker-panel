@@ -17,7 +17,7 @@ reviewer：独立 general 子代理（只读）
 | fmt / clippy / check | ✔ |
 | cargo test | 7 passed |
 | 正文行数（去空行/注释） | ui_state 253 / ui_update 268 / consumer 218 / docker/logs 168 / models 191，均 ≤300 |
-| dvkit 新残留 | 无 |
+| 废弃旧名新残留 | 无 |
 | R7 | 锁内只状态变更 + spawn/clone；apply_ui 锁外闭包只读 Arc<AtomicU64> |
 
 ## 上轮问题核对

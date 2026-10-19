@@ -67,14 +67,14 @@
 - **Description**:
   - main.rs 调试线程（auto-open + request_detail）删除，`callbacks::bind_callbacks(&ui, &state); let _ = ui.run();` 恢复原样
   - 清理未使用的注释（drawer-detail-row.slint 顶部关于 Rust 预折行的注释已过时，更新为 "Slint wrap: word-wrap 原生折行"）
-  - 跑四条质量门禁 + dvkit 残留扫描
+  - 跑四条质量门禁 + 废弃旧名残留扫描
   - 最终 MCP build + 三 tab 全截图
 - **Acceptance Criteria Addressed**: AC-6, AC-7, AC-8
 - **Test Requirements**:
   - `rule` TR-5.1: `cargo check --all-targets` 零 error；evidence: shell 输出
   - `rule` TR-5.2: `cargo clippy --all-targets -- -D warnings` 零 warning；evidence: shell 输出
   - `rule` TR-5.3: `cargo fmt --all -- --check` 零 diff；evidence: shell 输出
-  - `rule` TR-5.4: `grep -ri dvkit src/ ui/ Cargo.toml packaging/` 退出码 1（零匹配）；evidence: shell 输出
+  - `rule` TR-5.4: `grep -riE 'd[v]kit' src/ ui/ Cargo.toml packaging/` 退出码 1（零匹配）；evidence: shell 输出
   - `rule` TR-5.5: 所有 .rs / .slint 文件正文 ≤ 300 行；evidence: `wc -l` + 人工审查
   - `rule` TR-5.6: 三 tab 最终截图：详情折行+复制可见+滚动条按需、环境折行+复制可见、日志不受影响；evidence: 三张 MCP screenshot
 

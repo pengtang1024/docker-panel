@@ -22,7 +22,7 @@ Docker Panel 的最终用户（桌面 Docker 管理工具使用者）。
 
 - Slint 1.18.1 strict 模式（`compat-1-18`），纯软件渲染
 - 单文件 ≤ 300 行
-- 项目名 docker-panel，零 dvkit 残留
+- 项目名 docker-panel，零废弃旧名残留
 - 现有线程模型（main + consumer + tokio runtime）不变
 - 所有 Docker 结果继续走 `tx.send(Msg)` → consumer pump → `invoke_from_event_loop`
 

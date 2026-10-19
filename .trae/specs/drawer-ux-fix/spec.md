@@ -35,7 +35,7 @@
 ## Non-Functional Requirements
 - **NFR-1**: Slint 严格模式无新编译错误（`cargo build --release --features slint/mcp` 零新增 warning 以外的诊断）
 - **NFR-2**: 质量门禁全部通过（`cargo check --all-targets` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --all -- --check`）
-- **NFR-3**: 源码零 dvkit 残留（`grep -ri dvkit src/ ui/ Cargo.toml packaging/` 退出码 1）
+- **NFR-3**: 源码零废弃旧名残留（`grep -riE 'd[v]kit' src/ ui/ Cargo.toml packaging/` 退出码 1）
 - **NFR-4**: 单文件正文 ≤300 行（AGENTS.md R2）
 - **NFR-5**: 不破坏 Drawer 关闭、Tab 切换、日志跟随、日志复制/清空等现有功能
 
@@ -112,7 +112,7 @@
 ### AC-8: 代码质量
 - **Type**: `rule`
 - **When**: 最终构建
-- **Then**: 所有质量门禁通过（cargo check / clippy -D warnings / fmt check / 单文件 ≤300 行 / 零 dvkit）
+- **Then**: 所有质量门禁通过（cargo check / clippy -D warnings / fmt check / 单文件 ≤300 行 / 零废弃旧名）
 - **Pass Condition**: 四条门禁命令全部成功退出
 - **Evidence**: shell 输出
 

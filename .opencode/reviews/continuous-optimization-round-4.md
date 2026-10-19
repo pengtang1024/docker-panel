@@ -16,7 +16,7 @@ reviewer：独立 general 子代理（只读）
 | cargo test | 7 passed |
 | fmt / clippy / check | ✔ |
 | 正文行数 | ui_state 255 / ui_update 275 / consumer 213 / docker/logs 168 / models 176，均 ≤300 |
-| dvkit 新残留 | 无 |
+| 废弃旧名新残留 | 无 |
 | R7 | 锁内只状态变更 + spawn/clone；apply_ui 锁外 invoke |
 | R8 | 文档基本同步 |
 

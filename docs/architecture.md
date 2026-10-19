@@ -49,12 +49,13 @@ docker-panel/
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
-│   ├── follow_runtime.rs       日志流运行时：建流/退避重连/存活标志/结局分类（从 ui_state 拆出）
+│   ├── follow_runtime.rs       日志流运行时：建流/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
+│   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
-│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）
+│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
 │   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
@@ -66,10 +67,12 @@ docker-panel/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
 │       ├── containers.rs      list / start / stop / restart / remove
 │       ├── images.rs          list / pull（含进度闭包）/ remove
-│       ├── logs.rs            inspect_container / follow_logs（Stream → tx.send）
+│       ├── logs.rs            follow_logs（Stream → tx.send，含空闲超时）
+│       ├── log_types.rs       日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs           fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs          list_networks + list_volumes
 │       ├── image_details.rs   inspect_image → ImageDetail
+│       ├── container_detail.rs inspect_container + probe_container（存活性探针）
 │       └── system.rs          cleanup prune
 │
 ├── translations/
@@ -100,7 +103,7 @@ main.rs
   ├── consumer.rs    → ui_state + ui_update + ui_rows + detail_fmt + render + ui_apply + slint_gen
   ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, with_timeout}
   ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout} + follow_runtime
-  ├── follow_runtime.rs → docker::{follow_logs, retry_delay, LogError, LogStreamEnd} + models::Msg
+  ├── follow_runtime.rs → docker::{follow_logs, probe_container, retry_delay, LogError, LogStreamEnd, ContainerReach} + log_status + models::Msg
   ├── ui_update.rs   → ui_state + models::Msg + docker::compute_cpu_delta
   ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config

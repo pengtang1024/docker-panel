@@ -15,11 +15,12 @@
 
 ### 变更
 
-- **日志流自愈**：`follow_logs` 返回 `LogStreamOutcome`，Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消，最多 8 次；重连若已有日志则改 tail=0 避免重复）；运行中容器遇到 EOF 同样自愈重连，容器已停止则不重连；超过 180s 无任何日志判定连接挂死并静默重连；容器被删除（HTTP 404）等致命错误直接结束流，避免僵尸任务。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。日志流状态走独立通道（带 epoch 过滤），显示在日志面板工具栏，不占用底部状态栏。
-- **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；新增 [src/render.rs]（CachedModel 差量同步）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
+- **日志流自愈**：`follow_logs` 返回 `LogStreamOutcome`，Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消；**连续失败预算 8 次耗尽后转 30s 低频保活，永不放弃跟随**）；运行中容器遇到 EOF 同样自愈重连，容器已停止/被删除则结束流并提示「日志流已停止」；超过 180s 无任何日志判定连接挂死并走**保活**分支（静默重连、不计失败预算、不打扰用户）；容器被删除（HTTP 404）等致命错误直接结束流，避免僵尸任务。**容器是否还活着一律由存活性探针 `probe_container` 判定**（`Running`/`Stopped`/`Gone`/`Unreachable`），不再用跨流共享的 running 标志。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。日志流状态走独立通道（带 epoch 过滤），显示在日志面板工具栏，不占用底部状态栏；三态文案唯一定义在 `src/log_status.rs`：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。
+- **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）+ [src/follow_runtime.rs]（日志流运行时）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；日志流拆为 [src/docker/logs.rs]（读流）+ [src/docker/log_types.rs]（结束原因/错误分类/退避常量）+ [src/docker/container_detail.rs]（inspect + 存活性探针）；新增 [src/render.rs]（CachedModel 差量同步）、[src/log_status.rs]（状态提示文案唯一定义处）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
 
 ### 修复
 
+- **日志流自愈的静默缺口**：① 空闲超时（连接挂死）与真实错误共用失败预算，8 次后直接放弃跟随——改为 Idle 走独立保活分支，不计预算、永不放弃，预算耗尽转 30s 低频保活；② 容器被删除等致命错误零 UI 提示——非取消的结束一律提示「日志流已停止」；③ 「已恢复连接」只依赖首行日志且提示标志单向锁存——改为三个触发点（重连后首行日志 / Idle 结局 / 探针由不可达跃迁为可达）；④ 切换容器后旧流的状态提示残留在新容器面板——新增 `clear_log_panel` / `clear_log_status` 两个清除落点，`ensure_follow` 返回「是否新建流」驱动清除。
 - **日志洪峰/高频 Msg 导致 UI 卡死**：consumer 改为单批最多 2048 条的有界 drain + 120ms UI 节流；日志洪峰只更新合并后的 `log_text`，不再每收一条日志就重建容器/镜像/网络/卷/抽屉。锁持有时间与 UI invoke 次数均变为有界，点击/搜索不再被饿死。
 - **Docker 无响应导致数据“冻住”**：列表 / stats / inspect / 卷占用调用统一 10s 超时；3s 刷新增加 in-flight 去重，避免慢守护进程下任务无限叠加耗尽 tokio 工作线程。
 - **关窗后进程不退出**：主题监听的 dconf 阻塞读移到独立 reader 线程，监控线程用 200ms `recv_timeout` 检查 shutdown；轮询回退路径同样 200ms 醒来，`theme-monitor` join 不再永久阻塞。

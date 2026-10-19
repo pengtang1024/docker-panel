@@ -155,12 +155,13 @@ docker-panel/
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
 │   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
-│   ├── follow_runtime.rs    # 日志流运行时：建流/退避重连/存活标志/结局分类
+│   ├── follow_runtime.rs    # 日志流运行时：建流/退避重连/探针判定/保活降级/结局分类
+│   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步（sync_model：数据未变则跳过 set_vec）
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers / images / netvol（网络/卷）
 │   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
-│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now（搜索排序即时重建）
+│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status
 │   ├── batch.rs            # BatchState 多选状态
 │   ├── callbacks.rs        # 回调绑定中枢 + restore_config
 │   ├── callbacks_container.rs  # AppActions container_* 回调
@@ -171,10 +172,12 @@ docker-panel/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度闭包）/ remove
-│       ├── logs.rs         # inspect_container / follow_logs（Stream → tx.send）
+│       ├── logs.rs         # follow_logs（Stream → tx.send，含空闲超时）
+│       ├── log_types.rs    # 日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs       # list_networks / list_volumes
 │       ├── image_details.rs # inspect_image → ImageDetail
+│       ├── container_detail.rs # inspect_container + probe_container（存活性探针）
 │       └── system.rs       # cleanup prune
 │
 ├── translations/

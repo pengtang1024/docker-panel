@@ -116,6 +116,7 @@ invoke_from_event_loop(move || {
 | **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
 | **`LogLine(u64, String)`** | `follow_logs` Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
 | `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
+| **`LogStreamStatus(u64, String)`** | follow_runtime 判定结局 | 仅当前 stream_epoch 时写入 `log_status`（日志面板工具栏状态位）；文案见 `src/log_status.rs`（重连中 / 已恢复 / 已停止） |
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -179,18 +180,27 @@ rt_handle.spawn(async move {
 
 **日志流自愈**（`src/follow_runtime.rs`，从 `AppState` 拆出以满足 R2 行数约束）：
 
-`follow_logs` 返回 `LogStreamOutcome { end, lines }`，`classify_end` 判定处置：
+`follow_logs` 返回 `LogStreamOutcome { end, lines, notified_recovered }`。**容器是否还活着由探针判定**：`probe_container` → `ContainerReach { Running, Stopped, Gone, Unreachable }`（`src/docker/container_detail.rs`），`classify_end(end, reach)` 据此得出 `FollowAction`：
 
-- `Cancelled`（切容器 / Clear）：结束，不重连。
-- `Eof` + 容器已停止：结束，由下一次 `ensure_follow` 决定是否重建。
-- `Eof` + 容器仍在运行（`AppState.follow_running` 随列表刷新更新，`ensure_follow` 另做一次现场计算）：视为可恢复，按退避重连——Docker 侧「干净关闭」不应让运行中容器的日志静默停摆。
-- `Idle`（超过 `LOG_IDLE_TIMEOUT = 180s` 无任何日志行）：连接可能挂死，**静默**退避重连（不打扰用户）。
-- `Error` + 致命（`LogError.status_code == 404` / `No such container`，容器已被删除）：结束，避免僵尸任务无限重试。
-- `Error` + 可恢复：按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限），最多 `MAX_RETRY_ATTEMPTS = 8` 次后放弃并结束流；退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
+- `Cancelled`（切容器 / Clear）：`End`，不重连、不提示。
+- `Eof` + 探针 `Stopped` / `Gone`：容器已停止或被删除，日志流本就该结束 → `End`。
+- `Eof` + 探针 `Running`：容器还在跑却 EOF → `Recover`，按退避重连（Docker 侧「干净关闭」不应让运行中容器的日志静默停摆）。
+- `Eof` + 探针 `Unreachable`：Docker 整体不可达 → `Recover`，等它回来。
+- `Idle`（超过 `LOG_IDLE_TIMEOUT = 180s` 无任何日志行）：连接可能挂死 → `KeepAlive`，**静默**重连（`IDLE_RETRY_DELAY = 1s`），不打扰用户、**不计入失败预算**（这是长连接健康检查，不是失败）。
+- `Error` + 致命（`LogError.status_code == 404` / `No such container`，容器已被删除）：`End`，避免僵尸任务无限重试。
+- `Error` + 可恢复：`Recover`，按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限）。**连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），永不放弃跟随**——旧实现会静默停止，用户看到日志停在半截却毫无提示。退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
 
-**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。首次失败提示「日志流中断，正在重连…」，重连前提示「日志流已恢复连接」，放弃或致命错误提示「日志流已停止」。
+**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。文案唯一定义处是 `src/log_status.rs` 的 3 条 i18n key 常量：
 
-**流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。
+| 提示 | 触发时机 |
+|---|---|
+| 「日志流中断，正在重连…」 | 进入 `Recover` 且此前未提示过（每条流只提示一次，不刷屏） |
+| 「日志流已恢复连接」 | ① 重连后收到**首行日志**；② `Idle` 结局（连接已保持 180s 证明流通）；③ 探针从「不可达」跃迁到「可达」。三者均要求此前已提示过「正在重连」 |
+| 「日志流已停止」 | `End` 且非 `Cancelled`（容器停止 / 被删除 / 致命错误） |
+
+**状态清除**：切换选中资源或按 Clear 走 `ui_apply::clear_log_panel`（日志文本 + 状态提示全清）；同一容器重建日志流走 `clear_log_status`（只清状态、保留已缓冲的日志文本）——新流没有「正在重连」之类的历史状态，但旧文本仍有效。`AppState::ensure_follow` 返回「是否新建了流」，调用方据此决定是否清残留提示。
+
+**流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。跨流共享的 running 标志已移除——容器存活一律以探针结论为准。
 
 > 已知限制：已收到部分历史后异常断流（daemon 重启/连接抖动），tail=0 从当前时刻接续，断流窗口内产生的日志不会补回；若需补齐，应使用 timestamps + `since` 游标，而不是回到 tail=200。
 

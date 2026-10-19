@@ -138,7 +138,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | 目录/文件 | 职责 |
 |-----------|------|
 | `ui/` | Slint 声明层（26 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ follow_runtime（日志流运行时：建流/退避重连/存活标志）/ render（CachedModel 差量同步）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status`）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
@@ -177,8 +177,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
 | `LogLine(u64, String)` | follow_logs Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
-| `LogStreamEnded(u64)` | 日志流结束 | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active` / `follow_running`，允许下次重新建流；来源：Eof / Cancelled / 不可恢复错误 / 重试放弃 |
-| `LogStreamStatus(u64, String)` | 日志流运行时 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板状态位（重连中 / 已恢复 / 已停止），不占用底部状态栏 |
+| `LogStreamEnded(u64)` | 日志流结束 | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active`，允许下次重新建流；来源：Eof / Cancelled / 致命错误（容器已删除） |
+| `LogStreamStatus(u64, String)` | follow_runtime 判定结局 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板工具栏状态位（重连中 / 已恢复 / 已停止），不占用底部状态栏。时机：「日志流中断，正在重连…」= 首次进入可恢复重连；「日志流已恢复连接」= 重连后收到首行日志 / Idle 结局 / 探针由不可达跃迁为可达（三者均要求此前提示过重连中）；「日志流已停止」= 非取消的结束 |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -198,7 +198,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 卷占用）；3s 刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
 11. **高频 Msg 不得逐条 invoke**——统一走 `consumer` 的分批 drain + 120ms 节流；UI 只重建 `DrainResult` 标记的变化区域，日志走合并后的 `log_text` string。
 12. **可能永久阻塞的读必须可被 shutdown 唤醒**——例如 dconf reader 放独立线程，监控线程用 `recv_timeout` 轮询；禁止在会被 join 的线程里做无超时的阻塞读。
-13. **日志流重连必须退避**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限，最多 8 次），禁止立即紧密重试拖垮 Docker；运行中容器遇到 `Eof` 同样按可恢复重连，容器已停止则不重连；超过 `LOG_IDLE_TIMEOUT`（180s）无任何日志视为连接挂死并主动重连。每条流的存活标志必须独立，旧流退出不得误标新流。
+13. **日志流重连必须退避且永不放弃**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限），禁止立即紧密重试拖垮 Docker；连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），**不得静默放弃跟随**。超过 `LOG_IDLE_TIMEOUT`（180s）无任何日志视为连接挂死，走 `KeepAlive` 分支：静默重连、**不计入失败预算**、不打扰用户。容器是否还活着一律由探针 `probe_container` 判定（`Running`/`Stopped`/`Gone`/`Unreachable`），禁止用跨流共享的 running 标志。每条流的存活标志必须独立，旧流退出不得误标新流。
+14. **日志流状态提示三态**——文案唯一定义处是 `src/log_status.rs`（禁止内联字面量）：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。「已恢复连接」只允许三个触发点：重连后收到首行日志、Idle 结局、探针由「不可达」跃迁为「可达」；三者均要求此前提示过「正在重连」。切换资源或 Clear 必须清掉残留提示（`ui_apply::clear_log_panel` / `clear_log_status`）。
 
 ## 构建命令
 
@@ -245,6 +246,9 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 - **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
 - **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
+- **断流窗口的日志不补回**：异常断流后以 `tail=0` 从当前时刻接续，断流窗口内产生的日志会丢；要补齐需改用 timestamps + `since` 游标
+- **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
+- **静默容器的「已恢复连接」提示最迟 180s**：容器 180s 无输出走 Idle 保活分支，不计失败预算也不打扰用户；「已恢复」要等到 Idle 结局才提示
 
 ## 文档导航
 

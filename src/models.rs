@@ -137,8 +137,9 @@ pub enum Msg {
     CleanupDone(Result<String, String>),
     /// 容器 inspect 结果（详情面板）
     ContainerDetail(Result<ContainerDetail, String>),
-    /// 日志流的一行（详情面板日志页签）
-    LogLine(String),
+    /// 日志流的一行（epoch, 文本）；epoch 不匹配当前流时 consumer 直接丢弃，
+    /// 避免切换容器/清空日志后队列里的旧行污染新日志。
+    LogLine(u64, String),
     /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
     Stats(String, crate::docker::ContainerStatsSnapshot),
     /// 网络列表

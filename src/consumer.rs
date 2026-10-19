@@ -29,6 +29,20 @@ const MAX_DRAIN_BATCH: usize = 2048;
 /// 锁外阻塞超时：兼顾退出检查与空闲时尽快 flush pending
 const RECV_TIMEOUT: Duration = Duration::from_millis(100);
 
+/// 下一轮 `recv_timeout` 的等待时间。
+///
+/// 有 pending 时只睡到节流窗口结束（最多再等 RECV_TIMEOUT，保证 shutdown 可观测）；
+/// 空闲时固定 RECV_TIMEOUT。这样最坏 UI 延迟从「两个 100ms 超时」收敛到约 120ms。
+fn poll_timeout(has_pending: bool, since_apply: Duration) -> Duration {
+    if has_pending {
+        UI_MIN_INTERVAL
+            .saturating_sub(since_apply)
+            .min(RECV_TIMEOUT)
+    } else {
+        RECV_TIMEOUT
+    }
+}
+
 /// 启动 consumer 线程，返回 join handle（优雅退出时 join）
 pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> JoinHandle<()> {
     std::thread::spawn(move || {
@@ -37,7 +51,8 @@ pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> Joi
 
         loop {
             // 锁外阻塞！超时后检查 shutdown；空闲时也用于 flush pending
-            let first = match rx.recv_timeout(RECV_TIMEOUT) {
+            let wait = poll_timeout(pending.processed > 0, last_apply.elapsed());
+            let first = match rx.recv_timeout(wait) {
                 Ok(msg) => Some(msg),
                 Err(RecvTimeoutError::Timeout) => None,
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -208,4 +223,40 @@ pub fn spawn_refresh_interval(state: &SharedState) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_uses_recv_timeout() {
+        assert_eq!(poll_timeout(false, Duration::ZERO), RECV_TIMEOUT);
+        assert_eq!(
+            poll_timeout(false, Duration::from_millis(500)),
+            RECV_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn pending_wait_is_capped_by_recv_timeout() {
+        assert_eq!(poll_timeout(true, Duration::ZERO), RECV_TIMEOUT);
+    }
+
+    #[test]
+    fn pending_wait_tracks_remaining_throttle() {
+        assert_eq!(
+            poll_timeout(true, Duration::from_millis(100)),
+            Duration::from_millis(20)
+        );
+    }
+
+    #[test]
+    fn due_pending_returns_zero() {
+        assert_eq!(poll_timeout(true, UI_MIN_INTERVAL), Duration::ZERO);
+        assert_eq!(
+            poll_timeout(true, Duration::from_millis(200)),
+            Duration::ZERO
+        );
+    }
 }

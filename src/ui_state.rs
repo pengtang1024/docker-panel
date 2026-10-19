@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::runtime::Runtime;
 
@@ -48,7 +48,6 @@ pub struct AppState {
     pub networks: Vec<NetworkInfo>,
     pub volumes: Vec<VolumeInfo>,
 
-    pub last_refresh: Instant,
     /// 3s 刷新是否已有任务在跑：Docker 慢时避免每 3s 叠加一批新任务
     pub refresh_inflight: Arc<AtomicBool>,
     pub container_query: String,
@@ -71,6 +70,8 @@ pub struct AppState {
     // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
+    /// 当前日志流 epoch：切换容器/清空日志时递增；consumer 只接受当前 epoch 的日志行
+    pub log_epoch: u64,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
     pub follow_id: String,
     /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
@@ -131,7 +132,6 @@ impl AppState {
             images: Vec::new(),
             networks: Vec::new(),
             volumes: Vec::new(),
-            last_refresh: Instant::now() - Duration::from_secs(10),
             refresh_inflight: Arc::new(AtomicBool::new(false)),
             container_query: query.clone(),
             image_query: query,
@@ -143,6 +143,7 @@ impl AppState {
             volume_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: 500,
+            log_epoch: 0,
             follow_id: String::new(),
             follow_cancel: None,
             stats_prev: HashMap::new(),
@@ -195,7 +196,6 @@ impl AppState {
             let _ = tx.send(Msg::Volumes(v_res));
             inflight.store(false, Ordering::Release);
         });
-        self.last_refresh = Instant::now();
     }
 
     /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）
@@ -242,17 +242,25 @@ impl AppState {
         });
     }
 
-    /// 切换选中资源：清空日志缓冲，并取消旧容器的跟随流（避免旧流继续往新容器日志里写）。
+    /// 切换选中资源：清空日志缓冲，取消旧流，并让队列里旧 epoch 的日志失效。
     pub fn clear_logs(&mut self) {
         self.logs.clear();
         self.follow_id.clear();
+        self.log_epoch = self.log_epoch.wrapping_add(1);
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
     }
 
-    /// 仅清空当前日志缓冲，保留跟随流（日志工具条 Clear 使用）。
+    /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
+    ///
+    /// 不能只 clear 缓冲：旧流在 mpsc 队列中已排队的行会在下一批 drain 时重新出现。
     pub fn clear_log_buffer(&mut self) {
         self.logs.clear();
+        if self.follow_id.is_empty() {
+            return;
+        }
+        let id = self.follow_id.clone();
+        self.spawn_follow(&id, 0);
     }
 
     /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
@@ -260,14 +268,21 @@ impl AppState {
         if self.follow_id == id {
             return;
         }
+        self.spawn_follow(id, 200);
+    }
+
+    /// 建流并递增 epoch：旧流随后被取消，其已入队日志会因 epoch 不匹配被丢弃。
+    fn spawn_follow(&mut self, id: &str, tail: i64) {
         self.follow_id = id.to_string();
+        self.log_epoch = self.log_epoch.wrapping_add(1);
+        let epoch = self.log_epoch;
         // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
         self.follow_cancel = Some(cancel_tx);
         let tx = self.tx.clone();
         let id = id.to_string();
         self.rt.spawn(async move {
-            let _ = crate::docker::follow_logs(&id, tx, 200, cancel_rx).await;
+            let _ = crate::docker::follow_logs(&id, tx, tail, epoch, cancel_rx).await;
         });
     }
 

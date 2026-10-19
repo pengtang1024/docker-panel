@@ -190,9 +190,12 @@ impl AppState {
                     self.image_detail = Some(d.clone());
                 }
             }
-            Msg::LogLine(line) => {
-                self.logs.push(line.clone());
-                res.logs_changed = true;
+            Msg::LogLine(epoch, line) => {
+                // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
+                if *epoch == self.log_epoch {
+                    self.logs.push(line.clone());
+                    res.logs_changed = true;
+                }
             }
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);

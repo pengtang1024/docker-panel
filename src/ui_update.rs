@@ -304,5 +304,13 @@ mod tests {
         tx.send(Msg::LogStreamEnded(5)).unwrap();
         s.drain_messages(&rx, None, 10);
         assert_eq!(s.follow_id, "c2");
+
+        // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的 log_text
+        s.follow_id.clear();
+        s.logs.push("old".into());
+        let before = s.log_epoch.load(Ordering::Acquire);
+        s.clear_log_buffer();
+        assert!(s.logs.is_empty());
+        assert_eq!(s.log_epoch.load(Ordering::Acquire), before + 1);
     }
 }

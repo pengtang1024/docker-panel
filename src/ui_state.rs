@@ -257,6 +257,9 @@ impl AppState {
     /// 不能只 clear 缓冲：旧流在 mpsc 队列中已排队的行会在下一批 drain 时重新出现。
     pub fn clear_log_buffer(&mut self) {
         self.logs.clear();
+        // 即使当前没有活动流（流已自然结束），也必须推进 epoch，
+        // 让已经投递但尚未执行的旧 log_text invoke 失效。
+        self.log_epoch.fetch_add(1, Ordering::AcqRel);
         if self.follow_id.is_empty() {
             return;
         }

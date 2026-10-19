@@ -332,10 +332,19 @@ impl AppState {
         let id = id.to_string();
         self.rt.spawn(async move {
             let mut attempt: u32 = 0;
+            // 本流是否已推送过日志：决定重连时是否重放历史（避免重复行）
+            let mut sent_any = false;
+            let mut retry_tail = tail;
             loop {
-                let end =
-                    crate::docker::follow_logs(&id, tx.clone(), tail, epoch, cancel_rx.clone())
-                        .await;
+                let (end, lines) = crate::docker::follow_logs(
+                    &id,
+                    tx.clone(),
+                    retry_tail,
+                    epoch,
+                    cancel_rx.clone(),
+                )
+                .await;
+                sent_any |= lines > 0;
                 match end {
                     crate::docker::LogStreamEnd::Cancelled | crate::docker::LogStreamEnd::Eof => {
                         break;
@@ -343,6 +352,10 @@ impl AppState {
                     crate::docker::LogStreamEnd::Error(e) => {
                         let delay = crate::docker::retry_delay(attempt);
                         attempt = attempt.saturating_add(1);
+                        // 已推送过日志则只接续新行，避免重放历史造成重复
+                        if sent_any {
+                            retry_tail = 0;
+                        }
                         eprintln!("[log-stream] {id} follow failed: {e}; retry in {delay:?}");
                         // 退避等待可被取消：切容器/Clear 时立即退出
                         tokio::select! {

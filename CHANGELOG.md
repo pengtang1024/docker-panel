@@ -15,7 +15,7 @@
 
 ### 变更
 
-- **日志流自愈**：`follow_logs` 返回 `LogStreamEnd`（Cancelled/Eof/Error）；Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消），容器停止不重连。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。
+- **日志流自愈**：`follow_logs` 返回 `LogStreamEnd`（Cancelled/Eof/Error）与已推送行数；Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消，重连若已有日志则改 tail=0 避免重复），容器停止不重连。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。
 - **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；新增 [src/render.rs]（CachedModel 差量同步）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
 
 ### 修复

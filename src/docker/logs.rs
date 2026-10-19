@@ -178,14 +178,14 @@ pub async fn follow_logs(
     tail_lines: i64,
     epoch: u64,
     mut cancel: tokio::sync::watch::Receiver<()>,
-) -> LogStreamEnd {
+) -> (LogStreamEnd, u64) {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
     use futures_util::StreamExt;
 
     let docker = match connect() {
         Ok(d) => d,
-        Err(e) => return LogStreamEnd::Error(e),
+        Err(e) => return (LogStreamEnd::Error(e), 0),
     };
     let options = LogsOptionsBuilder::new()
         .follow(true)
@@ -195,16 +195,17 @@ pub async fn follow_logs(
         .build();
 
     let mut stream = docker.logs(id, Some(options));
+    let mut lines: u64 = 0;
 
     loop {
         tokio::select! {
             biased;
-            _ = cancel.changed() => return LogStreamEnd::Cancelled,
+            _ = cancel.changed() => return (LogStreamEnd::Cancelled, lines),
             item = stream.next() => {
-                let Some(item) = item else { return LogStreamEnd::Eof };
+                let Some(item) = item else { return (LogStreamEnd::Eof, lines) };
                 let msg = match item {
                     Ok(m) => m,
-                    Err(e) => return LogStreamEnd::Error(e.to_string()),
+                    Err(e) => return (LogStreamEnd::Error(e.to_string()), lines),
                 };
                 let data = match msg {
                     LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
@@ -213,6 +214,7 @@ pub async fn follow_logs(
                 let line = String::from_utf8_lossy(&data).trim().to_string();
                 if !line.is_empty() {
                     let _ = tx.send(Msg::LogLine(epoch, line));
+                    lines += 1;
                 }
             }
         }
@@ -250,6 +252,9 @@ mod tests {
             1,
             cancel_rx,
         ));
-        assert!(matches!(end, LogStreamEnd::Error(_)), "应判定为可重连错误");
+        assert!(
+            matches!(end.0, LogStreamEnd::Error(_)),
+            "应判定为可重连错误"
+        );
     }
 }

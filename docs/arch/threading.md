@@ -179,7 +179,7 @@ rt_handle.spawn(async move {
 
 **日志流自愈**（`follow_logs` 返回 `LogStreamEnd`）：
 
-- `Error`（Docker 侧错误，如 daemon 重启）：按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限），退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。
+- `Error`（Docker 侧错误，如 daemon 重启）：按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限），退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
 - `Eof`（容器停止/日志 EOF）：不重连，由下一次 `ensure_follow` 决定是否重建。
 - `Cancelled`（切容器 / Clear）：立即退出，不重连。
 

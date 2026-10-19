@@ -1,6 +1,6 @@
 {
-  "status": "running",
-  "stage": "fixed",
+  "status": "awaiting-user",
+  "stage": "synced",
   "baseline_tag": "baseline-continuous-optimization",
   "dod": [
     "consumer 待更新消息的最长 UI 应用延迟收敛到约 120ms（原最坏约 200ms），并有单元测试",
@@ -41,8 +41,9 @@
   "sync": {
     "doc": "done",
     "changelog": "done",
-    "version": "skipped"
+    "version": "skipped",
+    "version_reason": "当前在 develop；按 docs/git-flow.md 版本号在 release 分支同步，不在优化任务中 bump"
   },
-  "awaiting": "none",
-  "updated_at": "2026-10-20T01:03:57+08:00"
+  "awaiting": "push-confirm",
+  "updated_at": "2026-10-20T01:09:09+08:00"
 }

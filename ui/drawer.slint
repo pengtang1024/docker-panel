@@ -13,8 +13,9 @@ import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
 import { TabItem } from "components-nav.slint";
-import { DetailPair } from "models.slint";
+import { DetailPair, LogRow } from "models.slint";
 import { DetailRow } from "drawer-detail-row.slint";
+import { LogLineRow } from "drawer-log-row.slint";
 import { ScrollView, ListView } from "@material";
 
 export component Drawer inherits Rectangle {
@@ -27,7 +28,8 @@ export component Drawer inherits Rectangle {
     in-out property <bool> tabs_visible: true;
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
-    in-out property <string> log_text: "";
+    /// 日志行列表（虚拟化：只渲染视口内的行）
+    in-out property <[LogRow]> log_rows: [];
     /// 日志流状态提示（重连中 / 已恢复 / 已停止）
     in-out property <string> log_status: "";
 
@@ -152,43 +154,28 @@ export component Drawer inherits Rectangle {
                 vertical-stretch: 1;
                 width: 100%;
                 background: Theme.log_bg;
-                log_scroll := ScrollView {
+                // 虚拟化日志列表：ListView 只实例化视口内的行（Slint 1.18 运行时
+                // 虚拟化），新增日志只 push 新行（render::logs 差量同步），
+                // 渲染成本与视口高度成正比，与缓冲行数无关。
+                // 旧实现是「整段 500 行塞进一个 TextInput」，每次新增日志都要让
+                // 软件渲染器重排 + 重绘全部缓冲行 —— 实测吃掉一个 CPU 核。
+                log_scroll := ListView {
                     width: 100%; height: 100%;
                     vertical-scrollbar-policy: as-needed;
                     horizontal-scrollbar-policy: always-off;
+                    // 锁死横向 viewport：日志按 char-wrap 折行显示，不允许横向拖拽
                     content_width: self.visible_width;
-                    // 关闭 Flickable 的鼠标拖拽平移：否则按住拖动会被滚动容器抢走，
-                    // 日志 TextInput 的选词/选中手势时有时无（滚轮/触摸板滚动不受影响）
                     mouse_drag_pan_enabled: false;
-                    // 自动跟随：content_y 为负值表示向下滚，贴底 = visible_height - content_height。
-                    // 1) 首次打开 / 内容变高（未满 500 行缓冲）
+                    // 自动跟随：新增日志行 → 内容变高 → 贴底
+                    // （content_y 为负值表示向下滚，贴底 = visible_height - content_height）
                     changed content_height => {
                         if root.log_follow {
                             self.content_y = self.visible_height - self.content_height;
                         }
                     }
-                    VerticalLayout {
-                        width: 100%;
-                        spacing: 0px;
-                        padding-left: 16px; padding-right: 16px;
-                        padding-top: Theme.s4; padding-bottom: Theme.s5;
-                        TextInput {
-                            width: 100%;
-                            read-only: true;
-                            text: root.log_text;
-                            font-size: 12px;
-                            font-family: Theme.mono;
-                            color: Theme.log_ink;
-                            // 日志按字符断行：word-wrap 遇到放不下的单词会整词换行，右侧留大片空白
-                            // （char-wrap 在软件渲染器下可用，1.18.1 已实测）
-                            wrap: char-wrap;
-                            // 2) 文本变化但内容高度不变（500 行缓冲已满，旧行被顶掉）时也要贴底
-                            changed text => {
-                                if root.log_follow {
-                                    log_scroll.content_y = log_scroll.visible_height - log_scroll.content_height;
-                                }
-                            }
-                        }
+                    for row[i] in root.log_rows : LogLineRow {
+                        data: row; width: 100%;
+                        height: self.min-height;
                     }
                 }
             }

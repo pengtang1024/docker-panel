@@ -10,11 +10,11 @@ use std::sync::mpsc;
 
 use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
-use crate::ui_state::AppState;
+use crate::ui_state::{AppState, LOG_ROWS_MAX};
 
 /// 一次批量 drain 的聚合结果。
 ///
-/// consumer 用它决定本轮要刷新哪些 UI 区域：日志洪峰时只更新 `log_text`，
+/// consumer 用它决定本轮要刷新哪些 UI 区域：日志洪峰时只更新日志行列表，
 /// 不再每收一条日志就把容器/镜像/网络/卷/抽屉全部重建一遍。
 #[derive(Default)]
 pub struct DrainResult {
@@ -24,8 +24,17 @@ pub struct DrainResult {
     pub has_more: bool,
     /// AppState.shutdown 已置位
     pub shutdown: bool,
-    pub lists_changed: bool,
+    /// 容器卡片行变化（列表刷新 / stats 采样 / 选中态变化）
+    pub containers_changed: bool,
+    /// 镜像卡片行变化
+    pub images_changed: bool,
+    /// 网络卡片行变化
+    pub networks_changed: bool,
+    /// 卷卡片行变化（含 30s 磁盘占用回填）
+    pub volumes_changed: bool,
+    /// 抽屉内容变化（详情 / 环境变量 / 容器 stats）
     pub drawer_changed: bool,
+    /// 日志行列表变化
     pub logs_changed: bool,
     /// Containers/Images 的最新结果（None = 本批没有列表结果）
     pub docker_ok: Option<bool>,
@@ -42,11 +51,22 @@ pub struct DrainResult {
 }
 
 impl DrainResult {
+    /// 本批是否有列表需要重建。
+    ///
+    /// 按列表分标记：一条 stats 消息只重建容器行，
+    /// 不再连带重建镜像 / 网络 / 卷（纯浪费：这些行没变，还要逐行比对）。
+    pub fn any_list_changed(&self) -> bool {
+        self.containers_changed
+            || self.images_changed
+            || self.networks_changed
+            || self.volumes_changed
+    }
+
     /// 本批是否产生了需要落到 UI 的变化。
     ///
     /// 被 epoch 丢弃的旧日志只会增加 `processed`，不应触发无意义的 `apply_ui`/invoke。
     pub fn has_ui_changes(&self) -> bool {
-        self.lists_changed
+        self.any_list_changed()
             || self.drawer_changed
             || self.logs_changed
             || self.docker_ok.is_some()
@@ -63,7 +83,10 @@ impl DrainResult {
         self.processed += o.processed;
         self.has_more = o.has_more;
         self.shutdown |= o.shutdown;
-        self.lists_changed |= o.lists_changed;
+        self.containers_changed |= o.containers_changed;
+        self.images_changed |= o.images_changed;
+        self.networks_changed |= o.networks_changed;
+        self.volumes_changed |= o.volumes_changed;
         self.drawer_changed |= o.drawer_changed;
         self.logs_changed |= o.logs_changed;
         if o.docker_ok.is_some() {
@@ -95,45 +118,50 @@ impl AppState {
     ) -> DrainResult {
         let mut res = DrainResult::default();
         if let Some(msg) = first {
-            self.apply_msg(&msg, &mut res);
+            self.apply_msg(msg, &mut res);
         }
         while res.processed < max {
             match rx.try_recv() {
-                Ok(msg) => self.apply_msg(&msg, &mut res),
+                Ok(msg) => self.apply_msg(msg, &mut res),
                 Err(_) => break,
             }
         }
         // 环形缓冲整批处理完再裁剪一次（逐行 drain 是 O(cap)，洪峰下会被放大）
-        if self.logs.len() > self.logs_cap {
-            let excess = self.logs.len() - self.logs_cap;
-            self.logs.drain(0..excess);
-        }
+        self.trim_logs();
         res.has_more = res.processed >= max;
         res.shutdown = self.shutdown.load(Ordering::Relaxed);
         res
     }
 
     /// 单条消息 → AppState + UI 意图。日志洪峰下每条只做 O(1) 状态更新。
-    fn apply_msg(&mut self, msg: &Msg, res: &mut DrainResult) {
+    ///
+    /// ⚠️ 消息按值消费（`Msg` 而非 `&Msg`）：日志批里的成千上万行必须**移动**进
+    /// 缓冲，逐行 clone 会在洪峰下把 CPU 直接打满；列表类消息同理，去掉整表 clone。
+    fn apply_msg(&mut self, msg: Msg, res: &mut DrainResult) {
         res.processed += 1;
 
-        // Stats：每条都写回 containers（累加）
-        if let Msg::Stats(id, curr) = msg {
-            let cpu = compute_cpu_delta(self.stats_prev.get(id), curr);
-            self.stats_prev.insert(id.clone(), curr.clone());
-            if let Some(c) = self.containers.iter_mut().find(|c| c.id == *id) {
-                c.cpu_percent = cpu;
-                c.mem_usage = curr.mem_usage;
-                c.mem_limit = curr.mem_limit;
-                c.net_rx = curr.net_rx;
-                c.net_tx = curr.net_tx;
-            }
-            res.lists_changed = true;
-        }
-
         match msg {
+            // Stats：整轮采样一次到达，逐容器写回 containers（累加）
+            Msg::StatsBatch(batch) => {
+                for (id, curr) in batch {
+                    let cpu = compute_cpu_delta(self.stats_prev.get(&id), &curr);
+                    self.stats_prev.insert(id.clone(), curr);
+                    if let Some(c) = self.containers.iter_mut().find(|c| c.id == id) {
+                        c.cpu_percent = cpu;
+                        c.mem_usage = curr.mem_usage;
+                        c.mem_limit = curr.mem_limit;
+                        c.net_rx = curr.net_rx;
+                        c.net_tx = curr.net_tx;
+                    }
+                }
+                res.containers_changed = true;
+                // 抽屉详情含容器 CPU/内存，选中的是容器时也要重建
+                if self.sel == crate::ui_state::SelKind::Container {
+                    res.drawer_changed = true;
+                }
+            }
             Msg::Containers(r) => {
-                res.lists_changed = true;
+                res.containers_changed = true;
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
@@ -148,7 +176,7 @@ impl AppState {
                                 )
                             })
                             .collect();
-                        self.containers = list.clone();
+                        self.containers = list;
                         for c in &mut self.containers {
                             if let Some(v) = old.remove(&c.id) {
                                 (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
@@ -157,64 +185,72 @@ impl AppState {
                     }
                     Err(e) => {
                         res.status_text =
-                            Some(crate::i18n::trf("Container refresh failed: {0}", &[e]));
+                            Some(crate::i18n::trf("Container refresh failed: {0}", &[&e]));
                         res.toast = true;
                     }
                 }
             }
             Msg::Images(r) => {
-                res.lists_changed = true;
+                res.images_changed = true;
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
-                        self.images = list.clone();
+                        self.images = list;
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();
                     }
                     Err(e) => {
-                        res.status_text = Some(crate::i18n::trf("Image refresh failed: {0}", &[e]));
+                        res.status_text =
+                            Some(crate::i18n::trf("Image refresh failed: {0}", &[&e]));
                         res.toast = true;
                     }
                 }
             }
             Msg::Networks(r) => {
-                res.lists_changed = true;
+                res.networks_changed = true;
                 if let Ok(list) = r {
-                    self.networks = list.clone();
+                    self.networks = list;
                 }
             }
             Msg::Volumes(r) => {
-                res.lists_changed = true;
+                res.volumes_changed = true;
                 if let Ok(list) = r {
-                    self.volumes = list.clone();
+                    self.volumes = list;
                 }
             }
             Msg::ImageLayers(pairs) => {
-                res.lists_changed = true;
+                res.images_changed = true;
                 for (id, n) in pairs {
-                    self.image_layers.insert(id.clone(), *n);
+                    self.image_layers.insert(id, n);
                 }
             }
             Msg::VolumeSizes(map) => {
-                res.lists_changed = true;
-                self.volume_sizes = map.clone();
+                res.volumes_changed = true;
+                self.volume_sizes = map;
             }
             Msg::ContainerDetail(r) => {
                 res.drawer_changed = true;
                 if let Ok(d) = r {
-                    self.detail = Some(d.clone());
+                    self.detail = Some(d);
                 }
             }
             Msg::ImageDetail(r) => {
                 res.drawer_changed = true;
                 if let Ok(d) = r {
-                    self.image_detail = Some(d.clone());
+                    self.image_detail = Some(d);
                 }
             }
-            Msg::LogLine(epoch, line) => {
+            Msg::LogBatch(epoch, mut lines) => {
                 // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
-                if *epoch == self.stream_epoch {
-                    self.logs.push(line.clone());
+                if epoch == self.stream_epoch {
+                    // 洪峰下单批可达数万行：只保留最后 LOG_ROWS_MAX 行。
+                    // 中间行既显示不出来（全被新行挤出视口），保留下来还会把
+                    // 行模型撑到十万级 —— 裁剪退化成 O(n²)，洪峰下直接打满 CPU。
+                    let start = lines.len().saturating_sub(LOG_ROWS_MAX);
+                    // 整批搬进窗口（移动，不是拷贝）：洪峰下逐行拷贝会打满 CPU
+                    self.logs_total += (lines.len() - start) as u64;
+                    self.logs.extend(lines.drain(start..));
+                    self.trim_logs();
                     // 收到首条（历史）日志后才算历史加载完成；空历史/首流失败可重试 tail=200
                     self.history_done = true;
                     res.logs_changed = true;
@@ -222,7 +258,7 @@ impl AppState {
             }
             Msg::LogStreamEnded(epoch) => {
                 // 流结束（Eof / Cancelled）：清空 follow_id，允许下次 ensure_follow 重新建流
-                if *epoch == self.stream_epoch {
+                if epoch == self.stream_epoch {
                     self.follow_id.clear();
                     self.follow_cancel = None;
                     self.follow_active = None;
@@ -231,45 +267,44 @@ impl AppState {
             Msg::LogStreamStatus(epoch, text) => {
                 // 日志流状态提示（重连中 / 已恢复 / 已停止）：独立通道，不占用状态栏。
                 // 运行时就只在状态**变化**时发消息，这里直接透传给 UI。
-                if *epoch == self.stream_epoch {
-                    res.log_status = Some(text.clone());
+                if epoch == self.stream_epoch {
+                    res.log_status = Some(text);
                 }
             }
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);
                 res.status_text = Some(match r {
-                    Ok(_) => crate::i18n::t(desc),
-                    Err(e) => format!("{}: {e}", crate::i18n::t(desc)),
+                    Ok(_) => crate::i18n::t(&desc),
+                    Err(e) => format!("{}: {e}", crate::i18n::t(&desc)),
                 });
                 res.toast = true;
                 res.refresh_now = true;
             }
             Msg::PullProgress(p) => {
                 res.docker_ok = Some(true);
-                res.status_text = Some(p.clone());
+                res.status_text = Some(p);
             }
             Msg::PullDone(r) => {
                 res.docker_ok = Some(true);
+                let ok = r.is_ok();
                 res.status_text = Some(match r {
-                    Ok(succ) => succ.clone(),
-                    Err(e) => crate::i18n::trf("Pull failed: {0}", &[e]),
+                    Ok(succ) => succ,
+                    Err(e) => crate::i18n::trf("Pull failed: {0}", &[&e]),
                 });
                 res.toast = true;
                 res.reset_pull_busy = true;
-                res.close_pull = r.is_ok();
+                res.close_pull = ok;
                 res.refresh_now = true;
             }
             Msg::CleanupDone(r) => {
                 res.docker_ok = Some(true);
                 res.status_text = Some(match r {
-                    Ok(succ) => succ.clone(),
-                    Err(e) => crate::i18n::trf("Cleanup failed: {0}", &[e]),
+                    Ok(succ) => succ,
+                    Err(e) => crate::i18n::trf("Cleanup failed: {0}", &[&e]),
                 });
                 res.toast = true;
                 res.refresh_now = true;
             }
-            // 已在上方统一处理
-            Msg::Stats(..) => {}
         }
     }
 }

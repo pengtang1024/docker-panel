@@ -16,16 +16,23 @@
 ### 变更
 
 - **日志流自愈**：`follow_logs` 返回 `LogStreamOutcome`，Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消；**连续失败预算 8 次耗尽后转 30s 低频保活，永不放弃跟随**）；运行中容器遇到 EOF 同样自愈重连，容器已停止/被删除则结束流并提示「日志流已停止」；超过 180s 无任何日志判定连接挂死并走**保活**分支（静默重连、不计失败预算、不打扰用户）；容器被删除（HTTP 404）等致命错误直接结束流，避免僵尸任务。**容器是否还活着一律由存活性探针 `probe_container` 判定**（`Running`/`Stopped`/`Gone`/`Unreachable`），不再用跨流共享的 running 标志。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。日志流状态走独立通道（带 epoch 过滤），显示在日志面板工具栏，不占用底部状态栏；三态文案唯一定义在 `src/log_status.rs`：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。
-- **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）+ [src/follow_runtime.rs]（日志流运行时）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；日志流拆为 [src/docker/logs.rs]（读流）+ [src/docker/log_types.rs]（结束原因/错误分类/退避常量）+ [src/docker/container_detail.rs]（inspect + 存活性探针）；新增 [src/render.rs]（CachedModel 差量同步）、[src/log_status.rs]（状态提示文案唯一定义处）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
+- **日志面板改为虚拟化行模型（卡顿根治）**：旧实现把整段日志塞进一个 `TextInput`，每来一行日志都要让软件渲染器重排 + 重绘全部缓冲行（实测 500 行时吃掉一个 CPU 核）。新实现是**虚拟化 `ListView`**（逐行 `LogLineRow` delegate，只实例化视口内的行），且行模型是日志窗口的**镜像**——用「全局行流位置」对齐，能追加就追加（`LogSyncPlan::Append`，只 `extend`，可见行不重排），窗口裁剪过前段才整体重建一次（`LogSyncPlan::Reset`）。日志窗口上限从 500 行提到 **2000 行**（分块裁剪，保留 1000 行），「复制日志」与面板所见一致。
+- **日志投递改行批（`Msg::LogBatch`）**：`follow_logs` 不再逐行 `tx.send`（洪峰下每行唤醒一次 consumer 形成惊群，实测 CPU 240%+），改为攒批投递（满 1024 行或距首行 60ms 发一条），空闲超时改用**常驻 `Sleep`**（每行只重置截止时间，不再逐行新建 `timeout`），每行只做一次 UTF-8 校验 + 一次堆分配。`Msg::LogLine(u64, String)` → `Msg::LogBatch(u64, Vec<String>)`。
+- **stats 采样改整轮打包（`Msg::StatsBatch`）**：6s 采样不再逐容器单发（卡片数值在 1~2 秒内分批阶梯跳动，感知为闪烁），整轮打包成一条消息，所有卡片同帧更新。`Msg::Stats` → `Msg::StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`。
+- **变化区域按列表独立标记**：`DrainResult` 的 `lists_changed` 拆成 `containers_changed / images_changed / networks_changed / volumes_changed`，一条 stats 只重建容器行，不再连带重建镜像/网络/卷（这些行没变还要逐行比对）。`apply_msg` 改为按值消费 `Msg`，日志批整批**移动**进缓冲（逐行 clone 在洪峰下直接打满 CPU）。
+- **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）+ [src/follow_runtime.rs]（日志流运行时）+ [src/ui_state/log_sync.rs]（日志窗口裁剪 + 行模型同步账）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；日志流拆为 [src/docker/logs.rs]（读流）+ [src/docker/log_types.rs]（结束原因/错误分类/退避常量）+ [src/docker/container_detail.rs]（inspect + 存活性探针）；新增 [src/render.rs]（CachedModel 差量同步）、[src/log_status.rs]（状态提示文案唯一定义处）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）、[ui/drawer-log-row.slint]（日志行 delegate）。
 
 ### 修复
 
 - **日志流自愈的静默缺口**：① 空闲超时（连接挂死）与真实错误共用失败预算，8 次后直接放弃跟随——改为 Idle 走独立保活分支，不计预算、永不放弃，预算耗尽转 30s 低频保活；② 容器被删除等致命错误零 UI 提示——非取消的结束一律提示「日志流已停止」；③ 「已恢复连接」只依赖首行日志且提示标志单向锁存——改为三个触发点（重连后首行日志 / Idle 结局 / 探针由不可达跃迁为可达）；④ 切换容器后旧流的状态提示残留在新容器面板——新增 `clear_log_panel` / `clear_log_status` 两个清除落点，`ensure_follow` 返回「是否新建流」驱动清除。
-- **日志洪峰/高频 Msg 导致 UI 卡死**：consumer 改为单批最多 2048 条的有界 drain + 120ms UI 节流；日志洪峰只更新合并后的 `log_text`，不再每收一条日志就重建容器/镜像/网络/卷/抽屉。锁持有时间与 UI invoke 次数均变为有界，点击/搜索不再被饿死。
+- **日志洪峰/高频 Msg 导致 UI 卡死**：consumer 改为单批最多 2048 条的有界 drain + 120ms UI 节流；日志洪峰只**追加**日志行模型，不再每收一条日志就重建容器/镜像/网络/卷/抽屉。锁持有时间与 UI invoke 次数均变为有界，点击/搜索不再被饿死。
+- **日志行模型随缓冲整表错位**：旧环形缓冲每来一行就挤掉最旧一行，整表索引每行错位一次，Slint 的 ListView 每次都把可见行标记为脏并重新排版——这是卡顿主因。改为分块裁剪（攒够 1000 行才整体搬移一次）+ 追加式行模型，稳态下可见行完全不重排。
+- **状态栏结果永不恢复**：复制日志 / 清空日志 / 复制字段值直接写状态栏后一直停在结果上（看起来像卡住）。新增 `ui_apply::status_toast`，2s 后自动恢复「就绪」；期间若被其它消息改过则不覆盖（避免旧定时器盖掉新结果）。
+- **Tooltip 气泡与按钮脱节**：`Tip.btn_h` 写死 32px 且从不随悬停元素更新，翻转（下方空间不足时向下弹）时气泡与按钮之间出现空隙。改为由悬停元素写入真实高度（`IconBtn.size` / `Dot.dot_size`），气泡箭头重新贴住按钮下沿。
 - **Docker 无响应导致数据“冻住”**：列表 / stats / inspect / 卷占用调用统一 10s 超时；3s 刷新增加 in-flight 去重，避免慢守护进程下任务无限叠加耗尽 tokio 工作线程。
 - **关窗后进程不退出**：主题监听的 dconf 阻塞读移到独立 reader 线程，监控线程用 200ms `recv_timeout` 检查 shutdown；轮询回退路径同样 200ms 醒来，`theme-monitor` join 不再永久阻塞。
-- **抽屉日志交互**：关闭 ScrollView 的左右拖拽平移，恢复日志文本拖选；日志改为 `char-wrap` 消除提前换行留白；自动跟随在文本/内容高度变化时贴底，关闭跟随后视口保持不动；切容器时同步清空旧日志文本并取消旧日志流，避免不同容器日志串台；工具条 Clear 以 `tail=0` 重启当前跟随流，清空前的排队日志不会回填。
-- **旧日志回填/串台**：日志行携带 stream epoch，consumer 只接受当前流；clear/切容器后队列里的旧行直接丢弃。`apply_ui` 构建的 `log_text` 也带 buffer epoch 校验，避免已投递的 UI invoke 把旧文本写回。日志流自然结束发送 `LogStreamEnded(epoch)`，仅当前流清空 `follow_id`。
+- **抽屉日志交互**：关闭滚动容器的左右拖拽平移；日志按 `char-wrap` 折行消除提前换行留白；自动跟随在内容高度变化时贴底，关闭跟随后视口保持不动；切容器时同步清空旧日志行并取消旧日志流，避免不同容器日志串台；工具条 Clear 以 `tail=0` 重启当前跟随流，清空前的排队日志不会回填。
+- **旧日志回填/串台**：日志行携带 stream epoch，consumer 只接受当前流；clear/切容器后队列里的旧行直接丢弃。`apply_ui` 构建的日志行增量也带 buffer epoch 校验，避免已投递的 UI invoke 把旧行写回。日志流自然结束发送 `LogStreamEnded(epoch)`，仅当前流清空 `follow_id`。
 - **日志续流重复**：流自然结束后缓冲仍在，`ensure_follow` 改用 `tail=0` 续流，避免切回日志 Tab 时重放最近 200 行；`history_done` 在收到首条日志，或在有缓冲/活动流时 Clear 后置位，空历史/首流失败仍可 `tail=200` 重试；空缓冲且无活动流时 Clear 不置位，避免跳过之后的启动日志。`LogStreamEnded` 同时释放 cancel sender。
 - **consumer 更新延迟**：有待更新消息时按 120ms 节流窗口剩余时间等待，最坏 UI 应用延迟由约 200ms 收敛到约 120ms；无变化的批次（例如只有被丢弃的旧日志）不再触发 apply/invoke。
 - **抽屉环境挂载布局**：挂载项按 chip 行渲染，端口/网络/挂载盒宽度与复制按钮对齐，修复右侧裁切。

@@ -137,16 +137,23 @@ pub enum Msg {
     CleanupDone(Result<String, String>),
     /// 容器 inspect 结果（详情面板）
     ContainerDetail(Result<ContainerDetail, String>),
-    /// 日志流的一行（stream_epoch, 文本）；epoch 不匹配当前流时 consumer 直接丢弃，
+    /// 日志流的一批行（stream_epoch, 行列表）；epoch 不匹配当前流时 consumer 直接丢弃，
     /// 避免切换容器/清空日志后队列里的旧行污染新日志。
-    LogLine(u64, String),
+    ///
+    /// ⚠️ 必须整批投递，不能逐行发：日志洪峰可达 4 万+ 行/秒，逐行 send 会让
+    /// mpsc 每行唤醒一次 consumer（惊群），实测把 CPU 打到 240%+。
+    /// 整批投递把通道消息数降到 1/1000 量级。
+    LogBatch(u64, Vec<String>),
     /// 日志流结束（stream_epoch）；仅当仍是当前流时清空 follow_id 并释放 cancel sender，
     /// 允许下次重新建流
     LogStreamEnded(u64),
     /// 日志流状态提示（stream_epoch, 文本）：重连中 / 已恢复 / 已停止
     LogStreamStatus(u64, String),
-    /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
-    Stats(String, crate::docker::ContainerStatsSnapshot),
+    /// 一轮 stats 采样结果（容器 id → 快照；delta 计算在 consumer 线程完成）
+    ///
+    /// 整轮打包成一条消息：逐容器单发会让卡片数值在 1~2 秒内分批阶梯跳动
+    /// （用户感知为闪烁），整轮一次到达则所有卡片同帧更新。
+    StatsBatch(Vec<(String, crate::docker::ContainerStatsSnapshot)>),
     /// 网络列表
     Networks(Result<Vec<NetworkInfo>, String>),
     /// 卷列表

@@ -3,9 +3,15 @@
 //! consumer 的 `invoke_from_event_loop` 闭包会调这些，
 //! 把锁外拿到的数据一次性 set 到 Slint 属性。
 
+use std::time::Duration;
+
 use crate::detail_fmt::DrawerData;
 use crate::slint_gen::MainWindow;
-use slint::{ModelRc, SharedString};
+use crate::ui_state::SharedState;
+use slint::{ComponentHandle, ModelRc, SharedString};
+
+/// 操作结果提示的停留时长：到期后状态栏恢复 "Ready"（toast 语义）
+pub const TOAST_DURATION: Duration = Duration::from_secs(2);
 
 /// 把抽屉内容灌入 Drawer（行列表走 render 缓存模型，避免重建 Repeater）
 pub fn apply_drawer(ui: &MainWindow, d: &DrawerData) {
@@ -42,19 +48,45 @@ pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
     apply_lists(ui, cm, im, nm, vm);
 }
 
-/// 清空整个日志面板（日志文本 + 状态提示）。
+/// 清空整个日志面板（日志行 + 状态提示）。
 ///
 /// 切换选中资源（容器 / 镜像 / 网络 / 卷）或按 Clear 时调用：
-/// 日志上下文已经变了，旧文本与旧提示都不再属于当前对象。
+/// 日志上下文已经变了，旧行与旧提示都不再属于当前对象。
 pub fn clear_log_panel(ui: &MainWindow) {
-    ui.set_log_text(SharedString::from(""));
+    ui.set_log_rows(crate::render::clear_logs());
     ui.set_log_status(SharedString::from(""));
 }
 
-/// 只清空状态提示，保留日志文本。
+/// 只清空状态提示，保留日志内容。
 ///
 /// 同一容器重建日志流时调用：流是新的，没有「正在重连」之类的历史状态，
-/// 但已缓冲的日志文本仍然有效。
+/// 但已缓冲的日志内容仍然有效。
 pub fn clear_log_status(ui: &MainWindow) {
     ui.set_log_status(SharedString::from(""));
+}
+
+/// 状态栏 toast：写入操作结果，`TOAST_DURATION` 后自动恢复 "Ready"。
+///
+/// 与 consumer 的 toast 语义一致，但用于「回调直接写状态栏」的场景
+/// （复制日志 / 清空日志 / 复制字段值）—— 这些动作不走 Msg 通道，
+/// 状态文本会一直停在结果上，看起来像卡住。
+pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
+    ui.set_status_text(SharedString::from(text));
+    let rt = {
+        let Ok(s) = state.lock() else { return };
+        s.rt.handle().clone()
+    };
+    let ui_w = ui.as_weak();
+    let owned = text.to_string();
+    rt.spawn(async move {
+        tokio::time::sleep(TOAST_DURATION).await;
+        slint::invoke_from_event_loop(move || {
+            let Some(ui) = ui_w.upgrade() else { return };
+            // 期间被别的消息改过（如新的操作结果 / 错误）就不覆盖
+            if ui.get_status_text().as_str() == owned {
+                ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+            }
+        })
+        .ok();
+    });
 }

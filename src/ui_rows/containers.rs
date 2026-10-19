@@ -2,7 +2,7 @@
 
 use slint::SharedString;
 
-use crate::detail_fmt::{format_bytes, format_bytes_compact};
+use crate::detail_fmt::format_bytes_compact;
 use crate::models::{ContainerInfo, SortField};
 use crate::slint_gen::ContainerRow;
 use crate::ui_state::AppState;
@@ -119,22 +119,9 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
         }),
     }
 
-    // —— 只在 Group 排序下生成分组行 ——
-    let grouping = matches!(s.sort_field, SortField::Group);
-    let mut last: Option<&str> = None;
     filtered
         .into_iter()
         .map(|c| {
-            // 分组比较始终用英文 key，显示时再走 i18n 翻译
-            let project = c.compose_project.as_deref().or(Some("Standalone"));
-            let is_group = grouping
-                && match (project, last) {
-                    (Some(a), Some(b)) => a != b,
-                    _ => last.is_none(),
-                };
-            if grouping {
-                last = project;
-            }
             // 端口：卡片最多展示 3 条（芯片只放短标签，避免长映射串溢出卡片宽），
             // 其余走 "+N" 角标；芯片与角标的 tooltip 都列全部端口全文
             let all_ports: Vec<String> = if c.ports.trim().is_empty() {
@@ -150,17 +137,13 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
             let shown: Vec<&str> = all_ports.iter().map(|p| short_port(p)).take(3).collect();
             ContainerRow {
                 id: SharedString::from(c.id.clone()),
-                short_id: SharedString::from(c.short_id()),
                 name: SharedString::from(c.name.clone()),
                 image: SharedString::from(c.image.clone()),
-                status: SharedString::from(c.status.clone()),
                 is_running: c.is_running(),
                 is_selected: s.batch.contains(&c.id),
                 // 非 compose 容器置空（spec 3.1：proj-tag 只在真 compose 项目时显示）
                 compose_project: SharedString::from(c.compose_project.clone().unwrap_or_default()),
                 compose_color: proj_color(c.compose_project.as_deref().unwrap_or_default()),
-                compose_service: SharedString::from(c.compose_service.clone().unwrap_or_default()),
-                is_group_start: is_group,
                 // prototype .stat 数值风格：整数百分比（"3%"）+ 紧凑字节（"8M"）
                 cpu_percent: if c.cpu_percent > 0.0 {
                     SharedString::from(format!("{:.0}%", c.cpu_percent))
@@ -169,15 +152,6 @@ pub fn build_container_rows(s: &AppState) -> Vec<ContainerRow> {
                 },
                 mem_usage: if c.mem_usage > 0 {
                     SharedString::from(format_bytes_compact(c.mem_usage))
-                } else {
-                    SharedString::default()
-                },
-                net_traffic: if c.net_rx > 0 || c.net_tx > 0 {
-                    SharedString::from(format!(
-                        "↓{} ↑{}",
-                        format_bytes(c.net_rx),
-                        format_bytes(c.net_tx)
-                    ))
                 } else {
                     SharedString::default()
                 },

@@ -8,7 +8,7 @@
 - 错误统一转中文 `String` 上抛，UI 层展示
 - 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
-- `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，逐行 `tx.send(Msg::LogLine(epoch, line))`；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；返回 `LogStreamOutcome { end, lines }`（`LogStreamEnd`：Cancelled/Eof/Idle/Error(LogError) + 已推送行数），`LogError` 保留 Docker HTTP 状态码用于判定致命错误；超过 `LOG_IDLE_TIMEOUT`（180s）无新日志判定为 Idle（连接挂死）；重连策略由 `follow_runtime` 负责；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
+- `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，**整批** `tx.send(Msg::LogBatch(epoch, lines))`（满 1024 行或距首行 60ms 投一批；逐行 send 在洪峰下会形成惊群）；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；返回 `LogStreamOutcome { end, lines }`（`LogStreamEnd`：Cancelled/Eof/Idle/Error(LogError) + 已推送行数），`LogError` 保留 Docker HTTP 状态码用于判定致命错误；超过 `LOG_IDLE_TIMEOUT`（180s）无新日志判定为 Idle（连接挂死）；重连策略由 `follow_runtime` 负责；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
 - 可重试调用统一 `docker::with_timeout`（10s）：列表 / stats / inspect / 卷占用；`refresh_inflight` 防止 3s 刷新叠加
 - 清理：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused→prune_images(-a)`，可任意组合
 

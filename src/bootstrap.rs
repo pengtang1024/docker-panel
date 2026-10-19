@@ -39,18 +39,24 @@ pub fn spawn_stats_interval(state: &SharedState) {
                         .collect(),
                 )
             };
+            // 整轮采样打包成一条消息：逐容器单发会让卡片数值分批阶梯跳动
             let futs: Vec<_> = ids
                 .into_iter()
-                .map(|id| {
-                    let tx = tx.clone();
-                    async move {
-                        if let Ok(snap) = with_timeout(fetch_stats(&id)).await {
-                            let _ = tx.send(Msg::Stats(id, snap));
-                        }
-                    }
+                .map(|id| async move {
+                    with_timeout(fetch_stats(&id))
+                        .await
+                        .ok()
+                        .map(|snap| (id, snap))
                 })
                 .collect();
-            futures::future::join_all(futs).await;
+            let batch: Vec<_> = futures::future::join_all(futs)
+                .await
+                .into_iter()
+                .flatten()
+                .collect();
+            if !batch.is_empty() {
+                let _ = tx.send(Msg::StatsBatch(batch));
+            }
         }
     });
 }

@@ -55,23 +55,31 @@ if pending.has_ui_changes() && last_apply.elapsed() >= UI_MIN_INTERVAL {
 let res = std::mem::take(pending);
 let Ok(mut s) = state.lock() else { return };
 if res.refresh_now { s.refresh(); }
-let container_rows = res.lists_changed.then(|| ui_rows::build_container_rows(&s));
-// ... image / network / volume / compose 同理
-let drawer = (res.drawer_changed || res.lists_changed)
-    .then(|| detail_fmt::build_drawer_data(&s));
-let log_data = res.logs_changed.then(|| {
+// 每类列表独立标记：一条 stats 只重建容器行，不连带重建镜像/网络/卷
+let container_rows = res.containers_changed.then(|| ui_rows::build_container_rows(&s));
+let image_rows = res.images_changed.then(|| ui_rows::build_image_rows(&s));
+let network_rows = res.networks_changed.then(|| ui_rows::build_network_rows(&s));
+let volume_rows = res.volumes_changed.then(|| ui_rows::build_volume_rows(&s));
+let drawer = res.drawer_changed.then(|| detail_fmt::build_drawer_data(&s));
+// 日志行模型同步：模型是窗口的镜像，能追加就追加（可见行不重排 → 不卡）
+let log_sync = res.logs_changed.then(|| {
     let epoch = s.log_epoch.load(Ordering::Acquire);
-    (SharedString::from(s.logs.join("\n")), s.log_epoch.clone(), epoch)
+    let action = match s.log_sync_plan() {
+        LogSyncPlan::Append { from } => LogModelSync::Append(rows_of(&s.logs[from..])),
+        LogSyncPlan::Reset => LogModelSync::Reset(rows_of(&s.logs)),
+    };
+    s.commit_log_sync();
+    (action, s.log_epoch.clone(), epoch)
 });
 drop(s);  // ⚠️ 必须在 invoke_from_event_loop 之前释放
 
 invoke_from_event_loop(move || {
     // render::containers(rows) 走 thread_local 缓存模型，只 set 变化的列表
     ui_apply::apply_drawer(&ui, &drawer);
-    // 构建 log_text 后 UI 线程可能已 Clear/切容器：epoch 变了就丢弃旧文本
-    if let Some((text, epoch_ref, epoch)) = log_data {
+    // 构建增量后 UI 线程可能已 Clear/切容器：epoch 变了就丢弃旧行
+    if let Some((action, epoch_ref, epoch)) = log_sync {
         if epoch_ref.load(Ordering::Acquire) == epoch {
-            ui.set_log_text(text);
+            ui.set_log_rows(render::logs_sync(action));
         }
     }
 }).ok();
@@ -81,11 +89,11 @@ invoke_from_event_loop(move || {
 
 - **单批上限**：`MAX_DRAIN_BATCH = 2048`，避免日志洪峰时无界 `try_recv` 长时间占锁。
 - **UI 节流**：`UI_MIN_INTERVAL = 120ms`（约 8 次/秒）；有待更新时 `poll_timeout` 只睡到窗口结束（≤100ms，兼顾 shutdown），把最坏 UI 应用延迟从约 200ms 收敛到约 120ms。
-- **变化区域**：`DrainResult` 只标记 `lists_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。`has_ui_changes()` 为 false 时不 apply（被 epoch 丢弃的旧日志不会触发空 invoke）。
-- **日志缓冲**：`LogLine(epoch, line)` 先推入 `AppState.logs`，整批 drain 后一次性裁剪到 500 行；UI 侧是一整个 `log_text` string，不再有逐行 Model/ListView。
+- **变化区域**：`DrainResult` 按列表分别标记 `containers_changed / images_changed / networks_changed / volumes_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。`has_ui_changes()` 为 false 时不 apply（被 epoch 丢弃的旧日志不会触发空 invoke）。
+- **日志缓冲**：`LogBatch(epoch, lines)` 整批推入 `AppState.logs`，超上限时**分块**裁剪（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）；UI 侧是逐行的 `VecModel<LogRow>`，只追加不重建。
 - **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 stream epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
-- **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI `log_text` 过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。`history_done` 记录当前选中会话是否已加载历史：收到首条日志，或在有缓冲/活动流时 Clear 后置 true；空缓冲且无活动流时保持 false，让下次 `ensure_follow` 用 `tail=200` 重试。首次/空历史/首流失败用 `tail=200`，否则用 `tail=0`。重新选中容器（含同一容器）会重置，Clear 的持久性仅到下一次选中。
-- **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断文本是否已过期。
+- **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI 日志行模型的过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。`history_done` 记录当前选中会话是否已加载历史：收到首条日志，或在有缓冲/活动流时 Clear 后置 true；空缓冲且无活动流时保持 false，让下次 `ensure_follow` 用 `tail=200` 重试。首次/空历史/首流失败用 `tail=200`，否则用 `tail=0`。重新选中容器（含同一容器）会重置，Clear 的持久性仅到下一次选中。
+- **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断行模型是否已过期。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
 
@@ -108,13 +116,13 @@ invoke_from_event_loop(move || {
 | `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 后台补查层数 |
 | `Networks(Result<Vec<NetworkInfo>>)` | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
-| **`Stats(String id, ContainerStatsSnapshot)`** | 6s stats interval | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列 |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，卡片数值同帧更新） |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记立即刷新 |
 | **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
-| **`LogLine(u64, String)`** | `follow_logs` Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
+| **`LogBatch(u64, Vec<String>)`** | `follow_logs` Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（窗口 ≤2000 行）→ 追加到 UI 行模型 |
 | `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
 | **`LogStreamStatus(u64, String)`** | follow_runtime 判定结局 | 仅当前 stream_epoch 时写入 `log_status`（日志面板工具栏状态位）；文案见 `src/log_status.rs`（重连中 / 已恢复 / 已停止） |
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
@@ -131,21 +139,21 @@ invoke_from_event_loop(move || {
   │ /interval │                  │ follow_logs   │◀──Stream──────│           │
   └──────────┘                  └──────────────┘                 └─────┬─────┘
                                                                        │
-                   ┌──────────────────────────────────────────────────┘
+                   ┌─────────────────────────────────────────────────┘
                    ▼
          ┌──────────────────────────┐
          │ lock state               │
          │ drain_messages ≤2048/批   │  逐条更新 containers / images / networks / volumes / detail / logs
-         │ 整批裁剪 logs 到 500 行    │  （ui_update.rs，每条只做 O(1) 状态更新）
+         │ 分块裁剪 logs 到 ≤2000 行  │  （ui_update.rs，每条只做 O(1) 状态更新）
          │ drop lock                │
          └────────────┬─────────────┘
                       │ pending.merge（最多每 120ms 一次；无变化不 apply）
                       ▼
          ┌──────────────────────────┐
          │ lock state               │
-         │ 只 build 变化区域          │  lists_changed → ui_rows::build_*_rows
+         │ 只 build 变化区域          │  containers_changed → ui_rows::build_container_rows
          │ drop lock                │  drawer_changed → detail_fmt::build_drawer_data
-         └────────────┬─────────────┘  logs_changed → logs.join("\n") + epoch
+         └────────────┬─────────────┘  logs_changed → log_sync_plan() → Append / Reset
                       │ invoke_from_event_loop
                       ▼
          ┌──────────────────────────────────────────────────┐
@@ -153,7 +161,7 @@ invoke_from_event_loop(move || {
          │                                                    │
          │  render::containers(rows) 等 thread_local 缓存同步  │
          │    └ ui.set_container_rows / set_image_rows / ...  │
-         │  epoch 匹配才 ui.set_log_text(log_text)             │
+         │  epoch 匹配才 ui.set_log_rows(render::logs_sync(..)) │
          │  ui_apply::apply_drawer(&ui, drawer)               │
          │  ui.set_total_* / set_running_containers / ...     │
          └──────────────────────────────────────────────────┘
@@ -170,9 +178,12 @@ invoke_from_event_loop(move || {
 rt_handle.spawn(async move {
     let _ = docker::follow_logs(&id, tx, tail, epoch, cancel_rx).await;
     // 内部：select! { biased; cancel.changed() => break, item = stream.next() => ... }
-    //       LogOutput::StdOut { message } → Bytes → String → tx.send(Msg::LogLine(epoch, line))
+    //       LogOutput::StdOut { message } → Bytes → String → 攒进行批
+    //       攒够 LOG_BATCH_MAX(1024) 行或距首行 LOG_FLUSH_INTERVAL(60ms) → tx.send(Msg::LogBatch(epoch, lines))
 });
 ```
+
+**行批投递（洪峰铁律）**：日志洪峰可达 4 万+ 行/秒。逐行 `tx.send` 会让 mpsc 每行唤醒一次 consumer（惊群），实测 CPU 打到 240%+。因此 `follow_logs` 只做三件事：① 行先攒进 `batch`，满 `LOG_BATCH_MAX = 1024` 行或距首行 `LOG_FLUSH_INTERVAL = 60ms` 才发一条 `Msg::LogBatch`（通道消息数下降 3 个数量级）；② 空闲超时用一个**常驻** `Sleep`（每行只 `reset` 截止时间，不逐行新建 `timeout`）；③ 每行只做一次 UTF-8 校验 + 一次堆分配。
 
 `AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：有活动流时递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启；无活动流时只清缓冲并递增 log_epoch。仅当确有缓冲或有活动流时把 `history_done` 置 true；空缓冲且无流时保留 false，切回日志 Tab 仍可用 tail=200 补拉启动日志。重新选中容器会重置 history_done。
 
@@ -198,13 +209,27 @@ rt_handle.spawn(async move {
 | 「日志流已恢复连接」 | ① 重连后收到**首行日志**；② `Idle` 结局（连接已保持 180s 证明流通）；③ 探针从「不可达」跃迁到「可达」。三者均要求此前已提示过「正在重连」 |
 | 「日志流已停止」 | `End` 且非 `Cancelled`（容器停止 / 被删除 / 致命错误） |
 
-**状态清除**：切换选中资源或按 Clear 走 `ui_apply::clear_log_panel`（日志文本 + 状态提示全清）；同一容器重建日志流走 `clear_log_status`（只清状态、保留已缓冲的日志文本）——新流没有「正在重连」之类的历史状态，但旧文本仍有效。`AppState::ensure_follow` 返回「是否新建了流」，调用方据此决定是否清残留提示。
+**状态清除**：切换选中资源或按 Clear 走 `ui_apply::clear_log_panel`（日志行模型 + 状态提示全清）；同一容器重建日志流走 `clear_log_status`（只清状态、保留已缓冲的日志行）——新流没有「正在重连」之类的历史状态，但旧内容仍有效。`AppState::ensure_follow` 返回「是否新建了流」，调用方据此决定是否清残留提示。
 
 **流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。跨流共享的 running 标志已移除——容器存活一律以探针结论为准。
 
-> 已知限制：已收到部分历史后异常断流（daemon 重启/连接抖动），tail=0 从当前时刻接续，断流窗口内产生的日志不会补回；若需补齐，应使用 timestamps + `since` 游标，而不是回到 tail=200。
+### 日志行模型：只追加，不重建（`src/ui_state/log_sync.rs`）
 
-环形缓冲在 `drain_messages` 里整批裁剪（`drain(0..excess)`），避免逐行 `drain` 在洪峰下被放大；UI 侧只接收合并后的 `log_text`，不再逐行建 Model。
+日志面板用**虚拟化 `ListView`**（逐行 `LogLineRow` delegate），只实例化视口内的行。但虚拟化只解决「渲染多少行」，不解决「模型怎么变」——如果每批日志都把模型整体替换，可见行会被标记为脏并重新排版，卡顿依旧（实测 500 行缓冲时软件渲染器吃掉一个 CPU 核）。
+
+因此行模型被设计成**日志窗口的镜像**，两者用「全局行流位置」对齐：
+
+| 位置 | 含义 |
+|------|------|
+| 窗口 = `[logs_total - logs.len(), logs_total)` | `AppState.logs`（滚动窗口，≤ `LOG_ROWS_MAX = 2000` 行） |
+| 模型 = `[model_total - model_rows, model_total)` | UI 侧 `VecModel<LogRow>` |
+
+- **起点相同** → 模型是窗口的前缀 → `LogSyncPlan::Append { from }`：只 `extend` 新行（1 个 `RowAdded` 事件），已有行索引不变，可见行不重排 → **不卡**。
+- **起点不同** → 窗口裁剪过前段（或换了流）→ `LogSyncPlan::Reset`：`set_vec` 整体替换（1 个 reset 事件）。分块裁剪（`LOG_ROWS_KEEP = 1000`）保证这一步每 1000 行才发生一次。
+
+裁剪必须**分块**而不是逐行丢最旧行：逐行 `drain(0..1)` 会让整表索引每行错位一次，Slint 的 ListView 每次都把可见行标脏重排——这正是旧实现卡顿的主因。
+
+> 已知限制：已收到部分历史后异常断流（daemon 重启/连接抖动），tail=0 从当前时刻接续，断流窗口内产生的日志不会补回；若需补齐，应使用 timestamps + `since` 游标，而不是回到 tail=200。
 
 ## 3. Rust 回调绑定三段式
 
@@ -262,6 +287,7 @@ ui.on_xxx_requested(move || {
 - **详情字段格式化抽成 detail_fmt/**——ui_state.rs 只管状态变更与后台任务
 - **ui_update.rs 只做 Msg 聚合**——`DrainResult` + 有上限 `drain_messages` + 单条 `apply_msg`，保持日志洪峰防护逻辑独立
 - **ui_state.rs 只做状态与后台任务**——刷新去重/超时、follow 建流、清理计数、配置持久化
+- **日志窗口裁剪与行模型同步账归 ui_state/log_sync.rs**——`LogSyncPlan` / `trim_logs` / `log_sync_plan` / `commit_log_sync` 与其单测独立成模块，ui_state.rs 保持 ≤300 行
 - 回调按实体分：callbacks.rs（顶栏+弹窗+配置恢复）+ callbacks_container.rs + callbacks_image.rs
 - 类型集中入口：`slint_gen.rs` 只做 `include_modules!()` 一次展开
 - **所有 spawn 都走 state.rt（锁内 clone handle → drop → spawn）**——主线程不持有独立 tokio runtime

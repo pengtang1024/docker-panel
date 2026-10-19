@@ -17,7 +17,7 @@
 
 ### 右侧抽屉（详情 / 日志 / 环境）
 
-- 点击容器卡片 → inspect 详情（18 字段）+ 实时日志流（环形缓冲 500 行）+ 环境变量 Tab
+- 点击容器卡片 → inspect 详情（18 字段）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab
 - 点击镜像卡片 → 镜像详情（RepoTag / 大小 / Entrypoint / Cmd / Env 等）
 
 ### 操作
@@ -112,7 +112,8 @@ cargo build --release
 **关键设计**：
 - `Receiver<Msg>` 由 consumer 独占所有权，**不**放进 Mutex。这样 `rx.recv_timeout()` 永远不阻塞主线程拿 state 锁。
 - **两阶段铁律**：锁内只做分片 drain（单批 ≤2048 条）+ build → drop lock → 锁外 `invoke_from_event_loop` 更新 Slint Model。闭包里绝不碰 state。
-- **UI 更新节流**：consumer 最多每 120ms 应用一次 UI；日志洪峰时只更新 `log_text`，不重算容器/镜像/网络/卷/抽屉，避免无界 invoke 与重排把 UI 线程压死。
+- **UI 更新节流**：consumer 最多每 120ms 应用一次 UI；日志洪峰时只**追加**日志行模型，不重算容器/镜像/网络/卷/抽屉，避免无界 invoke 与重排把 UI 线程压死。
+- **日志行模型只追加不重建**：行模型是日志窗口的镜像（滚动窗口 2000 行），能追加就追加（可见行不重排 → 不卡），窗口裁剪过前段才整体重建一次。
 - **Docker 调用有超时 + 刷新去重**：单次调用 10s 超时；上一次 3s 刷新未完成时跳过下一轮，防止守护进程无响应时任务叠加耗尽 tokio 线程。
 - **所有 Docker 结果走 `tx.send(Msg)`**——不直接碰 Slint Model，统一由 consumer pump 更新。
 
@@ -126,11 +127,11 @@ docker-panel/
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
-├── ui/                     # Slint UI 声明（26 文件按职责拆分，app.slint 唯一组装入口）
+├── ui/                     # Slint UI 声明（27 文件按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
-│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair struct
+│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
 │   ├── sub-bar.slint       # SubBar：筛选 chips + 排序 + 4 视图 tabs
 │   ├── cards.slint         # 卡片网格容器（四种视图共用，含空状态与背景点击层）
@@ -142,6 +143,7 @@ docker-panel/
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
 │   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
+│   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
 │   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染）
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
@@ -153,26 +155,27 @@ docker-panel/
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
+│   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
+│   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
 │   ├── follow_runtime.rs    # 日志流运行时：建流/退避重连/探针判定/保活降级/结局分类
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
-│   ├── render.rs           # CachedModel 差量同步（sync_model：数据未变则跳过 set_vec）
+│   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers / images / netvol（网络/卷）
 │   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
-│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status
+│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态
 │   ├── callbacks.rs        # 回调绑定中枢 + restore_config
 │   ├── callbacks_container.rs  # AppActions container_* 回调
-│   ├── callbacks_drawer.rs     # 抽屉 Tab 切换（日志 Tab 触发 ensure_follow）
+│   ├── callbacks_drawer.rs     # 抽屉 Tab 切换（日志 Tab 触发 ensure_follow）+ 跟随/复制/清空
 │   ├── callbacks_image.rs      # AppActions image_* 回调
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度闭包）/ remove
-│       ├── logs.rs         # follow_logs（Stream → tx.send，含空闲超时）
+│       ├── logs.rs         # follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
 │       ├── log_types.rs    # 日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs       # list_networks / list_volumes

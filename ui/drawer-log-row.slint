@@ -1,0 +1,35 @@
+// drawer-log-row.slint — Drawer 日志行（一条日志一行）
+//
+// 行高：根节点声明 min-height: body.min-height（内容自然高度，
+// char-wrap 折行后行高变大）。ListView 的 delegate 必须显式行高
+// （Slint 列表布局逐项读 delegate.height），实例处用 height: self.min-height 取用；
+// 绝不能写成 100%（会退化为视口高）。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { LogRow } from "models.slint";
+
+export component LogLineRow inherits Rectangle {
+    in property <LogRow> data;
+
+    vertical-stretch: 0;
+    min-height: body.min-height;
+
+    body := VerticalLayout {
+        width: 100%;
+        spacing: 0px;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 2px;
+        VCenterText {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            text: root.data.text;
+            font-size: 12px;
+            font-family: Theme.mono;
+            color: Theme.log_ink;
+            // 日志按字符断行：word-wrap 遇到放不下的单词会整词换行，右侧留大片空白
+            // （char-wrap 在软件渲染器下可用，1.18.1 已实测）
+            wrap: char-wrap;
+        }
+    }
+}

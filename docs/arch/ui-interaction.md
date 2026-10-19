@@ -36,7 +36,7 @@ models.slint struct               Rust consumer 构造
 │ VolumeRow    { ... }     │      │   // thread_local 差量同步   │
 │ DetailPair   { ... }     │      │ ui_apply::apply_drawer(&ui) │
 └──────────────────────────┘      └─────────────────────────────┘
-日志不是 Model：AppState.logs → 合并成 log_text string → Drawer TextInput
+日志也是 Model：AppState.logs → LogSyncPlan(Append/Reset) → render::logs_sync → Drawer 虚拟化 ListView
 ```
 
 `include_modules!()` 在 `slint_gen.rs` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入。
@@ -59,10 +59,10 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 327 | MainWindow + global-shortcuts FocusScope + 布局组装 | theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
+| `app.slint` | 331 | MainWindow + global-shortcuts FocusScope + 布局组装 | theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
 | `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
 | `theme.slint` | 96 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态 | 无 |
-| `models.slint` | 81 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair | 无 |
+| `models.slint` | 84 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
 | `sub-bar.slint` | 194 | 筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
 | `cards.slint` | 173 | 四种资源卡片网格 + 空状态 + 背景点击层 | theme / card-* / skel / components-* |
@@ -72,11 +72,12 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 | `skel.slint` | 69 | 骨架屏占位 | theme |
 | `foot-bar.slint` | 109 | 底部 8 项资源概览 | theme / components-align |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
-| `drawer.slint` | 204 | 右侧抽屉三 Tab（详情/日志/环境） | theme / drawer-detail-row / components-* |
+| `drawer.slint` | 201 | 右侧抽屉三 Tab（详情/日志/环境） | theme / drawer-detail-row / drawer-log-row / components-* |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
+| `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
 | `menu-layers.slint` | 133 | 排序菜单 + 卡片「···」菜单 | theme / models |
-| `components-interact.slint` | 338 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
+| `components-interact.slint` | 340 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |
 | `components-form.slint` | 102 | 输入/复选框等表单组件 | theme |
 | `components-chip.slint` | 115 | Chip / 标签类组件 | theme |

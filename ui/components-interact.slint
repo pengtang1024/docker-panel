@@ -133,7 +133,9 @@ export component IconBtn inherits Rectangle {
     }
 
     changed hovered => {
-        if (hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; }
+        // btn_h 必须来自当前按钮：TipLayer 在上方空间不够时会把气泡翻到按钮下方，
+        // 此时气泡的箭头要贴在按钮底边 —— 高度写死会让箭头与按钮脱节。
+        if (hovered && root.tip != "") { Tip.text = root.tip; Tip.ax = area.absolute-position.x + area.width / 2; Tip.ay = area.absolute-position.y; Tip.btn_h = root.size; }
         else if (Tip.text == root.tip) { Tip.text = ""; }
     }
 
@@ -194,7 +196,7 @@ export component Dot inherits Rectangle {
     touch := TouchArea { width: 100%; height: 100%; }
     private property <bool> tip_hover: touch.has-hover;
     changed tip_hover => {
-        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
+        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; Tip.btn_h = root.dot_size; }
         else if (Tip.text == root.tip) { Tip.text = ""; }
     }
 }

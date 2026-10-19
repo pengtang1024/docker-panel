@@ -71,12 +71,12 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     assert!(!s.history_done);
 
     let tx = s.tx.clone();
-    tx.send(Msg::LogLine(5, "stale".into())).unwrap();
+    tx.send(Msg::LogBatch(5, vec!["stale".into()])).unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert!(s.logs.is_empty(), "旧 epoch 日志必须被丢弃");
     assert!(!res.logs_changed);
 
-    tx.send(Msg::LogLine(6, "fresh".into())).unwrap();
+    tx.send(Msg::LogBatch(6, vec!["fresh".into()])).unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert_eq!(s.logs, vec!["fresh".to_string()]);
     assert!(res.logs_changed);
@@ -103,7 +103,7 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     assert!(s.follow_cancel.is_none());
     assert!(s.follow_active.is_none());
 
-    // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的 log_text
+    // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的日志行增量
     s.follow_id.clear();
     s.logs.push("old".into());
     s.history_done = false;
@@ -127,7 +127,7 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     assert!(s.history_done);
 
     // #18：Clear 前的旧 epoch 行必须被丢弃，且不能改变 history_done
-    tx.send(Msg::LogLine(se, "stale-after-clear".into()))
+    tx.send(Msg::LogBatch(se, vec!["stale-after-clear".into()]))
         .unwrap();
     s.drain_messages(&rx, None, 10);
     assert!(s.logs.is_empty());

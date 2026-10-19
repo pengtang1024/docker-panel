@@ -20,7 +20,7 @@ use slint::{invoke_from_event_loop, SharedString, Weak};
 
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::{SharedState, REFRESH_INTERVAL};
+use crate::ui_state::{LogSyncPlan, SharedState, REFRESH_INTERVAL};
 use crate::ui_update::DrainResult;
 
 /// UI 刷新最短间隔：日志洪峰下把上千次 invoke 合并成每秒 ~8 次
@@ -97,39 +97,63 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         s.refresh();
     }
 
-    // 只重建本批变化的区域：日志洪峰时其余列表一律跳过
+    // 只重建本批变化的区域：日志洪峰时其余列表一律跳过；
+    // 列表之间也分开标记（一条 stats 只重建容器行，不连带重建镜像/网络/卷）
     let container_rows = res
-        .lists_changed
+        .containers_changed
         .then(|| crate::ui_rows::build_container_rows(&s));
     let image_rows = res
-        .lists_changed
+        .images_changed
         .then(|| crate::ui_rows::build_image_rows(&s));
     let network_rows = res
-        .lists_changed
+        .networks_changed
         .then(|| crate::ui_rows::build_network_rows(&s));
     let volume_rows = res
-        .lists_changed
+        .volumes_changed
         .then(|| crate::ui_rows::build_volume_rows(&s));
+    // compose 芯片由容器列表派生，与容器行同批重建
     let compose_rows = res
-        .lists_changed
+        .containers_changed
         .then(|| crate::ui_rows::build_compose_rows(&s));
-    // 抽屉详情含 CPU/内存/磁盘（来自列表 stats），列表刷新时也要重建，
-    // 但纯日志消息不触发（drawer_changed/lists_changed 都为 false）
-    let drawer_data = if res.drawer_changed || res.lists_changed {
+    // 抽屉详情含 CPU/内存/磁盘（来自列表 stats），容器 stats 变化时也要重建，
+    // 但纯日志消息不触发（drawer_changed / 各列表标记都为 false）
+    let drawer_data = if res.drawer_changed {
         crate::detail_fmt::build_drawer_data(&s)
     } else {
         None
     };
-    let log_data = res.logs_changed.then(|| {
+    // 日志行同步：模型是窗口的镜像 —— 能追加就追加（已有行索引不变，
+    // 可见行不必重排，是日志流不卡的关键）；窗口裁剪过前段才整体重建。
+    let log_sync = if res.logs_changed {
         let epoch = s.log_epoch.load(Ordering::Acquire);
-        (
-            SharedString::from(s.logs.join("\n")),
-            s.log_epoch.clone(),
-            epoch,
-        )
-    });
+        let action = match s.log_sync_plan() {
+            LogSyncPlan::Append { from } => {
+                let rows: Vec<LogRow> = s.logs[from..]
+                    .iter()
+                    .map(|l| LogRow {
+                        text: SharedString::from(l.as_str()),
+                    })
+                    .collect();
+                crate::render::LogModelSync::Append(rows)
+            }
+            LogSyncPlan::Reset => {
+                let rows: Vec<LogRow> = s
+                    .logs
+                    .iter()
+                    .map(|l| LogRow {
+                        text: SharedString::from(l.as_str()),
+                    })
+                    .collect();
+                crate::render::LogModelSync::Reset(rows)
+            }
+        };
+        s.commit_log_sync();
+        Some((action, s.log_epoch.clone(), epoch))
+    } else {
+        None
+    };
 
-    let batch_count = if res.lists_changed {
+    let batch_count = if res.containers_changed {
         let live: Vec<String> = s.containers.iter().map(|c| c.id.clone()).collect();
         s.batch.purge_dead(live)
     } else {
@@ -167,10 +191,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(rows) = compose_rows {
             ui.set_compose_rows(crate::render::compose_rows(rows));
         }
-        if let Some((text, epoch_ref, epoch)) = log_data {
-            // 构建 log_text 后 UI 线程可能已经 Clear/切容器；epoch 变了就丢弃旧文本
+        if let Some((action, epoch_ref, epoch)) = log_sync {
+            // 构建增量后 UI 线程可能已经 Clear/切容器；epoch 变了就丢弃旧行
             if epoch_ref.load(Ordering::Acquire) == epoch {
-                ui.set_log_text(text);
+                ui.set_log_rows(crate::render::logs_sync(action));
             }
         }
         ui.set_sort_field(sort_field_int);
@@ -204,7 +228,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             let rt_t = rt_h;
             let ui_weak_t = ui_w_for_toast;
             rt_t.spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                tokio::time::sleep(crate::ui_apply::TOAST_DURATION).await;
                 invoke_from_event_loop(move || {
                     let Some(ui) = ui_weak_t.upgrade() else {
                         return;

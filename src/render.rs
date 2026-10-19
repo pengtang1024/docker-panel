@@ -16,7 +16,9 @@ use std::rc::Rc;
 
 use slint::{Model, ModelRc, VecModel};
 
-use crate::slint_gen::{ComposeRow, ContainerRow, DetailPair, ImageRow, NetworkRow, VolumeRow};
+use crate::slint_gen::{
+    ComposeRow, ContainerRow, DetailPair, ImageRow, LogRow, NetworkRow, VolumeRow,
+};
 
 thread_local! {
     static CONTAINERS: Rc<VecModel<ContainerRow>> = Rc::new(VecModel::default());
@@ -26,6 +28,7 @@ thread_local! {
     static DETAIL: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static ENV: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static COMPOSE: Rc<VecModel<ComposeRow>> = Rc::new(VecModel::default());
+    static LOGS: Rc<VecModel<LogRow>> = Rc::new(VecModel::default());
 }
 
 /// 就地同步一个缓存模型：对齐长度 → 逐行比对 → 仅变化行 set_row_data。
@@ -80,4 +83,48 @@ pub fn env_rows(data: Vec<DetailPair>) -> ModelRc<DetailPair> {
 /// Compose 项目筛选芯片模型（须在 UI 线程调用）
 pub fn compose_rows(data: Vec<ComposeRow>) -> ModelRc<ComposeRow> {
     COMPOSE.with(|m| sync(Rc::clone(m), data))
+}
+
+/// 日志行模型的同步动作（须在 UI 线程执行）。
+///
+/// 两种动作对应 Slint 虚拟化 ListView 的两种代价：
+/// - `Append`：只发一个 RowAdded 事件，已有行索引不变 →
+///   可见行不重排（日志流不卡的关键）；
+/// - `Reset`：整表替换，可见行重排一次（每裁剪一轮一次）。
+#[derive(Debug)]
+pub enum LogModelSync {
+    /// 增量追加：把新行接到模型尾部。
+    Append(Vec<LogRow>),
+    /// 整体重建：模型与窗口已错位，用给定行替换全部内容。
+    Reset(Vec<LogRow>),
+}
+
+/// 日志行模型同步（须在 UI 线程调用）
+///
+/// 模型是日志窗口的镜像：能追加就追加（可见行不重排），
+/// 窗口裁剪过前段才整体重建 —— 整表替换只发一个 reset 事件，
+/// 比逐行 `remove_row(0)` 的 O(n²) 搬移便宜得多。
+pub fn logs_sync(sync: LogModelSync) -> ModelRc<LogRow> {
+    LOGS.with(|m| {
+        match sync {
+            LogModelSync::Append(rows) => {
+                if !rows.is_empty() {
+                    // extend 一次只发一个 RowAdded 事件，避免逐行 push 的事件风暴
+                    m.extend(rows);
+                }
+            }
+            LogModelSync::Reset(rows) => {
+                m.set_vec(rows);
+            }
+        }
+        ModelRc::from(Rc::clone(m))
+    })
+}
+
+/// 清空日志行缓存模型（Clear / 切换容器时调用，须在 UI 线程）
+pub fn clear_logs() -> ModelRc<LogRow> {
+    LOGS.with(|m| {
+        m.clear();
+        ModelRc::from(Rc::clone(m))
+    })
 }

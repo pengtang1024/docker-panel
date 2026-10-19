@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 
 use super::connect;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ContainerStatsSnapshot {
     pub cpu_total_usage: u64,
     pub system_cpu_usage: u64,

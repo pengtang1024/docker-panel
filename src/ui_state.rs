@@ -23,6 +23,10 @@ use crate::models::{
     ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
 };
 
+/// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
+pub mod log_sync;
+pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
+
 /// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SelKind {
@@ -67,15 +71,23 @@ pub struct AppState {
     /// 卷磁盘占用缓存（name → 字节）：来自低频 `/system/df`
     pub volume_sizes: HashMap<String, u64>,
 
-    // —— Phase 3 日志面板（环形缓冲，最多 500 行）——
+    // —— Phase 3 日志面板（滚动窗口，最多 LOG_ROWS_MAX 行）——
     pub logs: Vec<String>,
     pub logs_cap: usize,
+    /// 日志流累计进窗口的行数：给窗口在全局行流中定位（窗口 = 末尾 logs.len() 行）
+    pub logs_total: u64,
+    /// UI 日志行模型已同步到的累计行数
+    pub model_total: u64,
+    /// UI 日志行模型当前行数
+    pub model_rows: usize,
+    /// 上次同步时的流 epoch：epoch 变了说明模型已被清空，行数跟踪作废
+    pub model_epoch: u64,
     /// 当前日志流 epoch：用于 Msg::LogLine / LogStreamEnded 的流代际过滤
     pub stream_epoch: u64,
     /// 当前选中会话是否已加载过历史日志：收到首条日志或用户 Clear 后置 true；
     /// 重新选中容器（clear_logs）重置。空历史/首流失败可再次以 tail=200 重试。
     pub history_done: bool,
-    /// 日志缓冲 epoch：仅用于 UI log_text 的过期判断；Clear/切容器时递增
+    /// 日志缓冲 epoch：仅用于 UI 日志行列表的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
     pub follow_id: String,
@@ -149,7 +161,11 @@ impl AppState {
             image_layers: HashMap::new(),
             volume_sizes: HashMap::new(),
             logs: Vec::new(),
-            logs_cap: 500,
+            logs_cap: LOG_ROWS_MAX,
+            logs_total: 0,
+            model_total: 0,
+            model_rows: 0,
+            model_epoch: 0,
             stream_epoch: 0,
             history_done: false,
             log_epoch: Arc::new(AtomicU64::new(0)),
@@ -262,6 +278,7 @@ impl AppState {
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
         self.follow_active = None;
+        self.reset_log_model_tracking();
     }
 
     /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
@@ -277,14 +294,16 @@ impl AppState {
             self.history_done = true;
         }
         // 即使当前没有活动流（流已自然结束），也必须推进 epoch，
-        // 让已经投递但尚未执行的旧 log_text invoke 失效。
+        // 让已经投递但尚未执行的旧日志行 invoke 失效。
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
         if !active {
             self.follow_active = None;
+            self.reset_log_model_tracking();
             return;
         }
         let id = self.follow_id.clone();
         self.spawn_follow(&id, 0);
+        self.reset_log_model_tracking();
     }
 
     /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）

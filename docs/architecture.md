@@ -49,13 +49,14 @@ docker-panel/
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
+│   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
 │   ├── follow_runtime.rs       日志流运行时：建流/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
-│   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）
+│   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
-│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status
+│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
 │   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
@@ -67,7 +68,7 @@ docker-panel/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
 │       ├── containers.rs      list / start / stop / restart / remove
 │       ├── images.rs          list / pull（含进度闭包）/ remove
-│       ├── logs.rs            follow_logs（Stream → tx.send，含空闲超时）
+│       ├── logs.rs            follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
 │       ├── log_types.rs       日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs           fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs          list_networks + list_volumes
@@ -81,7 +82,7 @@ docker-panel/
 └── ui/                        Slint 层（所有 ≤ 300 行）
     ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
     ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态
-    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair struct（日志走 string 属性）
+    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
     ├── cards.slint             卡片网格容器（四种视图共用，含空状态 + 背景点击层）
@@ -91,6 +92,7 @@ docker-panel/
     ├── foot-bar.slint          底部 8 项资源概览
     ├── batch-bar.slint         批量操作浮动栏
     ├── drawer.slint            右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
+    ├── drawer-log-row.slint    日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
     ├── dialogs.slint           PullDialog + CleanupDialog 弹窗
     ├── menu-layers.slint       浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
     └── components.slint        IconBtn / Dot / CheckCell / MenuItem / Dropdown / TipLayer 等原子组件
@@ -103,9 +105,10 @@ main.rs
   ├── consumer.rs    → ui_state + ui_update + ui_rows + detail_fmt + render + ui_apply + slint_gen
   ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, with_timeout}
   ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout} + follow_runtime
+  │                   └ ui_state/log_sync.rs（子模块：日志窗口裁剪 + 行模型同步账）
   ├── follow_runtime.rs → docker::{follow_logs, probe_container, retry_delay, LogError, LogStreamEnd, ContainerReach} + log_status + models::Msg
   ├── ui_update.rs   → ui_state + models::Msg + docker::compute_cpu_delta
-  ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render
+  ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render + ui_state::SharedState
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   └── docker/        → 纯 async 层，不反依赖任何上层模块

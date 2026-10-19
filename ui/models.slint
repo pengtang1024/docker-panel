@@ -6,21 +6,16 @@
 
 export struct ContainerRow {
     id: string,
-    short_id: string,
     name: string,
     image: string,
-    status: string,
     is_running: bool,
     is_selected: bool,
     // —— Compose 分组 ——
     compose_project: string,       // 空字符串表示非 Compose 容器
     compose_color: color,          // compose 项目标签配色（按项目名稳定散列）
-    compose_service: string,       // Compose 服务名
-    is_group_start: bool,          // 是否是某 Compose 项目第一行（渲染分组标题）
     // —— 资源监控 ——
     cpu_percent: string,           // 如 "12.3%"（空字符串 = 未采样）
     mem_usage: string,             // 如 "512MB"
-    net_traffic: string,           // 如 "↓1.2MB ↑345KB"
     disk: string,                  // 如 "12MB"（容器可写层占用）
     // —— 端口（spec 3.1 .c-ports：最多 3 个 +N）——
     port1: string,                 // 卡片展示的第 1 个端口短标签（空 = 无，如 "6399"）
@@ -70,6 +65,14 @@ export struct ComposeRow {
     name: string,
     n: int,
     color: color,
+}
+
+// 日志行（虚拟化列表的一行 = 一条日志）
+// 逐行成行而非整段文本：整段塞进 TextInput 时，每次新增日志都要让渲染器
+// 重排 + 重绘全部缓冲行（实测 500 行时软件渲染器吃掉一个 CPU 核）；
+// 拆成行后由 ListView 只实例化视口内的行，成本与视口高度成正比。
+export struct LogRow {
+    text: string,
 }
 
 // 抽屉 / 详情面板的通用行（对齐 prototype .sec / .kv / .box / .kv-list）

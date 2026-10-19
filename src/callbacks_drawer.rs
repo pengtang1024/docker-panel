@@ -61,7 +61,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 Err(_) => return,
             };
             if text.is_empty() {
-                ui.set_status_text(SharedString::from(crate::i18n::t("Log is empty")));
+                crate::ui_apply::status_toast(&ui, &s, &crate::i18n::t("Log is empty"));
                 return;
             }
             let n = text.lines().count();
@@ -69,7 +69,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 Ok(()) => crate::i18n::trf("Copied {0} log lines", &[&n.to_string()]),
                 Err(_) => crate::i18n::t("Copy failed"),
             };
-            ui.set_status_text(SharedString::from(msg));
+            crate::ui_apply::status_toast(&ui, &s, &msg);
         });
     }
     {
@@ -81,11 +81,12 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 st.clear_log_buffer();
             }
             crate::ui_apply::clear_log_panel(&ui);
-            ui.set_status_text(SharedString::from(crate::i18n::t("Log cleared")));
+            crate::ui_apply::status_toast(&ui, &s, &crate::i18n::t("Log cleared"));
         });
     }
     {
         let ui_d = ui.as_weak();
+        let s = state.clone();
         actions.on_value_copy(move |v: SharedString| {
             let Some(ui) = ui_d.upgrade() else { return };
             let text = v.as_str().to_string();
@@ -94,7 +95,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 Ok(()) => crate::i18n::trf("Copied {0} chars", &[&n.to_string()]),
                 Err(_) => crate::i18n::t("Copy failed"),
             };
-            ui.set_status_text(SharedString::from(msg));
+            crate::ui_apply::status_toast(&ui, &s, &msg);
         });
     }
 }

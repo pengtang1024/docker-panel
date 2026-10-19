@@ -11,7 +11,7 @@ import { CardsArea } from "cards.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow } from "models.slint";
 import { AppActions } from "app-actions.slint";
 // 再导出：Slint 只把「主文件导出的类型」暴露给 Rust（否则 AppActions 变成内部类型，
 // Rust 侧 ui.global::<AppActions>() 找不到符号）
@@ -69,7 +69,8 @@ export component MainWindow inherits Window {
     in-out property <[ImageRow]> image_rows: [];
     in-out property <[NetworkRow]> network_rows: [];
     in-out property <[VolumeRow]> volume_rows: [];
-    in-out property <string> log_text: "";
+    // 日志行列表（虚拟化渲染：只实例化视口内的行）
+    in-out property <[LogRow]> log_rows: [];
     in-out property <[ComposeRow]> compose_rows: [];
 
     // —— 抽屉 ——
@@ -248,7 +249,7 @@ export component MainWindow inherits Window {
             open <=> root.drawer_open;
             tab <=> root.drawer_tab;
             log_follow <=> root.log_follow;
-            log_text <=> root.log_text;
+            log_rows <=> root.log_rows;
             log_status <=> root.log_status;
             title <=> root.drawer_title;
             sub <=> root.drawer_sub;

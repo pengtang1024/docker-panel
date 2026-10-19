@@ -138,7 +138,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | 目录/文件 | 职责 |
 |-----------|------|
 | `ui/` | Slint 声明层（26 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + `follow_id` 日志流 + `cleanup_counts`）/ render（CachedModel 差量同步）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ follow_runtime（日志流运行时：建流/退避重连/存活标志）/ render（CachedModel 差量同步）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,stats,netvol,image_details,system} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
@@ -177,8 +177,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
 | `LogLine(u64, String)` | follow_logs Stream | `(stream_epoch, line)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（cap=500）→ `log_text` string |
-| `LogStreamEnded(u64)` | 日志流结束（Eof / Cancelled） | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active`，允许下次重新建流；Docker 异常由流内部退避重连消化，不会产生 Ended |
-| `LogStreamStatus(String)` | 日志流运行时 | 写入状态栏（重连中 / 已恢复 / 已停止），不弹 toast |
+| `LogStreamEnded(u64)` | 日志流结束 | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active` / `follow_running`，允许下次重新建流；来源：Eof / Cancelled / 不可恢复错误 / 重试放弃 |
+| `LogStreamStatus(u64, String)` | 日志流运行时 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板状态位（重连中 / 已恢复 / 已停止），不占用底部状态栏 |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -198,7 +198,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 卷占用）；3s 刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
 11. **高频 Msg 不得逐条 invoke**——统一走 `consumer` 的分批 drain + 120ms 节流；UI 只重建 `DrainResult` 标记的变化区域，日志走合并后的 `log_text` string。
 12. **可能永久阻塞的读必须可被 shutdown 唤醒**——例如 dconf reader 放独立线程，监控线程用 `recv_timeout` 轮询；禁止在会被 join 的线程里做无超时的阻塞读。
-13. **日志流重连必须退避**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限），禁止立即紧密重试拖垮 Docker；容器停止（`Eof`）不重连。每条流的存活标志必须独立，旧流退出不得误标新流。
+13. **日志流重连必须退避**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限，最多 8 次），禁止立即紧密重试拖垮 Docker；运行中容器遇到 `Eof` 同样按可恢复重连，容器已停止则不重连；超过 `LOG_IDLE_TIMEOUT`（180s）无任何日志视为连接挂死并主动重连。每条流的存活标志必须独立，旧流退出不得误标新流。
 
 ## 构建命令
 

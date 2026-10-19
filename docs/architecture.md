@@ -48,7 +48,8 @@ docker-panel/
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
-│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + ensure_follow + cleanup_counts + persist
+│   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
+│   ├── follow_runtime.rs       日志流运行时：建流/退避重连/存活标志/结局分类（从 ui_state 拆出）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
@@ -98,7 +99,8 @@ docker-panel/
 main.rs
   ├── consumer.rs    → ui_state + ui_update + ui_rows + detail_fmt + render + ui_apply + slint_gen
   ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, with_timeout}
-  ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout}
+  ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout} + follow_runtime
+  ├── follow_runtime.rs → docker::{follow_logs, retry_delay, LogError, LogStreamEnd} + models::Msg
   ├── ui_update.rs   → ui_state + models::Msg + docker::compute_cpu_delta
   ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config

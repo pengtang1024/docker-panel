@@ -28,6 +28,8 @@ export component Drawer inherits Rectangle {
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
     in-out property <string> log_text: "";
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止）
+    in-out property <string> log_status: "";
 
     callback close();
     callback set_tab(int);
@@ -136,6 +138,14 @@ export component Drawer inherits Rectangle {
                     }
                     IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
                     IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
+                    // 日志流状态提示：重连中 / 已恢复 / 已停止（独立于底部状态栏）
+                    VCenterText {
+                        text: root.log_status;
+                        color: Theme.ink_3;
+                        font-size: 11px;
+                        visible: root.log_status != "";
+                        horizontal-stretch: 1;
+                    }
                 }
             }
             Rectangle {

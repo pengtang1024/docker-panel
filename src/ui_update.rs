@@ -31,6 +31,8 @@ pub struct DrainResult {
     pub docker_ok: Option<bool>,
     /// 需要写入 status_text 的文本（toast / pull 进度）
     pub status_text: Option<String>,
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不覆盖状态栏
+    pub log_status: Option<String>,
     /// 本批出现过操作结果 toast（2s 后恢复 Ready）
     pub toast: bool,
     pub close_pull: bool,
@@ -49,6 +51,7 @@ impl DrainResult {
             || self.logs_changed
             || self.docker_ok.is_some()
             || self.status_text.is_some()
+            || self.log_status.is_some()
             || self.toast
             || self.close_pull
             || self.reset_pull_busy
@@ -68,6 +71,9 @@ impl DrainResult {
         }
         if o.status_text.is_some() {
             self.status_text = o.status_text;
+        }
+        if o.log_status.is_some() {
+            self.log_status = o.log_status;
         }
         self.toast |= o.toast;
         self.close_pull |= o.close_pull;
@@ -227,11 +233,14 @@ impl AppState {
                     self.follow_id.clear();
                     self.follow_cancel = None;
                     self.follow_active = None;
+                    self.follow_running.store(false, Ordering::Release);
                 }
             }
-            Msg::LogStreamStatus(text) => {
-                // 日志流状态提示（重连中 / 已恢复 / 已停止）：写入状态栏，不弹 toast
-                res.status_text = Some(text.clone());
+            Msg::LogStreamStatus(epoch, text) => {
+                // 日志流状态提示（重连中 / 已恢复 / 已停止）：独立通道，不占用状态栏
+                if *epoch == self.stream_epoch {
+                    res.log_status = Some(text.clone());
+                }
             }
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);

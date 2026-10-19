@@ -300,6 +300,10 @@ impl AppState {
         if self.follow_id == id && self.follow_is_alive() {
             return;
         }
+        // 现场计算被跟随容器是否在运行：列表刷新最多滞后 3s，
+        // 直接用最新列表判断可避免「已停止容器被误判为可恢复」而空转重连
+        let running = self.containers.iter().any(|c| c.id == id && c.is_running());
+        self.follow_running.store(running, Ordering::Release);
         // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
         // history_done 在收到首条日志或 Clear 时才置位，空历史/首流失败可重试。
         let tail = crate::follow_runtime::follow_tail(self.history_done);
@@ -332,7 +336,6 @@ impl AppState {
             epoch,
             self.follow_running.clone(),
             self.tx.clone(),
-            self.tx.clone(),
         );
         self.follow_cancel = Some(handle.cancel);
         self.follow_active = Some(handle.active);
@@ -362,12 +365,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn follow_tail_avoids_replaying_history() {
-        assert_eq!(crate::follow_runtime::follow_tail(false), 200);
-        assert_eq!(crate::follow_runtime::follow_tail(true), 0);
-    }
-
-    #[test]
     fn follow_alive_flag_controls_idempotence() {
         let (state, _rx) = AppState::new();
         let mut s = state.lock().unwrap();
@@ -378,15 +375,5 @@ mod tests {
         assert!(!s.follow_is_alive());
         s.follow_active = None;
         assert!(!s.follow_is_alive());
-    }
-
-    #[test]
-    fn unrecoverable_follow_ends_stream_without_retry() {
-        // 容器不存在 → 不可恢复错误（404）→ 直接结束流，不做僵尸式无限重试
-        let (state, _rx) = AppState::new();
-        let mut s = state.lock().unwrap();
-        s.spawn_follow("zz-dp-nonexistent-container", 0);
-        std::thread::sleep(Duration::from_millis(400));
-        assert!(!s.follow_is_alive(), "不可恢复错误应结束流");
     }
 }

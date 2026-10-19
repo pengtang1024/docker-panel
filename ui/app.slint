@@ -46,6 +46,8 @@ export component MainWindow inherits Window {
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
     in-out property <string> status_text: @tr("Ready");
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不占用底部状态栏
+    in-out property <string> log_status: "";
     in-out property <int> batch_count: 0;
     /// 首次数据拉取期间显示骨架屏（强制 true 单独验证骨架屏渲染效果）
     in-out property <bool> loading: true;
@@ -247,6 +249,7 @@ export component MainWindow inherits Window {
             tab <=> root.drawer_tab;
             log_follow <=> root.log_follow;
             log_text <=> root.log_text;
+            log_status <=> root.log_status;
             title <=> root.drawer_title;
             sub <=> root.drawer_sub;
             tabs_visible <=> root.drawer_tabs;

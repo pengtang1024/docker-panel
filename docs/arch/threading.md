@@ -179,15 +179,16 @@ rt_handle.spawn(async move {
 
 **日志流自愈**（`src/follow_runtime.rs`，从 `AppState` 拆出以满足 R2 行数约束）：
 
-`follow_logs` 返回 `(LogStreamEnd, lines)`，`classify_end` 判定可恢复性：
+`follow_logs` 返回 `LogStreamOutcome { end, lines }`，`classify_end` 判定处置：
 
-- `Cancelled`（切容器 / Clear）：立即结束，不重连。
+- `Cancelled`（切容器 / Clear）：结束，不重连。
 - `Eof` + 容器已停止：结束，由下一次 `ensure_follow` 决定是否重建。
-- `Eof` + 容器仍在运行（`AppState.follow_running` 随 3s 列表刷新更新）：视为可恢复，按退避重连——Docker 侧「干净关闭」不应让运行中容器的日志静默停摆。
-- `Error` + 不可恢复（`No such container` / 404 等，容器被删除）：结束，避免僵尸任务无限重试。
+- `Eof` + 容器仍在运行（`AppState.follow_running` 随列表刷新更新，`ensure_follow` 另做一次现场计算）：视为可恢复，按退避重连——Docker 侧「干净关闭」不应让运行中容器的日志静默停摆。
+- `Idle`（超过 `LOG_IDLE_TIMEOUT = 180s` 无任何日志行）：连接可能挂死，**静默**退避重连（不打扰用户）。
+- `Error` + 致命（`LogError.status_code == 404` / `No such container`，容器已被删除）：结束，避免僵尸任务无限重试。
 - `Error` + 可恢复：按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限），最多 `MAX_RETRY_ATTEMPTS = 8` 次后放弃并结束流；退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
 
-**UI 反馈**：首次失败发 `Msg::LogStreamStatus("Log stream interrupted, reconnecting…")`，恢复后发「已恢复连接」，放弃重连发「已停止」，均写入状态栏（i18n，不弹 toast）。
+**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。首次失败提示「日志流中断，正在重连…」，重连前提示「日志流已恢复连接」，放弃或致命错误提示「日志流已停止」。
 
 **流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。
 

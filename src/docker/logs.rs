@@ -146,16 +146,67 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     })
 }
 
+/// 日志流错误（保留 Docker HTTP 状态码，便于判定不可恢复错误）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogError {
+    /// 错误文本
+    pub message: String,
+    /// Docker HTTP 状态码（服务端错误才有；连接类错误为 None）
+    pub status_code: Option<u16>,
+}
+
+impl LogError {
+    /// 从 bollard 错误提取状态码（服务端错误带 404/5xx，其余仅文本）
+    pub fn from_bollard(e: &bollard::errors::Error) -> Self {
+        match e {
+            bollard::errors::Error::DockerResponseServerError {
+                status_code,
+                message,
+            } => LogError {
+                message: message.clone(),
+                status_code: Some(*status_code),
+            },
+            _ => LogError {
+                message: e.to_string(),
+                status_code: None,
+            },
+        }
+    }
+
+    /// 不可恢复错误：容器已被删除（HTTP 404 / No such container）
+    pub fn is_fatal(&self) -> bool {
+        self.status_code == Some(404)
+            || self
+                .message
+                .to_ascii_lowercase()
+                .contains("no such container")
+    }
+}
+
 /// 日志流结束原因（决定是否退避重连）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogStreamEnd {
     /// 被取消（切容器 / Clear 重建流）
     Cancelled,
-    /// 流自然结束（容器停止 / 日志 EOF）：无需重连
+    /// 流自然结束（容器停止 / 日志 EOF）
     Eof,
-    /// Docker 侧错误（daemon 重启、连接抖动等）：可退避重连
-    Error(String),
+    /// 长时间无任何日志行：连接可能已挂死
+    Idle,
+    /// Docker 侧错误：可退避重连（是否致命见 `LogError::is_fatal`）
+    Error(LogError),
 }
+
+/// 日志流一次连接的结果
+#[derive(Debug, Clone)]
+pub struct LogStreamOutcome {
+    /// 结束原因
+    pub end: LogStreamEnd,
+    /// 本次连接推送出的日志行数
+    pub lines: u64,
+}
+
+/// 日志流空闲超时：多久没有新日志就认为连接挂死（主动断流走重连路径）
+pub const LOG_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// 重连退避序列：1s → 2s → 4s → 8s → 10s（上限）
 pub fn retry_delay(attempt: u32) -> Duration {
@@ -168,10 +219,9 @@ pub fn retry_delay(attempt: u32) -> Duration {
 
 /// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine(epoch, line)) 推给 consumer
 ///
-/// 返回 `(LogStreamEnd, lines)`：
-/// - `LogStreamEnd::Cancelled`：被取消（切容器 / Clear）
-/// - `LogStreamEnd::Eof`：日志流自然结束（容器停止 / Docker 侧干净关闭）
-/// - `LogStreamEnd::Error(String)`：Docker 侧错误，可退避重连
+/// 返回 `LogStreamOutcome`：
+/// - `end`：`Cancelled`（被取消）/ `Eof`（容器停止或 Docker 侧干净关闭）/
+///   `Idle`（超过 `LOG_IDLE_TIMEOUT` 无新行）/ `Error`（Docker 侧错误）
 /// - `lines`：本次连接推送出的日志行数，调用方据此决定重连时是否重放历史
 ///
 /// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
@@ -185,14 +235,22 @@ pub async fn follow_logs(
     tail_lines: i64,
     epoch: u64,
     mut cancel: tokio::sync::watch::Receiver<()>,
-) -> (LogStreamEnd, u64) {
+) -> LogStreamOutcome {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
     use futures_util::StreamExt;
 
     let docker = match connect() {
         Ok(d) => d,
-        Err(e) => return (LogStreamEnd::Error(e), 0),
+        Err(e) => {
+            return LogStreamOutcome {
+                end: LogStreamEnd::Error(LogError {
+                    message: e,
+                    status_code: None,
+                }),
+                lines: 0,
+            }
+        }
     };
     let options = LogsOptionsBuilder::new()
         .follow(true)
@@ -207,12 +265,28 @@ pub async fn follow_logs(
     loop {
         tokio::select! {
             biased;
-            _ = cancel.changed() => return (LogStreamEnd::Cancelled, lines),
-            item = stream.next() => {
-                let Some(item) = item else { return (LogStreamEnd::Eof, lines) };
+            _ = cancel.changed() => {
+                return LogStreamOutcome { end: LogStreamEnd::Cancelled, lines };
+            }
+            item = tokio::time::timeout(LOG_IDLE_TIMEOUT, stream.next()) => {
+                let item = match item {
+                    // 长时间无任何日志：连接可能挂死，主动断流走重连路径
+                    Err(_elapsed) => {
+                        return LogStreamOutcome { end: LogStreamEnd::Idle, lines };
+                    }
+                    Ok(item) => item,
+                };
+                let Some(item) = item else {
+                    return LogStreamOutcome { end: LogStreamEnd::Eof, lines };
+                };
                 let msg = match item {
                     Ok(m) => m,
-                    Err(e) => return (LogStreamEnd::Error(e.to_string()), lines),
+                    Err(e) => {
+                        return LogStreamOutcome {
+                            end: LogStreamEnd::Error(LogError::from_bollard(&e)),
+                            lines,
+                        };
+                    }
                 };
                 let data = match msg {
                     LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
@@ -243,16 +317,31 @@ mod tests {
     }
 
     #[test]
+    fn fatal_errors_are_detected_by_status_code() {
+        let e404 = LogError {
+            message: "No such container: abc".into(),
+            status_code: Some(404),
+        };
+        assert!(e404.is_fatal());
+        // 连接类错误没有状态码 → 可重试
+        let refused = LogError {
+            message: "Connection refused".into(),
+            status_code: None,
+        };
+        assert!(!refused.is_fatal());
+    }
+
+    #[test]
     fn follow_logs_reports_error_for_unknown_container() {
-        // 需要本机 Docker 守护进程；容器不存在时日志流返回 Error（可退避重连），
-        // 而不是 Eof（容器停止，不重连）。
+        // 需要本机 Docker 守护进程；容器不存在时返回 Error（可退避重连），
+        // 而不是 Eof（容器停止，不重连）。daemon 不可用时同样是 Error。
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("tokio runtime");
         let (tx, _rx) = std::sync::mpsc::channel();
         let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
-        let end = rt.block_on(follow_logs(
+        let out = rt.block_on(follow_logs(
             "zz-dp-nonexistent-container",
             tx,
             0,
@@ -260,7 +349,7 @@ mod tests {
             cancel_rx,
         ));
         assert!(
-            matches!(end.0, LogStreamEnd::Error(_)),
+            matches!(out.end, LogStreamEnd::Error(_)),
             "应判定为可重连错误"
         );
     }

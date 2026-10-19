@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "stage": "fixed",
+  "stage": "tested",
   "baseline_tag": "baseline-continuous-optimization-2",
   "dod": [
     "ensure_follow 依据流存活标志判定幂等：Ended 未 drain 的窗口内切 Tab 也能重建流（消除 #8/#17）",
@@ -28,5 +28,5 @@
   },
   "sync": {},
   "awaiting": "none",
-  "updated_at": "2026-10-20T01:57:34+08:00"
+  "updated_at": "2026-10-20T02:02:01+08:00"
 }

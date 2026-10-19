@@ -9,9 +9,17 @@ fn log_stream_status_sets_status_text() {
     let (state, rx) = AppState::new();
     let mut s = state.lock().unwrap();
     let tx = s.tx.clone();
-    tx.send(Msg::LogStreamStatus("日志流中断".into())).unwrap();
+    tx.send(Msg::LogStreamStatus(0, "日志流中断".into()))
+        .unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert_eq!(res.status_text.as_deref(), Some("日志流中断"));
+    assert_eq!(res.log_status.as_deref(), Some("日志流中断"));
+    assert!(res.status_text.is_none(), "日志流提示不应占用状态栏");
+
+    // 旧 epoch 的提示必须被丢弃，避免落到新容器
+    s.stream_epoch = 5;
+    tx.send(Msg::LogStreamStatus(4, "旧提示".into())).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(res.log_status.is_none());
 }
 
 #[test]

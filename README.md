@@ -154,7 +154,8 @@ docker-panel/
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
 │   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
-│   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ ensure_follow（日志流）+ cleanup_counts + persist
+│   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
+│   ├── follow_runtime.rs    # 日志流运行时：建流/退避重连/存活标志/结局分类
 │   ├── render.rs           # CachedModel 差量同步（sync_model：数据未变则跳过 set_vec）
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers / images / netvol（网络/卷）

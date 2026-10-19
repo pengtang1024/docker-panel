@@ -15,7 +15,7 @@
 
 ### 变更
 
-- **日志流自愈**：`follow_logs` 返回 `(LogStreamEnd, lines)`；Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消，最多 8 次；重连若已有日志则改 tail=0 避免重复），容器停止不重连，运行中容器却 EOF 也会自愈重连；容器被删除等不可恢复错误直接结束流，避免僵尸任务。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题；首次失败/恢复/放弃会在状态栏给出提示。
+- **日志流自愈**：`follow_logs` 返回 `LogStreamOutcome`，Docker 侧错误按 1s→2s→4s→8s→10s 退避自动重连（可取消，最多 8 次；重连若已有日志则改 tail=0 避免重复）；运行中容器遇到 EOF 同样自愈重连，容器已停止则不重连；超过 180s 无任何日志判定连接挂死并静默重连；容器被删除（HTTP 404）等致命错误直接结束流，避免僵尸任务。每条流持有独立存活标志，`ensure_follow` 依据「id 相同且流仍存活」判定幂等，消除 `LogStreamEnded` 未 drain 窗口内切 Tab 不建流的问题。日志流状态走独立通道（带 epoch 过滤），显示在日志面板工具栏，不占用底部状态栏。
 - **模块拆分（单文件 ≤300 行）**：main.rs → [src/consumer.rs]（Msg 泵 + 3s 刷新 interval）+ [src/bootstrap.rs]（6s stats 采样 + 首屏加载）；ui_state.rs → [src/detail_fmt/]（mod + container / image / netvol）；卡片拆为 [ui/cards.slint] 网格容器 + card-container / card-image / card-netvol；行构建 → [src/ui_rows/]（mod + containers / images / netvol）；新增 [src/render.rs]（CachedModel 差量同步）、[src/callbacks_drawer.rs]、[src/callbacks_netvol.rs]、[ui/menu-layers.slint]（浮动菜单层）。
 
 ### 修复

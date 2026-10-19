@@ -70,6 +70,7 @@
     "L4": "material-1.1.0/ 与 vendor/ 排除 R2——第三方引入物，维持豁免",
     "L5": "{} 命中均为 match 分支非空实现——维持豁免"
   },
-  "awaiting": "push",
-  "updated_at": "2026-10-20T03:35:00+08:00"
+  "awaiting": "none",
+  "pushed_to": "origin/develop@049d863",
+  "updated_at": "2026-10-20T03:52:00+08:00"
 }

@@ -72,6 +72,8 @@ pub struct AppState {
     pub logs_cap: usize,
     /// 当前日志流 epoch：用于 Msg::LogLine / LogStreamEnded 的流代际过滤
     pub stream_epoch: u64,
+    /// 当前选中容器的历史日志是否已请求过；Clear 不清除，切容器时重置
+    pub history_done: bool,
     /// 日志缓冲 epoch：仅用于 UI log_text 的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
     /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
@@ -146,6 +148,7 @@ impl AppState {
             logs: Vec::new(),
             logs_cap: 500,
             stream_epoch: 0,
+            history_done: false,
             log_epoch: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
             follow_cancel: None,
@@ -249,6 +252,7 @@ impl AppState {
     pub fn clear_logs(&mut self) {
         self.logs.clear();
         self.follow_id.clear();
+        self.history_done = false;
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
         self.stream_epoch = self.stream_epoch.wrapping_add(1);
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
@@ -275,8 +279,11 @@ impl AppState {
         if self.follow_id == id {
             return;
         }
-        // 流自然结束后缓冲仍在：tail=0 续流，避免重放最近 200 行造成重复
-        let tail = follow_tail(self.logs.is_empty());
+        // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行
+        let tail = follow_tail(self.history_done);
+        if tail > 0 {
+            self.history_done = true;
+        }
         self.spawn_follow(id, tail);
     }
 
@@ -315,12 +322,12 @@ impl AppState {
     }
 }
 
-/// 续流 tail：空缓冲拉最近 200 行；已有缓冲只接续新行，避免重放造成重复。
-fn follow_tail(logs_empty: bool) -> i64 {
-    if logs_empty {
-        200
-    } else {
+/// 续流 tail：历史未加载时拉最近 200 行；已加载过则只接续新行，避免 Clear 后历史复活。
+fn follow_tail(history_done: bool) -> i64 {
+    if history_done {
         0
+    } else {
+        200
     }
 }
 
@@ -332,7 +339,7 @@ mod tests {
 
     #[test]
     fn follow_tail_avoids_replaying_history() {
-        assert_eq!(follow_tail(true), 200);
-        assert_eq!(follow_tail(false), 0);
+        assert_eq!(follow_tail(false), 200);
+        assert_eq!(follow_tail(true), 0);
     }
 }

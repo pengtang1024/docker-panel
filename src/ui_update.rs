@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn stale_log_epoch_is_dropped_after_clear() {
+    fn stale_stream_epoch_is_dropped_after_clear() {
         let (state, rx) = AppState::new();
         let mut s = state.lock().unwrap();
         s.logs.push("old".into());
@@ -307,12 +307,28 @@ mod tests {
         s.drain_messages(&rx, None, 10);
         assert_eq!(s.follow_id, "c2");
 
+        // #12：当前流结束同时释放 cancel sender
+        s.follow_id = "c3".into();
+        let (cancel_tx, _cancel_rx) = tokio::sync::watch::channel(());
+        s.follow_cancel = Some(cancel_tx);
+        tx.send(Msg::LogStreamEnded(6)).unwrap();
+        s.drain_messages(&rx, None, 10);
+        assert!(s.follow_id.is_empty());
+        assert!(s.follow_cancel.is_none());
+
         // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的 log_text
         s.follow_id.clear();
         s.logs.push("old".into());
+        s.history_done = true;
         let before = s.log_epoch.load(Ordering::Acquire);
         s.clear_log_buffer();
         assert!(s.logs.is_empty());
         assert_eq!(s.log_epoch.load(Ordering::Acquire), before + 1);
+        // #9：Clear 不重置历史标志，切回日志 Tab 不会再拉 200 行
+        assert!(s.history_done);
+
+        // 切容器会重置历史标志
+        s.clear_logs();
+        assert!(!s.history_done);
     }
 }

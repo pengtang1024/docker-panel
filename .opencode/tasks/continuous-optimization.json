@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "stage": "reviewed",
+  "stage": "fixed",
   "baseline_tag": "baseline-continuous-optimization",
   "dod": [
     "consumer 待更新消息的最长 UI 应用延迟收敛到约 120ms（原最坏约 200ms），并有单元测试",
@@ -27,10 +27,10 @@
     "13": "fixed",
     "14": "fixed",
     "15": "fixed",
-    "16": "open",
+    "16": "fixed",
     "17": "waived",
-    "18": "open",
-    "19": "open"
+    "18": "fixed",
+    "19": "fixed"
   },
   "tests": {
     "L1": "pass",
@@ -44,5 +44,5 @@
     "version": "skipped"
   },
   "awaiting": "none",
-  "updated_at": "2026-10-20T01:03:07+08:00"
+  "updated_at": "2026-10-20T01:03:57+08:00"
 }

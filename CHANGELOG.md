@@ -24,7 +24,7 @@
 - **关窗后进程不退出**：主题监听的 dconf 阻塞读移到独立 reader 线程，监控线程用 200ms `recv_timeout` 检查 shutdown；轮询回退路径同样 200ms 醒来，`theme-monitor` join 不再永久阻塞。
 - **抽屉日志交互**：关闭 ScrollView 的左右拖拽平移，恢复日志文本拖选；日志改为 `char-wrap` 消除提前换行留白；自动跟随在文本/内容高度变化时贴底，关闭跟随后视口保持不动；切容器时同步清空旧日志文本并取消旧日志流，避免不同容器日志串台；工具条 Clear 以 `tail=0` 重启当前跟随流，清空前的排队日志不会回填。
 - **旧日志回填/串台**：日志行携带 stream epoch，consumer 只接受当前流；clear/切容器后队列里的旧行直接丢弃。`apply_ui` 构建的 `log_text` 也带 buffer epoch 校验，避免已投递的 UI invoke 把旧文本写回。日志流自然结束发送 `LogStreamEnded(epoch)`，仅当前流清空 `follow_id`。
-- **日志续流重复**：流自然结束后缓冲仍在，`ensure_follow` 改用 `tail=0` 续流，避免切回日志 Tab 时重放最近 200 行；`history_done` 在收到首条日志或 Clear 后置位，空历史/首流失败仍可 `tail=200` 重试；Clear 无活动流时也推进 buffer epoch，确保旧文本不再回填。`LogStreamEnded` 同时释放 cancel sender。
+- **日志续流重复**：流自然结束后缓冲仍在，`ensure_follow` 改用 `tail=0` 续流，避免切回日志 Tab 时重放最近 200 行；`history_done` 在收到首条日志，或在有缓冲/活动流时 Clear 后置位，空历史/首流失败仍可 `tail=200` 重试；空缓冲且无活动流时 Clear 不置位，避免跳过之后的启动日志。`LogStreamEnded` 同时释放 cancel sender。
 - **consumer 更新延迟**：有待更新消息时按 120ms 节流窗口剩余时间等待，最坏 UI 应用延迟由约 200ms 收敛到约 120ms；无变化的批次（例如只有被丢弃的旧日志）不再触发 apply/invoke。
 - **抽屉环境挂载布局**：挂载项按 chip 行渲染，端口/网络/挂载盒宽度与复制按钮对齐，修复右侧裁切。
 - **抽屉详情代码盒键值布局**：环境 Tab 的 `KEY=value` 行原两段 Text 无 stretch 划分，键名被摊宽、长值溢出容器；改为键名自然宽、值吃满剩余宽度并自动换行。

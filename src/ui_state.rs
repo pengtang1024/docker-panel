@@ -264,13 +264,18 @@ impl AppState {
     ///
     /// 不能只 clear 缓冲：旧流在 mpsc 队列中已排队的行会在下一批 drain 时重新出现。
     pub fn clear_log_buffer(&mut self) {
+        let had_logs = !self.logs.is_empty();
+        let active = !self.follow_id.is_empty();
         self.logs.clear();
-        // Clear 之后历史永不复活：即使当前没有活动流也标记历史已完成
-        self.history_done = true;
+        // 只有确实清掉了历史，或当前流仍在（Clear 会丢弃其排队行）时，才标记历史已完成。
+        // 空缓冲 + 无活动流时保留原标志，让下次 ensure_follow 仍可 tail=200 拉启动日志。
+        if had_logs || active {
+            self.history_done = true;
+        }
         // 即使当前没有活动流（流已自然结束），也必须推进 epoch，
         // 让已经投递但尚未执行的旧 log_text invoke 失效。
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
-        if self.follow_id.is_empty() {
+        if !active {
             return;
         }
         let id = self.follow_id.clone();
@@ -279,6 +284,10 @@ impl AppState {
 
     /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
     pub fn ensure_follow(&mut self, id: &str) {
+        // 防御调用方绕过 clear_logs 直接切到另一个容器：先清掉旧缓冲，避免串台
+        if !self.follow_id.is_empty() && self.follow_id != id {
+            self.clear_logs();
+        }
         if self.follow_id == id {
             return;
         }

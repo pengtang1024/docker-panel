@@ -283,9 +283,12 @@ impl AppState {
         let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
         self.follow_cancel = Some(cancel_tx);
         let tx = self.tx.clone();
+        let tx_end = self.tx.clone();
         let id = id.to_string();
         self.rt.spawn(async move {
             let _ = crate::docker::follow_logs(&id, tx, tail, epoch, cancel_rx).await;
+            // 流自然结束/连接失败时通知 consumer；旧 epoch 的结束消息会被忽略
+            let _ = tx_end.send(Msg::LogStreamEnded(epoch));
         });
     }
 

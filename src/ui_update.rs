@@ -197,6 +197,12 @@ impl AppState {
                     res.logs_changed = true;
                 }
             }
+            Msg::LogStreamEnded(epoch) => {
+                // 流自然结束（容器停止/Docker 异常）：允许下次 ensure_follow 重新建流
+                if *epoch == self.log_epoch.load(Ordering::Acquire) {
+                    self.follow_id.clear();
+                }
+            }
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);
                 res.status_text = Some(match r {
@@ -259,5 +265,15 @@ mod tests {
         let res = s.drain_messages(&rx, None, 10);
         assert_eq!(s.logs, vec!["fresh".to_string()]);
         assert!(res.logs_changed);
+
+        // #4：当前流的结束消息清空 follow_id；旧 epoch 的结束消息不影响新流
+        s.follow_id = "c1".into();
+        tx.send(Msg::LogStreamEnded(6)).unwrap();
+        s.drain_messages(&rx, None, 10);
+        assert!(s.follow_id.is_empty());
+        s.follow_id = "c2".into();
+        tx.send(Msg::LogStreamEnded(5)).unwrap();
+        s.drain_messages(&rx, None, 10);
+        assert_eq!(s.follow_id, "c2");
     }
 }

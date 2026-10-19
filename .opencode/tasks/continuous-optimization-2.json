@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "stage": "tested",
+  "stage": "fixed",
   "baseline_tag": "baseline-continuous-optimization-2",
   "dod": [
     "ensure_follow 依据流存活标志判定幂等：Ended 未 drain 的窗口内切 Tab 也能重建流（消除 #8/#17）",
@@ -9,7 +9,7 @@
     "MCP 集成：跟随中删除容器 → 判定 Eof 不重连（设计如此）；Docker 侧 Error 路径由单测覆盖（未知容器 → Error）；daemon 级故障需中断 Docker 才能端到端复现，记录为限制",
     "cargo fmt --check / clippy -D warnings / check / test 全绿；L4 洪峰 0 失败"
   ],
-  "round": 1,
+  "round": 2,
   "issues": {
     "1": "fixed",
     "2": "fixed",
@@ -18,7 +18,17 @@
     "5": "fixed",
     "6": "fixed",
     "7": "fixed",
-    "8": "fixed"
+    "8": "fixed",
+    "9": "fixed",
+    "10": "fixed",
+    "11": "fixed",
+    "12": "fixed",
+    "13": "fixed",
+    "14": "fixed",
+    "15": "fixed",
+    "16": "fixed",
+    "17": "fixed",
+    "18": "fixed"
   },
   "tests": {
     "L1": "pass",
@@ -28,5 +38,5 @@
   },
   "sync": {},
   "awaiting": "none",
-  "updated_at": "2026-10-20T02:02:01+08:00"
+  "updated_at": "2026-10-20T02:11:20+08:00"
 }

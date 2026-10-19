@@ -1,15 +1,15 @@
 {
   "status": "running",
-  "stage": "fixed",
+  "stage": "reviewed",
   "baseline_tag": "baseline-continuous-optimization-2",
   "dod": [
     "ensure_follow 依据流存活标志判定幂等：Ended 未 drain 的窗口内切 Tab 也能重建流（消除 #8/#17）",
     "Docker 流异常(Error)按指数退避自动重连（1s→2s→4s…上限 10s，可取消）；容器停止(EOF)不重连",
     "单测覆盖退避序列、EOF/Error/Cancelled 结局与存活判定",
-    "MCP 集成：跟随中删除容器 → 判定 Eof 不重连（设计如此）；Docker 侧 Error 路径由单测覆盖（未知容器 → Error）；daemon 级故障需中断 Docker 才能端到端复现，记录为限制",
+    "MCP 集成：跟随中删除容器 → 判定 Eof 不重连（设计如此）；daemon 级故障用 unix-socket 代理掐断/恢复完成端到端复现（unix:// 代理仅作用于本应用实例，不触碰真实守护进程）",
     "cargo fmt --check / clippy -D warnings / check / test 全绿；L4 洪峰 0 失败"
   ],
-  "round": 2,
+  "round": 3,
   "issues": {
     "1": "fixed",
     "2": "fixed",
@@ -28,7 +28,18 @@
     "15": "fixed",
     "16": "fixed",
     "17": "fixed",
-    "18": "fixed"
+    "18": "fixed",
+    "19": "fixed",
+    "20": "fixed",
+    "21": "fixed",
+    "22": "fixed",
+    "23": "fixed",
+    "24": "fixed",
+    "25": "fixed",
+    "26": "fixed",
+    "27": "fixed",
+    "28": "fixed",
+    "29": "fixed"
   },
   "tests": {
     "L1": "pass",
@@ -36,7 +47,29 @@
     "L3": "pass",
     "L4": "pass"
   },
-  "sync": {},
-  "awaiting": "none",
-  "updated_at": "2026-10-20T02:11:20+08:00"
+  "mcp_acceptance": {
+    "log_stream_normal": "pass",
+    "clear_button": "pass",
+    "container_removed_stopped_notice": "pass",
+    "docker_unreachable_reconnecting_notice": "pass",
+    "docker_recovered_reconnected_notice": "pass",
+    "backoff_sequence_1_2_4_8_10": "pass",
+    "switch_container_clears_status": "pass"
+  },
+  "sync": {
+    "docs/arch/threading.md": "done",
+    "AGENTS.md": "done",
+    "README.md": "done",
+    "docs/architecture.md": "done",
+    "CHANGELOG.md": "done"
+  },
+  "leftovers": {
+    "L1": "断流窗口日志不补回（需 timestamps + since 游标）——已知限制，已文档化",
+    "L2": "daemon 级故障端到端复现——本轮已通过 unix-socket 代理完成，豁免作废",
+    "L3": "UI 截图验收——本轮已完成 6 个场景，豁免作废",
+    "L4": "material-1.1.0/ 与 vendor/ 排除 R2——第三方引入物，维持豁免",
+    "L5": "{} 命中均为 match 分支非空实现——维持豁免"
+  },
+  "awaiting": "push",
+  "updated_at": "2026-10-20T03:35:00+08:00"
 }

@@ -421,4 +421,16 @@ mod tests {
         s.follow_active = None;
         assert!(!s.follow_is_alive());
     }
+
+    #[test]
+    fn failed_follow_keeps_stream_alive_for_retry() {
+        // 容器不存在 → follow_logs 返回 Error → 任务进入退避重连，
+        // 期间流仍算「存活」，ensure_follow 不会另建一条流。
+        let (state, _rx) = AppState::new();
+        let mut s = state.lock().unwrap();
+        s.spawn_follow("zz-dp-nonexistent-container", 0);
+        std::thread::sleep(Duration::from_millis(400));
+        assert!(s.follow_is_alive(), "失败后退避重连期间仍应视为存活");
+        assert_eq!(s.follow_id, "zz-dp-nonexistent-container");
+    }
 }

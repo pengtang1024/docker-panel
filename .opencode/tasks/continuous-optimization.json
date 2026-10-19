@@ -1,5 +1,5 @@
 {
-  "status": "awaiting-user",
+  "status": "done",
   "stage": "synced",
   "baseline_tag": "baseline-continuous-optimization",
   "dod": [
@@ -44,6 +44,6 @@
     "version": "skipped",
     "version_reason": "当前在 develop；按 docs/git-flow.md 版本号在 release 分支同步，不在优化任务中 bump"
   },
-  "awaiting": "push-confirm",
-  "updated_at": "2026-10-20T01:09:09+08:00"
+  "awaiting": "none",
+  "updated_at": "2026-10-20T01:38:44+08:00"
 }

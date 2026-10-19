@@ -8,7 +8,7 @@
 - 错误统一转中文 `String` 上抛，UI 层展示
 - 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
-- `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，逐行 `tx.send(Msg::LogLine(epoch, line))`；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
+- `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，逐行 `tx.send(Msg::LogLine(epoch, line))`；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；返回 `LogStreamEnd`（Cancelled / Eof / Error），Error 由调用方按 `retry_delay` 退避重连；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
 - 可重试调用统一 `docker::with_timeout`（10s）：列表 / stats / inspect / 卷占用；`refresh_inflight` 防止 3s 刷新叠加
 - 清理：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused→prune_images(-a)`，可任意组合
 

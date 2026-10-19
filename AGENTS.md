@@ -197,6 +197,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 卷占用）；3s 刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
 11. **高频 Msg 不得逐条 invoke**——统一走 `consumer` 的分批 drain + 120ms 节流；UI 只重建 `DrainResult` 标记的变化区域，日志走合并后的 `log_text` string。
 12. **可能永久阻塞的读必须可被 shutdown 唤醒**——例如 dconf reader 放独立线程，监控线程用 `recv_timeout` 轮询；禁止在会被 join 的线程里做无超时的阻塞读。
+13. **日志流重连必须退避**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限），禁止立即紧密重试拖垮 Docker；容器停止（`Eof`）不重连。每条流的存活标志必须独立，旧流退出不得误标新流。
 
 ## 构建命令
 

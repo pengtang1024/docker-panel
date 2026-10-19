@@ -1,0 +1,20 @@
+{
+  "status": "running",
+  "stage": "implemented",
+  "baseline_tag": "baseline-continuous-optimization-2",
+  "dod": [
+    "ensure_follow 依据流存活标志判定幂等：Ended 未 drain 的窗口内切 Tab 也能重建流（消除 #8/#17）",
+    "Docker 流异常(Error)按指数退避自动重连（1s→2s→4s…上限 10s，可取消）；容器停止(EOF)不重连",
+    "单测覆盖退避序列、EOF/Error/Cancelled 结局与存活判定",
+    "MCP 集成：删除正在跟随的容器后应用日志出现退避重连记录；日志切换/Clear 行为不回归",
+    "cargo fmt --check / clippy -D warnings / check / test 全绿；L4 洪峰 0 失败"
+  ],
+  "round": 0,
+  "issues": {},
+  "tests": {
+    "L1": "pass"
+  },
+  "sync": {},
+  "awaiting": "none",
+  "updated_at": "2026-10-20T01:41:37+08:00"
+}

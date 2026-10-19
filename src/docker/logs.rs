@@ -1,5 +1,7 @@
 //! 容器详情 + 日志流：inspect_container + follow_logs
 
+use std::time::Duration;
+
 use crate::models::ContainerDetail;
 use crate::models::Msg;
 
@@ -144,6 +146,26 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     })
 }
 
+/// 日志流结束原因（决定是否退避重连）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogStreamEnd {
+    /// 被取消（切容器 / Clear 重建流）
+    Cancelled,
+    /// 流自然结束（容器停止 / 日志 EOF）：无需重连
+    Eof,
+    /// Docker 侧错误（daemon 重启、连接抖动等）：可退避重连
+    Error(String),
+}
+
+/// 重连退避序列：1s → 2s → 4s → 8s → 10s（上限）
+pub fn retry_delay(attempt: u32) -> Duration {
+    const MAX: Duration = Duration::from_secs(10);
+    if attempt >= 4 {
+        return MAX;
+    }
+    Duration::from_secs(1u64 << attempt).min(MAX)
+}
+
 /// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine(epoch, line)) 推给 consumer
 ///
 /// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
@@ -156,12 +178,15 @@ pub async fn follow_logs(
     tail_lines: i64,
     epoch: u64,
     mut cancel: tokio::sync::watch::Receiver<()>,
-) -> Result<(), String> {
+) -> LogStreamEnd {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
     use futures_util::StreamExt;
 
-    let docker = connect()?;
+    let docker = match connect() {
+        Ok(d) => d,
+        Err(e) => return LogStreamEnd::Error(e),
+    };
     let options = LogsOptionsBuilder::new()
         .follow(true)
         .stdout(true)
@@ -174,9 +199,13 @@ pub async fn follow_logs(
     loop {
         tokio::select! {
             biased;
-            _ = cancel.changed() => break,
+            _ = cancel.changed() => return LogStreamEnd::Cancelled,
             item = stream.next() => {
-                let Some(Ok(msg)) = item else { break };
+                let Some(item) = item else { return LogStreamEnd::Eof };
+                let msg = match item {
+                    Ok(m) => m,
+                    Err(e) => return LogStreamEnd::Error(e.to_string()),
+                };
                 let data = match msg {
                     LogOutput::StdOut { message } | LogOutput::StdErr { message } => message,
                     _ => continue,
@@ -188,5 +217,19 @@ pub async fn follow_logs(
             }
         }
     }
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_delay_backs_off_and_caps() {
+        assert_eq!(retry_delay(0), Duration::from_secs(1));
+        assert_eq!(retry_delay(1), Duration::from_secs(2));
+        assert_eq!(retry_delay(2), Duration::from_secs(4));
+        assert_eq!(retry_delay(3), Duration::from_secs(8));
+        assert_eq!(retry_delay(4), Duration::from_secs(10));
+        assert_eq!(retry_delay(99), Duration::from_secs(10));
+    }
 }

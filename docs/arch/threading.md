@@ -177,6 +177,14 @@ rt_handle.spawn(async move {
 
 流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流时清空 `follow_id` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。空历史或首流失败时 `history_done` 仍为 false，会再次以 `tail=200` 重试。
 
+**日志流自愈**（`follow_logs` 返回 `LogStreamEnd`）：
+
+- `Error`（Docker 侧错误，如 daemon 重启）：按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限），退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。
+- `Eof`（容器停止/日志 EOF）：不重连，由下一次 `ensure_follow` 决定是否重建。
+- `Cancelled`（切容器 / Clear）：立即退出，不重连。
+
+**流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。
+
 > 已知限制：已收到部分历史后异常断流（daemon 重启/连接抖动），tail=0 从当前时刻接续，断流窗口内产生的日志不会补回；若需补齐，应使用 timestamps + `since` 游标，而不是回到 tail=200。
 
 环形缓冲在 `drain_messages` 里整批裁剪（`drain(0..excess)`），避免逐行 `drain` 在洪峰下被放大；UI 侧只接收合并后的 `log_text`，不再逐行建 Model。

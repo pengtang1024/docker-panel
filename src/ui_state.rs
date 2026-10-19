@@ -81,6 +81,8 @@ pub struct AppState {
     pub follow_id: String,
     /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
     pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
+    /// 当前日志流存活标志（每条流独立）：旧流退出不会误标新流
+    pub follow_active: Option<Arc<AtomicBool>>,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -153,6 +155,7 @@ impl AppState {
             log_epoch: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
             follow_cancel: None,
+            follow_active: None,
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -258,6 +261,7 @@ impl AppState {
         self.stream_epoch = self.stream_epoch.wrapping_add(1);
         // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
         self.follow_cancel = None;
+        self.follow_active = None;
     }
 
     /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
@@ -276,6 +280,7 @@ impl AppState {
         // 让已经投递但尚未执行的旧 log_text invoke 失效。
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
         if !active {
+            self.follow_active = None;
             return;
         }
         let id = self.follow_id.clone();
@@ -288,7 +293,7 @@ impl AppState {
         if !self.follow_id.is_empty() && self.follow_id != id {
             self.clear_logs();
         }
-        if self.follow_id == id {
+        if self.follow_id == id && self.follow_is_alive() {
             return;
         }
         // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
@@ -297,20 +302,58 @@ impl AppState {
         self.spawn_follow(id, tail);
     }
 
+    /// 当前日志流是否仍在运行：每条流独立标志，旧流退出不会误标新流。
+    ///
+    /// 用于消除「Ended 消息已入队但 consumer 尚未 drain」窗口内 ensure_follow
+    /// 误判幂等、导致本次切 Tab 不建流的问题。
+    fn follow_is_alive(&self) -> bool {
+        self.follow_active
+            .as_ref()
+            .map(|a| a.load(Ordering::Acquire))
+            .unwrap_or(false)
+    }
+
     /// 建流并递增 stream epoch；不推进 buffer epoch，续流时保留已缓冲日志与待应用文本。
+    ///
+    /// 流异常（Docker 错误）时按指数退避自动重连；容器停止（EOF）不重连，
+    /// 由下一次 ensure_follow 决定是否重建。
     fn spawn_follow(&mut self, id: &str, tail: i64) {
         self.follow_id = id.to_string();
         self.stream_epoch = self.stream_epoch.wrapping_add(1);
         let epoch = self.stream_epoch;
         // 每一条新流持有自己的取消 receiver；换流时旧 sender 被替换/丢弃 → 旧流退出
-        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
+        let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(());
         self.follow_cancel = Some(cancel_tx);
+        // 每条流独立存活标志：旧流退出不会误标新流
+        let active = Arc::new(AtomicBool::new(true));
+        self.follow_active = Some(active.clone());
         let tx = self.tx.clone();
         let tx_end = self.tx.clone();
         let id = id.to_string();
         self.rt.spawn(async move {
-            let _ = crate::docker::follow_logs(&id, tx, tail, epoch, cancel_rx).await;
-            // 流自然结束/连接失败时通知 consumer；旧 epoch 的结束消息会被忽略
+            let mut attempt: u32 = 0;
+            loop {
+                let end =
+                    crate::docker::follow_logs(&id, tx.clone(), tail, epoch, cancel_rx.clone())
+                        .await;
+                match end {
+                    crate::docker::LogStreamEnd::Cancelled | crate::docker::LogStreamEnd::Eof => {
+                        break;
+                    }
+                    crate::docker::LogStreamEnd::Error(e) => {
+                        let delay = crate::docker::retry_delay(attempt);
+                        attempt = attempt.saturating_add(1);
+                        eprintln!("[log-stream] {id} follow failed: {e}; retry in {delay:?}");
+                        // 退避等待可被取消：切容器/Clear 时立即退出
+                        tokio::select! {
+                            _ = cancel_rx.changed() => break,
+                            _ = tokio::time::sleep(delay) => {}
+                        }
+                    }
+                }
+            }
+            active.store(false, Ordering::Release);
+            // 流结束通知 consumer；旧 epoch 的结束消息会被忽略
             let _ = tx_end.send(Msg::LogStreamEnded(epoch));
         });
     }
@@ -351,5 +394,18 @@ mod tests {
     fn follow_tail_avoids_replaying_history() {
         assert_eq!(follow_tail(false), 200);
         assert_eq!(follow_tail(true), 0);
+    }
+
+    #[test]
+    fn follow_alive_flag_controls_idempotence() {
+        let (state, _rx) = AppState::new();
+        let mut s = state.lock().unwrap();
+        assert!(!s.follow_is_alive());
+        s.follow_active = Some(Arc::new(AtomicBool::new(true)));
+        assert!(s.follow_is_alive());
+        s.follow_active = Some(Arc::new(AtomicBool::new(false)));
+        assert!(!s.follow_is_alive());
+        s.follow_active = None;
+        assert!(!s.follow_is_alive());
     }
 }

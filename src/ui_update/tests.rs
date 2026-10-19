@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use super::*;
@@ -53,10 +54,12 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     s.follow_id = "c3".into();
     let (cancel_tx, _cancel_rx) = tokio::sync::watch::channel(());
     s.follow_cancel = Some(cancel_tx);
+    s.follow_active = Some(std::sync::Arc::new(AtomicBool::new(true)));
     tx.send(Msg::LogStreamEnded(6)).unwrap();
     s.drain_messages(&rx, None, 10);
     assert!(s.follow_id.is_empty());
     assert!(s.follow_cancel.is_none());
+    assert!(s.follow_active.is_none());
 
     // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的 log_text
     s.follow_id.clear();

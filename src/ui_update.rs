@@ -219,6 +219,7 @@ impl AppState {
                 if *epoch == self.stream_epoch {
                     self.follow_id.clear();
                     self.follow_cancel = None;
+                    self.follow_active = None;
                 }
             }
             Msg::ActionDone(desc, r) => {

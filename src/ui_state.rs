@@ -72,7 +72,8 @@ pub struct AppState {
     pub logs_cap: usize,
     /// 当前日志流 epoch：用于 Msg::LogLine / LogStreamEnded 的流代际过滤
     pub stream_epoch: u64,
-    /// 当前选中容器的历史日志是否已请求过；Clear 不清除，切容器时重置
+    /// 当前选中会话是否已加载过历史日志：收到首条日志或用户 Clear 后置 true；
+    /// 重新选中容器（clear_logs）重置。空历史/首流失败可再次以 tail=200 重试。
     pub history_done: bool,
     /// 日志缓冲 epoch：仅用于 UI log_text 的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
@@ -264,6 +265,8 @@ impl AppState {
     /// 不能只 clear 缓冲：旧流在 mpsc 队列中已排队的行会在下一批 drain 时重新出现。
     pub fn clear_log_buffer(&mut self) {
         self.logs.clear();
+        // Clear 之后历史永不复活：即使当前没有活动流也标记历史已完成
+        self.history_done = true;
         // 即使当前没有活动流（流已自然结束），也必须推进 epoch，
         // 让已经投递但尚未执行的旧 log_text invoke 失效。
         self.log_epoch.fetch_add(1, Ordering::AcqRel);
@@ -279,11 +282,9 @@ impl AppState {
         if self.follow_id == id {
             return;
         }
-        // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行
+        // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
+        // history_done 在收到首条日志或 Clear 时才置位，空历史/首流失败可重试。
         let tail = follow_tail(self.history_done);
-        if tail > 0 {
-            self.history_done = true;
-        }
         self.spawn_follow(id, tail);
     }
 

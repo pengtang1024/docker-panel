@@ -144,7 +144,7 @@ pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     })
 }
 
-/// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine) 推给 consumer
+/// follow_logs — 持续读容器日志，每行通过 tx.send(Msg::LogLine(epoch, line)) 推给 consumer
 ///
 /// `cancel` 由 AppState 持有 sender；换容器/清空时 drop sender，
 /// 本任务会在下一次 `select!` 立即退出，避免旧容器的日志流泄漏并污染新容器。

@@ -209,6 +209,8 @@ impl AppState {
                 // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
                 if *epoch == self.stream_epoch {
                     self.logs.push(line.clone());
+                    // 收到首条（历史）日志后才算历史加载完成；空历史/首流失败可重试 tail=200
+                    self.history_done = true;
                     res.logs_changed = true;
                 }
             }
@@ -285,6 +287,7 @@ mod tests {
         s.clear_logs(); // stream epoch → 6，缓冲清空
         assert!(s.logs.is_empty());
         assert_eq!(s.stream_epoch, 6);
+        assert!(!s.history_done);
 
         let tx = s.tx.clone();
         tx.send(Msg::LogLine(5, "stale".into())).unwrap();
@@ -296,6 +299,7 @@ mod tests {
         let res = s.drain_messages(&rx, None, 10);
         assert_eq!(s.logs, vec!["fresh".to_string()]);
         assert!(res.logs_changed);
+        assert!(s.history_done, "收到首条日志后才算历史完成");
 
         // #4：当前流的结束消息清空 follow_id；旧 epoch 的结束消息不影响新流
         s.follow_id = "c1".into();
@@ -319,12 +323,24 @@ mod tests {
         // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的 log_text
         s.follow_id.clear();
         s.logs.push("old".into());
-        s.history_done = true;
+        s.history_done = false;
         let before = s.log_epoch.load(Ordering::Acquire);
         s.clear_log_buffer();
         assert!(s.logs.is_empty());
         assert_eq!(s.log_epoch.load(Ordering::Acquire), before + 1);
-        // #9：Clear 不重置历史标志，切回日志 Tab 不会再拉 200 行
+        // #9：Clear 强制标记历史完成，切回日志 Tab 不会再拉 200 行
+        assert!(s.history_done);
+
+        // #15：有活动流时 Clear：stream_epoch +1、log_epoch +1、follow_id 保持
+        s.follow_id = "c4".into();
+        s.logs.push("x".into());
+        let se = s.stream_epoch;
+        let be = s.log_epoch.load(Ordering::Acquire);
+        s.clear_log_buffer();
+        assert_eq!(s.stream_epoch, se + 1);
+        assert_eq!(s.log_epoch.load(Ordering::Acquire), be + 1);
+        assert_eq!(s.follow_id, "c4");
+        assert!(s.logs.is_empty());
         assert!(s.history_done);
 
         // 切容器会重置历史标志

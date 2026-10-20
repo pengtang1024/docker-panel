@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### 新增
 
 - **UI 全面重构（slint-ui-overhaul spec）**：主题系统（浅/深/auto 三态 + 22 语义色令牌）、顶栏+筛选栏+卡片网格+底栏+右侧抽屉布局、四种卡片组件、自定义 Tooltip、抽屉三 Tab（详情/日志/环境）、拉取/清理对话框。
@@ -146,6 +148,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.3.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.0
+[0.2.3]: https://github.com/pengtang1024/docker-panel/tree/v0.2.3
 [0.2.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.2
 [0.2.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.1
 [0.2.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.0

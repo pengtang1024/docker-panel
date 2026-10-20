@@ -1,0 +1,89 @@
+// material-theme.slint — 把 Material 3 组件库（@material）接进项目设计令牌
+//
+// 背景（Slint 1.18.1 实测）：
+//   - @material 的 MaterialPalette 有两套色板：light / dark，由
+//     `Palette.color-scheme == ColorScheme.dark` 选择（material_palette.slint 末尾）
+//   - `Palette` 是 std-widgets（fluent 风格）的全局，color-scheme 是 in-out，可绑定
+//   - 之前项目从没设过 Palette.color-scheme → 走 OS 主题（ColorSchemeSelector）
+//     → 用户在应用里选「浅色」而 OS 是深色时，M3 组件仍按深色渲染
+//   - 且 MaterialPalette.schemes 用的是 M3 默认蓝灰板（primary: rgb(68,94,145)），
+//     与项目 Theme（纯黑 accent / 蓝紫双强调色）不是一个体系
+//
+// 本文件职责：把项目 Theme 的语义色映射成一份 MaterialScheme，
+// 由 app.slint 根节点接到 MaterialPalette.schemes 上。
+import { Theme } from "theme.slint";
+import { MaterialScheme } from "@material";
+
+export global MaterialTheme {
+    /// 当前主题 → M3 MaterialScheme 的完整映射（53 个角色全覆盖，缺一个编译不过）
+    /// 注意：light / dark 两个槽位填的是同一份「当前主题」映射，
+    /// 因为 Theme.* 本身已经按 is_dark 解析；真正决定用哪套的是 Palette.color-scheme。
+    out property <MaterialScheme> scheme: {
+        // —— 主色（项目 accent 是「反白」高对比色，对应 M3 的 primary/onPrimary 反转关系）——
+        primary: Theme.accent,
+        onPrimary: Theme.card,
+        primaryContainer: Theme.row_sel,
+        onPrimaryContainer: Theme.ink,
+        surfaceTint: Theme.accent,
+        inversePrimary: Theme.accent,
+
+        // —— 次色 ——
+        secondary: Theme.ink_2,
+        onSecondary: Theme.card,
+        secondaryContainer: Theme.line_2,
+        onSecondaryContainer: Theme.ink_2,
+
+        // —— 第三色（项目里唯一「品牌紫」= 内存指标色）——
+        tertiary: Theme.bar_mem,
+        onTertiary: Theme.card,
+        tertiaryContainer: Theme.line_2,
+        onTertiaryContainer: Theme.ink_3,
+
+        // —— 错误 ——
+        error: Theme.err,
+        onError: Theme.card,
+        errorContainer: Theme.err_bg,
+        onErrorContainer: Theme.err,
+
+        // —— 背景 / 表面 ——
+        background: Theme.bg,
+        onBackground: Theme.ink,
+        surface: Theme.card,
+        onSurface: Theme.ink,
+        surfaceVariant: Theme.line_2,
+        onSurfaceVariant: Theme.ink_2,
+        surfaceDim: Theme.bg,
+        surfaceBright: Theme.card,
+        surfaceContainerLowest: Theme.bg,
+        surfaceContainerLow: Theme.card,
+        surfaceContainer: Theme.card,
+        surfaceContainerHigh: Theme.line_2,
+        surfaceContainerHighest: Theme.line,
+
+        // —— 描边 ——
+        outline: Theme.ink_4,
+        outlineVariant: Theme.line,
+
+        // —— 阴影 / 遮罩 ——
+        shadow: Theme.shadow,
+        scrim: Theme.overlay,
+
+        // —— 反色面（tooltip 背景/文字：沿用项目自己的 tip 令牌，不做真反色）——
+        inverseSurface: Theme.tip_bg,
+        inverseOnSurface: Theme.tip_ink,
+
+        // —— 固定色（fixed = 与主题无关的固定色，M3 用于跨主题混排）——
+        primaryFixed: Theme.row_sel,
+        onPrimaryFixed: Theme.ink,
+        primaryFixedDim: Theme.ink_4,
+        onPrimaryFixedVariant: Theme.ink_2,
+        secondaryFixed: Theme.line_2,
+        onSecondaryFixed: Theme.ink_2,
+        secondaryFixedDim: Theme.ink_4,
+        onSecondaryFixedVariant: Theme.ink_3,
+        tertiaryFixed: Theme.line_2,
+        onTertiaryFixed: Theme.ink_3,
+        tertiaryFixedDim: Theme.ink_4,
+        onTertiaryFixedVariant: Theme.ink_3,
+    };
+}

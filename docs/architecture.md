@@ -79,23 +79,27 @@ docker-panel/
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   gettext 翻译（编译期嵌入）
 │
-└── ui/                        Slint 层（所有 ≤ 300 行）
-    ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
-    ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态
+└── ui/                        Slint 层（正文均 ≤ 300 行）
+    ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装 + M3 色板接线
+    ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
+    ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态（is_dark 为 out）
+    ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
     ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
-    ├── cards.slint             卡片网格容器（四种视图共用，含空状态 + 背景点击层）
-    ├── card-container.slint    容器卡片（多选勾选 + 启停/重启/日志）
-    ├── card-image.slint        镜像卡片（运行/删除）
-    ├── card-netvol.slint       网络/卷卡片（共用布局，内建标记 + 容器数）
-    ├── foot-bar.slint          底部 8 项资源概览
-    ├── batch-bar.slint         批量操作浮动栏
-    ├── drawer.slint            右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
-    ├── drawer-log-row.slint    日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
-    ├── dialogs.slint           PullDialog + CleanupDialog 弹窗
-    ├── menu-layers.slint       浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
-    └── components.slint        IconBtn / Dot / CheckCell / MenuItem / Dropdown / TipLayer 等原子组件
+    ├── cards.slint            卡片网格容器（四种视图共用，含空状态 + 背景点击层）
+    ├── card-container.slint   容器卡片（多选勾选 + 启停/重启/日志）
+    ├── card-image.slint       镜像卡片（运行/删除）
+    ├── card-netvol.slint      网络/卷卡片（共用布局，内建标记 + 容器数）
+    ├── skel.slint             骨架屏占位
+    ├── foot-bar.slint         底部 8 项资源概览
+    ├── batch-bar.slint        批量操作浮动栏
+    ├── drawer.slint           右侧抽屉：详情/日志/环境 三 Tab（四种资源共用，滚动容器用 @material ScrollView+ListView）
+    ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）
+    ├── drawer-log-row.slint   日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
+    ├── dialogs.slint          PullDialog + CleanupDialog 弹窗（继承 DialogShell）
+    ├── menu-layers.slint      浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
+    └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```
 
 ### 依赖方向（严格单向，无循环）
@@ -113,8 +117,10 @@ main.rs
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
-ui/*.slint           app.slint 是唯一组装入口，import 其余子文件，
-                     子文件之间不互相 import（避免 Slint 跨文件 global 兼容性坑）
+ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；
+                     子文件依赖是**无环 DAG**：theme.slint 是叶子（所有文件都 import 它），
+                     composition 依赖只向下（cards→card-*/skel、drawer→drawer-*-row、dialogs→components-dialog、
+                     material-theme→theme），不存在互相 import / 循环
 ```
 
 ## 3. 文件规范

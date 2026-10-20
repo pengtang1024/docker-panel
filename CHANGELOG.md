@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **抽屉滚动条与卡片网格滚动条不跟随应用主题**：抽屉详情 / 日志面板用的是内置 Material 3 组件库（`@material`）的 ScrollView / ListView，其色板由 `MaterialPalette` 提供；卡片网格滚动条来自 std-widgets(fluent)。此前项目从未给 `Palette.color-scheme` 赋值，两者全部走 OS 主题——用户在应用里选「浅色」而系统是深色时，抽屉滚动条仍按深色渲染（浅底上的深色滑块几乎不可见），网格滚动条同理。现新增 `ui/material-theme.slint`，把项目设计令牌映射成完整的 `MaterialScheme`（53 个角色全覆盖）接入 `MaterialPalette.schemes`，并把 `Palette.color-scheme` 接到应用主题（auto / light / dark），两处滚动条及后续 M3 组件全部跟随应用主题。
+
+### 工程
+
+- **AGENTS.md 组件库描述与实际实现不符**：文档写「用了 Modal（inherits Modal），项目自己的 DialogShell 在 Modal 上盖了自定义 card」，但 `ui/components-dialog.slint` 实际是手搓的 `inherits Rectangle`，从未 import Material Modal。已按实际实现改写，并把 Material Modal 的坑表换成项目 DialogShell 的真实约束（TouchArea 的 100% 对 Rectangle 父级不可靠、slot 覆盖层级、`@children` 唯一性等），另补「M3 接项目主题」一节：全局属性赋值语句不合法、必须经本组件属性中转、赋值不会打断 `<=>` 绑定（依据 `i-slint-core-1.18.1` 源码）、M3 滑块自动隐藏时的像素验收姿势。同步更新 README / architecture.md / docs/arch/ui-interaction.md 的模块地图与文件行数。
+
 ## [0.3.4] - 2026-10-20
 
 ### 修复

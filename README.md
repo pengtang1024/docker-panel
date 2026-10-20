@@ -34,6 +34,7 @@
 ### 主题与本地化
 
 - 浅色 / 深色 / 跟随系统 三态主题，22 个语义色令牌
+- 内置 Material 3 组件库（`@material`，ScrollView / ListView）的色板由项目令牌映射而来，跟随应用主题而非系统主题
 - 界面文案中英双语，跟随系统 locale 自动选择（zh* → zh_CN）
 
 ### 配置持久化
@@ -127,10 +128,11 @@ docker-panel/
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
-├── ui/                     # Slint UI 声明（27 文件按职责拆分，app.slint 唯一组装入口）
+├── ui/                     # Slint UI 声明（28 文件按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
+│   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
 │   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
 │   ├── sub-bar.slint       # SubBar：筛选 chips + 排序 + 4 视图 tabs

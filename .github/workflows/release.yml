@@ -59,13 +59,52 @@ jobs:
           sha256sum "docker-panel_${version}_amd64.deb" > checksums.txt
           cat checksums.txt
 
+      - name: 提取版本更新日志
+        run: |
+          version="${{ steps.ver.outputs.version }}"
+          scripts/release-notes.sh "$version" > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md 里没有 [$version] 段落，Release 页面将没有更新日志"
+            exit 1
+          fi
+          cat release-notes.md
+
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: docker-panel ${{ steps.ver.outputs.version }}
           draft: false
+          # body_path = CHANGELOG.md 里该版本的完整段落（发版页面显示真正的更新日志，
+          # 而不是 GitHub 自动生成的 "**Full Changelog**: <compare 链接>"——本仓库没有 PR，
+          # 自动生成基本是空的）。generate_release_notes 保留，GitHub 会把 compare 链接追加在后面。
+          body_path: release-notes.md
           generate_release_notes: true
           files: |
             docker-panel_${{ steps.ver.outputs.version }}_amd64.deb
             target/release/docker-panel
             checksums.txt
+
+      # 历史版本（流水线修好之前发的）页面只有一行 "**Full Changelog**: ..."，
+      # 这里用 CHANGELOG.md 的段落回填。immutable release 改不了就跳过，不影响本次发布。
+      - name: 回填历史 Release 更新日志
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          current="${{ steps.ver.outputs.version }}"
+          for tag in $(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -6); do
+            [ "$tag" = "$current" ] && continue
+            notes=$(scripts/release-notes.sh "$tag" 2>/dev/null) || continue
+            [ -n "$notes" ] || continue
+            head_line=$(printf '%s\n' "$notes" | head -1)
+            body=$(gh release view "$tag" --json body -q .body 2>/dev/null) || continue
+            case "$body" in
+              *"$head_line"*) continue ;;
+            esac
+            if gh release edit "$tag" --notes "$notes" >/dev/null 2>&1; then
+              echo "已回填 $tag 的更新日志"
+            else
+              echo "::warning::$tag 的更新日志回填失败（可能是 immutable release）"
+            fi
+          done

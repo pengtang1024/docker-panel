@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-20
+
+### 修复
+
+- **GitHub Release 页面没有更新日志**：工作流只用 `generate_release_notes`，而本仓库没有 PR，GitHub 自动生成的正文只有一行 `**Full Changelog**: <compare 链接>`，发出去的版本在发布页面上看不到任何更新日志。现在新增 `scripts/release-notes.sh` 从 `CHANGELOG.md` 抽出对应 `## [X.Y.Z]` 段落，由工作流以 `body_path` 传给发布步骤（`generate_release_notes` 保留，compare 链接追加在后面）；抽不到段落时流水线直接失败，避免发出没有更新日志的版本。另加「回填历史 Release 更新日志」步骤，把流水线修好之前发的 0.3.0 / 0.3.1 页面正文补齐（immutable release 改不了则跳过，不影响本次发布）。
+- **发版流程漏掉版本更新日志这一步**：`docs/git-flow.md` 的发版流程写着「两处必须一致」却列了三项，hotfix 流程更是完全没有版本同步与 CHANGELOG 步骤。现已补齐三处同步的可执行动作、hotfix 的完整 6 步、门禁步骤与两次推送（tag 必须单独推），并新增 `scripts/check-version.sh` 核对 Cargo.toml / deb control / CHANGELOG 段落 / 底部链接 / 最新 tag 五项。
+
 ## [0.3.1] - 2026-10-20
 
 ### 修复
@@ -155,6 +162,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.3.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.2
 [0.3.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.1
 [0.3.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.0
 [0.2.3]: https://github.com/pengtang1024/docker-panel/tree/v0.2.3

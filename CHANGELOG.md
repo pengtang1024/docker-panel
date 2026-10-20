@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-20
+
+### 修复
+
+- **面板坞（Dock）显示「未识别程序」、图标变成通用占位图**：Slint 1.18 的 winit backend 只有在 `WindowInner::xdg_app_id()` 有值时才调用 `with_name(app_id, "")`，本项目从未设置过 → Wayland toplevel 完全没有 app_id（`WAYLAND_DEBUG` trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`。现在于 `MainWindow::new()` 之后、`ui.run()` 之前在 Wayland 下显式调用 `slint::set_xdg_app_id("docker-panel")`；X11 保持不设（winit 用 argv[0] 回退生成 `WM_CLASS`，显式设置会让 class 段变空）。
+
 ## [0.3.0] - 2026-10-20
 
 ### 新增
@@ -149,6 +155,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.3.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.1
 [0.3.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.0
 [0.2.3]: https://github.com/pengtang1024/docker-panel/tree/v0.2.3
 [0.2.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.2

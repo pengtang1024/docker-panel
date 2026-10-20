@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-20
+
+### 修复
+
+- **历史 Release 页面的更新日志没能回填**：回填步骤用 `git tag --list` 列历史版本，但 `actions/checkout` 默认 shallow clone，仓库里只有触发流水线的那个 tag，取不到任何历史 tag，回填循环空转。改用 `gh release list`（API）列 release，与 clone 深度无关；immutable release 改不了则跳过并告警，不影响本次发布。
+
 ## [0.3.2] - 2026-10-20
 
 ### 修复
@@ -162,6 +168,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.3.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.3
 [0.3.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.2
 [0.3.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.1
 [0.3.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.0

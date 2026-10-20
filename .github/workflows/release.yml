@@ -93,7 +93,10 @@ jobs:
         run: |
           set -uo pipefail
           current="${{ steps.ver.outputs.version }}"
-          for tag in $(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -6); do
+          # 用 API 列 release，不能用 `git tag --list`：actions/checkout 默认是
+          # shallow clone，仓库里只有触发流水线的那个 tag，历史 tag 一个都取不到。
+          for tag in $(gh release list --limit 20 --json tagName -q '.[].tagName' \
+                        | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'); do
             [ "$tag" = "$current" ] && continue
             notes=$(scripts/release-notes.sh "$tag" 2>/dev/null) || continue
             [ -n "$notes" ] || continue

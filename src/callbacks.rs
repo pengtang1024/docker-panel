@@ -5,6 +5,8 @@ use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_image::bind_image_actions;
 pub use super::callbacks_netvol::bind_netvol_actions;
 
+use std::sync::atomic::Ordering;
+
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
@@ -72,6 +74,7 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 let Ok(mut st) = s.lock() else { return };
                 st.container_query = q.clone();
                 st.image_query = q;
+                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
                 st.persist();
             }
             // 网络/卷无定时刷新，必须立即重建，否则过滤看不到效果
@@ -149,6 +152,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 let key = f.to_string();
                 let Ok(mut st) = s.lock() else { return };
                 st.filter = key;
+                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
                 st.persist();
             }
             if let Ok(st) = s.lock() {
@@ -162,14 +166,20 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let ui_f = ui.as_weak();
         actions.on_set_sort(move |f: i32| {
             let Some(ui) = ui_f.upgrade() else { return };
-            {
+            let (field_idx, desc) = {
                 let new_field = SortField::from_ui_index(f as i64);
                 let Ok(mut st) = s.lock() else { return };
                 // 切换到新字段默认降序；同字段重复点击则翻转方向
                 st.sort_desc = st.sort_field != new_field || !st.sort_desc;
                 st.sort_field = new_field;
+                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
                 st.persist();
-            }
+                (st.sort_field.to_ui_index() as i32, st.sort_desc)
+            };
+            // 排序状态由回调独占写入（与 filter/view 一致）：consumer 心跳拿到的是
+            // 旧快照，回写会把箭头打回旧方向 —— 排序状态与上下箭头偶发不一致的根因
+            ui.set_sort_field(field_idx);
+            ui.set_sort_desc(desc);
             if let Ok(st) = s.lock() {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }
@@ -180,11 +190,15 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let ui_f = ui.as_weak();
         actions.on_set_sort_dir(move || {
             let Some(ui) = ui_f.upgrade() else { return };
-            {
+            let desc = {
                 let Ok(mut st) = s.lock() else { return };
                 st.sort_desc = !st.sort_desc;
+                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
                 st.persist();
-            }
+                st.sort_desc
+            };
+            // 同上：方向箭头只由回调写，consumer 不再回写快照值
+            ui.set_sort_desc(desc);
             if let Ok(st) = s.lock() {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }

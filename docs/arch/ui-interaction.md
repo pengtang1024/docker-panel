@@ -95,7 +95,44 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 - 顶栏/筛选栏用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见
 - **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸
 
-## 3. 窗口身份（xdg app_id）与 Dock 图标
+## 3. 两条容易踩的 Slint 规则
+
+### 3.1 命中顺序：TouchArea 声明在布局之后 = 盖住布局里的热区
+
+Slint 按**声明顺序**做命中测试：后声明的兄弟节点画在上面，也先拿到指针事件。
+所以一个按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，就会盖住布局内部
+自己声明的 TouchArea——布局里的热区永远收不到点击。
+
+本项目的写法约定（`Chip` / `ViewTab` / 排序按钮统一）：
+
+```slint
+component Chip inherits Rectangle {
+    area := StateArea { clicked => { root.clicked(root.key); } }   // ← 热区在前
+    HorizontalLayout { ... }                                     // ← 内容在后
+}
+```
+
+- 热区在前 → 布局内的独立热区（排序按钮的方向箭头）能被点到；
+  布局里的 `Text` 没有 input region，点击会**穿透**到下面的热区（打开菜单）。
+- 热区在后 → 布局内的热区是死代码（点箭头只会触发外层热区）。
+
+> 踩过的坑：排序按钮的外层 TouchArea 声明在布局之后 → 方向箭头的
+> `set_sort_dir()` 永远不触发，点箭头只会开菜单、方向翻不动。
+
+### 3.2 UI 状态单一写入方：回调写，consumer 不回写
+
+Slint 属性（如 `sort_field` / `sort_desc` / `filter` / `view`）由 **UI 回调**独占写入：
+回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。
+
+consumer 的 3s 心跳**不得**回写这些属性：它在锁内取快照、锁外才写 UI，
+期间用户改了条件的话，回写的就是**旧值**——排序状态与箭头会偶发对不上
+（箭头滞后最多 3s，甚至被旧快照打回旧方向）。
+
+consumer 只负责「按 Msg 增量刷新数据」，不负责「回写用户操作过的状态」。
+需要防的另一种竞态（锁内建行、锁外应用，期间条件被改）用
+`AppState::rows_epoch` 判定：epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
+
+## 4. 窗口身份（xdg app_id）与 Dock 图标
 
 桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。
 

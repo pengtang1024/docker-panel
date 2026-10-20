@@ -164,8 +164,11 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let images_len = s.images.len();
     let networks_len = s.networks.len();
     let volumes_len = s.volumes.len();
-    let sort_field_int = s.sort_field.to_ui_index() as i32;
-    let sort_desc = s.sort_desc;
+    // 行模型 epoch：排序/筛选/搜索变更时回调会重建行并递增 epoch。
+    // 这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
+    // 落地就会让列表顺序与排序箭头打架，故应用前比对 epoch，不一致就丢弃。
+    let rows_epoch = s.rows_epoch.load(Ordering::Acquire);
+    let rows_epoch_ref = s.rows_epoch.clone();
     let rt_h = s.rt.handle().clone();
 
     drop(s); // ⚠️ invoke_from_event_loop 之前必须释放锁
@@ -176,20 +179,24 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         let Some(ui) = ui_w.upgrade() else { return };
         ui.set_loading(false);
         // 走 render::*（thread_local 缓存模型就地同步），只 set 变化的列表
-        if let Some(rows) = container_rows {
-            ui.set_container_rows(crate::render::containers(rows));
-        }
-        if let Some(rows) = image_rows {
-            ui.set_image_rows(crate::render::images(rows));
-        }
-        if let Some(rows) = network_rows {
-            ui.set_network_rows(crate::render::networks(rows));
-        }
-        if let Some(rows) = volume_rows {
-            ui.set_volume_rows(crate::render::volumes(rows));
-        }
-        if let Some(rows) = compose_rows {
-            ui.set_compose_rows(crate::render::compose_rows(rows));
+        // epoch 变了 = 排序/筛选/搜索条件已被回调改过，这批行是旧条件建的
+        // （回调已用新条件重建并应用），丢弃以免顺序与箭头不一致
+        if rows_epoch_ref.load(Ordering::Acquire) == rows_epoch {
+            if let Some(rows) = container_rows {
+                ui.set_container_rows(crate::render::containers(rows));
+            }
+            if let Some(rows) = image_rows {
+                ui.set_image_rows(crate::render::images(rows));
+            }
+            if let Some(rows) = network_rows {
+                ui.set_network_rows(crate::render::networks(rows));
+            }
+            if let Some(rows) = volume_rows {
+                ui.set_volume_rows(crate::render::volumes(rows));
+            }
+            if let Some(rows) = compose_rows {
+                ui.set_compose_rows(crate::render::compose_rows(rows));
+            }
         }
         if let Some((action, epoch_ref, epoch)) = log_sync {
             // 构建增量后 UI 线程可能已经 Clear/切容器；epoch 变了就丢弃旧行
@@ -197,8 +204,6 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                 ui.set_log_rows(crate::render::logs_sync(action));
             }
         }
-        ui.set_sort_field(sort_field_int);
-        ui.set_sort_desc(sort_desc);
         ui.set_batch_count(batch_count as i32);
         ui.set_total_containers(containers_len as i32);
         ui.set_running_containers(running_count as i32);

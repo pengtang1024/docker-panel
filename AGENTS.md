@@ -203,6 +203,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 15. **日志行模型只追加不重建**——UI 日志行模型（`render::logs_sync`）是日志窗口（`AppState.logs`）的**镜像**，用「全局行流位置」对齐：起点相同 → `LogSyncPlan::Append`（只 `extend`，可见行不重排 → 不卡）；起点不同（窗口裁剪过前段 / 换了流）→ `LogSyncPlan::Reset`（整表替换）。**禁止**逐行丢最旧行（整表索引每行错位一次，ListView 每次都把可见行标脏重排 = 旧卡顿主因）；裁剪必须分块（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）。同步账实现见 `src/ui_state/log_sync.rs`。
 16. **状态栏 toast 必须自动恢复**——回调直接写状态栏（复制日志 / 清空日志 / 复制字段值）一律走 `ui_apply::status_toast`，2s 后恢复「就绪」；期间若被其它消息改过则不覆盖（避免旧定时器盖掉新结果）。
 17. **Wayland 必须显式设置 xdg app_id**——`main.rs` 在 `MainWindow::new()` 之后、`ui.run()` 之前调用 `slint::set_xdg_app_id("docker-panel")`（仅当 `WAYLAND_DISPLAY` 存在时）。不设置时 toplevel 没有 app_id（Wayland trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`，**面板坞（Dock）会显示成「未识别程序」、图标退化成通用占位图**。仅在 Wayland 下设置：X11 由 winit 用 argv[0] 回退生成 `WM_CLASS`（class 段 = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致），显式设置反而会让 class 段变空（Slint 固定传 `with_name(app_id, "")`）。
+18. **UI 状态单一写入方——回调写，consumer 禁回写**——用户操作过的 Slint 属性（`sort_field` / `sort_desc` / `filter` / `view`）一律由 UI 回调独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。consumer 的 3s 心跳**只刷数据、不回写这些属性**：它在锁内取快照、锁外才写 UI，期间用户改了条件时回写的就是**旧值**（排序状态与上下箭头偶发对不上、箭头滞后最多 3s）。需要防「锁内建行、锁外应用，期间条件被改」的竞态时用 `AppState::rows_epoch`：排序/筛选/搜索变更时递增，consumer 应用行模型前比对，epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
+19. **TouchArea 命中顺序——热区声明在布局之前**——Slint 按声明顺序做命中测试，后声明的兄弟节点先拿事件。按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，会盖住布局内部自己声明的 TouchArea（死代码：点箭头只会触发外层热区）。统一写法：`StateArea` / TouchArea 在前、内容布局在后（见 `Chip` / `ViewTab` / 排序按钮）；布局里的 `Text` 无 input region，点击会穿透到下面的热区。
 
 ## 构建命令
 

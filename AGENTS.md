@@ -238,7 +238,9 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 1. `Cargo.toml` 的 `version`
 2. `packaging/debian/control` 的 `Version`
-3. `CHANGELOG.md` 新增版本段落
+3. `CHANGELOG.md` 新增版本段落（`[Unreleased]` 改写为 `## [X.Y.Z]` + 底部链接；**hotfix 同样要写**）
+
+收尾用 `scripts/check-version.sh --tag` 一键核对三处是否一致（版本号 / CHANGELOG 段落 / 底部链接 / 最新 tag）。
 
 ## 文档同步规范
 

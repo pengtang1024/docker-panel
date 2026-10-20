@@ -94,6 +94,8 @@ invoke_from_event_loop(move || {
 - **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 stream epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
 - **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI 日志行模型的过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。`history_done` 记录当前选中会话是否已加载历史：收到首条日志，或在有缓冲/活动流时 Clear 后置 true；空缓冲且无活动流时保持 false，让下次 `ensure_follow` 用 `tail=200` 重试。首次/空历史/首流失败用 `tail=200`，否则用 `tail=0`。重新选中容器（含同一容器）会重置，Clear 的持久性仅到下一次选中。
 - **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断行模型是否已过期。
+- **行模型过期判定（`rows_epoch`）**：行是在锁内按**当时**的排序/筛选/搜索条件建的，锁外才写 UI；期间用户改了条件，这批行落地就会让列表顺序与排序箭头打架。排序/筛选/搜索变更时回调递增 `AppState::rows_epoch`，consumer 在锁内快照、锁外比对，epoch 变了就丢弃这批旧行（回调已用新条件重建并应用过）。
+- **consumer 不回写用户操作过的状态**：`sort_field` / `sort_desc` / `filter` / `view` 等由 UI 回调独占写入（回调在 UI 线程同步改 state → `ui.set_xxx` → 重建列表）。consumer 只刷数据：它锁内取的是快照、锁外才写 UI，回写就会把用户刚改的状态打回旧值（箭头滞后最多 3s，甚至偶发对不上）。详见 [ui-interaction.md §3.2](ui-interaction.md)。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
 

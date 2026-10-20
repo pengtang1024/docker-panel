@@ -112,6 +112,14 @@ export component SubBar inherits Rectangle {
             background: root.sort_open ? Theme.bg : Theme.card;
             border-width: 1px;
             border-color: root.sort_open ? Theme.ink_4 : Theme.line;
+            // ⚠️ 按钮热区必须声明在 HorizontalLayout **之前**（同 Chip / ViewTab 的
+            // StateArea 写法）：Slint 按声明顺序做命中测试，声明在后面会盖住布局内
+            // 箭头自己的 TouchArea —— 点箭头只会开菜单，方向永远翻不动。
+            TouchArea { clicked => {
+                root.sort_open = root.sort_open == false;
+                root.menu_x = sort_btn.absolute-position.x;
+                root.menu_y = sort_btn.absolute-position.y + sort_btn.height + 4px;
+            } }
             HorizontalLayout {
                 width: 100%;
                 height: 100%;
@@ -159,11 +167,6 @@ export component SubBar inherits Rectangle {
                     TouchArea { clicked => { root.set_sort_dir(); } }
                 }
             }
-            TouchArea { clicked => {
-                root.sort_open = root.sort_open == false;
-                root.menu_x = sort_btn.absolute-position.x;
-                root.menu_y = sort_btn.absolute-position.y + sort_btn.height + 4px;
-            } }
         }
 
         if root.view == 0 : IconBtn {

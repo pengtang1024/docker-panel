@@ -69,7 +69,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | Rust | stable | edition 2021 | — |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
-| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。用了 Modal（inherits Modal），没用到 Dialog 内置组件——项目自己的 DialogShell 在 Modal 上盖了自定义 card |
+| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。**实际只用到 ScrollView / ListView**（drawer 日志 + 详情面板）+ **MaterialPalette 色板**；**未使用 Modal / Dialog 内置组件**——项目自己的 DialogShell 是手搓 `inherits Rectangle`（坑条见 Slint 限制表）。色板经 `ui/material-theme.slint` 映射到项目设计令牌 |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
@@ -101,18 +101,36 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | **条件渲染移除焦点元素后焦点悬空** | 弹窗/抽屉关闭后其内部焦点丢失，后续按键无人处理 | 关闭处主动调 `global-shortcuts.focus()` 归还焦点（app.slint Esc 分支） |
 | **`select_bundled_translation` 必须在首个组件创建之后调用** | 之前调用 GLOBAL_CONTEXT 未初始化 → 恒报 `NoTranslationsBundled`（debug/release 都一样） | 放在 `MainWindow::new()` 之后；切换后 `translations_dirty` 自动重算 `@tr` 属性 |
 
-#### Material Modal / Dialog 踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
+#### Dialog 弹窗踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
 
-> DialogShell（`components-dialog.slint`）继承 Material Modal 1.1.0，以下是踩过的真实坑条。
+> DialogShell（`components-dialog.slint`）是**手搓**的 `inherits Rectangle`——**没有**继承 Material Modal
+> （Material Modal 是裸组件，Window 层级不给 100% 尺寸；它的 `background_layer` 语义也与项目遮罩冲突）。
+> 以下是踩过的真实坑条。
 
 | 坑 | 正确做法 |
 |----|----------|
-| **Material Modal 不是 Rectangle 组件** | 必须显式 `width: 100%; height: 100%`，它没有默认 `parent.width` |
-| **Material Modal 默认 `background_layer` 是空 Rectangle** | 覆盖它加全屏半透明遮罩：`background_layer := Rectangle { background: Theme.overlay; width/height: parent.width/height; TouchArea { ... } }` |
-| **VerticalLayout 子元素显式 `height` 被忽略** | 必须用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
-| **Modal 外层 TouchArea 会吞所有子内容点击** | card 内部必须再包一层 TouchArea，否则点击按钮/CheckBox 会穿透触发遮罩关闭 |
-| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 Material BaseDialog 的 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **DialogShell 必须 inherits Rectangle** | Material Modal 是裸组件、没有默认 `parent.width`；项目自己继承 Rectangle 并显式 `width: 100%; height: 100%` |
+| **TouchArea 的 `width/height: 100%` 对 Rectangle 父级不可靠** | 遮罩 TouchArea 必须显式写 `root.width` / `root.height` |
+| **子类只能在父类声明的层级里覆盖 slot** | 用 `:=` 覆盖的元素必须与父类声明同层级，否则 Slint 会在根级新建实例；所以父类只提供 card 容器 + `@children`，子类写完整 Header/Body/Footer |
+| **一个组件只能有一个 `@children` 入口** | 父类不能再开第二个 `@children` |
+| **遮罩 TouchArea 会吞掉所有子内容点击** | card 内部必须再包一层 TouchArea，否则点按钮/CheckBox 会穿透触发遮罩关闭 |
+| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **VerticalLayout 子元素显式 `height` 被忽略** | 用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
 | **Dialog 内三段 VerticalLayout 必须显式 `height: 100%`** | `VerticalLayout { width:100%; height:100%; ... Header/min-height:60 ... Body/stretch:1 ... Footer/min-height:56 }` |
+
+#### M3（@material）接项目主题（**已实现：`ui/material-theme.slint` + `ui/app.slint`**）
+
+> 目标：`@material` 的 ScrollView / ListView（drawer 日志 + 详情面板）与 std-widgets(fluent) 卡片网格滚动条，
+> 全部跟随**应用主题**（auto/light/dark）而非 OS 主题，颜色全部由项目 `Theme.*` 令牌派生。
+
+| 坑 | 正确做法 |
+|----|----------|
+| **全局属性赋值语句不合法** | `Palette.color-scheme := ...` / `MaterialPalette.schemes := {...}` 都是 Parse error（`Palette` 被 import 后是**类型名**，表达式里要写 `Palette.color-scheme`） |
+| **不能 `changed <全局属性> =>`** | 只能盯本组件属性（写 `changed theme_mode =>`，**无 `root.` 前缀**）；一个组件只能有一个 `init` |
+| **必须经本组件属性中转** | `in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;` + `in-out property <MaterialSchemes> m3_schemes <=> MaterialPalette.schemes;`，再在 `init` / `changed theme_mode` / `changed system_dark` 里赋值灌色板 |
+| **赋值不会打断 `<=>` 绑定**（已查源码坐实） | `i-slint-core-1.18.1/properties.rs:1029` `Property::set` → `if !previous_binding_intercepted { remove_binding() }`；`properties/two_way_binding.rs:21` `TwoWayBinding::intercept_set` 返回 `true` 并把值同步到对端 → **赋值照常透传且绑定保留**，主题切换实时跟随 |
+| **light/dark 两个槽位填同一份映射** | `Theme.*` 本身已按 `is_dark` 解析，真正决定用哪套的是 `Palette.color-scheme`；两槽同填不冲突 |
+| **M3 ScrollBar 滑块自动隐藏，像素验收要用 MCP 悬停** | 滑块 `opacity` = 滚动中 40% / 悬停 70% / 静止 1.5s 后淡出；采样必须用 MCP `move_pointer` 悬停到滚动条上再 `take_screenshot`，否则采样全 miss |
 
 #### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
 
@@ -137,7 +155,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（27 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `ui/` | Slint 声明层（28 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
 | `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |

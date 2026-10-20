@@ -59,12 +59,13 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 331 | MainWindow + global-shortcuts FocusScope + 布局组装 | theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
+| `app.slint` | 361 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
 | `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
-| `theme.slint` | 96 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态 | 无 |
+| `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
+| `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
 | `models.slint` | 84 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
-| `sub-bar.slint` | 194 | 筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
+| `sub-bar.slint` | 197 | 筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
 | `cards.slint` | 173 | 四种资源卡片网格 + 空状态 + 背景点击层 | theme / card-* / skel / components-* |
 | `card-container.slint` | 201 | 容器卡片（多选 + 启停/重启/日志） | theme / components-* |
 | `card-image.slint` | 172 | 镜像卡片（运行/删除） | theme / components-* |
@@ -72,7 +73,7 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 | `skel.slint` | 69 | 骨架屏占位 | theme |
 | `foot-bar.slint` | 109 | 底部 8 项资源概览 | theme / components-align |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
-| `drawer.slint` | 201 | 右侧抽屉三 Tab（详情/日志/环境） | theme / drawer-detail-row / drawer-log-row / components-* |
+| `drawer.slint` | 201 | 右侧抽屉三 Tab（详情/日志/环境） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
 | `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
@@ -85,7 +86,7 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 | `components-state.slint` | 49 | StateArea 等状态层 | theme |
 | `components-empty.slint` | 35 | 空态组件 | theme |
 | `components-feedback.slint` | 30 | Tip / 反馈类组件 | theme |
-| `components-dialog.slint` | 54 | DialogShell 基类（inherits Material Modal） | material |
+| `components-dialog.slint` | 54 | DialogShell 基类（手搓 inherits Rectangle，未用 Material Modal） | theme |
 
 ## 2. Slint 拆分原则
 

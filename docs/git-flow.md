@@ -95,11 +95,31 @@ hotfix 同样会触发 Release 流水线，产出补丁版本。
 
 不在 `push` 或 `pull_request` 上跑 CI，也不启用 Dependabot 自动开 PR。
 
+### CI 的系统依赖（改工作流前必读）
+
+GitHub runner 镜像**不预装** fontconfig / freetype 的开发包，`cargo build` 会在
+`yeslogic-fontconfig-sys` 的 build script 处 panic：
+`The system library 'fontconfig' required by crate 'yeslogic-fontconfig-sys' was not found`。
+
+工作流的 apt 列表必须包含 `libfontconfig1-dev`，它会连带装上
+`libfreetype-dev` → `zlib1g-dev` / `libbz2-dev` / `libpng-dev` / `libbrotli-dev`，
+缺任何一个都会导致 `fontconfig.pc` / `freetype2.pc` 的 `Requires` 解析失败。
+
+本地复现该环境的方法（只暴露 CI 已安装的 `.pc`）：
+
+```bash
+mkdir -p /tmp/fake-pc && ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/{x11,xcb,wayland-client,wayland-cursor,wayland-egl,xkbcommon,gl,egl,glesv2}.pc /tmp/fake-pc/
+PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 fontconfig 的失败
+```
+
 ## 常见错误
 
 | 现象 | 成因 | 正解 |
 |------|------|------|
 | master 上出现 `merge: develop 合入 master` | 直接把 develop 合进了 master | 走 `release` 分支，由 `release finish` 中转 |
 | 推了 tag 但没有 Release | 只推了分支没推 tag | `git push origin X.Y.Z` |
+| 推了 tag 但 Release 流水线没触发 | tag 用了 `v` 前缀，不匹配正则 `[0-9]+.[0-9]+.[0-9]+` | 用纯数字 `X.Y.Z` |
+| 一次 `git push --all` 带上了 tag，流水线没触发 | 同一批 push 的 tag 事件被吞 | tag 单独 push 一次（`git push origin refs/tags/X.Y.Z`） |
+| CI 在 `cargo build` 处失败且报 fontconfig 缺失 | apt 列表缺 `libfontconfig1-dev` | 见上文「CI 的系统依赖」 |
 | deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改 |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |

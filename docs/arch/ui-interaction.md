@@ -94,3 +94,38 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 - 卡片/行组件用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
 - 顶栏/筛选栏用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见
 - **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸
+
+## 3. 窗口身份（xdg app_id）与 Dock 图标
+
+桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。
+
+| 后端 | 机制 | 不设置的后果 |
+|------|------|--------------|
+| Wayland | toplevel 的 `app_id`（`xdg_toplevel.set_app_id`） | GNOME Shell 匹配不到 `docker-panel.desktop` → Dock 显示「未识别程序」，图标退化成通用占位图 |
+| X11 | `WM_CLASS` 的 class 段 | winit 用 argv[0] 回退 → class = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致 → 正常 |
+
+Slint 1.18 提供了 `slint::set_xdg_app_id(app_id)`，但**不主动调用**（`i-slint-backend-winit` 只在
+`WindowInner::xdg_app_id()` 有值时才调 `with_name(app_id, "")`）。所以本项目在 `src/main.rs` 里显式设置：
+
+```rust
+// Wayland：app_id = desktop 文件名去掉 .desktop 后缀
+if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    let _ = slint::set_xdg_app_id("docker-panel");
+}
+```
+
+三个关键约束：
+
+1. **时机**——必须早于窗口 show。native window 在 `ui.run()` 里才创建（`ensure_window`），
+   所以放在 `MainWindow::new()` 之后、`ui.run()` 之前即可。
+2. **只在 Wayland 下设置**——Slint 对 X11 也用 `with_name(app_id, "")`，会让 `WM_CLASS` 的 class 段变空，
+   反而破坏 X11 下的匹配。
+3. **取值必须是 desktop 文件基名**——`docker-panel` → 查 `docker-panel.desktop` → `Icon=docker-panel` →
+   `hicolor/scalable/apps/docker-panel.svg`。
+
+验证方法（不依赖截图）：
+
+```bash
+WAYLAND_DEBUG=1 ./target/release/docker-panel 2>wl.log
+grep set_app_id wl.log     # 应有 xdg_toplevel#N.set_app_id("docker-panel")
+```

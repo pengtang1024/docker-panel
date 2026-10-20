@@ -91,7 +91,24 @@ hotfix 同样会触发 Release 流水线，产出补丁版本。
 ## 流水线
 
 仓库只保留一条工作流 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，
-仅在推送 `X.Y.Z` tag 时触发：编译 → 打包 deb → 生成 sha256 → 创建 GitHub Release。
+仅在推送 `X.Y.Z` tag 时触发：编译 → 打包 deb → 生成 sha256 → 提取版本更新日志 → 创建 GitHub Release。
+
+### Release 页面的更新日志
+
+发版页面（`releases/tag/X.Y.Z`）的正文来自 **`CHANGELOG.md` 里该版本的完整段落**：
+
+- 流水线用 `scripts/release-notes.sh X.Y.Z` 抽出 `## [X.Y.Z]` 段落写进 `release-notes.md`，
+  再以 `body_path` 传给 `softprops/action-gh-release`；`generate_release_notes` 保留，
+  GitHub 会把 `**Full Changelog**: <compare 链接>` 追加在后面。
+- 段落缺失时流水线**直接失败**（`::error::`），避免发出一个没有更新日志的版本。
+- 流水线修好之前发的版本，页面正文只有一行 `**Full Changelog**: ...`——发布后由
+  「回填历史 Release 更新日志」步骤用同样的段落补齐（immutable release 改不了就跳过，不影响本次发布）。
+
+本地预览某个版本的发布正文：
+
+```bash
+scripts/release-notes.sh 0.3.1
+```
 
 不在 `push` 或 `pull_request` 上跑 CI，也不启用 Dependabot 自动开 PR。
 
@@ -120,6 +137,7 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | 推了 tag 但没有 Release | 只推了分支没推 tag | `git push origin X.Y.Z` |
 | 推了 tag 但 Release 流水线没触发 | tag 用了 `v` 前缀，不匹配正则 `[0-9]+.[0-9]+.[0-9]+` | 用纯数字 `X.Y.Z` |
 | 一次 `git push --all` 带上了 tag，流水线没触发 | 同一批 push 的 tag 事件被吞 | tag 单独 push 一次（`git push origin refs/tags/X.Y.Z`） |
+| Release 页面没有更新日志（只有一行 Full Changelog） | 流水线只用了 `generate_release_notes` | 用 `body_path` 传 `scripts/release-notes.sh` 抽出的 CHANGELOG 段落 |
 | CI 在 `cargo build` 处失败且报 fontconfig 缺失 | apt 列表缺 `libfontconfig1-dev` | 见上文「CI 的系统依赖」 |
 | deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改 |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |

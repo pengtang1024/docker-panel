@@ -202,6 +202,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 14. **日志流状态提示三态**——文案唯一定义处是 `src/log_status.rs`（禁止内联字面量）：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。「已恢复连接」只允许三个触发点：重连后收到首行日志、Idle 结局、探针由「不可达」跃迁为「可达」；三者均要求此前提示过「正在重连」。切换资源或 Clear 必须清掉残留提示（`ui_apply::clear_log_panel` / `clear_log_status`）。
 15. **日志行模型只追加不重建**——UI 日志行模型（`render::logs_sync`）是日志窗口（`AppState.logs`）的**镜像**，用「全局行流位置」对齐：起点相同 → `LogSyncPlan::Append`（只 `extend`，可见行不重排 → 不卡）；起点不同（窗口裁剪过前段 / 换了流）→ `LogSyncPlan::Reset`（整表替换）。**禁止**逐行丢最旧行（整表索引每行错位一次，ListView 每次都把可见行标脏重排 = 旧卡顿主因）；裁剪必须分块（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）。同步账实现见 `src/ui_state/log_sync.rs`。
 16. **状态栏 toast 必须自动恢复**——回调直接写状态栏（复制日志 / 清空日志 / 复制字段值）一律走 `ui_apply::status_toast`，2s 后恢复「就绪」；期间若被其它消息改过则不覆盖（避免旧定时器盖掉新结果）。
+17. **Wayland 必须显式设置 xdg app_id**——`main.rs` 在 `MainWindow::new()` 之后、`ui.run()` 之前调用 `slint::set_xdg_app_id("docker-panel")`（仅当 `WAYLAND_DISPLAY` 存在时）。不设置时 toplevel 没有 app_id（Wayland trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`，**面板坞（Dock）会显示成「未识别程序」、图标退化成通用占位图**。仅在 Wayland 下设置：X11 由 winit 用 argv[0] 回退生成 `WM_CLASS`（class 段 = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致），显式设置反而会让 class 段变空（Slint 固定传 `with_name(app_id, "")`）。
 
 ## 构建命令
 

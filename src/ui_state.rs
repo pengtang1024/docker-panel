@@ -102,6 +102,13 @@ pub struct AppState {
 
     pub sort_field: SortField,
     pub sort_desc: bool,
+    /// 行模型 epoch：排序/筛选/搜索等改变行内容的操作递增。
+    ///
+    /// consumer 在锁内快照行模型、锁外才写 UI；这期间用户若改了排序条件，
+    /// 那批行就是按旧条件建的，落地后列表顺序会与排序箭头打架。
+    /// 回调改条件时会重建行并递增 epoch，consumer 应用前比对 epoch，
+    /// 不一致就丢弃这批旧行（与日志行模型的 log_epoch 同一套做法）。
+    pub rows_epoch: Arc<AtomicU64>,
     pub filter: String,
     /// 当前视图 0=容器 1=镜像 2=网络 3=卷（真值在 UI，回写 state 仅为持久化）
     pub view: i64,
@@ -176,6 +183,7 @@ impl AppState {
             shutdown: AtomicBool::new(false),
             sort_field,
             sort_desc,
+            rows_epoch: Arc::new(AtomicU64::new(0)),
             filter,
             view,
             theme,

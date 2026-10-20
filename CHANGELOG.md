@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-20
+
+### 修复
+
+- **排序状态与上下箭头偶发对不上**：排序状态有两个写入方——UI 回调改了 `AppState` 却没写 Slint 属性，只有 consumer 的 3s 心跳才回写，且回写的是锁内快照的旧值。用户改完排序后心跳写回的仍是旧方向，箭头最长滞后 3s，甚至与实际排序方向相反。现改为回调在 UI 线程同步写 `sort_field` / `sort_desc`（与筛选 / 视图同一套路），consumer 只刷数据不回写用户操作过的状态；另加 `AppState::rows_epoch`，consumer 应用行模型前比对 epoch，锁内建行、锁外应用期间排序条件被改时丢弃这批旧行。
+- **点排序方向箭头没反应（只会打开菜单）**：排序按钮的外层 `TouchArea` 声明在 `HorizontalLayout` 之后，Slint 按声明顺序命中，外层热区盖住了布局内箭头自己的 `TouchArea`，`set_sort_dir()` 永远收不到点击。已把按钮热区移到布局之前（与 `Chip` / `ViewTab` 的 `StateArea` 写法一致），方向箭头恢复可点：点箭头直接翻转升/降序，点按钮其余部分仍然展开排序菜单。
+
 ## [0.3.3] - 2026-10-20
 
 ### 修复
@@ -168,6 +175,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.3.4]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.4
 [0.3.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.3
 [0.3.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.2
 [0.3.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.1

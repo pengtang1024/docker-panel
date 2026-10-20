@@ -13,12 +13,37 @@ import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow } from "models.slint";
 import { AppActions } from "app-actions.slint";
+import { MaterialTheme } from "material-theme.slint";
+import { MaterialPalette, MaterialSchemes } from "@material";
+import { Palette } from "std-widgets.slint";
 // 再导出：Slint 只把「主文件导出的类型」暴露给 Rust（否则 AppActions 变成内部类型，
 // Rust 侧 ui.global::<AppActions>() 找不到符号）
 export { AppActions }
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
+
+    // —— M3 组件库接项目主题 ——
+    // 1) Palette.color-scheme 跟随应用主题（而不是 OS 主题）：
+    //    @material 的 MaterialPalette 用它选 light/dark 板；std-widgets(fluent) 自己也用它。
+    //    不接管的话，用户在应用里选「浅色」而 OS 是深色时，M3 组件仍按深色渲染。
+    // 2) MaterialPalette.schemes 灌入项目设计令牌映射：
+    //    否则 M3 组件用 M3 默认蓝灰板（primary rgb(68,94,145)），与项目 Theme 不同源。
+    //
+    // ⚠️ Slint 语法：不能直接写 `Palette.color-scheme := ...`（全局属性赋值语句不合法，
+    // 且属性名是 kebab-case）。必须经由本组件属性做双向绑定中转。
+    in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;
+    in-out property <MaterialSchemes> m3_schemes <=> MaterialPalette.schemes;
+    // ⚠️ Slint 不允许 `changed <全局属性> => {}`，只能盯本组件的属性。
+    //    theme_mode / system_dark 是 Theme.is_dark 的两个输入，任一变化都要重灌色板。
+    changed theme_mode => {
+        root.color_scheme = Theme.is_dark ? ColorScheme.dark : ColorScheme.light;
+        root.m3_schemes = { light: MaterialTheme.scheme, dark: MaterialTheme.scheme };
+    }
+    changed system_dark => {
+        root.color_scheme = Theme.is_dark ? ColorScheme.dark : ColorScheme.light;
+        root.m3_schemes = { light: MaterialTheme.scheme, dark: MaterialTheme.scheme };
+    }
     // 用 preferred-* 而非 width/height：显式 width/height 会把 min/max 一起钉死
     // → 窗口被锁成固定尺寸、无法缩放拖拽。preferred 只给初始尺寸，min 给下限。
     preferred-width: 1280px;
@@ -31,7 +56,12 @@ export component MainWindow inherits Window {
     // init 里先试一次；Rust 在事件循环启动后置 boot_tick 再兜底一次
     // （testing/winit 后端下 init 阶段焦点可能在窗口 show 时被清掉）
     in-out property <int> boot_tick: 0;
-    init => { global-shortcuts.focus(); }
+    init => {
+        global-shortcuts.focus();
+        // M3 组件库接项目主题：首次灌色板 + 选 light/dark 板
+        root.color_scheme = Theme.is_dark ? ColorScheme.dark : ColorScheme.light;
+        root.m3_schemes = { light: MaterialTheme.scheme, dark: MaterialTheme.scheme };
+    }
     changed boot_tick => { if root.boot_tick > 0 { global-shortcuts.focus(); } }
 
     // —— 视图与筛选 ——

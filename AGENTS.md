@@ -1,26 +1,76 @@
 # AGENTS.md — docker-panel 开发协作入口
 
-> 给 AI 编码助手看的项目速查手册。首次进入仓库请先读此文件。
+> 给 AI 编码助手看的项目速查手册。首次进入仓库请先读此文件与规则配置层 [docs/agents-rules.md](docs/agents-rules.md)。
 
 ## ⚠️ 硬约束：项目名称禁止出现 dvkit
 
 本项目唯一正确的名称是 **docker-panel**（品牌名 Docker Panel）。`dvkit` 是已废弃的旧名，**任何文件、注释、字符串、日志前缀、包名、二进制名、desktop 入口中禁止出现 dvkit 字样**。提交前必须 `grep -ri dvkit .` 确认零残留。
 
+## ⚠️ 硬约束：UI 验证只能通过 Slint MCP
+
+本项目运行在 Wayland 下，**系统截图工具（scrot/gnome-screenshot/maim）全部黑屏**，无法用于 UI 验收。查看 UI 状态必须使用 Slint 内置 MCP 服务器：
+
+```bash
+# 1. 构建带 mcp feature 的版本
+cargo build --release --features slint/mcp
+
+# 2. 启动（SLINT_MCP_PORT 指定端口）
+SLINT_EMIT_DEBUG_INFO=1 SLINT_MCP_PORT=8080 ./target/release/docker-panel &
+
+# 3. 截图（通过 MCP HTTP 接口）
+curl -s -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"take_screenshot","arguments":{"windowHandle":{"generation":"1","index":"1"},"imageMimeType":"image/png"}}}'
+```
+
+Slint MCP 还提供 `get_element_tree` / `get_element_properties` / `click_element` 等工具，可精确检查元素几何尺寸、属性值和模拟交互。**修复 UI 问题时必须用 MCP 截图验证，不要依赖用户口述。**
+
+Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
+```json
+"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }
+```
+
+## ⚠️ 硬约束：正文超过 300 行必须考虑拆分
+
+任何文件去除头部与注释后，**正文内容超过 300 行必须按职责拆分**（头部、注释均不计入行数统计）。此限制适用于源码文件与文档，单一文件承担过多职责会导致维护困难与协作冲突。提交前需审查文件长度，若超限应拆分为独立模块。
+
+## 规则地图与红线约束（外部配置层注入）
+
+> 行为规则的权威定义在独立配置层 [docs/agents-rules.md](docs/agents-rules.md)（规则全文 + 四阶段门禁 + 冲突记录），本文件只保留**规则地图**与**红线摘要**，规则与执行主体解耦。规则间冲突按 R3（架构优先）裁决。
+
+| ID | 规则 | 维度 | 权威定义 |
+|----|------|------|----------|
+| R0 | 项目名禁止出现废弃旧名 | 红线 | 本文件顶部硬约束 |
+| R1 | UI 验证只能通过 Slint MCP | 红线 | 本文件顶部硬约束 |
+| R2 | 去头部/注释后正文 >300 行必须拆分 | 红线 | 本文件顶部硬约束 |
+| R3 | 架构设计优先级绝对高于代码实现 | 红线 | agents-rules.md §2.1 |
+| R4 | 复用率 ≥80%，不足触发二次校验 | 红线 | agents-rules.md §2.2 |
+| R5 | 结构设计强制规范 | 红线 | agents-rules.md §2.3 |
+| R6 | 冲突无条件优先架构/结构 + 自动记录 | 红线 | agents-rules.md §2.4 |
+| R7 | 锁纪律 / Receiver 独占 / spawn 走 handle | 红线 | 本文件 代码规范 #2-5 |
+| R8 | 文档同步触发表 | 流程 | agents-rules.md §6 |
+| R9 | 版本号三同步 | 流程 | docs/git-flow.md |
+| R10 | 命名 / 错误处理 / Slint 隔离等惯例 | 惯例 | 本文件 代码规范 #6-9 |
+
+全链路四阶段门禁（S1 需求解析 → S2 方案生成 → S3 代码输出 → S4 最终校验）检查单见 agents-rules.md §3，**任一阶段不达标不得进入下一阶段**。
+
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.2.2（Phase 2+ 已交付：详情面板 + 实时日志流 + 镜像详情 + 网络/卷 Tab + 网络容器计数）。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.0（Phase 2+ 已交付：卡片化四视图 + 右侧抽屉详情/日志/环境 + 网络/卷视图与容器计数 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
 > **写代码时必须按下方版本的 API 写，禁止凭旧版本记忆。**
-> 不确定的 API 用法，查本文件下方对应技术的"版本特有 API 限制"小节。
+> 不确定的 API 用法：Slint 查本文件「Slint 1.18 已验证的限制」，bollard 查 docs/arch/docker-bollard.md。
 
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
 | Rust | stable | edition 2021 | — |
-| Slint | **1.14** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-2` + `std` | ⚠️ 版本特有 API 限制见下方「Slint 1.14 版本特有限制」 |
-| slint-build | **1.14** | build-dependency | `slint_build::compile("ui/app.slint")` |
-| bollard | **0.21** | — | ⚠️ 版本特有类型坑见下方「bollard 0.21 易踩坑速查」 |
+| Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
+| slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
+| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。用了 Modal（inherits Modal），没用到 Dialog 内置组件——项目自己的 DialogShell 在 Modal 上盖了自定义 card |
+| bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
 | futures-util | **0.3** | — | 提供 `StreamExt`（`.next().await`），需显式引 |
@@ -29,20 +79,48 @@
 | 渲染 | — | 纯软件渲染 | 无 Vulkan/GL/WGPU 依赖，deb 包 **不依赖 libgl1** |
 | 构建优化 | — | release profile | `opt-level="z"` + LTO + `codegen-units=1` + `panic="abort"` + strip |
 
-### Slint 1.14 版本特有限制
+### Slint 1.18 已验证的限制
 
-> 这些是 Slint 1.14 版本**实际存在**的 API 缺失 / 行为限制，写 UI 代码时必须绕开，不能假设未来版本有。升级 Slint 版本后重新核对本节。
+> 这些是 Slint 1.18.1 版本已验证**仍然存在**的 API 缺失 / 行为限制 / 严格语法规则。
+> 写 Slint 代码时必须遵守，不能假设旧版本兼容。升级 Slint 后重新核对本节。
+
+#### 已知 API 缺失（版本间未修复）
 
 | 限制 | 实际行为 | 必须的替代方案 |
 |------|----------|----------------|
-| **TabWidget 没有 `current-tab` property** | 无法通过 `ui.set_current_tab_index(1)` 编程式切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代 |
+| **TabWidget 没有 `current-tab` property** | 无法通过编程式方法切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代（本项目 `detail-log-panel.slint` 已用自绘 TabBar） |
 | **ListView delegate 没有内置 MouseArea** | 直接点 delegate 的空白区域不会触发点击事件 | 行点击需要在 delegate 内部**手动声明 `callback` 属性** + 在 app.slint 注入实现 |
 | **delegate 不能直接 import AppActions global** | Slint 跨文件 global 可见性有坑，Rust 侧 glob import 兼容性问题 | delegate 只声明 `callback xxx(string);`，由 app.slint 的 ListView 循环里 `xxx => { AppActions.container_toggle(row.id); }` 注入实现 |
 | **TabWidget 子组件不继承 parent 尺寸** | Tab 容器不给子组件自动传 width/height | 实例化处**硬设** `width: 320px; height: 600px;` |
-| **`include_modules!()` 用法** | 在一个 .rs 文件（`slint_gen.rs`）里统一展开一次，其他模块 `use crate::slint_gen::*` | 不要在多个 .rs 里重复写 `include_modules!()` |
+| **`include_modules!()` 用法** | 在一个 .rs 文件（`slint_gen.rs`）里统一展开一次 | 不要在多个 .rs 里重复写 `include_modules!()` |
 | **software-renderer-systemfonts 不打包字体** | 只从系统字体读取字形，没有内嵌 CJK fallback | 依赖系统装了 Noto CJK / 文泉驿 等中文字体 |
-| **不支持 `TextInput` 的光标定位** | Slint 1.14 的 TextInput 是简化版，不支持编程式光标移动 | 只读展示用普通 `Text`，需要编辑时才用 `TextInput` |
 | **`invoke_from_event_loop` 只能在主线程安全调用** | consumer 线程里用 `invoke_from_event_loop` 调度 UI 更新 | 闭包里**绝不**触碰 `Mutex<AppState>`，只读闭包外 clone 的参数 |
+| **FocusScope 聚焦方法名是 `focus()`** | 没有 `force-focus`；编译错误不以 `^error` 开头（build script 里是 `slint compile failed`） | 构建后必须看完整输出末尾 `Finished` 确认成功，不能只 grep `^error` |
+| **无焦点元素时 Slint 完全不派发按键** | `focus_item` 为空时 capture/bubble 都不执行，全局快捷键失效 | 根级 FocusScope 包裹全部 UI + 启动焦点引导（延时 300ms 线程投递 boot_tick；`run()` 前排队的 invoke 会被 winit 丢弃） |
+| **Esc 有无条件内置 accept** | i-slint-core window.rs 对 Esc 优先做 popup 关闭逻辑，即使无焦点元素也 Accepted | 不能用"Esc 被 Accepted"证明焦点引导成功；用其它键（如 Ctrl+数字）+ 事件录制验证 |
+| **条件渲染移除焦点元素后焦点悬空** | 弹窗/抽屉关闭后其内部焦点丢失，后续按键无人处理 | 关闭处主动调 `global-shortcuts.focus()` 归还焦点（app.slint Esc 分支） |
+| **`select_bundled_translation` 必须在首个组件创建之后调用** | 之前调用 GLOBAL_CONTEXT 未初始化 → 恒报 `NoTranslationsBundled`（debug/release 都一样） | 放在 `MainWindow::new()` 之后；切换后 `translations_dirty` 自动重算 `@tr` 属性 |
+
+#### Material Modal / Dialog 踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
+
+> DialogShell（`components-dialog.slint`）继承 Material Modal 1.1.0，以下是踩过的真实坑条。
+
+| 坑 | 正确做法 |
+|----|----------|
+| **Material Modal 不是 Rectangle 组件** | 必须显式 `width: 100%; height: 100%`，它没有默认 `parent.width` |
+| **Material Modal 默认 `background_layer` 是空 Rectangle** | 覆盖它加全屏半透明遮罩：`background_layer := Rectangle { background: Theme.overlay; width/height: parent.width/height; TouchArea { ... } }` |
+| **VerticalLayout 子元素显式 `height` 被忽略** | 必须用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
+| **Modal 外层 TouchArea 会吞所有子内容点击** | card 内部必须再包一层 TouchArea，否则点击按钮/CheckBox 会穿透触发遮罩关闭 |
+| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 Material BaseDialog 的 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **Dialog 内三段 VerticalLayout 必须显式 `height: 100%`** | `VerticalLayout { width:100%; height:100%; ... Header/min-height:60 ... Body/stretch:1 ... Footer/min-height:56 }` |
+
+#### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
+
+| 规则 | 旧写法（禁止） | 正确写法 | 验证状态 |
+|------|---------------|---------|----------|
+| **禁止 `!expr` 前缀否定运算符** | `!root.busy`、`if (!root.x)`、`if !root.y:` | `root.busy == false`、`if (root.x == false)`、`if root.y == false:` | ✅ 已全部修复（grep 零匹配） |
+| **1.18 编译期检测布局循环绑定** | `HorizontalBox { Text { height: parent.height; vertical-alignment: center; } }` — 父 HorizontalBox 高度依赖子元素，子元素又 `height: parent.height` 依赖父 → 隐式循环 | 父容器必须有硬值 height，或去掉子元素的 `height: parent.height` + `vertical-alignment` 让 Slint 自动布局 | ✅ 已全部审查：所有 HorizontalBox/VerticalBox 有硬值或子元素不参与循环 |
+| **1.18 编译期检测两向绑定循环** | 双向绑定链路形成循环 → 之前运行时 panic | 检查 `<=>` 链路，避免 A `<=>` B `<=>` C `<=>` A | ✅ 已全部审查 |
 
 ### tokio 1.x 版本关键用法
 
@@ -53,103 +131,62 @@
 | **`Mutex<T>` 不要进 Mutex**：`tokio::sync::Mutex` 不要包在 `std::sync::Mutex` 里 | 容易产生嵌套死锁；当前架构 std Mutex 用于 AppState + 独立 mpsc Receiver 已足够 |
 | **`mpsc::Receiver<Msg>` 由 consumer 独占**：不放在 Mutex 里 | 阻塞 `recv()` 时不能持有 state 锁，否则主线程 Timer / UI 回调全卡死 |
 
-## 模块地图（当前实际）
+## 模块地图（目录职责速查）
 
-```
-docker-panel/
-├── Cargo.toml              # 依赖 & release profile
-├── Cargo.lock
-├── build.rs                # slint_build::compile("ui/app.slint")
-│
-├── ui/                     # Slint UI 声明（纯标记，Rust 侧统一通过 slint_gen 引入）
-│   ├── app.slint           # 主骨架：MainWindow + AppActions global + 左右分栏布局
-│   ├── models.slint        # ContainerRow / ImageRow / LogLineRow / NetworkRow / VolumeRow struct
-│   ├── delegates.slint     # 行 delegate（ContainerRowDelegate / ImageRowDelegate 含按钮 callbacks）
-│   ├── network-views.slint # NetworkRowDelegate + VolumeRowDelegate + 对应 Headers
-│   ├── headers.slint       # ContainerHeader / ImageHeader（列宽严格对齐 delegates）
-│   ├── panes.slint         # TopBar / ToolBar / StatusBar 三个横向 strip 组件
-│   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗组件
-│   ├── detail-panel.slint  # DetailRow + DetailPanel（18 个 in-out 属性 + Labels section）
-│   ├── log-panel.slint     # LogLineDelegate + LogPanel（ListView 滚动）
-│   ├── list-area.slint     # TabBar + ListArea（4 Tab：容器/镜像/网络/卷，callback 注入 AppActions）
-│   └── detail-log-panel.slint  # 右侧详情/日志面板（自绘 Tab + 条件渲染）
-│
-├── src/
-│   ├── main.rs             # 桥接中枢：consumer 线程（recv_timeout + 优雅退出）+ 2 tokio intervals + pump_and_apply
-│   ├── slint_gen.rs        # slint::include_modules!() 集中入口（仅 7 行）
-│   ├── models.rs           # Msg(+Stats/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo
-│   ├── ui_state.rs         # AppState(shutdown: AtomicBool, stats_prev: HashMap) + drain_messages + build_detail_data(fmt_labels)
-│   ├── ui_update.rs        # derive_update(Msg → UiUpdate) + UiUpdate 结构体
-│   ├── ui_apply.rs         # apply_detail(18-tuple) + apply_lists(5 ModelRc)
-│   ├── ui_rows.rs          # 4 种 Slint 行构建 + Compose 分组排序
-│   ├── callbacks.rs        # 顶栏按钮 + PullDialog + CleanupDialog 回调绑定
-│   ├── callbacks_container.rs  # AppActions container_* 回调（toggle/restart/remove/logs/select）
-│   ├── callbacks_image.rs     # AppActions image_remove 回调
-│   └── docker/
-│       ├── mod.rs          # connect() + pub use 重导出
-│       ├── containers.rs   # list / start / stop / restart / remove
-│       ├── images.rs       # list / pull（含进度回调）/ remove
-│       ├── logs.rs         # inspect_container + follow_logs（Stream → tx.send）
-│       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU% 算法）
-│       ├── netvol.rs       # list_networks + list_volumes（bollard 0.21 API）
-│       ├── image_details.rs # inspect_image → ImageDetail（镜像详情 14 字段）
-│       └── system.rs       # cleanup prune
-│
-├── docs/
-│   ├── architecture.md     # 架构设计（线程模型、消息流、模块交互、bollard 坑条）
-│   └── git-flow.md         # Git Flow 分支与发版规范
-├── packaging/
-│   ├── debian/control      # deb 包元信息（Depends 移除 libgl1，软件渲染不需要）
-│   ├── docker-panel.desktop
-│   └── docker-panel.svg
-└── CHANGELOG.md
-```
+逐文件注释见 README「项目结构」（权威、注释齐全），此处只保留目录级职责与关键约束：
+
+| 目录/文件 | 职责 |
+|-----------|------|
+| `ui/` | Slint 声明层（27 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
+| `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
+| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
+| `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
+| 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
 
 ## 线程模型（三线程架构，已实现优雅退出）
 
 ```
 主线程 (ui.run() 阻塞)       consumer 线程               tokio runtime (multi-thread)
 ┌───────────────────┐      ┌────────────────────┐      ┌──────────────────┐
-│ 3s tokio interval ┼──lock▶│ recv_timeout(200ms)┼─────▶│ 3s refresh join!  │
-│ 6s stats interval ┼──lock▶│ (Timeout 检查 flag) │      │ 6s stats join_all │
-│ UI 回调 ───────────┼──lock▶│ drain_messages()   │      │ bollard API 调用   │
-│                     │      │ pump_and_apply      │      │ tx.send(Msg)       │
-│                     │      │ 操作完成立即 s.refresh()│    │ follow_logs 流     │
-│                     │      │ drop lock ──────────┼─invoke▶│                    │
+│ 3s tokio interval ┼──lock▶│ recv_timeout(≤100ms)│      │ 3s refresh join!  │
+│ 6s stats interval ┼──lock▶│ 分批 drain ≤2048/批 │      │ 6s stats join_all │
+│ UI 回调 ───────────┼──lock▶│ pending.merge       │      │ 30s volume df     │
+│                     │      │ 120ms 节流 apply    │      │ bollard API 调用   │
+│                     │      │ 只重建变化区域       │      │ tx.send(Msg)       │
+│                     │      │ drop lock ─────────┼─invoke▶│ follow_logs 流     │
 │                     │      │   _from_event_loop  │      │                    │
 └───────────────────┘      └────────────────────┘      └──────────────────┘
      Mutex<AppState>              mpsc::Receiver<Msg>（独占，不进 Mutex）
      + shutdown: AtomicBool
 ```
 
-**关键设计**：`mpsc::Receiver<Msg>` 不在 Mutex 内部，由 consumer 线程独占。`rx.recv_timeout(200ms)` 替代阻塞 `recv()`，每次 timeout 检查 `AppState.shutdown` flag。窗口关闭 → flag=true → consumer ~250ms 内 break → join → state/runtime 自然 drop。
-
-**Slint Timer 已废弃**：软件渲染器 + MCP 模式下 Slint Timer 不触发（连 debug eprintln 都没有），全部改用 `rt.handle().clone(); rt_h.spawn(async { tokio::time::interval(...); loop { tick().await; } })`。
-
-**pump_and_apply 两阶段铁律**：
-1. 锁内：`drain_messages` + `build rows` + `build_detail_data` + 读字段 + 操作完成时 `s.refresh()`
-2. `drop(state)`
-3. `invoke_from_event_loop` 闭包里调 `ui_apply::apply_lists(...)` / `ui_apply::apply_detail(...)` / 其他 `ui.set_*` — **闭包里绝不碰 state**
+**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式下 Slint Timer 不触发，改 tokio interval）· 两阶段铁律（锁内分批 drain + 只 build 变化区域 → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）· 日志洪峰防护（单批 ≤2048、UI 最多每 120ms 应用一次、纯日志不重算列表/抽屉、日志行模型只追加不重建）· Docker 调用 10s 超时 + 3s 刷新 in-flight 去重。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
 
 ## 消息类型（`models::Msg`）
 
 | 变体 | 来源 | UI 行为 |
 |------|------|---------|
-| `Containers(Result<Vec>)` | 3s tokio interval / 手动刷新 | 替换容器列表 + 剪失效选择 |
-| `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 剪失效选择 |
-| **`Networks(Result<Vec>)`** | 3s interval | 替换网络列表（网络 Tab） |
-| **`Volumes(Result<Vec>)`** | 3s interval | 替换卷列表（卷 Tab） |
+| `Containers(Result<Vec>)` | 3s tokio interval / 手动刷新 | 替换容器列表（保留旧 stats） |
+| `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 后台补查层数 |
+| **`Networks(Result<Vec>)`** | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
+| **`Volumes(Result<Vec>)`** | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
 | `PullProgress(String)` | pull_image 进度闭包 | 状态文本更新 |
-| `PullDone(Result)` | pull_image 结束 | 关弹窗 + 立即刷新镜像列表 |
-| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + **立即触发 s.refresh()** 刷新列表 |
-| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 立即刷新 |
-| `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → DetailPanel 18 字段（含 Labels）灌入 |
-| `LogLine(String)` | follow_logs Stream | 推入 `AppState.logs`（环形缓冲 cap=500）→ LogPanel ListView |
-| **`Stats(String id, ContainerStatsSnapshot)`** | 6s tokio interval | 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列 |
+| `PullDone(Result)` | pull_image 结束 | 关弹窗 + 标记 `refresh_now` |
+| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记 `refresh_now`（apply_ui 统一 `s.refresh()`） |
+| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now` |
+| `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
+| **`LogBatch(u64, Vec<String>)`** | follow_logs Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（滚动窗口 ≤2000 行）→ 追加到 UI 日志行模型 |
+| `LogStreamEnded(u64)` | 日志流结束 | 仅当前 stream_epoch 时清空 `follow_id` / `follow_cancel` / `follow_active`，允许下次重新建流；来源：Eof / Cancelled / 致命错误（容器已删除） |
+| `LogStreamStatus(u64, String)` | follow_runtime 判定结局 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板工具栏状态位（重连中 / 已恢复 / 已停止），不占用底部状态栏。时机：「日志流中断，正在重连…」= 首次进入可恢复重连；「日志流已恢复连接」= 重连后收到首行日志 / Idle 结局 / 探针由不可达跃迁为可达（三者均要求此前提示过重连中）；「日志流已停止」= 非取消的结束 |
+| `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
+| `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
+| `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（卡片数值同帧更新，不阶梯跳动） |
 
 ## 代码规范
 
-1. **单文件 ≤ 300 行**——超过必须按职责拆分。当前所有文件均 ≤ 300 行（最大 main.rs 296 / ui_state.rs 271）。
+1. **单文件 ≤ 300 行**——统计口径见顶部硬约束 R2（去除头部与注释后计正文）。当前所有文件均合规。
 2. **Mutex 锁持有最小化**——锁内**绝不**做任何可能耗时的操作（await、invoke_from_event_loop、长时间迭代）。锁内只做 clone / 取字段 / spawn 启动。
 3. **Receiver 不进 Mutex**——`mpsc::Receiver` 由 consumer 线程独占所有权，绝不能放回 `AppState`。
 4. **所有 spawn 都走 state.rt**——`let (rt, tx) = { let Ok(s) = state.lock() else { return }; (s.rt.handle().clone(), s.tx.clone()) }; drop(s); rt.spawn(async move { ... });`
@@ -158,23 +195,13 @@ docker-panel/
 7. **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸，实例化处硬设。
 8. **命名**：Rust 常规 snake_case / PascalCase；Slint 全局函数 snake_case，结构体 PascalCase。
 9. **错误处理**：Docker API 错误统一转为 `Result<T, String>` 上抛，UI 层展示中文文本。
-
-## bollard 0.21 易踩坑速查
-
-| 项目 | 实际类型 | 备注 |
-|------|----------|------|
-| `LogOutput` | `LogOutput::StdOut { message: Bytes }` | struct 变体，**不是** tuple |
-| `ContainerStateStatusEnum` | 没有 Default | 用 `.as_ref().map(\|e\| e.to_string()).unwrap_or_default()` |
-| `NetworkSettings.ports` | `Option<HashMap<String, Option<Vec<PortBinding>>>>` | 双层 Option |
-| `PortBinding.host_port` | `Option<String>` | 不是 u16 |
-| `LogsOptionsBuilder.tail` | 收 `&str` | 不是 `String` |
-| `StatsOptionsBuilder` 路径 | `bollard::query_parameters::StatsOptionsBuilder` | **不是** `bollard::stats::*` |
-| `list_networks` | 不用泛型参数 | `Some(ListNetworksOptionsBuilder::default().build())` |
-| `list_volumes` | 需要 type annotation | `list_volumes(None::<ListVolumesOptions>)` |
-| `Network` struct 字段 | 没有 `containers` 映射 | driver/scope/name/id 都是 `Option<String>` |
-| `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
-| `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |
-| 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` / `join_all` |
+10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 卷占用）；3s 刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
+11. **高频 Msg 不得逐条 invoke**——统一走 `consumer` 的分批 drain + 120ms 节流；UI 只重建 `DrainResult` 标记的变化区域（容器/镜像/网络/卷各自独立标记），日志走行模型追加。
+12. **可能永久阻塞的读必须可被 shutdown 唤醒**——例如 dconf reader 放独立线程，监控线程用 `recv_timeout` 轮询；禁止在会被 join 的线程里做无超时的阻塞读。
+13. **日志流重连必须退避且永不放弃**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限），禁止立即紧密重试拖垮 Docker；连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），**不得静默放弃跟随**。超过 `LOG_IDLE_TIMEOUT`（180s）无任何日志视为连接挂死，走 `KeepAlive` 分支：静默重连、**不计入失败预算**、不打扰用户。容器是否还活着一律由探针 `probe_container` 判定（`Running`/`Stopped`/`Gone`/`Unreachable`），禁止用跨流共享的 running 标志。每条流的存活标志必须独立，旧流退出不得误标新流。
+14. **日志流状态提示三态**——文案唯一定义处是 `src/log_status.rs`（禁止内联字面量）：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。「已恢复连接」只允许三个触发点：重连后收到首行日志、Idle 结局、探针由「不可达」跃迁为「可达」；三者均要求此前提示过「正在重连」。切换资源或 Clear 必须清掉残留提示（`ui_apply::clear_log_panel` / `clear_log_status`）。
+15. **日志行模型只追加不重建**——UI 日志行模型（`render::logs_sync`）是日志窗口（`AppState.logs`）的**镜像**，用「全局行流位置」对齐：起点相同 → `LogSyncPlan::Append`（只 `extend`，可见行不重排 → 不卡）；起点不同（窗口裁剪过前段 / 换了流）→ `LogSyncPlan::Reset`（整表替换）。**禁止**逐行丢最旧行（整表索引每行错位一次，ListView 每次都把可见行标脏重排 = 旧卡顿主因）；裁剪必须分块（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）。同步账实现见 `src/ui_state/log_sync.rs`。
+16. **状态栏 toast 必须自动恢复**——回调直接写状态栏（复制日志 / 清空日志 / 复制字段值）一律走 `ui_apply::status_toast`，2s 后恢复「就绪」；期间若被其它消息改过则不覆盖（避免旧定时器盖掉新结果）。
 
 ## 构建命令
 
@@ -186,9 +213,7 @@ cargo run
 cargo build --release
 ./target/release/docker-panel
 
-# MCP 截图验收（必须 feature slint/mcp）
-cargo build --release --features slint/mcp
-SLINT_EMIT_DEBUG_INFO=1 SLINT_MCP_PORT=8080 ./target/release/docker-panel &
+# MCP 截图验收：命令见顶部「硬约束：UI 验证只能通过 Slint MCP」（不在此重复）
 
 # 代码检查
 cargo fmt --all -- --check
@@ -216,64 +241,21 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 ## 文档同步规范
 
-> 代码变更后，必须判断是否需要同步文档。以下是**触发时机**和**文档清单**的对应关系。
-
-### 触发事件 → 需要更新的文档
-
-| 触发事件 | 需同步更新的文档 |
-|----------|------------------|
-| 源码文件新增 / 删除 / 重命名 | README 项目结构树、AGENTS.md 模块地图、architecture.md 模块地图 |
-| Slint 文件增删（ui/*.slint） | 同上 + architecture.md 第 4 节 Slint 模块交互 |
-| 依赖版本升级（slint / bollard / tokio / futures） | README 依赖表、AGENTS.md 技术栈表、architecture.md 第 1 节、Wiki Architecture |
-| 架构变更（线程模型、消息流 Msg 变体、模块交互方向调整） | AGENTS.md 线程模型 + 消息类型表、architecture.md 对应章节、README 架构概览 ASCII 图、Wiki Architecture |
-| 功能特性变更（新增 / 删除 / 修改用户可见功能） | CHANGELOG.md、README 功能特性、AGENTS.md 当前已知限制、Wiki Home / Usage |
-| 新增 bollard 类型坑条 | AGENTS.md bollard 易踩坑速查、architecture.md 第 6 节 |
-| 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
-
-### 文档清单与职责
-
-**主仓库内（随主仓库 commit）**：
-
-| 文件 | 职责 | 谁是权威源 |
-|------|------|------------|
-| `AGENTS.md` | AI 协作入口：模块地图、线程模型、消息类型、代码规范、bollard 坑条、已知限制、文档同步规范 | ✅ **本文件**——首次进仓库必须读 |
-| `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览 ASCII 图、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 的精简版 |
-| `docs/architecture.md` | 完整架构设计：7 大章节的深度版（线程模型、消息流、Slint 交互图、Rust/Slint 拆分原则） | ✅ **详细权威源**——与 AGENTS.md 的架构描述需保持一致 |
-| `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
-| `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |
-| `packaging/debian/control` | 版本号（与 Cargo.toml 同步） | ✅ 发版三同步之一 |
-
-**GitHub Wiki（独立 git 仓库）**：
-
-```bash
-# 更新流程（一次性）
-cd /tmp && git clone git@github.com:pengtang1024/docker-panel.wiki.git
-# 修改 .md 文件
-git add -A && git commit -m "docs(wiki): xxx" && git push origin HEAD:master
-rm -rf /tmp/docker-panel-wiki
-```
-
-| Wiki 页面 | 对应 in-tree 文档 | 更新时机 |
-|-----------|------------------|----------|
-| Home.md | README + CHANGELOG | 功能增删 / 发版 |
-| Install.md | README 安装章节 | 安装方式变更 / 二进制名改 |
-| Usage.md | README 使用说明 + 源码 UI 变化 | 用户可见交互变更 |
-| Architecture.md | docs/architecture.md + AGENTS.md 架构章节 | 架构变更（**必须与 in-tree 内容同步**） |
-| FAQ.md | —（独立维护） | 发现新常见问题 / 废弃旧问题 |
-
-### 双份同步原则
-
-- **AGENTS.md ↔ architecture.md**：架构描述两处都有，架构变更时**两边必须同步更新**。AGENTS 放 ASCII 图 + 速查表（AI 读），architecture.md 放完整深度版（人读）。
-- **in-tree ↔ Wiki**：Architecture 页与 `docs/architecture.md`、Install 页与 README 安装章节、Usage 页与 README 使用章节，**同一变更必须两处都改**，避免双源漂移。
-- 提交前快速校验：`grep -ri dvkit .`（零残留）+ 读一遍 README 项目结构树（确认没有已删除文件）。
+> 已迁移至规则配置层 [docs/agents-rules.md](docs/agents-rules.md) §6（触发事件 → 文档清单与职责 → Wiki 流程 → 双份同步原则）。代码变更后按该节执行同步。
+> 提交前快速校验：`grep -ri dvkit .`（零残留）+ 核对 README 项目结构树 + 核对各文件行数（R2 口径）。
 
 ## 当前已知限制
 
-- **无行内排序、多选批量、右键菜单**（v0.2.0 收敛的功能，后续 phase 再加）
+- **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
+- **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
+- **断流窗口的日志不补回**：异常断流后以 `tail=0` 从当前时刻接续，断流窗口内产生的日志会丢；要补齐需改用 timestamps + `since` 游标
+- **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
+- **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
+- **静默容器的「已恢复连接」提示最迟 180s**：容器 180s 无输出走 Idle 保活分支，不计失败预算也不打扰用户；「已恢复」要等到 Idle 结局才提示
 
 ## 文档导航
 
-- [架构设计](docs/architecture.md) — 各文件交互关系、线程模型、消息流、bollard 坑条
+- [规则配置层](docs/agents-rules.md) — 规则地图、红线约束、四阶段门禁、冲突记录、文档同步规范
+- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、Docker/bollard 坑条）
 - [Git Flow 规范](docs/git-flow.md)
 - [更新日志](CHANGELOG.md)
-- [AGENTS.md](AGENTS.md)（本文件）

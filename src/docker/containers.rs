@@ -46,7 +46,7 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
     let list = docker
         .list_containers(Some(options))
         .await
-        .map_err(|e| format!("获取容器列表失败: {e}"))?;
+        .map_err(|e| crate::i18n::trf("Failed to fetch container list: {0}", &[&e.to_string()]))?;
 
     Ok(list
         .into_iter()
@@ -102,8 +102,8 @@ pub async fn start_container(id: &str) -> Result<String, String> {
     docker
         .start_container(id, None)
         .await
-        .map_err(|e| format!("启动容器失败: {e}"))?;
-    Ok("容器已启动".into())
+        .map_err(|e| crate::i18n::trf("Failed to start container: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Container started"))
 }
 
 /// 停止容器
@@ -112,8 +112,8 @@ pub async fn stop_container(id: &str) -> Result<String, String> {
     docker
         .stop_container(id, None)
         .await
-        .map_err(|e| format!("停止容器失败: {e}"))?;
-    Ok("容器已停止".into())
+        .map_err(|e| crate::i18n::trf("Failed to stop container: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Container stopped"))
 }
 
 /// 重启容器
@@ -122,8 +122,8 @@ pub async fn restart_container(id: &str) -> Result<String, String> {
     docker
         .restart_container(id, None)
         .await
-        .map_err(|e| format!("重启容器失败: {e}"))?;
-    Ok("容器已重启".into())
+        .map_err(|e| crate::i18n::trf("Failed to restart container: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Container restarted"))
 }
 
 /// 删除容器（force=true 保证运行中的容器也能删除）
@@ -135,6 +135,6 @@ pub async fn remove_container(id: &str) -> Result<String, String> {
     docker
         .remove_container(id, Some(options))
         .await
-        .map_err(|e| format!("删除容器失败: {e}"))?;
-    Ok("容器已删除".into())
+        .map_err(|e| crate::i18n::trf("Failed to remove container: {0}", &[&e.to_string()]))?;
+    Ok(crate::i18n::t("Container removed"))
 }

@@ -13,8 +13,10 @@
 //!   ActionDone            ← callbacks.rs 所有操作回调 spawn 的任务
 //!   CleanupDone           ← callbacks.rs cleanup_submit spawn 的任务
 
+use std::collections::HashMap;
+
 /// 容器信息（表格一行的数据）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct ContainerInfo {
     /// 完整容器 ID
@@ -82,7 +84,7 @@ impl ContainerInfo {
     }
 }
 
-/// 镜像信息（表格一行的数据）
+/// 镜像信息（卡片一行的数据）
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct ImageInfo {
@@ -92,6 +94,8 @@ pub struct ImageInfo {
     pub name: String,
     /// Tag（无 tag 时为 `<none>`）
     pub tag: String,
+    /// 全部 tag（卡片多 tag 芯片：取每个 repo_tag 的最后一个 ':' 之后部分）
+    pub tags: Vec<String>,
     /// 镜像大小（字节）
     pub size: i64,
     /// 创建时间（unix 秒）
@@ -133,16 +137,33 @@ pub enum Msg {
     CleanupDone(Result<String, String>),
     /// 容器 inspect 结果（详情面板）
     ContainerDetail(Result<ContainerDetail, String>),
-    /// 日志流的一行（详情面板日志页签）
-    LogLine(String),
-    /// 单个容器的 stats 采样（delta 计算在 consumer 线程完成）
-    Stats(String, crate::docker::ContainerStatsSnapshot),
+    /// 日志流的一批行（stream_epoch, 行列表）；epoch 不匹配当前流时 consumer 直接丢弃，
+    /// 避免切换容器/清空日志后队列里的旧行污染新日志。
+    ///
+    /// ⚠️ 必须整批投递，不能逐行发：日志洪峰可达 4 万+ 行/秒，逐行 send 会让
+    /// mpsc 每行唤醒一次 consumer（惊群），实测把 CPU 打到 240%+。
+    /// 整批投递把通道消息数降到 1/1000 量级。
+    LogBatch(u64, Vec<String>),
+    /// 日志流结束（stream_epoch）；仅当仍是当前流时清空 follow_id 并释放 cancel sender，
+    /// 允许下次重新建流
+    LogStreamEnded(u64),
+    /// 日志流状态提示（stream_epoch, 文本）：重连中 / 已恢复 / 已停止
+    LogStreamStatus(u64, String),
+    /// 一轮 stats 采样结果（容器 id → 快照；delta 计算在 consumer 线程完成）
+    ///
+    /// 整轮打包成一条消息：逐容器单发会让卡片数值在 1~2 秒内分批阶梯跳动
+    /// （用户感知为闪烁），整轮一次到达则所有卡片同帧更新。
+    StatsBatch(Vec<(String, crate::docker::ContainerStatsSnapshot)>),
     /// 网络列表
     Networks(Result<Vec<NetworkInfo>, String>),
     /// 卷列表
     Volumes(Result<Vec<VolumeInfo>, String>),
     /// 镜像 inspect 结果（镜像详情面板）
     ImageDetail(Result<ImageDetail, String>),
+    /// 镜像层数批量回填（id → RootFS.Layers.len()；列表 API 不返回层数）
+    ImageLayers(Vec<(String, usize)>),
+    /// 卷磁盘占用（name → 字节数；来自 `/system/df`，低频刷新）
+    VolumeSizes(HashMap<String, u64>),
 }
 
 /// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段
@@ -158,6 +179,8 @@ pub struct ContainerDetail {
     pub status: String,
     pub pid: i64,
     pub exit_code: i64,
+    /// 重启次数（inspect.restart_count）
+    pub restarts: i64,
     pub started_at: String,
     pub finished_at: String,
     pub ports: Vec<String>,
@@ -173,7 +196,7 @@ pub struct ContainerDetail {
     pub networks: Vec<String>,
 }
 
-/// 网络列表简化视图（网络 Tab 用）
+/// 网络列表简化视图（网络卡片 / 详情用）
 #[derive(Debug, Clone)]
 pub struct NetworkInfo {
     pub id: String,
@@ -181,15 +204,24 @@ pub struct NetworkInfo {
     pub name: String,
     pub driver: String,
     pub scope: String,
+    /// 第一个 IPAM 子网（无则为空）
+    pub subnet: String,
+    /// 第一个 IPAM 网关（无则为空）
+    pub gateway: String,
+    /// 是否 Docker 内置网络（bridge / host / none）
+    pub builtin: bool,
 }
 
-/// 卷列表简化视图（卷 Tab 用）
+/// 卷列表简化视图（卷卡片 / 详情用）
 #[derive(Debug, Clone)]
 pub struct VolumeInfo {
     pub name: String,
     pub driver: String,
     pub mountpoint: String,
-    pub size: String,
+    /// 创建时间（Docker 原始 RFC3339 文本，未启用 time/chrono feature 时为字符串）
+    pub created: String,
+    /// 是否匿名卷（64 位小写十六进制名启发式判定）
+    pub anonymous: bool,
 }
 
 /// inspect_image 结果的精简版本——只取 UI 镜像详情面板需要的字段
@@ -203,6 +235,8 @@ pub struct ImageDetail {
     pub created: String,
     pub author: String,
     pub size: String, // 格式化后的大小
+    /// 层数（RootFS.Layers.len()）
+    pub layers: usize,
     pub os: String,
     pub architecture: String,
     pub entrypoint: String,
@@ -228,4 +262,46 @@ pub enum SortField {
     Cpu,
     /// 按内存使用
     Mem,
+    /// 按磁盘读写总量
+    Disk,
+}
+
+impl SortField {
+    /// Slint UI 索引：0=Name 1=Cpu 2=Mem 3=Disk 4=Status（Group 归到 Name）
+    pub fn to_ui_index(self) -> i64 {
+        match self {
+            SortField::Name | SortField::Group => 0,
+            SortField::Cpu => 1,
+            SortField::Mem => 2,
+            SortField::Disk => 3,
+            SortField::Status => 4,
+        }
+    }
+
+    /// 配置文件索引：比 UI 多一个 -1=Group（首次启动的默认分组视图）
+    pub fn to_config_index(self) -> i64 {
+        match self {
+            SortField::Group => -1,
+            other => other.to_ui_index(),
+        }
+    }
+
+    /// 配置索引 → 排序字段（-1=Group，越界回落 Group）
+    pub fn from_config_index(i: i64) -> SortField {
+        match i {
+            -1 => SortField::Group,
+            other => SortField::from_ui_index(other),
+        }
+    }
+
+    /// UI 索引 → 排序字段（越界回落 Name）
+    pub fn from_ui_index(i: i64) -> SortField {
+        match i {
+            1 => SortField::Cpu,
+            2 => SortField::Mem,
+            3 => SortField::Disk,
+            4 => SortField::Status,
+            _ => SortField::Name,
+        }
+    }
 }

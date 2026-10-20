@@ -1,0 +1,102 @@
+// components-form.slint — 表单类组件（TextField + Switch）
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
+
+// ============ TextField — 严格对齐 prototype .input{height:38px;padding:0 12px} ============
+export component TextField inherits Rectangle {
+    in-out property <string> text: "";
+    in-out property <string> placeholder: "";
+    in-out property <string> label: "";
+    in-out property <string> error_msg: "";
+    in-out property <bool> enabled: true;
+    in-out property <string> font_family: "";
+    in-out property <length> font_size: Theme.fs_md;
+
+    height: 38px;
+    border-radius: Theme.r_md;
+    background: Theme.bg;
+    border-width: 1px;
+    // 边框三态：focus → ink，error → err，default → line
+    border-color: fs.has-focus && root.enabled ? Theme.ink
+        : root.error_msg != "" ? Theme.err
+        : Theme.line;
+
+    fs := FocusScope {
+        width: 100%; height: 100%;
+        HorizontalLayout {
+            width: 100%; height: 100%;
+            padding-left: 12px; padding-right: 12px;
+            TextInput {
+                width: 100%; height: 100%;
+                text <=> root.text;
+                color: Theme.ink;
+                font-family: root.font_family;
+                font-size: root.font_size;
+                enabled: root.enabled;
+            }
+        }
+    }
+
+    // Placeholder：text 为空且无焦点时叠加
+    if root.text == "" && fs.has-focus == false : VCenterText {
+        x: 12px;
+        y: (parent.height - self.height) / 2;
+        text: root.placeholder;
+        color: Theme.ink_4;
+        font-family: root.font_family;
+        font-size: root.font_size;
+    }
+
+    // Error 提示（底部小字）
+    if root.error_msg != "" : VCenterText {
+        x: 0px;
+        y: parent.height + 2px;
+        text: root.error_msg;
+        font-size: Theme.fs_xs;
+        color: Theme.err;
+    }
+}
+
+// ============ Switch — 开关型选择器 ============
+// track + thumb 结构，checked 时 thumb 滑到右侧 + track 变色
+export component Switch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in-out property <bool> enabled: true;
+    callback toggled();
+
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+
+    // Track background：default / hover / checked
+    property <color> track_bg: root.checked ? Theme.ink : (area.has_hover ? Theme.ink_4 : Theme.line);
+
+    area := StateArea {
+        width: 100%; height: 100%;
+        layer_color: root.checked ? Theme.ink : Theme.ink_4;
+        layer_radius: 10px;
+        area_enabled: root.enabled;
+        clicked => { root.checked = root.checked == false; root.toggled(); }
+    }
+
+    Rectangle {
+        width: 100%; height: 100%;
+        border-radius: 10px;
+        background: track_bg;
+        opacity: root.enabled ? 1.0 : 0.4;
+    }
+
+    // Thumb：18px 圆，checked 时 x 从 1 → 17px
+    Rectangle {
+        width: 18px; height: 18px;
+        x: root.checked ? 17px : 1px;
+        y: 1px;
+        border-radius: 9px;
+        background: Theme.card;
+        // drop-shadow-color: Theme.shadow;  // 软件渲染器下产生 artifact
+        // drop-shadow-blur: 4px;  // 软件渲染器下产生 artifact
+        // drop-shadow-offset-y: 1px;  // 软件渲染器下产生 artifact
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+}

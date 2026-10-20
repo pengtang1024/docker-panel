@@ -19,6 +19,8 @@ use std::collections::HashMap;
 
 use bollard::query_parameters::PruneImagesOptionsBuilder;
 
+use crate::i18n::trf;
+
 use super::connect;
 
 fn format_bytes(bytes: u64) -> String {
@@ -45,15 +47,15 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let resp = docker
             .prune_containers(None)
             .await
-            .map_err(|e| format!("清理停止容器失败: {e}"))?;
+            .map_err(|e| trf("Cleanup stopped containers failed: {0}", &[&e.to_string()]))?;
         let n = resp
             .containers_deleted
             .as_ref()
             .map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
-        lines.push(format!(
-            "停止的容器：删除 {n} 个，释放 {}",
-            format_bytes(space as u64)
+        lines.push(trf(
+            "Stopped containers: removed {0}, freed {1}",
+            &[&n.to_string(), &format_bytes(space as u64)],
         ));
     }
 
@@ -64,12 +66,12 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let resp = docker
             .prune_images(Some(options))
             .await
-            .map_err(|e| format!("清理悬空镜像失败: {e}"))?;
+            .map_err(|e| trf("Cleanup dangling images failed: {0}", &[&e.to_string()]))?;
         let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
-        lines.push(format!(
-            "悬空镜像：删除 {n} 项，释放 {}",
-            format_bytes(space as u64)
+        lines.push(trf(
+            "Dangling images: removed {0}, freed {1}",
+            &[&n.to_string(), &format_bytes(space as u64)],
         ));
     }
 
@@ -80,17 +82,17 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         let resp = docker
             .prune_images(Some(options))
             .await
-            .map_err(|e| format!("清理未使用镜像失败: {e}"))?;
+            .map_err(|e| trf("Cleanup unused images failed: {0}", &[&e.to_string()]))?;
         let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
-        lines.push(format!(
-            "未使用镜像：删除 {n} 项，释放 {}",
-            format_bytes(space as u64)
+        lines.push(trf(
+            "Unused images: removed {0}, freed {1}",
+            &[&n.to_string(), &format_bytes(space as u64)],
         ));
     }
 
     if lines.is_empty() {
-        return Err("请至少勾选一项清理内容".into());
+        return Err(crate::i18n::t("Nothing to clean up"));
     }
     Ok(lines.join("\n"))
 }

@@ -1,0 +1,133 @@
+// menu-layers.slint — 浮动菜单层
+import { Theme } from "theme.slint";
+import { VCenterText, CenterText } from "components-align.slint";
+import { Dropdown, MenuItem } from "components-interact.slint";
+
+component SortRow inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+    in property <bool> desc: true;
+    callback pick();
+
+    height: 30px;
+    vertical-stretch: 0;
+    border-radius: Theme.r_xs;
+    background: touch.has-hover ? Theme.row_hover : transparent;
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.pick(); }
+    }
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: 8px;
+        padding-left: 10px;
+        padding-right: 10px;
+        cross-axis-alignment: center;
+        VCenterText {
+            text: root.label;
+            font-size: Theme.fs;
+            font-weight: root.active ? 600 : 500;
+            color: root.active ? Theme.ink : Theme.ink_2;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        if root.active : Rectangle {
+            height: 100%;
+            width: 14px;
+            Path {
+                width: 10px; height: 10px;
+                commands: root.desc ? "M12 5v14 M5 12l7 7 7-7" : "M12 19V5 M5 12l7-7 7 7";
+                viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                stroke: Theme.ink_3;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+}
+
+// ============ 排序下拉菜单 ============
+export component SortMenu inherits Dropdown {
+    in property <int> field: 0;
+    in property <bool> desc: true;
+    callback pick(int);
+
+    dw: 110px;
+
+    SortRow {
+        label: @tr("Name");
+        active: root.field == 0;
+        desc: root.desc;
+        pick => { root.pick(0); }
+    }
+    SortRow {
+        label: "CPU";
+        active: root.field == 1;
+        desc: root.desc;
+        pick => { root.pick(1); }
+    }
+    SortRow {
+        label: @tr("Memory");
+        active: root.field == 2;
+        desc: root.desc;
+        pick => { root.pick(2); }
+    }
+    SortRow {
+        label: @tr("Disk");
+        active: root.field == 3;
+        desc: root.desc;
+        pick => { root.pick(3); }
+    }
+    SortRow {
+        label: @tr("Status");
+        active: root.field == 4;
+        desc: root.desc;
+        pick => { root.pick(4); }
+    }
+}
+
+// ============ 卡片「···」菜单（spec 3.1 card-actions）============
+// kind：0=容器 1=镜像 2=网络 3=卷；kind/can_stop 由 app.slint 从 CardMenu 总线透传
+export component CardMenuLayer inherits Dropdown {
+    /// 目标资源主键（容器 id / 镜像 key / 网络 id / 卷名）
+    in property <string> id: "";
+    in property <int> kind: 0;
+    /// 容器菜单的「停止」只在运行中显示：对已停止容器调 toggle 会把它启动，语义相反
+    in property <bool> can_stop: false;
+    callback stop_card(string);
+    callback logs(string);
+    callback details(string);
+    callback remove(string);
+
+    // 容器：停止 / 日志 / 删除（prototype 卡片 dropdown）
+    if root.kind == 0 && root.can_stop : MenuItem {
+        icon_name: "";
+        label: @tr("Stop");
+        clicked => { root.stop_card(root.id); }
+    }
+    if root.kind == 0 : MenuItem {
+        icon_name: "more";
+        label: @tr("Logs");
+        clicked => { root.logs(root.id); }
+    }
+    // 镜像 / 网络 / 卷：详情 + 删除
+    if root.kind != 0 : MenuItem {
+        icon_name: "more";
+        label: @tr("Details");
+        clicked => { root.details(root.id); }
+    }
+    MenuItem {
+        icon_name: "trash";
+        label: @tr("Remove");
+        danger: true;
+        clicked => { root.remove(root.id); }
+    }
+}

@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Docker Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--r:14px;--r-sm:6px;--r-md:8px;--r-xs:4px;--f:"Plus Jakarta Sans",sans-serif;--m:"JetBrains Mono",monospace}
+  :root,[data-theme="light"]{
+    --bg:#f7f7f8;--card:#fff;--line:#ebeaee;--line-2:#f4f4f5;
+    --ink:#0e0e11;--ink-2:#52525b;--ink-3:#a1a1aa;--ink-4:#d4d4d8;
+    --ok:#16a34a;--stop:#a1a1aa;--warn:#d97706;--err:#dc2626;--accent:#0e0e11;
+    --pill-on-bg:rgba(22,163,74,.10);--pill-off-bg:rgba(161,161,170,.14);
+    --bar-bg:#f0f0f3;--bar-cpu:#3b82f6;--bar-mem:#8b5cf6;
+    --shadow:0 1px 2px rgba(14,14,17,.04),0 4px 16px rgba(14,14,17,.05);
+    --shadow-hover:0 2px 4px rgba(14,14,17,.05),0 12px 32px rgba(14,14,17,.10);
+    --overlay:rgba(14,14,17,.4);--skel:#ebeaee;--skel-hi:#f4f4f5;
+    --log-bg:#f4f4f5;--log-ink:#0e0e11;--log-dim:#a1a1aa;
+    --tip-bg:#fff;--tip-ink:#0e0e11;--tip-arrow:#fff;
+  }
+  [data-theme="dark"]{
+    --bg:#0c0c0e;--card:#18181b;--line:#27272a;--line-2:#1f1f23;
+    --ink:#fafafa;--ink-2:#a1a1aa;--ink-3:#71717a;--ink-4:#3f3f46;
+    --ok:#4ade80;--stop:#71717a;--warn:#fbbf24;--err:#f87171;--accent:#fafafa;
+    --pill-on-bg:rgba(74,222,128,.14);--pill-off-bg:rgba(113,113,122,.18);
+    --bar-bg:#27272a;--bar-cpu:#60a5fa;--bar-mem:#a78bfa;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+    --shadow-hover:0 2px 4px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.45);
+    --overlay:rgba(0,0,0,.55);--skel:#1f1f23;--skel-hi:#27272a;
+    --log-bg:#000;--log-ink:#e4e4e7;--log-dim:#52525b;
+    --tip-bg:#18181b;--tip-ink:#fafafa;--tip-arrow:#18181b;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme]){
+      --bg:#0c0c0e;--card:#18181b;--line:#27272a;--line-2:#1f1f23;
+      --ink:#fafafa;--ink-2:#a1a1aa;--ink-3:#71717a;--ink-4:#3f3f46;
+      --ok:#4ade80;--stop:#71717a;--warn:#fbbf24;--err:#f87171;--accent:#fafafa;
+      --pill-on-bg:rgba(74,222,128,.14);--pill-off-bg:rgba(113,113,122,.18);
+      --bar-bg:#27272a;--bar-cpu:#60a5fa;--bar-mem:#a78bfa;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+      --shadow-hover:0 2px 4px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.45);
+      --overlay:rgba(0,0,0,.55);--skel:#1f1f23;--skel-hi:#27272a;
+      --log-bg:#000;--log-ink:#e4e4e7;--log-dim:#52525b;
+      --tip-bg:#18181b;--tip-ink:#fafafa;--tip-arrow:#18181b;
+    }
+  }
+  body{font-family:var(--f);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .app{width:1280px;height:780px;margin:16px auto;background:var(--bg);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-hover);display:flex;flex-direction:column;overflow:hidden;position:relative;transition:background .2s,color .2s}
+
+  /* ===== Top ===== */
+  .top{height:48px;display:flex;align-items:center;padding:0 14px;gap:10px;border-bottom:1px solid var(--line);background:var(--card)}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;letter-spacing:-.01em}
+  .brand .mark{width:26px;height:26px;border-radius:var(--r-md);background:var(--ink);display:grid;place-items:center;color:var(--bg)}
+  .conn{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ok);font-weight:600;margin-left:2px}
+  .conn .d{width:6px;height:6px;border-radius:3px;background:var(--ok);box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 40%,transparent);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 40%,transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  .search{margin-left:auto;width:300px;height:32px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--line-2);display:flex;align-items:center;padding:0 10px;gap:8px;font-size:12px;color:var(--ink-3);cursor:pointer;transition:border-color .15s,background .15s}
+  .search:hover{border-color:var(--ink-4)}
+  .search:focus-within{border-color:var(--ink-3);background:var(--card)}
+  .search .si{display:flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0}
+  .search input{flex:1;border:none;background:transparent;outline:none;font-family:var(--f);font-size:12px;color:var(--ink);min-width:0}
+  .search input::placeholder{color:var(--ink-3)}
+  .search .k{font-size:10px;color:var(--ink-3);font-family:var(--m);padding:1px 6px;border:1px solid var(--line);border-radius:var(--r-xs);background:transparent;line-height:1.3;letter-spacing:.02em}
+  .icon-btn{width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card);display:grid;place-items:center;cursor:pointer;color:var(--ink-2);transition:all .12s}
+  .icon-btn:hover{background:var(--bg);color:var(--ink)}
+  .btn{height:32px;padding:0 12px;border-radius:var(--r-md);border:none;font-family:var(--f);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s;white-space:nowrap}
+  .btn.filled{background:var(--ink);color:var(--bg)}
+  .btn.filled:hover{filter:brightness(1.15)}
+  .btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
+  .btn.ghost:hover{background:var(--bg);color:var(--ink)}
+
+  /* ===== Sub bar ===== */
+  .sub{height:40px;display:flex;align-items:center;padding:0 14px;gap:6px;border-bottom:1px solid var(--line);background:var(--card)}
+  .chip{height:28px;padding:0 12px;border-radius:14px;font-size:12px;font-weight:600;color:var(--ink-2);display:inline-flex;align-items:center;gap:5px;cursor:pointer;transition:all .12s}
+  .chip:hover{background:var(--bg)}
+  .chip.active{background:var(--ink);color:var(--bg)}
+  .chip .n{font-family:var(--m);font-size:11px;opacity:.75}
+  .spacer{flex:1}
+  .sort{position:relative;display:flex;align-items:center;gap:6px;height:28px;font-size:12px;color:var(--ink-3);cursor:pointer;margin-right:8px;padding:0 10px;border-radius:var(--r-sm);transition:all .12s}
+  .sort:hover{background:var(--bg);color:var(--ink)}
+  .sort.active{color:var(--ink);font-weight:600}
+  .sort .arr{display:flex}
+  .sort-menu{position:absolute;top:100%;left:0;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-hover);padding:4px;min-width:110px;opacity:0;transform:translateY(-4px);pointer-events:none;transition:all .15s ease;z-index:20}
+  .sort.open .sort-menu{opacity:1;transform:translateY(0);pointer-events:auto}
+  .sort-menu .si{width:100%;height:30px;padding:0 10px;border:none;background:transparent;border-radius:var(--r-xs);font-family:var(--f);font-size:12px;font-weight:500;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .1s}
+  .sort-menu .si:hover{background:var(--bg);color:var(--ink)}
+  .sort-menu .si.active{color:var(--ink);font-weight:600}
+  .sort-menu .si .ck{margin-left:auto;display:flex}
+  .view-tabs{display:flex;gap:2px;padding:2px;background:var(--bg);border-radius:var(--r-md)}
+  .view-tab{height:30px;padding:0 13px;border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--ink-3);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s}
+  .view-tab.active{background:var(--card);color:var(--ink);box-shadow:0 1px 2px color-mix(in srgb,var(--ink) 10%,transparent)}
+  .view-tab .n{font-family:var(--m);font-size:10px;color:var(--ink-3)}
+
+  /* ===== Batch bar ===== */
+  .batch{height:44px;display:none;align-items:center;padding:0 16px;gap:8px;background:var(--ink);color:var(--bg)}
+  .batch.show{display:flex}
+  .batch .sel{font-size:13px;font-weight:600}
+  .batch .sel b{font-family:var(--m)}
+  .batch .spacer{flex:1}
+  .batch .btn{height:30px;font-size:12px;background:color-mix(in srgb,var(--bg) 18%,transparent);color:var(--bg);border:1px solid color-mix(in srgb,var(--bg) 25%,transparent)}
+  .batch .btn:hover{background:color-mix(in srgb,var(--bg) 30%,transparent)}
+  .batch .btn.danger{background:rgba(220,38,38,.55)}
+  .batch .btn.danger:hover{background:rgba(220,38,38,.75)}
+
+  /* ===== Content ===== */
+  .content{flex:1;overflow:auto;padding:8px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .view{display:none}
+  .view.active{display:block}
+
+  /* ---- Card base ---- */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:9px 9px 7px 11px;cursor:pointer;position:relative;transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease;overflow:hidden}
+  .card::before{content:"";position:absolute;left:0;top:9px;bottom:7px;width:3px;border-radius:0 2px 2px 0;background:var(--state,var(--ok))}
+  .card:hover{box-shadow:var(--shadow-hover);transform:translateY(-2px);border-color:var(--ink-4)}
+  .card.selected{border-color:var(--ink);box-shadow:var(--shadow-hover)}
+  .card .check{position:absolute;top:9px;left:11px;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-4);background:var(--card);display:none;align-items:center;justify-content:center;color:var(--bg);z-index:2}
+  .sel-mode .card .check{display:flex}
+  .card.checked .check{background:var(--ink);border-color:var(--ink)}
+  .card.checked{border-color:var(--ink)}
+  .card-actions{position:absolute;top:9px;right:9px;display:flex;gap:4px;z-index:2}
+  .card:hover .card-actions .ca-main,
+  .card:hover .card-actions .ca-menu,
+  .card-actions:has(.dropdown.open) .ca-main,
+  .card-actions:has(.dropdown.open) .ca-menu{opacity:1}
+  .ca-main{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card);display:grid;place-items:center;cursor:pointer;transition:all .12s;opacity:0;color:var(--ink-2)}
+  .card:hover .ca-main{opacity:1}
+  .ca-main:hover{background:var(--bg);color:var(--ink)}
+  .ca-main.play:hover{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+  .ca-main.restart:hover{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+  .ca-menu{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card);display:grid;place-items:center;cursor:pointer;transition:all .12s;opacity:0;color:var(--ink-2)}
+  .card:hover .ca-menu{opacity:1}
+  .ca-menu:hover,.ca-menu.open{background:var(--bg);color:var(--ink)}
+  .ca-menu.open{border-color:var(--ink-4)}
+  .dropdown{position:absolute;top:36px;right:9px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-hover);padding:4px;min-width:120px;opacity:0;transform:translateY(-4px);pointer-events:none;transition:all .15s ease;z-index:10}
+  .dropdown.open{opacity:1;transform:translateY(0);pointer-events:auto}
+  .dropdown .di{width:100%;height:30px;padding:0 10px;border:none;background:transparent;border-radius:var(--r-xs);font-family:var(--f);font-size:12px;font-weight:500;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .1s}
+  .dropdown .di:hover{background:var(--bg);color:var(--ink)}
+  .dropdown .di.danger:hover{background:rgba(220,38,38,.10);color:var(--err)}
+  .dropdown .di .ic{width:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .status-dot.on{background:var(--ok)}
+  .status-dot.off{background:var(--stop)}
+
+  /* ---- Container card ---- */
+  .c-name{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.01em;word-break:break-word;line-height:1.3;padding-right:70px}
+  .c-img{font-size:11px;color:var(--ink-2);font-family:var(--m);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .c-ports{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;align-items:center}
+  .port{font-size:10px;font-family:var(--m);color:var(--ink-2);background:var(--line-2);padding:1px 6px;border-radius:var(--r-xs)}
+  .port-more{font-size:10px;font-family:var(--m);color:var(--ink-3);padding:1px 5px;border-radius:var(--r-xs);cursor:pointer}
+  .c-res{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:11px;color:var(--ink-2);font-family:var(--m)}
+  .c-res .stat{display:flex;align-items:center;gap:4px;line-height:1}
+  .c-res .stat .ic{display:flex;align-items:center;color:var(--ink-3)}
+  .c-res .stat b{color:var(--ink);font-weight:600;line-height:1;display:flex;align-items:center}
+  .c-res .status-dot{align-self:center}
+  .proj-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r-xs);letter-spacing:.02em;color:var(--ink-2);background:var(--line-2);white-space:nowrap}
+  .proj-tag .dot{width:6px;height:6px;border-radius:3px;background:var(--proj-color,var(--accent))}
+
+  /* ---- Image card ---- */
+  .img-card .repo{font-size:14px;font-weight:700;word-break:break-word;line-height:1.3;padding-right:70px}
+  .img-card .tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+  .img-card .tag{font-size:11px;font-weight:600;color:var(--ink);background:var(--line-2);padding:2px 8px;border-radius:var(--r-sm);font-family:var(--m)}
+  .img-card .tag.latest{color:var(--warn)}
+  .img-card .img-stats{display:flex;gap:16px;margin-top:7px;font-size:11px;color:var(--ink-2)}
+  .img-card .img-stats div b{display:block;font-family:var(--m);font-size:13px;color:var(--ink);font-weight:600;margin-bottom:1px}
+
+  /* ---- Network card ---- */
+  .net-card .net-name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;padding-right:70px}
+  .net-card .net-name .bt{font-size:10px;color:var(--ink-3);font-weight:400}
+  .net-card .net-sub{font-size:11px;color:var(--ink-2);margin-top:1px;font-family:var(--m)}
+  .net-card .net-tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .net-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r-sm);background:var(--line-2);color:var(--ink-2);font-family:var(--m)}
+  .net-card .net-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:11px;color:var(--ink-2)}
+
+  /* ---- Volume card ---- */
+  .vol-card .vol-name{font-size:13px;font-weight:700;font-family:var(--m);padding-right:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vol-card .vol-mount{font-size:10px;color:var(--ink-3);font-family:var(--m);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vol-card .vol-foot{display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--ink-2)}
+  .vol-card .vol-foot b{font-family:var(--m);color:var(--ink);font-weight:600}
+  .anon-tag{display:inline-block;font-size:10px;font-weight:600;color:var(--ink-3);background:var(--line-2);padding:1px 6px;border-radius:var(--r-xs);margin-top:2px}
+
+  /* ===== Tooltip ===== */
+  .tip{position:fixed;z-index:9999;background:var(--tip-bg);color:var(--tip-ink);font-size:11px;font-weight:500;padding:5px 9px;border-radius:var(--r-xs);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.25);letter-spacing:.01em}
+  .tip.show{opacity:1;transform:translateY(0)}
+  .tip::after{content:"";position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--tip-arrow)}
+  [data-tip]{position:relative}
+
+  /* ===== Empty state ===== */
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:420px;gap:12px;color:var(--ink-3);text-align:center}
+  .empty .ico{opacity:.3}
+  .empty h3{font-size:15px;font-weight:700;color:var(--ink-2)}
+  .empty p{font-size:12px;color:var(--ink-3);max-width:320px}
+  .empty .btn{margin-top:8px}
+
+  /* ===== Skeleton ===== */
+  .skel-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:9px 9px 7px 11px;position:relative;overflow:hidden}
+  .skel-card::before{content:"";position:absolute;left:0;top:9px;bottom:7px;width:3px;border-radius:0 2px 2px 0;background:var(--skel)}
+  .skel{background:var(--skel);border-radius:4px;overflow:hidden;position:relative}
+  .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--skel-hi),transparent);animation:shimmer 1.4s infinite}
+  @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  .skel-line{height:12px;margin-bottom:8px}
+  .skel-line.w60{width:60%}.skel-line.w40{width:40%}.skel-line.w80{width:80%}
+
+  /* ===== Drawer ===== */
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:400px;background:var(--card);border-left:1px solid var(--line);box-shadow:-20px 0 40px rgba(14,14,17,.08);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.16,1,.3,1);z-index:20}
+  .drawer.open{transform:translateX(0)}
+  .d-head{padding:18px 20px 14px;border-bottom:1px solid var(--line);position:relative}
+  .d-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:var(--r-sm);border:none;background:var(--bg);cursor:pointer;color:var(--ink-2);display:grid;place-items:center}
+  .d-close:hover{background:var(--line)}
+  .d-title{font-size:18px;font-weight:700;letter-spacing:-.01em;padding-right:30px;word-break:break-word}
+  .d-sub{font-size:12px;color:var(--ink-2);font-family:var(--m);margin-top:4px}
+  .d-tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--card)}
+  .d-tab{height:36px;padding:0 14px;font-size:12px;font-weight:600;color:var(--ink-3);cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-bottom:2px solid transparent;transition:all .12s}
+  .d-tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+  .d-body{flex:1;overflow-y:auto;overflow-x:hidden;display:none}
+  .d-body.active{display:block}
+  .sec{padding:16px 20px;border-bottom:1px solid var(--line)}
+  .sec h3{font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+  .kv{display:flex;align-items:flex-start;gap:12px;padding:5px 0}
+  .kv .k{width:62px;flex-shrink:0;text-align:right;font-size:12px;color:var(--ink-3);padding-top:1px}
+  .kv .v{flex:1;font-size:12px;color:var(--ink);font-weight:500;word-break:break-word}
+  .kv .v.mono{font-family:var(--m);font-size:11px;color:var(--ink-2)}
+  .kv .v.dim{color:var(--ink-3)}
+  .box{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 11px;font-family:var(--m);font-size:11px;color:var(--ink-2);line-height:1.65;white-space:pre-wrap;word-break:break-all;margin-top:6px}
+  .kv-list{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  .kv-list .it{font-family:var(--m);font-size:11px;color:var(--ink-2);padding:4px 8px;background:var(--bg);border-radius:var(--r-xs);border:1px solid var(--line);word-break:break-all;overflow-wrap:break-word}
+
+  /* ---- Logs ---- */
+  .logs{background:var(--log-bg);color:var(--log-ink);font-family:var(--m);font-size:12px;line-height:1.7;padding:14px 16px;height:calc(100% - 36px);overflow-y:auto;overflow-x:hidden}
+  .logs .ln{display:flex;gap:10px}
+  .logs .t{color:var(--log-dim);flex-shrink:0}
+  .logs .stdout{color:var(--log-ink);word-break:break-all;overflow-wrap:break-word}
+  .logs .stderr{color:var(--err);word-break:break-all;overflow-wrap:break-word}
+  .logs .sys{color:var(--warn);word-break:break-all;overflow-wrap:break-word}
+  .log-toolbar{height:36px;background:var(--log-bg);border-bottom:1px solid var(--ink-4);display:flex;align-items:center;padding:0 12px;gap:8px}
+  .log-toolbar .lt{font-size:11px;color:var(--ink-3);font-family:var(--m)}
+  .log-toolbar .lt-btn{width:26px;height:26px;border-radius:var(--r-sm);background:var(--line-2);border:none;color:var(--ink-3);cursor:pointer;display:grid;place-items:center;transition:all .12s}
+  .log-toolbar .lt-btn:hover{color:var(--ink)}
+  .log-toolbar .lt-btn.active{background:var(--ok);color:#fff}
+  .log-toolbar .spacer{flex:1}
+
+  /* ===== Dialog ===== */
+  .overlay{position:absolute;inset:0;background:var(--overlay);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:30}
+  .overlay.show{display:flex}
+  .dialog{background:var(--card);border-radius:16px;width:420px;box-shadow:var(--shadow-hover);overflow:hidden;animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .dlg-head{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+  .dlg-head h2{font-size:16px;font-weight:700}
+  .dlg-head p{font-size:12px;color:var(--ink-2);margin-top:3px}
+  .dlg-body{padding:16px 20px}
+  .field-lbl{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+  .input{width:100%;height:38px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 12px;font-family:var(--m);font-size:13px;color:var(--ink);background:var(--bg);outline:none;transition:border .12s}
+  .input:focus{border-color:var(--ink)}
+  .check-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px;cursor:pointer;transition:all .12s}
+  .check-row:hover{background:var(--bg)}
+  .check-row.on{border-color:var(--ink-3);background:var(--bg)}
+  .check-row:last-child{margin-bottom:0}
+  .check-row .cb{width:18px;height:18px;border-radius:var(--r-xs);border:1.5px solid var(--ink-4);display:grid;place-items:center;color:var(--bg);background:var(--card);flex-shrink:0}
+  .check-row.on .cb{background:var(--ink);border-color:var(--ink)}
+  .check-row .ci{width:20px;height:20px;display:flex;align-items:center;justify-content:center;color:var(--ink-2);flex-shrink:0}
+  .check-row.on .ci{color:var(--ink)}
+  .check-row .cl{flex:1}
+  .check-row .cl .ct{font-size:13px;font-weight:600}
+  .check-row .cl .cd{font-size:11px;color:var(--ink-3);margin-top:1px}
+  .check-row .cnt{font-size:11px;font-family:var(--m);color:var(--ink-3);flex-shrink:0}
+  .progress{height:6px;background:var(--line-2);border-radius:3px;overflow:hidden;margin-top:10px}
+  .progress-bar{height:100%;background:var(--ink);border-radius:3px;width:0;transition:width .3s}
+  .dlg-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+
+  /* ===== Footer ===== */
+  .foot{display:flex;align-items:center;gap:0;padding:0 12px;height:40px;border-top:1px solid var(--line);background:var(--card);overflow-x:auto;scrollbar-width:none}
+  .foot::-webkit-scrollbar{display:none}
+  .foot .msg{font-size:11px;color:var(--ink-3);white-space:nowrap;flex-shrink:0;display:flex;align-items:center}
+  .foot .dot{width:6px;height:6px;border-radius:3px;background:var(--ok);flex-shrink:0;margin-right:8px}
+  .foot .sum{margin-left:auto;font-family:var(--m);font-size:11px;color:var(--ink-3);white-space:nowrap;flex-shrink:0;padding-left:12px;display:flex;align-items:center}
+  .ov-item{display:flex;align-items:center;gap:6px;padding:0 10px;height:100%;border-right:1px solid var(--line-2);white-space:nowrap;flex-shrink:1;min-width:0}
+  .ov-item:first-child{padding-left:0}
+  .ov-item:last-child{border-right:none}
+  .ov-item .ov-ic{color:var(--ink-3);display:flex;align-items:center;flex-shrink:0}
+  .ov-item .ov-val{font-size:13px;font-weight:700;color:var(--ink);font-family:var(--m);line-height:1;display:flex;align-items:center;flex-shrink:0}
+  .ov-item .ov-lbl{font-size:11px;color:var(--ink-3);font-weight:500;line-height:1;display:flex;align-items:center;overflow:hidden;text-overflow:ellipsis;max-width:60px}
+  .ov-item.cpu .ov-val{color:var(--bar-cpu)}
+  .ov-item.mem .ov-val{color:var(--bar-mem)}
+  .ov-item.disk .ov-val{color:var(--warn)}
+
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--ink-4);border-radius:5px;border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink-3)}
+  .logs::-webkit-scrollbar-thumb{background:var(--ink-4);border:2px solid var(--log-bg)}
+  mark{background:color-mix(in srgb,var(--warn) 30%,transparent);color:inherit;border-radius:2px;padding:0 2px}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="top">
+    <div class="brand"><span class="mark" id="brand-mark"></span> Docker Panel</div>
+    <div class="conn"><span class="d"></span><span data-i18n="connected">已连接</span></div>
+    <div class="search" onclick="document.getElementById('search-input').focus()">
+      <span class="si" id="search-ic"></span>
+      <input id="search-input" data-i18n-ph="search_ph" placeholder="搜索名称、镜像..." oninput="doSearch(this.value)">
+      <span class="k" id="search-k">Ctrl+K</span>
+    </div>
+    <button class="icon-btn" data-i18n-tip="toggle_theme" data-tip="切换主题" onclick="toggleTheme()" id="theme-btn"></button>
+    <button class="icon-btn" data-i18n-tip="refresh" data-tip="刷新 (Ctrl+R)" onclick="refresh()" id="refresh-btn"></button>
+    <button class="btn ghost" data-i18n-tip="cleanup" data-tip="清理资源" onclick="openCleanup()" id="cleanup-btn"></button>
+    <button class="btn filled" data-i18n-tip="pull" data-tip="拉取镜像" onclick="openPull()" id="pull-btn"></button>
+  </div>
+
+  <div class="sub">
+    <div id="chips">
+      <div class="chip active" data-filter="all" onclick="setChip(this)"><span data-i18n="all">全部</span><span class="n" id="n-all">8</span></div>
+      <div class="chip" data-filter="running" onclick="setChip(this)"><span data-i18n="running">运行中</span><span class="n">5</span></div>
+      <div class="chip" data-filter="stopped" onclick="setChip(this)"><span data-i18n="stopped">已停止</span><span class="n">3</span></div>
+      <div class="chip" data-filter="iouf" onclick="setChip(this)">iouf<span class="n">4</span></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="sort active" id="sort-btn" onclick="toggleSortMenu(event)">
+      <span id="sort-ic"></span><span id="sort-label" data-i18n="name">名称</span><span class="arr" id="sort-arr"></span>
+      <div class="sort-menu" onclick="event.stopPropagation()">
+        <div class="si active" onclick="setSortField('name')"><span data-i18n="name">名称</span><span class="ck"></span></div>
+        <div class="si" onclick="setSortField('cpu')">CPU<span class="ck"></span></div>
+        <div class="si" onclick="setSortField('mem')"><span data-i18n="memory">内存</span><span class="ck"></span></div>
+        <div class="si" onclick="setSortField('disk')"><span data-i18n="disk">磁盘</span><span class="ck"></span></div>
+        <div class="si" onclick="setSortField('on')"><span data-i18n="status">状态</span><span class="ck"></span></div>
+      </div>
+    </div>
+    <div class="view-tabs" id="views">
+      <div class="view-tab active" data-v="c" onclick="setView('c')"><span data-i18n="containers">容器</span><span class="n">8</span></div>
+      <div class="view-tab" data-v="i" onclick="setView('i')"><span data-i18n="images">镜像</span><span class="n">12</span></div>
+      <div class="view-tab" data-v="n" onclick="setView('n')"><span data-i18n="networks">网络</span><span class="n">5</span></div>
+      <div class="view-tab" data-v="v" onclick="setView('v')"><span data-i18n="volumes">卷</span><span class="n">3</span></div>
+    </div>
+  </div>
+
+  <div class="batch" id="batch">
+    <span class="sel"><span data-i18n="selected">已选</span> <b id="batch-count">0</b> <span data-i18n="sel_count">个</span></span>
+    <div class="spacer"></div>
+    <button class="btn" data-i18n-tip="start_sel" data-tip="启动选中" onclick="batchAction('start')" id="batch-start"></button>
+    <button class="btn" data-i18n-tip="stop_sel" data-tip="停止选中" onclick="batchAction('stop')" id="batch-stop"></button>
+    <button class="btn" data-i18n-tip="restart_sel" data-tip="重启选中" onclick="batchAction('restart')" id="batch-restart"></button>
+    <button class="btn danger" data-i18n-tip="remove_sel" data-tip="删除选中" onclick="batchAction('remove')" id="batch-remove"></button>
+    <button class="btn" data-i18n-tip="cancel_sel" data-tip="取消选择" onclick="clearSel()"><span data-i18n="cancel">取消</span></button>
+  </div>
+
+  <div class="content">
+    <div class="view active" id="view-c"><div class="grid" id="container-grid"></div></div>
+    <div class="view" id="view-i"><div class="grid" id="image-grid"></div></div>
+    <div class="view" id="view-n"><div class="grid" id="network-grid"></div></div>
+    <div class="view" id="view-v"><div class="grid" id="volume-grid"></div></div>
+  </div>
+
+  <!-- Drawer -->
+  <div class="drawer" id="drawer">
+    <div class="d-head">
+      <button class="d-close" data-i18n-tip="close_esc" data-tip="关闭 (Esc)" onclick="closeDrawer()" id="drawer-close"></button>
+      <div class="d-title" id="d-title">iouf-nats-1</div>
+      <div class="d-sub" id="d-sub">nats:2.12-alpine</div>
+    </div>
+    <div class="d-tabs" id="d-tabs">
+      <div class="d-tab active" data-t="detail" onclick="setDTab('detail')"><span data-i18n="detail">详情</span></div>
+      <div class="d-tab" data-t="logs" onclick="setDTab('logs')"><span data-i18n="logs">日志</span></div>
+      <div class="d-tab" data-t="env" onclick="setDTab('env')"><span data-i18n="environment">环境</span></div>
+    </div>
+    <div class="d-body active" id="d-detail"></div>
+    <div class="d-body" id="d-logs" style="background:var(--log-bg)">
+      <div class="log-toolbar">
+        <span class="lt" data-i18n="realtime_logs">实时日志</span><span class="lt">tail: 200</span>
+        <div class="spacer"></div>
+        <button class="lt-btn active" id="log-follow" data-i18n-tip="auto_follow" data-tip="自动跟随滚动" onclick="toggleLogFollow()"></button>
+        <button class="lt-btn" data-i18n-tip="copy_logs" data-tip="复制日志" onclick="toast(t('logs_copied'))"></button>
+        <button class="lt-btn" data-i18n-tip="clear_logs" data-tip="清空日志" onclick="clearLogs()"></button>
+      </div>
+      <div class="logs" id="log-lines"></div>
+    </div>
+    <div class="d-body" id="d-env"></div>
+  </div>
+
+  <!-- Pull dialog -->
+  <div class="overlay" id="pull-overlay">
+    <div class="dialog">
+      <div class="dlg-head"><h2 data-i18n="pull_title">拉取镜像</h2><p data-i18n="pull_desc">输入镜像名称，可选 tag（默认 latest）</p></div>
+      <div class="dlg-body">
+        <div class="field-lbl" data-i18n="image">镜像</div>
+        <input class="input" id="pull-input" placeholder="nginx:latest" value="redis:7-alpine">
+        <div class="field-lbl" style="margin-top:14px" data-i18n="progress">进度</div>
+        <div class="progress"><div class="progress-bar" id="pull-bar"></div></div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:6px;font-family:var(--m)" id="pull-status" data-i18n="waiting">等待拉取...</div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn ghost" onclick="closePull()"><span data-i18n="cancel">取消</span></button>
+        <button class="btn filled" onclick="doPull()"><span data-i18n="pull_btn">拉取</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cleanup dialog -->
+  <div class="overlay" id="cleanup-overlay">
+    <div class="dialog">
+      <div class="dlg-head"><h2 data-i18n="cleanup_title">清理资源</h2><p data-i18n="cleanup_desc">选择要清理的资源类型</p></div>
+      <div class="dlg-body" id="cleanup-list"></div>
+      <div class="dlg-foot">
+        <button class="btn ghost" onclick="closeCleanup()"><span data-i18n="cancel">取消</span></button>
+        <button class="btn filled" onclick="doCleanup()"><span data-i18n="cleanup_btn">清理</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot" id="foot">
+    <span class="dot"></span><span class="msg" id="foot-msg" data-i18n="ready">就绪</span>
+    <div class="ov-item" id="ov-docker"></div>
+    <div class="ov-item" id="ov-ctn"></div>
+    <div class="ov-item" id="ov-img"></div>
+    <div class="ov-item" id="ov-net"></div>
+    <div class="ov-item" id="ov-vol"></div>
+    <div class="ov-item cpu" id="ov-cpu"></div>
+    <div class="ov-item mem" id="ov-mem"></div>
+    <div class="ov-item disk" id="ov-disk"></div>
+    <span class="sum" id="foot-sum">8 容器 · 12 镜像 · 5 网络 · 3 卷</span>
+  </div>
+
+</div>
+
+<script>
+// ===== Icons (Lucide-style, 24x24, stroke 1.5) =====
+const ICONS={
+  docker:'<path d="M3 12h18M3 6h18M3 18h18"/>',
+  container:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  image:'<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+  network:'<rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4M5 16v-2h14v2"/>',
+  volume:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  cpu:'<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
+  memory:'<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10v4M10 10v4M14 10v4M18 10v4"/>',
+  disk:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
+  play:'<polygon points="6 3 20 12 6 21 6 3"/>',
+  restart:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+  stop:'<rect x="5" y="5" width="14" height="14" rx="1"/>',
+  'file-text':'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+  trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>',
+  'more-horizontal':'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  'arrow-up':'<path d="M12 19V5M5 12l7-7 7 7"/>',
+  'arrow-down':'<path d="M12 5v14M19 12l-7 7-7-7"/>',
+  'arrow-up-down':'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/>',
+  'chevron-down':'<path d="M6 9l6 6 6-6"/>',
+  'chevron-up':'<path d="M18 15l-6-6-6 6"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  zap:'<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
+  box:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/>',
+  pause:'<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>',
+  play:'<polygon points="6 3 20 12 6 21 6 3"/>',
+};
+function icon(name,size=14){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">${ICONS[name]||''}</svg>`;
+}
+
+// ===== Data =====
+const containers=[
+  {name:'iouf-nats-1',img:'nats:2.12-alpine',svc:'nats',proj:'iouf',on:true,cpu:5,mem:18,disk:12,ports:['4222','8222'],pid:'1227612',id:'a1b2c3d4e5f6',status:'Up 7 minutes',created:'2025-10-09 14:22',started:'2025-10-16 08:11',restarts:3,netmode:'bridge',networks:['bridge','iouf_default'],mounts:'/data → nats-data',entry:'/docker-entrypoint.sh',cmd:'nats-server --js',labels:'com.docker.compose.project=iouf\ncom.docker.compose.service=nats\ncom.docker.compose.version=2.29.7',env:'NATS_SERVER_NAME=nats-1\nNATS_HTTP_PORT=8222\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',cpushare:'1024',memlimit:'512 MB',health:'healthy',restartPolicy:'unless-stopped'},
+  {name:'iouf-api-1',img:'iouf-api:0.1.0',svc:'api',proj:'iouf',on:true,cpu:12,mem:64,disk:8,ports:['8080'],env:'NODE_ENV=production\nPORT=8080\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['iouf_default'],mounts:'/app/logs → iouf-api-logs',pid:'1227620',id:'b2c3d4e5f6a1',status:'Up 5 minutes',created:'2025-10-09 14:22',started:'2025-10-16 08:13',restarts:0,entry:'node',cmd:'server.js',labels:'com.docker.compose.project=iouf\ncom.docker.compose.service=api',cpushare:'1024',memlimit:'1 GB',health:'healthy',restartPolicy:'unless-stopped'},
+  {name:'iouf-worker-1',img:'iouf-worker:0.1.0',svc:'worker',proj:'iouf',on:false,cpu:0,mem:0,disk:5,ports:[],env:'WORKER_CONCURRENCY=4\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['iouf_default'],mounts:'',pid:'—',id:'c3d4e5f6a1b2',status:'Exited (0) 2 hours ago',created:'2025-10-09 14:22',started:'2025-10-16 06:00',restarts:2,entry:'node',cmd:'worker.js',labels:'com.docker.compose.project=iouf\ncom.docker.compose.service=worker',cpushare:'512',memlimit:'512 MB',health:'none',restartPolicy:'on-failure'},
+  {name:'portainer',img:'portainer/portainer:latest',on:true,cpu:1,mem:32,disk:24,ports:['9000','9443'],env:'PORTAINER_DATA=/data\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['bridge'],mounts:'/var/run/docker.sock → /var/run/docker.sock\n/data → portainer_data',pid:'1227500',id:'d4e5f6a1b2c3',status:'Up 3 days',created:'2025-10-01 10:00',started:'2025-10-13 09:00',restarts:0,entry:'/portainer',cmd:'',labels:'',cpushare:'1024',memlimit:'512 MB',health:'healthy',restartPolicy:'always'},
+  {name:'redis',img:'redis:7-alpine',on:true,cpu:3,mem:8,disk:2,ports:['6379'],env:'REDIS_MAXMEMORY=256mb\nREDIS_MAXMEMORY_POLICY=allkeys-lru\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['bridge'],mounts:'/data → redis-data',pid:'1227580',id:'e5f6a1b2c3d4',status:'Up 2 days',created:'2025-10-05 12:00',started:'2025-10-14 08:00',restarts:0,entry:'docker-entrypoint.sh',cmd:'redis-server',labels:'',cpushare:'1024',memlimit:'256 MB',health:'healthy',restartPolicy:'unless-stopped'},
+  {name:'postgres',img:'postgres:16-alpine',on:true,cpu:8,mem:128,disk:340,ports:['5432'],env:'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=secret\nPOSTGRES_DB=app\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['bridge'],mounts:'/var/lib/postgresql/data → postgres-data',pid:'1227590',id:'f6a1b2c3d4e5',status:'Up 2 days',created:'2025-10-05 12:00',started:'2025-10-14 08:00',restarts:1,entry:'docker-entrypoint.sh',cmd:'postgres',labels:'',cpushare:'1024',memlimit:'1 GB',health:'healthy',restartPolicy:'unless-stopped'},
+  {name:'nginx',img:'nginx:latest',on:false,cpu:0,mem:0,disk:3,ports:['80','443','8080','8443','3000'],env:'NGINX_HOST=localhost\nNGINX_PORT=80\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['bridge'],mounts:'/etc/nginx/conf.d → nginx-config\n/var/log/nginx → nginx-logs',pid:'—',id:'a1b2c3d4e5f7',status:'Exited (0) 1 hour ago',created:'2025-10-10 09:00',started:'2025-10-16 07:00',restarts:0,entry:'/docker-entrypoint.sh',cmd:'nginx -g daemon off;',labels:'',cpushare:'1024',memlimit:'256 MB',health:'none',restartPolicy:'no'},
+  {name:'iouf-db-1',img:'postgres:16',svc:'db',proj:'iouf',on:true,cpu:4,mem:96,disk:180,ports:['5432'],env:'POSTGRES_USER=iouf\nPOSTGRES_PASSWORD=iouf_pass\nPOSTGRES_DB=iouf_prod\nTZ=Asia/Shanghai\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',netmode:'bridge',networks:['iouf_default'],mounts:'/var/lib/postgresql/data → iouf-db-data',pid:'1227630',id:'b2c3d4e5f6a2',status:'Up 7 minutes',created:'2025-10-09 14:22',started:'2025-10-16 08:11',restarts:0,entry:'docker-entrypoint.sh',cmd:'postgres',labels:'com.docker.compose.project=iouf\ncom.docker.compose.service=db',cpushare:'1024',memlimit:'1 GB',health:'healthy',restartPolicy:'unless-stopped'},
+];
+const images=[
+  {repo:'nats',tags:[{t:'2.12-alpine',size:'28 MB'}],size:'28 MB',layers:12,created:'2 days ago',id:'sha256:abc123',entry:'/docker-entrypoint.sh',cmd:'nats-server',env:'PATH=/usr/local/sbin:/usr/local/bin\nNATS_SERVER_NAME=default'},
+  {repo:'iouf-api',tags:[{t:'0.1.0',size:'142 MB'}],size:'142 MB',layers:18,created:'1 week ago'},
+  {repo:'iouf-worker',tags:[{t:'0.1.0',size:'156 MB'}],size:'156 MB',layers:18,created:'1 week ago'},
+  {repo:'portainer/portainer',tags:[{t:'latest',size:'280 MB'}],size:'280 MB',layers:22,created:'3 weeks ago'},
+  {repo:'redis',tags:[{t:'7-alpine',size:'32 MB'},{t:'latest',size:'38 MB'}],size:'32 MB',layers:10,created:'1 month ago'},
+  {repo:'postgres',tags:[{t:'16-alpine',size:'240 MB'},{t:'16',size:'430 MB'}],size:'240 MB',layers:16,created:'1 month ago'},
+  {repo:'nginx',tags:[{t:'latest',size:'142 MB'},{t:'alpine',size:'48 MB'}],size:'142 MB',layers:13,created:'2 months ago'},
+];
+const networks=[
+  {name:'bridge',driver:'bridge',scope:'local',containers:4,builtin:true,subnet:'172.17.0.0/16',gateway:'172.17.0.1'},
+  {name:'iouf_default',driver:'bridge',scope:'local',containers:4,subnet:'172.18.0.0/16',gateway:'172.18.0.1'},
+  {name:'host',driver:'host',scope:'local',containers:0,builtin:true},
+  {name:'none',driver:'null',scope:'local',containers:0,builtin:true},
+  {name:'macvlan0',driver:'macvlan',scope:'local',containers:1,subnet:'192.168.1.0/24'},
+];
+const volumes=[
+  {name:'nats-data',driver:'local',mount:'/var/lib/docker/volumes/nats-data',size:'12 MB',created:'2 weeks ago'},
+  {name:'postgres-data',driver:'local',mount:'/var/lib/docker/volumes/postgres-data',size:'1.2 GB',created:'1 month ago'},
+  {name:'redis-data',driver:'local',mount:'/var/lib/docker/volumes/redis-data',size:'4 MB',created:'3 weeks ago'},
+  {name:'a3f7c2d1e8b904567890abcdef1234567890abcdef1234567890abcdef123456',driver:'local',mount:'/var/lib/docker/volumes/a3f7c2d1.../_data',size:'28 MB',created:'5 days ago',anonymous:true},
+  {name:'b8e2d9f0c1a4567890abcdef1234567890abcdef1234567890abcdef1234567',driver:'local',mount:'/var/lib/docker/volumes/b8e2d9f0.../_data',size:'8 MB',created:'1 week ago',anonymous:true},
+  {name:'c1d4e7f0a3b67890abcdef1234567890abcdef1234567890abcdef12345678',driver:'local',mount:'/var/lib/docker/volumes/c1d4e7f0.../_data',size:'96 MB',created:'2 days ago',anonymous:true},
+  {name:'iouf-caddy-data',driver:'local',mount:'/var/lib/docker/volumes/iouf-caddy-data',size:'3 MB',created:'2 weeks ago'},
+  {name:'d5e8f1a4b7c01234567890abcdef1234567890abcdef1234567890abcdef1234',driver:'local',mount:'/var/lib/docker/volumes/d5e8f1a4.../_data',size:'1.2 MB',created:'6 days ago',anonymous:true},
+];
+
+let currentView='c', currentFilter='all', searchQ='', selectedType=null, selectedIdx=-1;
+let sortField='name', sortDesc=true;
+const collapsedGroups=new Set();
+let logFollow=true;
+
+// ===== Persistence (localStorage) =====
+const CFG_KEYS=['dp-view','dp-filter','dp-sort-field','dp-sort-desc','dp-search','dp-log-follow'];
+function saveConfig(){
+  localStorage.setItem('dp-view',currentView);
+  localStorage.setItem('dp-filter',currentFilter);
+  localStorage.setItem('dp-sort-field',sortField);
+  localStorage.setItem('dp-sort-desc',sortDesc?'1':'0');
+  localStorage.setItem('dp-search',searchQ);
+  localStorage.setItem('dp-log-follow',logFollow?'1':'0');
+}
+function loadConfig(){
+  const v=localStorage.getItem('dp-view');
+  if(v&&['c','i','n','v'].includes(v)){currentView=v}
+  const f=localStorage.getItem('dp-filter');
+  if(f){currentFilter=f}
+  const sf=localStorage.getItem('dp-sort-field');
+  if(sf&&['name','cpu','mem','disk','on'].includes(sf)){sortField=sf}
+  const sd=localStorage.getItem('dp-sort-desc');
+  if(sd!==null){sortDesc=sd==='1'}
+  const sq=localStorage.getItem('dp-search');
+  if(sq!==null){searchQ=sq;const inp=document.getElementById('search-input');if(inp)inp.value=sq}
+  const lf=localStorage.getItem('dp-log-follow');
+  if(lf!==null){logFollow=lf==='1'}
+}
+
+// ===== Render =====
+function hl(s){return searchQ?String(s).replace(new RegExp('('+searchQ.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>'):s}
+
+const projColors={iouf:'#38bdf8'};
+function projColor(p){return projColors[p]||'#a78bfa'}
+
+function portsHTML(ports){
+  if(!ports||!ports.length)return '';
+  const max=3;
+  const shown=ports.slice(0,max);
+  const rest=ports.length-max;
+  return `<div class="c-ports">${shown.map(p=>`<span class="port">${p}</span>`).join('')}${rest>0?`<span class="port-more" data-tip="${ports.slice(max).join(', ')}">+${rest}</span>`:''}</div>`;
+}
+
+function renderContainers(){
+  const g=document.getElementById('container-grid');
+  let list=containers;
+  if(currentFilter==='running')list=list.filter(c=>c.on);
+  if(currentFilter==='stopped')list=list.filter(c=>!c.on);
+  if(currentFilter==='iouf')list=list.filter(c=>c.proj==='iouf');
+  if(searchQ)list=list.filter(c=>c.name.includes(searchQ)||c.img.includes(searchQ));
+  list=[...list].sort((a,b)=>{
+    let av=a[sortField],bv=b[sortField];
+    if(typeof av==='string'){av=av.toLowerCase();bv=bv.toLowerCase()}
+    return sortDesc?(av<bv?1:av>bv?-1:0):(av<bv?-1:av>bv?1:0);
+  });
+  if(list.length===0){g.innerHTML=emptyHTML(t('no_match_ctn'),t('try_adjust'));return}
+  g.innerHTML=list.map(c=>{
+    const idx=containers.indexOf(c);
+    return `
+    <div class="card" style="--state:${c.on?'var(--ok)':'var(--stop)'}${c.proj?';--proj-color:'+projColor(c.proj):''}" onclick="cardClick(this,'c',${idx})">
+      <div class="check">${icon('check',10)}</div>
+      <div class="c-name">${hl(c.name)}</div>
+      <div class="c-img">${hl(c.img)}</div>
+      ${portsHTML(c.ports)}
+      <div class="c-res">
+        <span class="status-dot ${c.on?'on':'off'}" data-tip="${c.on?t('running'):t('stopped')}"></span>
+        <span class="stat" data-tip="${t('cpu_usage')}"><span class="ic">${icon('cpu',11)}</span><b>${c.on?c.cpu+'%':'—'}</b></span>
+        <span class="stat" data-tip="${t('mem_usage')}"><span class="ic">${icon('memory',11)}</span><b>${c.on?c.mem+'M':'—'}</b></span>
+        <span class="stat" data-tip="${t('disk_usage')}"><span class="ic">${icon('disk',11)}</span><b>${c.disk}M</b></span>
+        ${c.proj?`<span class="proj-tag" style="--proj-color:${projColor(c.proj)};margin-left:auto" data-tip="${t('compose_project')}: ${c.proj}"><span class="dot"></span>${c.proj}</span>`:''}
+      </div>
+      <div class="card-actions">
+        <button class="ca-main ${c.on?'restart':'play'}" data-tip="${c.on?t('restart'):t('start')}" onclick="event.stopPropagation();mainAction(this,'c',${idx})">${c.on?icon('restart',13):icon('play',13)}</button>
+        <button class="ca-menu" data-tip="${t('more')}" onclick="event.stopPropagation();toggleMenu(this)">${icon('more-horizontal',12)}</button>
+        <div class="dropdown">
+          <button class="di" onclick="event.stopPropagation();menuAction(this,'stop','c',${idx})"><span class="ic">${icon('stop',13)}</span>${t('stop')}</button>
+          <button class="di" onclick="event.stopPropagation();menuAction(this,'logs','c',${idx})"><span class="ic">${icon('file-text',13)}</span>${t('logs')}</button>
+          <button class="di danger" onclick="event.stopPropagation();menuAction(this,'remove','c',${idx})"><span class="ic">${icon('trash',13)}</span>${t('remove')}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderImages(){
+  const g=document.getElementById('image-grid');
+  let list=images;
+  if(searchQ)list=list.filter(i=>i.repo.includes(searchQ)||i.tags.some(t=>t.t.includes(searchQ)));
+  if(list.length===0){g.innerHTML=emptyHTML(t('no_match_img'),t('pull_or_search'));return}
+  g.innerHTML=list.map((i,idx)=>`
+    <div class="card img-card" onclick="openDetail('i',${images.indexOf(i)})">
+      <div class="repo">${hl(i.repo)}</div>
+      <div class="tags">${i.tags.map(t=>`<span class="tag ${t.t==='latest'?'latest':''}">${hl(t.t)}</span>`).join('')}</div>
+      <div class="img-stats">
+        <div><b>${i.size}</b>${t('size')}</div>
+        <div><b>${i.layers}</b>${t('layers')}</div>
+        <div><b>${i.created}</b>${t('created')}</div>
+      </div>
+      <div class="card-actions">
+        <button class="ca-main play" data-tip="${t('run')}" onclick="event.stopPropagation();toast('${t('run')} ${i.repo}')">${icon('play',13)}</button>
+        <button class="ca-menu" data-tip="${t('more')}" onclick="event.stopPropagation();toggleMenu(this)">${icon('more-horizontal',12)}</button>
+        <div class="dropdown">
+          <button class="di" onclick="event.stopPropagation();menuAction(this,'detail','i',${images.indexOf(i)})"><span class="ic">${icon('file-text',13)}</span>${t('detail')}</button>
+          <button class="di danger" onclick="event.stopPropagation();menuAction(this,'remove','i',${images.indexOf(i)})"><span class="ic">${icon('trash',13)}</span>${t('remove')}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderNetworks(){
+  const g=document.getElementById('network-grid');
+  let list=networks;
+  if(searchQ)list=list.filter(n=>n.name.includes(searchQ));
+  if(list.length===0){g.innerHTML=emptyHTML(t('no_match_net'),'');return}
+  g.innerHTML=list.map((n,idx)=>`
+    <div class="card net-card" onclick="openDetail('n',${networks.indexOf(n)})">
+      <div class="net-name">${hl(n.name)}${n.builtin?` <span class="bt">(${t('builtin')})</span>`:''}</div>
+      <div class="net-sub">${n.driver} · ${n.scope}${n.subnet?' · '+n.subnet:''}</div>
+      <div class="net-tags"><span class="net-tag">${n.driver}</span><span class="net-tag">${n.scope}</span></div>
+      <div class="net-foot">
+        <span>${n.containers} ${t('containers_count')}</span>
+      </div>
+      <div class="card-actions">
+        <button class="ca-main" data-tip="${t('detail')}" onclick="event.stopPropagation();openDetail('n',${networks.indexOf(n)})">${icon('file-text',13)}</button>
+        <button class="ca-menu" data-tip="${t('more')}" onclick="event.stopPropagation();toggleMenu(this)">${icon('more-horizontal',12)}</button>
+        <div class="dropdown">
+          <button class="di danger" onclick="event.stopPropagation();menuAction(this,'remove','n',${networks.indexOf(n)})"><span class="ic">${icon('trash',13)}</span>${t('remove')}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderVolumes(){
+  const g=document.getElementById('volume-grid');
+  let list=volumes;
+  if(searchQ)list=list.filter(v=>v.name.includes(searchQ));
+  if(list.length===0){g.innerHTML=emptyHTML(t('no_match_vol'),'');return}
+  g.innerHTML=list.map(v=>{
+    const idx=volumes.indexOf(v);
+    const isAnon=v.anonymous;
+    const displayName=isAnon?v.name.slice(0,12)+'…':v.name;
+    return `
+    <div class="card vol-card" onclick="openDetail('v',${idx})">
+      <div class="vol-name" data-tip="${v.name}">${hl(displayName)}</div>
+      ${isAnon?`<div class="anon-tag">${t('anon_volume')}</div>`:''}
+      <div class="vol-mount">${v.mount}</div>
+      <div class="vol-foot">
+        <span>driver: <b>${v.driver}</b></span>
+        <span><b>${v.size}</b></span>
+      </div>
+      <div class="card-actions">
+        <button class="ca-main" data-tip="${t('detail')}" onclick="event.stopPropagation();openDetail('v',${idx})">${icon('file-text',13)}</button>
+        <button class="ca-menu" data-tip="${t('more')}" onclick="event.stopPropagation();toggleMenu(this)">${icon('more-horizontal',12)}</button>
+        <div class="dropdown">
+          <button class="di danger" onclick="event.stopPropagation();menuAction(this,'remove','v',${idx})"><span class="ic">${icon('trash',13)}</span>${t('remove')}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function emptyHTML(title,desc){
+  return `<div class="empty"><div class="ico">${icon('box',40)}</div><h3>${title}</h3><p>${desc}</p></div>`;
+}
+
+function skeletonHTML(){
+  let h='';for(let i=0;i<6;i++)h+=`<div class="skel-card"><div class="skel skel-line w60"></div><div class="skel skel-line w40"></div><div class="skel skel-line w80" style="margin-top:16px"></div><div class="skel skel-line w30" style="margin-top:8px"></div></div>`;
+  return h;
+}
+
+// ===== Interactions =====
+function setView(v){
+  currentView=v;
+  saveConfig();
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('.view-tab').forEach(e=>e.classList.toggle('active',e.dataset.v===v));
+  document.getElementById('batch').classList.remove('show');
+  document.getElementById('app').classList.remove('sel-mode');
+  document.querySelectorAll('.card.checked').forEach(e=>e.classList.remove('checked'));
+}
+function setChip(el){
+  document.querySelectorAll('#chips .chip').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+  currentFilter=el.dataset.filter||'all';
+  saveConfig();
+  renderContainers();
+}
+function doSearch(q){searchQ=q.trim();saveConfig();renderAll()}
+function sortLabel(f){return {name:t('name'),cpu:'CPU',mem:t('memory'),disk:t('disk'),on:t('status')}[f]||f};
+function toggleSortMenu(e){
+  e.stopPropagation();
+  const btn=document.getElementById('sort-btn');
+  btn.classList.toggle('open');
+}
+function setSortField(field){
+  if(field===sortField){sortDesc=!sortDesc}
+  else{sortField=field;sortDesc=true}
+  saveConfig();
+  updateSortUI();
+  renderContainers();
+  document.getElementById('sort-btn').classList.remove('open');
+}
+function updateSortUI(){
+  document.getElementById('sort-ic').innerHTML=icon('arrow-up-down',12);
+  document.getElementById('sort-label').textContent=sortLabel(sortField);
+  document.getElementById('sort-arr').innerHTML=icon(sortDesc?'arrow-down':'arrow-up',11);
+  document.querySelectorAll('.sort-menu .si').forEach(si=>{
+    const f=si.getAttribute('onclick').match(/'(\w+)'/)[1];
+    si.classList.toggle('active',f===sortField);
+    si.querySelector('.ck').innerHTML=f===sortField?icon(sortDesc?'arrow-down':'arrow-up',10):'';
+  });
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.sort'))document.getElementById('sort-btn').classList.remove('open')});
+
+function renderOverview(){
+  const running=containers.filter(c=>c.on).length;
+  const totalCpu=containers.filter(c=>c.on).reduce((s,c)=>s+c.cpu,0).toFixed(1);
+  const totalMem=containers.filter(c=>c.on).reduce((s,c)=>s+c.mem,0);
+  const memStr=totalMem>=1024?(totalMem/1024).toFixed(1)+'G':totalMem+'M';
+  const totalDisk=volumes.reduce((s,v)=>{
+    const n=parseFloat(v.size);
+    return s + (v.size.includes('GB')?n*1024:n);
+  },0);
+  const diskStr=totalDisk>=1024?(totalDisk/1024).toFixed(1)+'G':totalDisk.toFixed(0)+'M';
+  document.getElementById('ov-docker').innerHTML=`<span class="ov-ic">${icon('box',12)}</span><span class="ov-val">v26.1.4</span><span class="ov-lbl">Docker</span>`;
+  document.getElementById('ov-ctn').innerHTML=`<span class="ov-ic">${icon('container',12)}</span><span class="ov-val">${running}/${containers.length}</span><span class="ov-lbl">${t('containers')}</span>`;
+  document.getElementById('ov-img').innerHTML=`<span class="ov-ic">${icon('image',12)}</span><span class="ov-val">${images.length}</span><span class="ov-lbl">${t('images')}</span>`;
+  document.getElementById('ov-net').innerHTML=`<span class="ov-ic">${icon('network',12)}</span><span class="ov-val">${networks.filter(n=>!n.builtin).length}</span><span class="ov-lbl">${t('networks')}</span>`;
+  document.getElementById('ov-vol').innerHTML=`<span class="ov-ic">${icon('volume',12)}</span><span class="ov-val">${volumes.length}</span><span class="ov-lbl">${t('volumes')}</span>`;
+  document.getElementById('ov-cpu').innerHTML=`<span class="ov-ic">${icon('cpu',12)}</span><span class="ov-val">${totalCpu}%</span><span class="ov-lbl">CPU</span>`;
+  document.getElementById('ov-mem').innerHTML=`<span class="ov-ic">${icon('memory',12)}</span><span class="ov-val">${memStr}</span><span class="ov-lbl">${t('memory')}</span>`;
+  document.getElementById('ov-disk').innerHTML=`<span class="ov-ic">${icon('disk',12)}</span><span class="ov-val">${diskStr}</span><span class="ov-lbl">${t('disk')}</span>`;
+  document.getElementById('foot-sum').textContent=`${containers.length} ${t('containers')} · ${images.length} ${t('images')} · ${networks.length} ${t('networks')} · ${volumes.length} ${t('volumes')}`;
+}
+
+function renderAll(){renderOverview();renderContainers();renderImages();renderNetworks();renderVolumes()}
+
+function cardClick(el,type,idx){
+  if(document.getElementById('app').classList.contains('sel-mode')){
+    el.classList.toggle('checked');updateBatch();
+  }else{
+    document.querySelectorAll('#view-'+(type==='c'?'c':type==='i'?'i':type==='n'?'n':'v')+' .card').forEach(e=>e.classList.remove('selected'));
+    el.classList.add('selected');
+    openDetail(type,idx);
+  }
+}
+
+function openDetail(type,idx,tab){
+  selectedType=type;selectedIdx=idx;
+  const tabsEl=document.getElementById('d-tabs');
+  tabsEl.style.display=type==='c'?'flex':'none';
+  const data=type==='c'?containers[idx]:type==='i'?images[idx]:type==='n'?networks[idx]:volumes[idx];
+  document.getElementById('d-title').textContent=data.name||data.repo;
+  document.getElementById('d-sub').textContent=data.img||data.size||data.driver||'';
+  document.getElementById('d-detail').innerHTML=detailHTML(type,data);
+  document.getElementById('d-env').innerHTML=envHTML(type,data);
+  setDTab(tab||'detail');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function detailHTML(type,d){
+  if(type==='c')return `
+    <div class="sec"><h3>${t('overview')}</h3>
+      <div class="kv"><span class="k">${t('status')}</span><span class="v"><span class="status-dot ${d.on?'on':'off'}" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>${d.on?t('running'):t('stopped')} · ${d.status||'—'}</span></div>
+      <div class="kv"><span class="k">${t('health')}</span><span class="v">${d.health||'—'}</span></div>
+      <div class="kv"><span class="k">PID</span><span class="v mono">${d.pid||'—'}</span></div>
+      <div class="kv"><span class="k">ID</span><span class="v mono">${d.id||'—'}</span></div>
+      <div class="kv"><span class="k">${t('disk')}</span><span class="v mono">${d.disk||0} MB</span></div>
+    </div>
+    <div class="sec"><h3>${t('resources')||'Resources'}</h3>
+      <div class="kv"><span class="k">CPU</span><span class="v">${d.on?d.cpu+'%':'—'} · ${d.cpushare||'1024'}</span></div>
+      <div class="kv"><span class="k">${t('memory')}</span><span class="v">${d.on?d.mem+' MB':'—'} · ${d.memlimit||t('unlimited')}</span></div>
+      <div class="kv"><span class="k">${t('restart_policy')}</span><span class="v">${d.restartPolicy||'no'}</span></div>
+      <div class="kv"><span class="k">${t('restart_count')}</span><span class="v">${d.restarts||0} ${t('times')}</span></div>
+    </div>
+    <div class="sec"><h3>${t('time')||'Time'}</h3>
+      <div class="kv"><span class="k">${t('created')}</span><span class="v">${d.created||'—'}</span></div>
+      <div class="kv"><span class="k">${t('started')}</span><span class="v">${d.started||'—'}</span></div>
+    </div>
+    <div class="sec"><h3>${t('network')}</h3>
+      <div class="kv"><span class="k">${t('mode')}</span><span class="v">${d.netmode||'bridge'}</span></div>
+      <div class="kv"><span class="k">${t('ports')}</span><span class="v mono">${(d.ports||[]).join(' · ')||'—'}</span></div>
+      <div class="kv"><span class="k">${t('network')}</span><span class="v">${(d.networks||[]).join(', ')||'—'}</span></div>
+      <div class="kv"><span class="k">${t('mounts')}</span><span class="v mono">${d.mounts||'—'}</span></div>
+    </div>
+    <div class="sec" style="border-bottom:none"><h3>${t('config')||'Config'}</h3>
+      <div class="kv"><span class="k">${t('entrypoint')}</span><div class="v"><div class="box">${d.entry||'—'}</div></div></div>
+      <div class="kv"><span class="k">${t('command')}</span><div class="v"><div class="box">${d.cmd||'—'}</div></div></div>
+      <div class="kv"><span class="k">Labels</span><div class="v"><div class="box">${d.labels||'—'}</div></div></div>
+    </div>`;
+  if(type==='i')return `
+    <div class="sec"><h3>${t('overview')}</h3>
+      <div class="kv"><span class="k">${t('repo')}</span><span class="v mono">${d.repo}</span></div>
+      <div class="kv"><span class="k">${t('size')}</span><span class="v">${d.size}</span></div>
+      <div class="kv"><span class="k">${t('layers')}</span><span class="v">${d.layers} ${t('layer')}</span></div>
+      <div class="kv"><span class="k">${t('created')}</span><span class="v">${d.created}</span></div>
+      <div class="kv"><span class="k">ID</span><span class="v mono">${d.id||'—'}</span></div>
+    </div>
+    <div class="sec" style="border-bottom:none"><h3>${t('config')||'Config'}</h3>
+      <div class="kv"><span class="k">${t('entrypoint')}</span><div class="v"><div class="box">${d.entry||'—'}</div></div></div>
+      <div class="kv"><span class="k">${t('command')}</span><div class="v"><div class="box">${d.cmd||'—'}</div></div></div>
+      <div class="kv"><span class="k">${t('environment')}</span><div class="v"><div class="box">${d.env||'—'}</div></div></div>
+    </div>`;
+  if(type==='n')return `
+    <div class="sec"><h3>${t('overview')}</h3>
+      <div class="kv"><span class="k">${t('name')}</span><span class="v mono">${d.name}</span></div>
+      <div class="kv"><span class="k">${t('driver')}</span><span class="v">${d.driver}</span></div>
+      <div class="kv"><span class="k">${t('scope')}</span><span class="v">${d.scope}</span></div>
+      <div class="kv"><span class="k">${t('containers')}</span><span class="v">${d.containers} ${t('containers_count')}</span></div>
+    </div>
+    <div class="sec" style="border-bottom:none"><h3>${t('subnet')}</h3>
+      <div class="kv"><span class="k">${t('subnet')}</span><span class="v mono">${d.subnet||'—'}</span></div>
+      <div class="kv"><span class="k">${t('gateway')}</span><span class="v mono">${d.gateway||'—'}</span></div>
+    </div>`;
+  return `
+    <div class="sec" style="border-bottom:none"><h3>${t('overview')}</h3>
+      <div class="kv"><span class="k">${t('name')}</span><span class="v mono">${d.name}</span></div>
+      <div class="kv"><span class="k">${t('driver')}</span><span class="v">${d.driver}</span></div>
+      <div class="kv"><span class="k">${t('size')}</span><span class="v">${d.size}</span></div>
+      <div class="kv"><span class="k">${t('created')}</span><span class="v">${d.created}</span></div>
+      <div class="kv"><span class="k">${t('mountpoint')}</span><span class="v mono">${d.mount}</span></div>
+    </div>`;
+}
+
+function envHTML(type,d){
+  if(type!=='c')return `<div class="sec"><h3>${t('env_vars')}</h3><div class="box">${d.env||t('none')}</div></div>`;
+  const envVars=(d.env||'').split('\n').filter(Boolean);
+  return `
+    <div class="sec"><h3>${t('env_vars')}</h3>
+      ${envVars.length?`<div class="kv-list">${envVars.map(e=>{const i=e.indexOf('=');return `<div class="it"><b style="color:var(--bar-cpu)">${e.slice(0,i)}</b>=${e.slice(i+1)}</div>`}).join('')}</div>`:`<div class="box">${t('none')}</div>`}
+    </div>
+    <div class="sec"><h3>${t('port_mapping')}</h3>
+      <div class="kv-list">${(d.ports||[]).map(p=>`<div class="it">0.0.0.0:${p} → ${p}/tcp</div>`).join('')||`<div class="it" style="color:var(--ink-3)">${t('no_port')}</div>`}</div>
+    </div>
+    <div class="sec"><h3>${t('net_conn')}</h3>
+      <div class="kv-list">${(d.networks||[]).map(n=>`<div class="it">${n}</div>`).join('')||`<div class="it" style="color:var(--ink-3)">${t('none')}</div>`}</div>
+    </div>
+    <div class="sec" style="border-bottom:none"><h3>${t('mounts')}</h3><div class="box">${d.mounts||'—'}</div></div>`;
+}
+
+function closeDrawer(){document.getElementById('drawer').classList.remove('open')}
+function setDTab(t){
+  document.querySelectorAll('.d-tab').forEach(e=>e.classList.toggle('active',e.dataset.t===t));
+  document.querySelectorAll('.d-body').forEach(e=>e.classList.toggle('active',e.id==='d-'+t));
+}
+
+// ---- Batch ----
+function updateBatch(){
+  const n=document.querySelectorAll('.card.checked').length;
+  document.getElementById('batch-count').textContent=n;
+  document.getElementById('batch').classList.toggle('show',n>0);
+}
+function clearSel(){
+  document.querySelectorAll('.card.checked').forEach(e=>e.classList.remove('checked'));
+  updateBatch();
+  document.getElementById('app').classList.remove('sel-mode');
+}
+function batchAction(a){const n=document.querySelectorAll('.card.checked').length;const actMap={start:t('start'),stop:t('stop'),restart:t('restart'),remove:t('remove')};toast(`${t('batch_prefix')}${actMap[a]||a} ${n}${t('sel_count')?` ${t('sel_count')}`:''}`);clearSel()}
+document.addEventListener('click',e=>{if(e.shiftKey&&e.target.closest('.card'))document.getElementById('app').classList.add('sel-mode')});
+
+// ---- Logs ----
+const logSamples=[
+  ['stdout','[1] Starting NATS Server v2.12.0'],
+  ['stdout','[1] Listening for client connections on 0.0.0.0:4222'],
+  ['stdout','[1] Server is ready'],
+  ['stdout','[1] JetStream enabled'],
+  ['sys','[WRN] Slow consumer detected on client cid=42'],
+  ['stdout','[1] Client connection accepted cid=42'],
+  ['stderr','[ERR] Error reading from client: connection reset'],
+  ['stdout','[1] Reconnected client cid=43'],
+];
+let logIdx=0;
+function renderLogs(){
+  const el=document.getElementById('log-lines');if(!el)return;
+  const now=new Date();
+  const t=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const s=logSamples[logIdx%logSamples.length];logIdx++;
+  const line=document.createElement('div');
+  line.className='ln';
+  line.innerHTML=`<span class="t">${t}</span><span class="${s[0]}">${s[1]}</span>`;
+  el.appendChild(line);
+  if(logFollow)el.scrollTop=el.scrollHeight;
+  if(el.children.length>60)el.removeChild(el.firstChild);
+}
+function toggleLogFollow(){
+  logFollow=!logFollow;
+  saveConfig();
+  const btn=document.getElementById('log-follow');
+  btn.classList.toggle('active',logFollow);
+  btn.innerHTML=logFollow?icon('play',12):icon('pause',12);
+  btn.dataset.tip=logFollow?t('log_follow_on'):t('log_paused');
+  if(logFollow){const el=document.getElementById('log-lines');if(el)el.scrollTop=el.scrollHeight}
+}
+function clearLogs(){document.getElementById('log-lines').innerHTML=''}
+setInterval(renderLogs,700);
+
+// ---- Dialogs ----
+function openPull(){document.getElementById('pull-overlay').classList.add('show')}
+function closePull(){document.getElementById('pull-overlay').classList.remove('show')}
+function doPull(){
+  const bar=document.getElementById('pull-bar'),st=document.getElementById('pull-status');
+  let p=0;st.textContent=t('pulling');
+  const iv=setInterval(()=>{p+=Math.random()*12;if(p>=100){p=100;clearInterval(iv);st.innerHTML=t('done')+' '+icon('check',12);setTimeout(closePull,600)}bar.style.width=p+'%'},120);
+}
+
+const cleanupItems=[
+  {key:'containers',icon:'container',titleKey:'stopped_containers',descKey:'cleanup_containers_desc',count:3},
+  {key:'images',icon:'image',titleKey:'dangling_images',descKey:'cleanup_images_desc',count:5},
+  {key:'networks',icon:'network',titleKey:'unused_networks',descKey:'cleanup_networks_desc',count:1},
+  {key:'volumes',icon:'volume',titleKey:'unused_volumes',descKey:'cleanup_volumes_desc',count:2},
+];
+const cleanupState={containers:true,images:true,networks:false,volumes:false};
+function renderCleanup(){
+  document.getElementById('cleanup-list').innerHTML=cleanupItems.map(it=>{
+    const title=t(it.titleKey),desc=t(it.descKey);
+    return `
+    <div class="check-row ${cleanupState[it.key]?'on':''}" onclick="toggleCleanup('${it.key}')" data-tip="${desc}">
+      <div class="cb">${icon('check',11)}</div>
+      <div class="ci">${icon(it.icon,16)}</div>
+      <div class="cl"><div class="ct">${title}</div><div class="cd">${desc}</div></div>
+      <span class="cnt">${it.count}</span>
+    </div>`;
+  }).join('');
+}
+function toggleCleanup(key){cleanupState[key]=!cleanupState[key];renderCleanup()}
+function openCleanup(){renderCleanup();document.getElementById('cleanup-overlay').classList.add('show')}
+function closeCleanup(){document.getElementById('cleanup-overlay').classList.remove('show')}
+function doCleanup(){
+  const sep=currentLang==='zh'?'、':', ';
+  const selected=cleanupItems.filter(i=>cleanupState[i.key]).map(i=>t(i.titleKey)).join(sep);
+  closeCleanup();toast(t('cleaned')+selected);
+}
+
+// ---- i18n (zh / en, default follows system) ----
+const I18N={
+  zh:{
+    connected:'已连接',search_ph:'搜索名称、镜像...',toggle_theme:'切换主题',
+    refresh:'刷新 (Ctrl+R)',cleanup:'清理资源',pull:'拉取镜像',lang:'切换语言',
+    cancel_sel:'取消选择',close_esc:'关闭 (Esc)',
+    all:'全部',running:'运行中',stopped:'已停止',
+    name:'名称',cpu:'CPU',memory:'内存',disk:'磁盘',status:'状态',
+    containers:'容器',images:'镜像',networks:'网络',volumes:'卷',
+    selected:'已选',sel_count:'个',start_sel:'启动选中',stop_sel:'停止选中',
+    restart_sel:'重启选中',remove_sel:'删除选中',cancel:'取消',
+    detail:'详情',logs:'日志',environment:'环境',
+    realtime_logs:'实时日志',auto_follow:'自动跟随滚动',copy_logs:'复制日志',
+    clear_logs:'清空日志',logs_copied:'日志已复制',
+    pull_title:'拉取镜像',pull_desc:'输入镜像名称，可选 tag（默认 latest）',
+    image:'镜像',progress:'进度',waiting:'等待拉取...',pulling:'正在拉取...',
+    done:'完成',pull_btn:'拉取',
+    cleanup_title:'清理资源',cleanup_desc:'选择要清理的资源类型',cleanup_btn:'清理',
+    ready:'就绪',refreshed:'已刷新',
+    cpu_usage:'CPU 使用率',mem_usage:'内存使用',disk_usage:'磁盘占用',
+    compose_project:'Compose 项目',restart:'重启',start:'启动',more:'更多操作',
+    stop:'停止',remove:'删除',run:'运行',
+    builtin:'内置',containers_count:'个容器',anon_volume:'匿名卷',
+    overview:'概览',resources:'资源',time:'时间',config:'配置',health:'健康',restart_policy:'重启策略',
+    restart_count:'重启次数',times:'次',created:'创建',started:'启动',
+    mode:'模式',ports:'端口',network:'网络',mounts:'挂载',entrypoint:'入口点',
+    command:'命令',repo:'仓库',size:'大小',layers:'层数',layer:'层',
+    driver:'驱动',scope:'范围',subnet:'子网',gateway:'网关',mountpoint:'挂载点',
+    env_vars:'环境变量',port_mapping:'端口映射',net_conn:'网络连接',
+    none:'无',no_port:'无端口映射',unlimited:'无限制',
+    stopped_containers:'停止的容器',dangling_images:'悬空镜像',
+    unused_networks:'未使用的网络',unused_volumes:'未使用的卷',
+    cleanup_containers_desc:'清理所有已停止的容器',cleanup_images_desc:'清理没有 tag 的悬空镜像',
+    cleanup_networks_desc:'清理没有容器连接的网络',cleanup_volumes_desc:'清理没有容器使用的卷',
+    cleaned:'已清理：',batch_prefix:'批量',
+    no_match_ctn:'没有匹配的容器',try_adjust:'试试调整筛选条件或搜索关键词',
+    no_match_img:'没有匹配的镜像',pull_or_search:'拉取新镜像或调整搜索',
+    no_match_net:'没有匹配的网络',no_match_vol:'没有匹配的卷',
+    log_follow_on:'自动跟随滚动（已开启）',log_paused:'已暂停跟随',
+  },
+  en:{
+    connected:'Connected',search_ph:'Search name, image...',toggle_theme:'Toggle theme',
+    refresh:'Refresh (Ctrl+R)',cleanup:'Cleanup',pull:'Pull image',lang:'Switch language',
+    cancel_sel:'Clear selection',close_esc:'Close (Esc)',
+    all:'All',running:'Running',stopped:'Stopped',
+    name:'Name',cpu:'CPU',memory:'Memory',disk:'Disk',status:'Status',
+    containers:'Containers',images:'Images',networks:'Networks',volumes:'Volumes',
+    selected:'Selected',sel_count:'',start_sel:'Start selected',stop_sel:'Stop selected',
+    restart_sel:'Restart selected',remove_sel:'Remove selected',cancel:'Cancel',
+    detail:'Details',logs:'Logs',environment:'Environment',
+    realtime_logs:'Live logs',auto_follow:'Auto-scroll',copy_logs:'Copy logs',
+    clear_logs:'Clear logs',logs_copied:'Logs copied',
+    pull_title:'Pull image',pull_desc:'Enter image name, optional tag (default latest)',
+    image:'Image',progress:'Progress',waiting:'Waiting...',pulling:'Pulling...',
+    done:'Done',pull_btn:'Pull',
+    cleanup_title:'Cleanup resources',cleanup_desc:'Select resource types to clean',cleanup_btn:'Cleanup',
+    ready:'Ready',refreshed:'Refreshed',
+    cpu_usage:'CPU usage',mem_usage:'Memory usage',disk_usage:'Disk usage',
+    compose_project:'Compose project',restart:'Restart',start:'Start',more:'More',
+    stop:'Stop',remove:'Remove',run:'Run',
+    builtin:'builtin',containers_count:'containers',anon_volume:'Anonymous',
+    overview:'Overview',resources:'Resources',time:'Time',config:'Config',health:'Health',restart_policy:'Restart policy',
+    restart_count:'Restarts',times:'',created:'Created',started:'Started',
+    mode:'Mode',ports:'Ports',network:'Network',mounts:'Mounts',entrypoint:'Entrypoint',
+    command:'Command',repo:'Repository',size:'Size',layers:'Layers',layer:'',
+    driver:'Driver',scope:'Scope',subnet:'Subnet',gateway:'Gateway',mountpoint:'Mountpoint',
+    env_vars:'Environment variables',port_mapping:'Port mapping',net_conn:'Network',
+    none:'None',no_port:'No port mapping',unlimited:'unlimited',
+    stopped_containers:'Stopped containers',dangling_images:'Dangling images',
+    unused_networks:'Unused networks',unused_volumes:'Unused volumes',
+    cleanup_containers_desc:'Remove all stopped containers',cleanup_images_desc:'Remove untagged dangling images',
+    cleanup_networks_desc:'Remove networks with no containers',cleanup_volumes_desc:'Remove volumes not used by containers',
+    cleaned:'Cleaned: ',batch_prefix:'Batch ',
+    no_match_ctn:'No matching containers',try_adjust:'Try adjusting filters or keywords',
+    no_match_img:'No matching images',pull_or_search:'Pull new image or adjust search',
+    no_match_net:'No matching networks',no_match_vol:'No matching volumes',
+    log_follow_on:'Auto-scroll (on)',log_paused:'Paused',
+  }
+};
+let currentLang=navigator.language.startsWith('zh')?'zh':'en';
+function t(k){return (I18N[currentLang]&&I18N[currentLang][k])||k}
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent=t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-tip]').forEach(el=>{
+    el.dataset.tip=t(el.dataset.i18nTip);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    el.placeholder=t(el.dataset.i18nPh);
+  });
+}
+// ---- Theme (auto / light / dark) ----
+const THEME_MODES=['auto','light','dark'];
+const THEME_ICONS={auto:'monitor',light:'sun',dark:'moon'};
+function initTheme(){
+  const saved=localStorage.getItem('dp-theme')||'auto';
+  applyTheme(saved);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{
+    if(!localStorage.getItem('dp-theme')||localStorage.getItem('dp-theme')==='auto'){
+      applyTheme('auto');
+    }
+  });
+}
+function applyTheme(mode){
+  if(mode==='auto'){
+    document.documentElement.removeAttribute('data-theme');
+  }else{
+    document.documentElement.setAttribute('data-theme',mode);
+  }
+  updateThemeIcon(mode);
+}
+function updateThemeIcon(mode){
+  document.getElementById('theme-btn').innerHTML=icon(THEME_ICONS[mode]||'monitor',15);
+}
+function toggleTheme(){
+  const cur=localStorage.getItem('dp-theme')||'auto';
+  const idx=THEME_MODES.indexOf(cur);
+  const next=THEME_MODES[(idx+1)%THEME_MODES.length];
+  applyTheme(next);
+  localStorage.setItem('dp-theme',next);
+}
+
+// ---- Card menu ----
+function toggleMenu(btn){
+  const dd=btn.nextElementSibling;
+  const isOpen=dd.classList.contains('open');
+  closeAllMenus();
+  if(!isOpen){dd.classList.add('open');btn.classList.add('open')}
+}
+function closeAllMenus(){
+  document.querySelectorAll('.dropdown.open').forEach(d=>d.classList.remove('open'));
+  document.querySelectorAll('.ca-menu.open').forEach(b=>b.classList.remove('open'));
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.card-actions'))closeAllMenus()});
+
+function mainAction(btn,type,idx){
+  const data=type==='c'?containers[idx]:type==='i'?images[idx]:null;
+  if(type==='c'){
+    if(data.on){toast(`${t('restart')} ${data.name}`)}
+    else{toast(`${t('start')} ${data.name}`);data.on=true;renderContainers()}
+  }else if(type==='i'){toast(`${t('run')} ${data.repo}`)}
+}
+function menuAction(btn,action,type,idx){
+  closeAllMenus();
+  const data=type==='c'?containers[idx]:type==='i'?images[idx]:type==='n'?networks[idx]:volumes[idx];
+  const name=data.name||data.repo;
+  if(action==='stop'){data.on=false;toast(`${t('stop')} ${name}`);renderContainers()}
+  else if(action==='logs'){openDetail(type,idx,'logs')}
+  else if(action==='detail'){openDetail(type,idx)}
+  else if(action==='remove'){toast(`${t('remove')} ${name}`)}
+}
+
+// ---- Shortcuts ----
+document.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  const typing=tag==='input'||tag==='textarea';
+  // Ctrl+K focus search
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('search-input').focus();return}
+  // Ctrl+R refresh
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='r'){e.preventDefault();refresh();return}
+  // Ctrl+1~4 switch view
+  if((e.ctrlKey||e.metaKey)&&['1','2','3','4'].includes(e.key)){e.preventDefault();setView(['c','i','n','v'][parseInt(e.key)-1]);return}
+  if(typing)return;
+  // Esc close overlays
+  if(e.key==='Escape'){
+    if(document.querySelector('.overlay.show')){document.querySelectorAll('.overlay.show').forEach(o=>o.classList.remove('show'));return}
+    if(document.getElementById('drawer').classList.contains('open')){closeDrawer();return}
+    if(document.getElementById('app').classList.contains('sel-mode')){clearSel();return}
+  }
+  // / focus search
+  if(e.key==='/'){e.preventDefault();document.getElementById('search-input').focus();return}
+});
+
+// ---- Tooltip ----
+const tipEl=document.createElement('div');
+tipEl.className='tip';
+document.body.appendChild(tipEl);
+let tipTimer=null;
+document.addEventListener('mouseover',e=>{
+  const t=e.target.closest('[data-tip]');
+  if(!t)return;
+  clearTimeout(tipTimer);
+  tipTimer=setTimeout(()=>{
+    tipEl.textContent=t.dataset.tip;
+    tipEl.style.visibility='hidden';
+    tipEl.classList.add('show');
+    const tw=tipEl.offsetWidth;
+    const r=t.getBoundingClientRect();
+    tipEl.style.left=Math.max(8,Math.min(window.innerWidth-tw-8,r.left+r.width/2-tw/2))+'px';
+    tipEl.style.top=(r.top-tipEl.offsetHeight-8)+'px';
+    tipEl.style.visibility='visible';
+  },300);
+});
+document.addEventListener('mouseout',e=>{
+  if(e.target.closest('[data-tip]')){clearTimeout(tipTimer);tipEl.classList.remove('show')}
+});
+
+// ---- Misc ----
+function toast(msg){document.getElementById('foot-msg').textContent=msg;setTimeout(()=>document.getElementById('foot-msg').textContent=t('ready'),2000)}
+function refresh(){
+  ['container-grid','image-grid','network-grid','volume-grid'].forEach(id=>document.getElementById(id).innerHTML=skeletonHTML());
+  setTimeout(()=>{renderAll();toast(t('refreshed'))},500);
+}
+
+// ---- Init ----
+initTheme();
+applyLang();
+loadConfig();
+document.getElementById('search-ic').innerHTML=icon('search',13);
+document.getElementById('refresh-btn').innerHTML=icon('refresh',15);
+document.getElementById('cleanup-btn').innerHTML=icon('trash',13);
+document.getElementById('pull-btn').innerHTML=icon('download',13);
+document.getElementById('drawer-close').innerHTML=icon('x',15);
+document.getElementById('brand-mark').innerHTML=icon('box',14);
+document.getElementById('batch-start').innerHTML=icon('play',13);
+document.getElementById('batch-stop').innerHTML=icon('stop',13);
+document.getElementById('batch-restart').innerHTML=icon('restart',13);
+document.getElementById('batch-remove').innerHTML=icon('trash',13);
+document.getElementById('log-follow').innerHTML=icon(logFollow?'play':'pause',12);
+document.getElementById('log-follow').classList.toggle('active',logFollow);
+document.querySelectorAll('.log-toolbar .lt-btn')[1].innerHTML=icon('copy',12);
+document.querySelectorAll('.log-toolbar .lt-btn')[2].innerHTML=icon('trash',12);
+// restore view tab + container active state
+document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active',e.id==='view-'+currentView));
+document.querySelectorAll('.view-tab').forEach(e=>e.classList.toggle('active',e.dataset.v===currentView));
+document.querySelectorAll('#chips .chip').forEach(e=>e.classList.toggle('active',(e.dataset.filter||'all')===currentFilter));
+updateThemeIcon();
+updateSortUI();
+renderAll();
+openDetail('c',0);
+</script>
+</body>
+</html>

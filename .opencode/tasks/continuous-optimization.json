@@ -1,0 +1,49 @@
+{
+  "status": "done",
+  "stage": "synced",
+  "baseline_tag": "baseline-continuous-optimization",
+  "dod": [
+    "consumer 待更新消息的最长 UI 应用延迟收敛到约 120ms（原最坏约 200ms），并有单元测试",
+    "日志行携带 epoch；切换容器/清空日志后不再出现上一容器或清空前的排队日志",
+    "Clear 后只显示新日志，旧流被取消并以 tail=0 重启",
+    "移除未读取的 last_refresh 字段",
+    "release + MCP 70k 请求洪峰 0 失败、最慢截图 <0.5s；日志切换/清空验证通过",
+    "cargo fmt --check / cargo clippy -D warnings / cargo check --all-targets 全部通过"
+  ],
+  "round": 5,
+  "issues": {
+    "1": "fixed",
+    "2": "fixed",
+    "3": "fixed",
+    "4": "fixed",
+    "5": "fixed",
+    "6": "fixed",
+    "7": "fixed",
+    "8": "waived",
+    "9": "fixed",
+    "10": "fixed",
+    "11": "fixed",
+    "12": "fixed",
+    "13": "fixed",
+    "14": "fixed",
+    "15": "fixed",
+    "16": "fixed",
+    "17": "waived",
+    "18": "fixed",
+    "19": "fixed"
+  },
+  "tests": {
+    "L1": "pass",
+    "L2": "pass",
+    "L3": "pass",
+    "L4": "pass"
+  },
+  "sync": {
+    "doc": "done",
+    "changelog": "done",
+    "version": "skipped",
+    "version_reason": "当前在 develop；按 docs/git-flow.md 版本号在 release 分支同步，不在优化任务中 bump"
+  },
+  "awaiting": "none",
+  "updated_at": "2026-10-20T01:38:44+08:00"
+}

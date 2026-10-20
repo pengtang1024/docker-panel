@@ -1,0 +1,151 @@
+// components-nav.slint — 导航类组件（TabBar + ListItem + Divider）
+import { Theme } from "theme.slint";
+import { VCenterText, CenterText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
+
+// ============ TabItem — 单个 Tab（严格对齐 prototype .d-tab）============
+// .d-tab{height:36px;padding:0 14px;font-size:12px;font-weight:600;color:var(--ink-3);border-bottom:2px solid transparent}
+// .d-tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+export component TabItem inherits Rectangle {
+    in-out property <string> label: "";
+    in-out property <int> idx: 0;
+    in-out property <bool> active: false;
+    in-out property <string> icon_name: "";
+    in-out property <string> badge: "";
+    callback clicked(int);
+
+    height: 36px;
+
+    property <string> icon_commands: root.icon_name == "container" ? "M3 3h18v18H3z M3 9h18 M9 21V9"
+        : root.icon_name == "image" ? "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5"
+        : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
+        : root.icon_name == "volume" ? "M12 5a9 3 0 1 1-18 0 9 3 0 0 1 18 0z M3 5v14a9 3 0 0 0 18 0V5 M3 12a9 3 0 0 0 18 0"
+        : "";
+
+    area := StateArea {
+        width: 100%; height: 100%;
+        layer_color: Theme.row_hover;
+        layer_radius: 0px;
+        clicked => { root.clicked(root.idx); }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        cross-axis-alignment: center;
+        width: 100%; height: 100%;
+        padding-left: 14px; padding-right: 14px;
+        spacing: 8px;
+
+        // ⚠️ Path 必须 Rectangle 包裹——HorizontalLayout 对 Path 不自动居中
+        Rectangle {
+            width: 14px; height: 100%;
+            Path {
+                width: 14px; height: 14px;
+                commands: icon_commands;
+                stroke: root.active ? Theme.ink : Theme.ink_3;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+            visible: icon_commands != "";
+        }
+
+        VCenterText {
+            text: root.label;
+            font-size: Theme.fs;
+            font-weight: 600;
+            color: root.active ? Theme.ink : Theme.ink_3;
+        }
+
+        if root.badge != "" : VCenterText {
+            text: root.badge;
+            font-size: 10px; font-family: Theme.mono;
+            color: root.active ? Theme.ink : Theme.ink_3;
+        }
+    }
+
+    Rectangle {
+        y: parent.height - 2px;
+        width: 100%; height: 2px;
+        background: root.active ? Theme.ink : transparent;
+    }
+}
+
+// ============ TabBar — Tab 栏容器 ============
+// 用法：TabBar { tabs: [TabItemSpec{...}, ...]; active_index <=> root.tab; }
+// Slint 限制：for 循环不能配合 @children → 用数组属性驱动
+struct TabItemSpec {
+    label: string,
+    icon_name: string,
+    badge: string,
+}
+
+export component TabBar inherits Rectangle {
+    in-out property <[TabItemSpec]> tabs: [];
+    in-out property <int> active_index: 0;
+    callback selected(int);
+
+    height: 40px;
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        for t[i] in root.tabs : TabItem {
+            label: t.label;
+            icon_name: t.icon_name;
+            badge: t.badge;
+            idx: i;
+            active: i == root.active_index;
+            clicked(idx) => { root.active_index = idx; root.selected(idx); }
+        }
+    }
+}
+
+// ============ ListItem — 通用列表行（icon + label + sublabel + trailing）============
+export component ListItem inherits Rectangle {
+    in-out property <string> icon: "";
+    in-out property <string> label: "";
+    in-out property <string> sublabel: "";
+    in-out property <string> trailing: "";
+    in-out property <bool> checked: false;
+    callback clicked();
+    callback toggled();
+
+    height: 40px;
+
+    area := StateArea {
+        width: 100%; height: 100%;
+        layer_color: Theme.row_hover;
+        layer_radius: 0px;
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        width: 100%; height: 100%;
+        spacing: Theme.s3;
+        padding-left: Theme.s4; padding-right: Theme.s4;
+
+        if root.icon != "" : CenterText {
+            text: root.icon; font-size: Theme.fs_md; width: 20px; height: 100%;
+            color: Theme.ink_2;
+        }
+
+        VerticalLayout {
+            VCenterText { text: root.label; font-size: Theme.fs_md; font-weight: 600; color: Theme.ink; overflow: elide; }
+            if root.sublabel != "" : VCenterText { text: root.sublabel; font-size: Theme.fs_sm; color: Theme.ink_3; overflow: elide; }
+        }
+
+        if root.trailing != "" : VCenterText {
+            text: root.trailing; font-size: Theme.fs_sm; font-family: Theme.mono; color: Theme.ink_3;
+        }
+    }
+}

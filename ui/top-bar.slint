@@ -1,0 +1,158 @@
+// top-bar.slint — 顶栏（严格对齐 prototype .top{height:48px;padding:0 14px;gap:10px}）
+import { Theme } from "theme.slint";
+import { VCenterText, CenterText } from "components-align.slint";
+import { IconBtn, Dot } from "components-interact.slint";
+
+export component TopBar inherits Rectangle {
+    height: Theme.top_h;
+    background: Theme.card;
+
+    Rectangle {
+        y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line;
+    }
+
+    in-out property <bool> docker_ok: false;
+    in-out property <string> search_q: "";
+    callback theme_click();
+    callback refresh_click();
+    callback cleanup_click();
+    callback pull_click();
+    callback search(string);
+    callback focus_search();
+    focus_search() => { search_input.focus(); }
+
+    // ⚠️ Slint HorizontalLayout 默认 stretch：Text 的 horizontal-stretch>0 会被均分剩余宽度
+    // （实测 brand/conn 各吞 300+px 把"已连接"顶到窗口中央）。全部 stretch:0，
+    // 只留一个弹性 spacer 把搜索框与按钮组钉在右侧（对齐 prototype .search{margin-left:auto}）。
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 10px;
+        padding-left: 14px; padding-right: 14px;
+        cross-axis-alignment: center;
+
+        // .brand .mark{width:26px;height:26px;background:var(--ink);border-radius:var(--r-md)}
+        Rectangle {
+            width: 26px; height: 26px;
+            border-radius: Theme.r_md;
+            background: Theme.ink;
+            Path {   width: 18px; height: 18px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                commands: "M3 3h18v18H3z M3 9h18 M9 21V9";
+                viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                stroke: Theme.card;
+                stroke-width: 1.5px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+            }
+        }
+
+        VCenterText { text: "Docker Panel"; horizontal-stretch: 0; font-size: 15px; font-weight: 800; color: Theme.ink; }
+
+        // .conn{gap:5px;font-size:11px;margin-left:2px}
+        Rectangle { width: 2px; }  // margin-left:2px 等效间距
+        Dot { on: root.docker_ok; dot_size: 6px; }
+        VCenterText {
+            horizontal-stretch: 0;
+            text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
+            font-size: 11px; font-weight: 600; color: Theme.ink_3;
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.line; }
+
+        // .search{margin-left:auto;width:300px;height:32px;padding:0 10px;gap:8px;background:var(--line-2)}
+        // .search:focus-within{border-color:var(--ink-3);background:var(--card)}
+        search_box := Rectangle {
+            height: 32px;
+            width: 300px;
+            border-radius: Theme.r_md;
+            background: search_input.has-focus ? Theme.card : Theme.line_2;
+            border-width: 1px;
+            border-color: search_input.has-focus ? Theme.ink_3 : Theme.line;
+
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 8px;
+                padding-left: 10px; padding-right: 10px;
+                // ⚠️ Slint alignment 是主轴(水平)分布 = CSS justify-content
+                // cross-axis-alignment 才是交叉轴(垂直) = CSS align-items
+                // 这里需要 stretch 主轴让 horizontal-stretch 生效，同时垂直居中所有子元素
+                alignment: stretch;
+                cross-axis-alignment: center;
+
+                // 放大镜图标 — 点击也能聚焦（包在 Rectangle 里放 MouseArea）
+                Rectangle {
+                    width: 14px; height: 14px;
+                    background: transparent;
+                    Path {
+                        width: 14px; height: 14px;
+                        commands: "M11 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M21 21l-4.35-4.35";
+                        viewbox-x: 0; viewbox-y: 0; viewbox-width: 24; viewbox-height: 24;
+                        stroke: Theme.ink_3;
+                        stroke-width: 1.5px;
+                        stroke-line-cap: round;
+                        stroke-line-join: round;
+                        fill: transparent;
+                    }
+                    TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { search_input.focus(); }
+                    }
+                }
+
+                // 输入区：外层 Rectangle stretch:1，内部 VCenterText placeholder（下层）+ TextInput（上层）绝对定位
+                Rectangle {
+                    horizontal-stretch: 1;
+                    height: 100%;
+
+                    // Placeholder —— 仅在 text 为空时可见
+                    VCenterText {
+                        x: 0px; y: 0px;
+                        width: 100%; height: 100%;
+                        visible: search_input.text == "";
+                        text: @tr("Search name, image...");
+                        color: Theme.ink_3; font-size: 12px;
+                    }
+
+                    // TextInput —— vertical-alignment:center 让文字垂直居中（默认 top 对齐）
+                    search_input := TextInput {
+                        x: 0px; y: 0px;
+                        width: 100%; height: 100%;
+                        vertical-alignment: center;
+                        text <=> root.search_q;
+                        color: Theme.ink; font-size: 12px;
+                        accepted() => { root.search(root.search_q); }
+                        edited() => { root.search(root.search_q); }
+                    }
+                }
+
+                // Ctrl+K 快捷键标签：必须显式 width + horizontal-stretch:0
+                // （Rectangle 无固有尺寸，alignment:stretch 下无 width 会被拉满或塌缩）
+                Rectangle {
+                    horizontal-stretch: 0;
+                    width: 46px; height: 20px;
+                    border-width: 1px; border-color: Theme.line;
+                    border-radius: Theme.r_xs;
+                    background: transparent;
+                    VerticalLayout {
+                        width: 100%; height: 100%;
+                        padding-left: 6px; padding-right: 6px;
+                        VCenterText {
+                            text: "Ctrl+K"; font-size: 10px; color: Theme.ink_3; font-family: Theme.mono;
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.line; }
+
+        IconBtn { icon_name: Theme.theme_mode == 1 ? "sun" : Theme.theme_mode == 2 ? "moon" : "monitor"; icon_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
+        IconBtn { icon_name: "refresh"; icon_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
+        IconBtn { icon_name: "trash"; icon_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
+        IconBtn { icon_name: "download"; icon_size: 13px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
+    }
+}

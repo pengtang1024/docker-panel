@@ -1,0 +1,530 @@
+# docker-panel 简体中文翻译
+# 配置文件格式：gettext .po（编译期嵌入二进制，运行时按系统 locale 选择）
+# 维护规则：
+#   1. Slint 文件中新增 @tr("...") 后，在此文件追加同名 msgid 条目
+#   2. Rust 动态消息 msgid 为英文，占位符统一 {0}/{1}...，翻译保留占位符
+#   3. 无翻译的条目自动回落英文源串
+msgid ""
+msgstr ""
+"Project-Id-Version: docker-panel\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-17\n"
+"PO-Revision-Date: 2026-10-17\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# ===== 顶栏 =====
+msgid "Connecting..."
+msgstr "正在连接…"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Disconnected"
+msgstr "已断开"
+
+msgid "Pull"
+msgstr "拉取"
+
+# ===== 筛选栏 =====
+msgid "All"
+msgstr "全部"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "CPU"
+msgstr "CPU"
+
+msgid "Memory"
+msgstr "内存"
+
+msgid "Disk"
+msgstr "磁盘"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Containers"
+msgstr "容器"
+
+msgid "Images"
+msgstr "镜像"
+
+msgid "Networks"
+msgstr "网络"
+
+msgid "Volumes"
+msgstr "卷"
+
+# ===== 卡片 =====
+msgid "{0} in use"
+msgstr "{0} 个在用"
+
+msgid "{0} container"
+msgid_plural "{0} containers"
+msgstr[0] "{0} 个容器"
+
+msgid "CPU usage"
+msgstr "CPU 使用率"
+
+msgid "Memory usage"
+msgstr "内存使用"
+
+msgid "Disk usage"
+msgstr "磁盘占用"
+
+msgid "Compose project"
+msgstr "Compose 项目"
+
+msgid "More"
+msgstr "更多操作"
+
+# ===== 底栏 =====
+msgid "Docker"
+msgstr "Docker"
+
+msgid "{0} containers · {1} images · {2} nets · {3} vols"
+msgstr "{0} 容器 · {1} 镜像 · {2} 网络 · {3} 卷"
+
+# ===== 批量栏 =====
+msgid "{0} selected"
+msgstr "已选 {0} 项"
+
+msgid "Cancel"
+msgstr "取消"
+
+# ===== 抽屉 =====
+msgid "Details"
+msgstr "详情"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "Environment"
+msgstr "环境"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Image"
+msgstr "镜像"
+
+msgid "PID"
+msgstr "PID"
+
+msgid "Resources"
+msgstr "资源"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Created"
+msgstr "创建时间"
+
+msgid "Started"
+msgstr "启动时间"
+
+msgid "Restart Policy"
+msgstr "重启策略"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "Mode"
+msgstr "模式"
+
+msgid "Ports"
+msgstr "端口"
+
+msgid "Environment Variables"
+msgstr "环境变量"
+
+msgid "Port Mappings"
+msgstr "端口映射"
+
+msgid "Mounts"
+msgstr "挂载"
+
+# ===== 拉取对话框 =====
+msgid "Pull Image"
+msgstr "拉取镜像"
+
+msgid "Enter image name, optional tag (default latest)"
+msgstr "输入镜像名称，可选 tag（默认 latest）"
+
+msgid "Progress"
+msgstr "进度"
+
+msgid "Waiting to pull..."
+msgstr "等待拉取…"
+
+# ===== 清理对话框 =====
+msgid "Cleanup Resources"
+msgstr "清理资源"
+
+msgid "Select resource types to clean up"
+msgstr "选择要清理的资源类型"
+
+msgid "Stopped Containers"
+msgstr "已停止的容器"
+
+msgid "Remove all stopped containers"
+msgstr "删除所有已停止的容器"
+
+msgid "Dangling Images"
+msgstr "悬空镜像"
+
+msgid "Remove unused image layers"
+msgstr "删除未使用的镜像层"
+
+msgid "Unused Networks"
+msgstr "未使用的网络"
+
+msgid "Remove networks not in use"
+msgstr "删除未被使用的网络"
+
+msgid "Unused Volumes"
+msgstr "未使用的卷"
+
+msgid "Remove volumes not in use"
+msgstr "删除未被使用的卷"
+
+msgid "Cleanup"
+msgstr "清理"
+
+# ===== Rust 动态：状态栏 =====
+msgid "Ready"
+msgstr "就绪"
+
+msgid "Docker API timeout"
+msgstr "Docker API 请求超时"
+
+msgid "Log stream interrupted, reconnecting…"
+msgstr "日志流中断，正在重连…"
+
+msgid "Log stream reconnected"
+msgstr "日志流已恢复连接"
+
+msgid "Log stream stopped"
+msgstr "日志流已停止"
+
+msgid "Loaded {0} containers"
+msgstr "已加载 {0} 个容器"
+
+msgid "Container refresh failed: {0}"
+msgstr "容器刷新失败：{0}"
+
+msgid "Image refresh failed: {0}"
+msgstr "镜像刷新失败：{0}"
+
+msgid "Pull failed: {0}"
+msgstr "拉取失败：{0}"
+
+msgid "Cleanup failed: {0}"
+msgstr "清理失败：{0}"
+
+msgid "Toggling container..."
+msgstr "正在切换容器状态…"
+
+msgid "Container stopped"
+msgstr "容器已停止"
+
+msgid "Failed to stop"
+msgstr "停止失败"
+
+msgid "Container started"
+msgstr "容器已启动"
+
+msgid "Failed to start"
+msgstr "启动失败"
+
+msgid "Container restarted"
+msgstr "容器已重启"
+
+msgid "Failed to restart"
+msgstr "重启失败"
+
+msgid "Container removed"
+msgstr "容器已删除"
+
+msgid "Failed to remove"
+msgstr "删除失败"
+
+msgid "Start {0}"
+msgstr "启动 {0}"
+
+msgid "Stop {0}"
+msgstr "停止 {0}"
+
+msgid "Restart {0}"
+msgstr "重启 {0}"
+
+msgid "Remove {0}"
+msgstr "删除 {0}"
+
+msgid "Inspect {0}"
+msgstr "查看 {0}"
+
+msgid "Inspect image {0}"
+msgstr "查看镜像 {0}"
+
+msgid "Image removed"
+msgstr "镜像已删除"
+
+msgid "Failed to remove image"
+msgstr "删除镜像失败"
+
+msgid "Please enter an image name"
+msgstr "请输入镜像名"
+
+msgid "Select at least one item"
+msgstr "请至少勾选一项"
+
+# ===== Rust 动态：分组 =====
+msgid "Standalone"
+msgstr "独立容器"
+
+# ===== Rust 动态：Docker 层错误/结果 =====
+msgid "inspect container failed: {0}"
+msgstr "inspect 容器失败：{0}"
+
+msgid "Stopped containers: removed {0}, freed {1}"
+msgstr "停止的容器：删除 {0} 个，释放 {1}"
+
+msgid "Dangling images: removed {0}, freed {1}"
+msgstr "悬空镜像：删除 {0} 项，释放 {1}"
+
+msgid "Unused images: removed {0}, freed {1}"
+msgstr "未使用镜像：删除 {0} 项，释放 {1}"
+
+msgid "Cleanup stopped containers failed: {0}"
+msgstr "清理停止容器失败：{0}"
+
+msgid "Cleanup dangling images failed: {0}"
+msgstr "清理悬空镜像失败：{0}"
+
+msgid "Cleanup unused images failed: {0}"
+msgstr "清理未使用镜像失败：{0}"
+
+msgid "Nothing to clean up"
+msgstr "没有可清理的内容"
+
+# ===== Rust 动态：Docker 层 =====
+msgid "Failed to connect to Docker: {0}"
+msgstr "连接 Docker 失败：{0}"
+
+msgid "Failed to fetch container list: {0}"
+msgstr "获取容器列表失败：{0}"
+
+msgid "Failed to fetch image list: {0}"
+msgstr "获取镜像列表失败：{0}"
+
+msgid "Failed to start container: {0}"
+msgstr "启动容器失败：{0}"
+
+msgid "Failed to stop container: {0}"
+msgstr "停止容器失败：{0}"
+
+msgid "Failed to restart container: {0}"
+msgstr "重启容器失败：{0}"
+
+msgid "Failed to remove container: {0}"
+msgstr "删除容器失败：{0}"
+
+msgid "Failed to remove image: {0}"
+msgstr "删除镜像失败：{0}"
+
+msgid "Image {0} removed"
+msgstr "镜像 {0} 已删除"
+
+msgid "Please enter an image name, e.g. nginx:latest"
+msgstr "请输入镜像名称，例如 nginx:latest"
+
+msgid "Failed to pull image: {0}"
+msgstr "拉取镜像失败：{0}"
+
+msgid "{0}:{1} pulled"
+msgstr "{0}:{1} 拉取完成"
+
+msgid "Failed to list networks: {0}"
+msgstr "网络列表失败：{0}"
+
+msgid "Failed to list volumes: {0}"
+msgstr "卷列表失败：{0}"
+
+msgid "Empty stats response"
+msgstr "stats 空响应"
+
+msgid "Failed to fetch stats: {0}"
+msgstr "stats 失败：{0}"
+
+msgid "Image inspect failed ({0}): {1}"
+msgstr "镜像详情失败（{0}）：{1}"
+
+msgid "Theme"
+msgstr "主题"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Remove"
+msgstr "删除"
+
+msgid "Run"
+msgstr "运行"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Follow logs"
+msgstr "跟随日志"
+
+msgid "Copy logs"
+msgstr "复制日志"
+
+msgid "Clear logs"
+msgstr "清空日志"
+
+msgid "Log is empty"
+msgstr "日志为空"
+
+msgid "Copied {0} log lines"
+msgstr "已复制 {0} 行日志"
+
+msgid "Copy failed"
+msgstr "复制失败"
+
+msgid "Log cleared"
+msgstr "日志已清空"
+
+# ===== 抽屉：网络 / 卷 / 镜像详情 =====
+msgid "Repo"
+msgstr "仓库"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Layers"
+msgstr "层数"
+
+msgid "Config"
+msgstr "配置"
+
+msgid "Entrypoint"
+msgstr "入口点"
+
+msgid "Command"
+msgstr "命令"
+
+msgid "Driver"
+msgstr "驱动"
+
+msgid "Scope"
+msgstr "范围"
+
+msgid "Subnet"
+msgstr "子网"
+
+msgid "Gateway"
+msgstr "网关"
+
+msgid "Mountpoint"
+msgstr "挂载点"
+
+msgid "Restart Count"
+msgstr "重启次数"
+
+msgid "None"
+msgstr "无"
+
+msgid "No ports"
+msgstr "无端口映射"
+
+msgid "unlimited"
+msgstr "无限制"
+
+msgid "{0} times"
+msgstr "{0} 次"
+
+msgid "{0} layers"
+msgstr "{0} 层"
+
+# ===== 卡片：网络 / 卷 / 空状态 =====
+msgid "Builtin"
+msgstr "内置"
+
+msgid "Anonymous volume"
+msgstr "匿名卷"
+
+msgid "No matching containers"
+msgstr "没有匹配的容器"
+
+msgid "No matching images"
+msgstr "没有匹配的镜像"
+
+msgid "No matching networks"
+msgstr "没有匹配的网络"
+
+msgid "No matching volumes"
+msgstr "没有匹配的卷"
+
+msgid "Pull new image or adjust search"
+msgstr "拉取新镜像或调整搜索"
+
+msgid "Try adjusting filters or keywords"
+msgstr "试试调整筛选条件或搜索关键词"
+
+# ===== 顶栏 =====
+msgid "Search name, image..."
+msgstr "搜索名称、镜像…"
+
+# ===== 相对时间 =====
+msgid "{0} minutes ago"
+msgstr "{0} 分钟前"
+
+msgid "{0} hours ago"
+msgstr "{0} 小时前"
+
+msgid "{0} days ago"
+msgstr "{0} 天前"
+
+msgid "{0} weeks ago"
+msgstr "{0} 周前"
+
+msgid "{0} months ago"
+msgstr "{0} 个月前"
+
+# ===== Rust 动态：网络 / 卷 / 镜像操作 =====
+msgid "Network removed"
+msgstr "网络已删除"
+
+msgid "Volume removed"
+msgstr "卷已删除"
+
+msgid "Failed to remove network: {0}"
+msgstr "删除网络失败：{0}"
+
+msgid "Failed to remove volume: {0}"
+msgstr "删除卷失败：{0}"
+
+msgid "Run {0}"
+msgstr "运行 {0}"

@@ -1,14 +1,14 @@
 [package]
 name = "docker-panel"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
 
 [dependencies]
 # Slint：关闭默认 backend，手动选 winit + 软件渲染器，极致轻量
-slint = { version = "1.14", default-features = false, features = [
+slint = { version = "1.18.1", default-features = false, features = [
     "std",
-    "compat-1-2",
+    "compat-1-18",
     "backend-winit",
     "renderer-software",
     "software-renderer-systemfonts",
@@ -24,8 +24,11 @@ anyhow = "1"
 # tokio 多线程运行时（不能用 current_thread：单线程下后台 Docker 任务可能无法调度）
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "rt"] }
 
+# 日志复制：Wayland 走 data-control 协议，无需外部 wl-copy 命令
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
 [build-dependencies]
-slint-build = "1.14"
+slint-build = "1.18.1"
 
 [profile.release]
 opt-level = "z"      # 体积最小化

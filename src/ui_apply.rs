@@ -1,54 +1,27 @@
 //! UI 属性灌入辅助函数
 //!
-//! pump_and_apply 里的 invoke_from_event_loop 闭包会调这些，
-//! 把锁外拿到的 SharedString/ModelRc 一次性 set 到 Slint 属性。
+//! consumer 的 `invoke_from_event_loop` 闭包会调这些，
+//! 把锁外拿到的数据一次性 set 到 Slint 属性。
 
+use std::time::Duration;
+
+use crate::detail_fmt::DrawerData;
 use crate::slint_gen::MainWindow;
-use crate::ui_state::DetailTuple;
-use slint::{ModelRc, SharedString};
+use crate::ui_state::SharedState;
+use slint::{ComponentHandle, ModelRc, SharedString};
 
-/// 把 14 字段 SharedString Vec 灌入 ImageDetailPanel
-pub fn apply_image_detail(ui: &MainWindow, fields: &[SharedString]) {
-    if fields.len() < 14 {
-        return;
-    }
-    ui.set_i_short_id(fields[0].clone());
-    ui.set_i_repo_tags(fields[1].clone());
-    ui.set_i_created(fields[2].clone());
-    ui.set_i_author(fields[3].clone());
-    ui.set_i_size(fields[4].clone());
-    ui.set_i_platform(fields[5].clone());
-    ui.set_i_entrypoint(fields[6].clone());
-    ui.set_i_cmd(fields[7].clone());
-    ui.set_i_workdir(fields[8].clone());
-    ui.set_i_ports(fields[9].clone());
-    ui.set_i_volumes(fields[10].clone());
-    ui.set_i_labels(fields[11].clone());
-    ui.set_i_env(fields[12].clone());
-    ui.set_i_id(fields[13].clone());
-}
+/// 操作结果提示的停留时长：到期后状态栏恢复 "Ready"（toast 语义）
+pub const TOAST_DURATION: Duration = Duration::from_secs(2);
 
-/// 把 18 字段元组灌入 DetailPanel
-pub fn apply_detail(ui: &MainWindow, t: &DetailTuple) {
-    let (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r) = t;
-    ui.set_d_name(a.clone());
-    ui.set_d_state(b.clone());
-    ui.set_d_status(c.clone());
-    ui.set_d_image(d.clone());
-    ui.set_d_id(e.clone());
-    ui.set_d_pid(f.clone());
-    ui.set_d_exit(g.clone());
-    ui.set_d_created(h.clone());
-    ui.set_d_started(i.clone());
-    ui.set_d_restart(j.clone());
-    ui.set_d_netmode(k.clone());
-    ui.set_d_ports(l.clone());
-    ui.set_d_mounts(m.clone());
-    ui.set_d_networks(n.clone());
-    ui.set_d_entry(o.clone());
-    ui.set_d_cmd(p.clone());
-    ui.set_d_workdir(q.clone());
-    ui.set_d_labels(r.clone());
+/// 把抽屉内容灌入 Drawer（行列表走 render 缓存模型，避免重建 Repeater）
+pub fn apply_drawer(ui: &MainWindow, d: &DrawerData) {
+    ui.set_drawer_title(SharedString::from(d.title.as_str()));
+    ui.set_drawer_sub(SharedString::from(d.sub.as_str()));
+    ui.set_drawer_tabs(d.tabs_visible);
+    let detail = crate::render::detail_rows(d.detail.clone());
+    let env = crate::render::env_rows(d.env.clone());
+    ui.set_detail_rows(detail);
+    ui.set_env_rows(env);
 }
 
 /// 把 ModelRc 列表灌入窗口
@@ -58,11 +31,62 @@ pub fn apply_lists(
     im: ModelRc<crate::slint_gen::ImageRow>,
     nm: ModelRc<crate::slint_gen::NetworkRow>,
     vm: ModelRc<crate::slint_gen::VolumeRow>,
-    lm: ModelRc<crate::slint_gen::LogLineRow>,
 ) {
     ui.set_container_rows(cm);
     ui.set_image_rows(im);
     ui.set_network_rows(nm);
     ui.set_volume_rows(vm);
-    ui.set_log_lines(lm);
+}
+
+/// UI 线程内按当前 AppState 立即重建四个资源列表（搜索/筛选/排序回调的即时反馈）。
+/// 网络/卷不在 3s 定时刷新范围内，不主动重建则过滤永不生效。
+pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
+    let cm = crate::render::containers(crate::ui_rows::build_container_rows(s));
+    let im = crate::render::images(crate::ui_rows::build_image_rows(s));
+    let nm = crate::render::networks(crate::ui_rows::build_network_rows(s));
+    let vm = crate::render::volumes(crate::ui_rows::build_volume_rows(s));
+    apply_lists(ui, cm, im, nm, vm);
+}
+
+/// 清空整个日志面板（日志行 + 状态提示）。
+///
+/// 切换选中资源（容器 / 镜像 / 网络 / 卷）或按 Clear 时调用：
+/// 日志上下文已经变了，旧行与旧提示都不再属于当前对象。
+pub fn clear_log_panel(ui: &MainWindow) {
+    ui.set_log_rows(crate::render::clear_logs());
+    ui.set_log_status(SharedString::from(""));
+}
+
+/// 只清空状态提示，保留日志内容。
+///
+/// 同一容器重建日志流时调用：流是新的，没有「正在重连」之类的历史状态，
+/// 但已缓冲的日志内容仍然有效。
+pub fn clear_log_status(ui: &MainWindow) {
+    ui.set_log_status(SharedString::from(""));
+}
+
+/// 状态栏 toast：写入操作结果，`TOAST_DURATION` 后自动恢复 "Ready"。
+///
+/// 与 consumer 的 toast 语义一致，但用于「回调直接写状态栏」的场景
+/// （复制日志 / 清空日志 / 复制字段值）—— 这些动作不走 Msg 通道，
+/// 状态文本会一直停在结果上，看起来像卡住。
+pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
+    ui.set_status_text(SharedString::from(text));
+    let rt = {
+        let Ok(s) = state.lock() else { return };
+        s.rt.handle().clone()
+    };
+    let ui_w = ui.as_weak();
+    let owned = text.to_string();
+    rt.spawn(async move {
+        tokio::time::sleep(TOAST_DURATION).await;
+        slint::invoke_from_event_loop(move || {
+            let Some(ui) = ui_w.upgrade() else { return };
+            // 期间被别的消息改过（如新的操作结果 / 错误）就不覆盖
+            if ui.get_status_text().as_str() == owned {
+                ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+            }
+        })
+        .ok();
+    });
 }

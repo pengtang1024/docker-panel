@@ -2,3 +2,5 @@
 /*.deb
 /docker-panel_*_amd64/
 /checksums.txt
+/.idea/
+/.opencode/

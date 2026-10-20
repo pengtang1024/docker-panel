@@ -1,160 +1,331 @@
-// app.slint — Docker Panel 主骨架
-import { VerticalBox } from "std-widgets.slint";
-import { TopBar, ToolBar, StatusBar } from "panes.slint";
+// app.slint — 主窗口骨架
+// 布局：VerticalLayout(TopBar, SubBar, BatchBar?, GridArea, FootBar) + Drawer
+import { Theme } from "theme.slint";
+import { Tip, CardMenu } from "components-align.slint";
+import { TipLayer } from "components-interact.slint";
+import { SortMenu, CardMenuLayer } from "menu-layers.slint";
+import { TopBar } from "top-bar.slint";
+import { SubBar } from "sub-bar.slint";
+import { BatchBar } from "batch-bar.slint";
+import { CardsArea } from "cards.slint";
+import { FootBar } from "foot-bar.slint";
+import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { DetailLogPanel } from "detail-log-panel.slint";
-import { TabBar, ListArea } from "list-area.slint";
-import { ContainerRow, ImageRow, LogLineRow, NetworkRow, VolumeRow } from "models.slint";
-
-export global AppActions {
-    callback container_toggle(string);
-    callback container_restart(string);
-    callback container_remove(string);
-    callback container_logs(string);
-    callback container_select(string);
-    callback container_sort(int);
-    callback image_select(string);
-    callback image_remove(string);
-}
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow } from "models.slint";
+import { AppActions } from "app-actions.slint";
+// 再导出：Slint 只把「主文件导出的类型」暴露给 Rust（否则 AppActions 变成内部类型，
+// Rust 侧 ui.global::<AppActions>() 找不到符号）
+export { AppActions }
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
-    width: 1100px; height: 680px;
-    in-out property <int> active_view: 0;
-    in-out property <length> right_pane_width: 320px;
+    // 用 preferred-* 而非 width/height：显式 width/height 会把 min/max 一起钉死
+    // → 窗口被锁成固定尺寸、无法缩放拖拽。preferred 只给初始尺寸，min 给下限。
+    preferred-width: 1280px;
+    preferred-height: 760px;
+    min-width: 880px;
+    min-height: 560px;
+    background: Theme.bg;
+
+    // 启动即把键盘焦点交给全局快捷键 FocusScope。
+    // init 里先试一次；Rust 在事件循环启动后置 boot_tick 再兜底一次
+    // （testing/winit 后端下 init 阶段焦点可能在窗口 show 时被清掉）
+    in-out property <int> boot_tick: 0;
+    init => { global-shortcuts.focus(); }
+    changed boot_tick => { if root.boot_tick > 0 { global-shortcuts.focus(); } }
+
+    // —— 视图与筛选 ——
+    in-out property <int> view: 0;          // 0=容器 1=镜像 2=网络 3=卷
+    in-out property <string> filter: "all";
+    in-out property <int> sort_field: 0;    // 0=name 1=cpu 2=mem 3=disk 4=status
+    in-out property <bool> sort_desc: true;
+    in-out property <string> search_q: "";
+    in-out property <int> theme_mode <=> Theme.theme_mode;
+    in-out property <bool> system_dark <=> Theme.system_dark;
+
+    // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
-    in-out property <string> status_text: "连接 Docker...";
-    in-out property <string> container_count: "0";
-    in-out property <string> image_count: "0";
-    in-out property <int> sort_field: 0;
-    in-out property <bool> sort_desc: false;
+    in-out property <string> status_text: @tr("Ready");
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不占用底部状态栏
+    in-out property <string> log_status: "";
+    in-out property <int> batch_count: 0;
+    /// 首次数据拉取期间显示骨架屏（强制 true 单独验证骨架屏渲染效果）
+    in-out property <bool> loading: true;
+    /// 多选模式独立开关（与 batch_count 解耦：进入 sel-mode 后可先不选任何项）
+    in-out property <bool> sel_mode: false;
+
+    // —— 统计 ——
+    in-out property <int> total_containers: 0;
+    in-out property <int> running_containers: 0;
+    in-out property <int> total_images: 0;
+    in-out property <int> total_networks: 0;
+    in-out property <int> total_volumes: 0;
+    in-out property <string> cpu_total: "0%";
+    in-out property <string> mem_total: "0MB";
+    in-out property <string> disk_total: "0MB";
+
+    // —— 数据 ——
     in-out property <[ContainerRow]> container_rows: [];
     in-out property <[ImageRow]> image_rows: [];
     in-out property <[NetworkRow]> network_rows: [];
     in-out property <[VolumeRow]> volume_rows: [];
-    in-out property <string> d_name: "";
-    in-out property <string> d_state: "";
-    in-out property <string> d_status: "";
-    in-out property <string> d_image: "";
-    in-out property <string> d_id: "";
-    in-out property <string> d_pid: "";
-    in-out property <string> d_exit: "";
-    in-out property <string> d_created: "";
-    in-out property <string> d_started: "";
-    in-out property <string> d_restart: "";
-    in-out property <string> d_netmode: "";
-    in-out property <string> d_ports: "";
-    in-out property <string> d_mounts: "";
-    in-out property <string> d_networks: "";
-    in-out property <string> d_entry: "";
-    in-out property <string> d_cmd: "";
-    in-out property <string> d_workdir: "";
-    in-out property <string> d_labels: "";
-    in-out property <[LogLineRow]> log_lines: [];
+    // 日志行列表（虚拟化渲染：只实例化视口内的行）
+    in-out property <[LogRow]> log_rows: [];
+    in-out property <[ComposeRow]> compose_rows: [];
+
+    // —— 抽屉 ——
+    in-out property <bool> drawer_open: false;
+    in-out property <int> drawer_tab: 0;    // 0=详情 1=日志 2=环境
+    in-out property <bool> log_follow: true;
+    // 抽屉内容统一走 DetailPair 行列表（Rust 侧按选中类型构建，见 detail_fmt.rs）
+    in-out property <string> drawer_title: "";
+    in-out property <string> drawer_sub: "";
+    in-out property <bool> drawer_tabs: true;
+    in-out property <[DetailPair]> detail_rows: [];
+    in-out property <[DetailPair]> env_rows: [];
+
+    // —— 弹窗 ——
     in-out property <bool> pull_open: false;
     in-out property <string> pull_input: "";
     in-out property <bool> pull_busy: false;
+    in-out property <int> pull_progress: 0;
+    in-out property <string> pull_status: "";
     in-out property <bool> cleanup_open: false;
     in-out property <bool> cleanup_stopped: true;
     in-out property <bool> cleanup_dangling: true;
-    in-out property <bool> cleanup_unused: false;
-    // —— 镜像详情属性 ——
-    in-out property <string> i_short_id: "";
-    in-out property <string> i_repo_tags: "";
-    in-out property <string> i_created: "";
-    in-out property <string> i_author: "";
-    in-out property <string> i_size: "";
-    in-out property <string> i_platform: "";
-    in-out property <string> i_entrypoint: "";
-    in-out property <string> i_cmd: "";
-    in-out property <string> i_workdir: "";
-    in-out property <string> i_ports: "";
-    in-out property <string> i_volumes: "";
-    in-out property <string> i_labels: "";
-    in-out property <string> i_env: "";
-    in-out property <string> i_id: "";
-    callback refresh_requested();
-    callback search_accepted(string);
-    callback stop_all_requested();
-    callback pull_requested();
-    callback cleanup_requested();
-    callback pull_submit(string);
-    callback pull_close();
-    callback cleanup_submit(bool, bool, bool);
-    callback cleanup_close();
+    in-out property <bool> cleanup_unused_net: false;
+    in-out property <bool> cleanup_unused_vol: false;
+    // 清理弹窗行右侧数量（Rust 侧按当前列表估算后回填）
+    in-out property <string> cleanup_cnt_stopped: "";
+    in-out property <string> cleanup_cnt_dangling: "";
+    in-out property <string> cleanup_cnt_unused_net: "";
+    in-out property <string> cleanup_cnt_unused_vol: "";
 
-    Rectangle { background: #0f172a; width: parent.width; height: parent.height; }
+    // —— 全局快捷键（capture 阶段拦截：必须是所有可聚焦元素的祖先，
+    //    否则捕获路径不含此 FocusScope，搜索框聚焦时收不到组合键）——
+    global-shortcuts := FocusScope {
+        width: 100%;
+        height: 100%;
+        capture-key-pressed(e) => {
+            if (e.modifiers.control) {
+                if (e.text == "k") {
+                    top-bar.focus_search();
+                    accept
+                } else if (e.text == "r") {
+                    AppActions.refresh();
+                    accept
+                } else if (e.text == "1" || e.text == "2" || e.text == "3" || e.text == "4") {
+                    if (e.text == "1") { root.view = 0; }
+                    else if (e.text == "2") { root.view = 1; }
+                    else if (e.text == "3") { root.view = 2; }
+                    else { root.view = 3; }
+                    AppActions.set_view(root.view);
+                    accept
+                } else {
+                    reject
+                }
+            } else if (e.text == "/") {
+                // spec 3.5：`/` 直接聚焦搜索框（已在搜索框内输入时由 TextInput 先消费）
+                top-bar.focus_search();
+                accept
+            } else if (e.text == Key.Escape) {
+                sub-bar.sort_open = false;
+                CardMenu.close();
+                if (root.drawer_open || root.pull_open || root.cleanup_open) {
+                    root.drawer_open = false;
+                    root.pull_open = false;
+                    root.cleanup_open = false;
+                } else if (root.batch_count > 0) {
+                    // sel-mode 退出：清空多选 → 复选框随之隐藏
+                    AppActions.batch_clear();
+                    root.sel_mode = false;
+                } else if (root.sel_mode) {
+                    // sel-mode=true 但还没选任何项 → 直接退出
+                    root.sel_mode = false;
+                }
+                // 弹窗/抽屉被条件渲染移除后其内部焦点会悬空，把焦点收回全局快捷键层
+                global-shortcuts.focus();
+                accept
+            } else {
+                reject
+            }
+        }
 
-    Rectangle {
-        x: 0px; y: 0px;
-        width: parent.width - root.right_pane_width;
-        height: parent.height; background: #0f172a;
-        VerticalBox { spacing: 0px; width: parent.width; height: parent.height;
-            Rectangle { background: #1e293b; width: parent.width; height: 48px;
-                TopBar { docker_ok <=> root.docker_ok;
-                    refresh => { root.refresh_requested(); }
-                    search(val) => { root.search_accepted(val); } } }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
-            TabBar { active_view <=> root.active_view; }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
-            ListArea {
-                width: parent.width;
-                height: parent.height - 48px - 36px - 36px - 28px - 4px;
-                active_view <=> root.active_view;
+    // 根横向布局：内容列（stretch:1）+ 抽屉（固定宽，仅打开时实例化）。
+    // 抽屉作为正式布局子元素，高度由布局引擎分配，ScrollView 视口不会再塌陷。
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        content-column := VerticalLayout {
+            horizontal-stretch: 1;
+            // 允许被抽屉压缩：否则子元素固有最小宽度（约 903px）会顶穿窗口右缘
+            min-width: 0px;
+            spacing: 0px;
+
+            top-bar := TopBar {
+                height: Theme.top_h;
+                docker_ok <=> root.docker_ok;
+                search_q <=> root.search_q;
+                theme_click => { AppActions.toggle_theme(); }
+                refresh_click => { AppActions.refresh(); }
+                cleanup_click => { AppActions.cleanup(); }
+                pull_click => { AppActions.pull(); }
+                search(val) => { AppActions.search(val); }
+            }
+
+            sub-bar := SubBar {
+                height: Theme.sub_h;
+                view <=> root.view;
+                filter <=> root.filter;
                 sort_field <=> root.sort_field;
                 sort_desc <=> root.sort_desc;
-                container_rows <=> root.container_rows;
-                image_rows <=> root.image_rows;
-                network_rows <=> root.network_rows;
-                volume_rows <=> root.volume_rows;
-                container_click(id) => { AppActions.container_select(id); }
-                container_toggle(id) => { AppActions.container_toggle(id); }
-                container_restart(id) => { AppActions.container_restart(id); }
-                container_logs(id) => { AppActions.container_logs(id); }
-                container_remove(id) => { AppActions.container_remove(id); }
-                container_sort(f) => { AppActions.container_sort(f); }
-                image_click(id) => { AppActions.image_select(id); }
-                image_remove(id) => { AppActions.image_remove(id); }
+                sel_mode <=> root.sel_mode;
+                compose_rows <=> root.compose_rows;
+                total_containers <=> root.total_containers;
+                running_containers <=> root.running_containers;
+                total_images <=> root.total_images;
+                total_networks <=> root.total_networks;
+                total_volumes <=> root.total_volumes;
+                set_view(v) => { AppActions.set_view(v); }
+                set_filter(f) => { AppActions.set_filter(f); }
+                set_sort(f) => { AppActions.set_sort(f); }
+                set_sort_dir() => { AppActions.set_sort_dir(); }
+                sel_toggle() => { root.sel_mode = root.sel_mode == false; if (root.sel_mode == false) { AppActions.batch_clear(); } }
             }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
-            Rectangle { background: #1e293b; width: parent.width; height: 40px;
-                ToolBar { stop_all => { root.stop_all_requested(); }
-                    pull_requested => { root.pull_requested(); }
-                    cleanup_requested => { root.cleanup_requested(); } } }
-            Rectangle { background: #334155; width: parent.width; height: 1px; }
-            Rectangle { background: #0f172a; width: parent.width; height: 28px;
-                StatusBar { status_text <=> root.status_text;
-                    container_count <=> root.container_count;
-                    image_count <=> root.image_count; } }
+
+            if root.batch_count > 0: BatchBar {
+                height: Theme.batch_h;
+                count <=> root.batch_count;
+                start => { AppActions.batch_start(); }
+                stop => { AppActions.batch_stop(); }
+                restart => { AppActions.batch_restart(); }
+                remove => { AppActions.batch_remove(); }
+                clear => { AppActions.batch_clear(); }
+            }
+
+            CardsArea {
+                vertical-stretch: 1;
+                view <=> root.view;
+                sel_mode <=> root.sel_mode;
+                loading <=> root.loading;
+                containers <=> root.container_rows;
+                images <=> root.image_rows;
+                networks <=> root.network_rows;
+                volumes <=> root.volume_rows;
+                c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
+                c_toggle(id) => { AppActions.container_toggle(id); }
+                c_restart(id) => { AppActions.container_restart(id); }
+                c_logs(id) => { AppActions.container_logs(id); }
+                c_remove(id) => { AppActions.container_remove(id); }
+                c_box(id) => { AppActions.container_toggle_select(id); }
+                i_select(id) => { CardMenu.close(); AppActions.image_select(id); }
+                i_run(id) => { AppActions.image_run(id); }
+                i_remove(id) => { AppActions.image_remove(id); }
+                n_select(id) => { CardMenu.close(); AppActions.network_select(id); }
+                n_remove(id) => { AppActions.network_remove(id); }
+                v_select(id) => { CardMenu.close(); AppActions.volume_select(id); }
+                v_remove(id) => { AppActions.volume_remove(id); }
+            }
+
+            FootBar {
+                height: Theme.foot_h;
+                docker_ok <=> root.docker_ok;
+                status <=> root.status_text;
+                total_containers <=> root.total_containers;
+                running_containers <=> root.running_containers;
+                total_images <=> root.total_images;
+                total_networks <=> root.total_networks;
+                total_volumes <=> root.total_volumes;
+                cpu_total <=> root.cpu_total;
+                mem_total <=> root.mem_total;
+                disk_total <=> root.disk_total;
+            }
+        }
+
+        // 抽屉：仅打开时实例化，作为布局子元素（固定宽 400px，高度吃满根布局）。
+        // 关闭时整棵子树不存在 → 完全不占布局空间、内容列自动回满宽度。
+        if root.drawer_open : Drawer {
+            open <=> root.drawer_open;
+            tab <=> root.drawer_tab;
+            log_follow <=> root.log_follow;
+            log_rows <=> root.log_rows;
+            log_status <=> root.log_status;
+            title <=> root.drawer_title;
+            sub <=> root.drawer_sub;
+            tabs_visible <=> root.drawer_tabs;
+            detail_rows <=> root.detail_rows;
+            env_rows <=> root.env_rows;
+            close => { AppActions.drawer_close(); }
+            set_tab(t) => { AppActions.drawer_tab(t); }
+            log_follow_click => { AppActions.log_toggle_follow(); }
+            log_copy_click => { AppActions.log_copy(); }
+            log_clear_click => { AppActions.log_clear(); }
+            value_copy(v) => { AppActions.value_copy(v); }
         }
     }
 
-    DetailLogPanel {
-        x: parent.width - root.right_pane_width; y: 0px;
-        width: root.right_pane_width; height: parent.height;
-        active_view <=> root.active_view;
-        d_name <=> root.d_name; d_state <=> root.d_state; d_status <=> root.d_status;
-        d_image <=> root.d_image; d_id <=> root.d_id; d_pid <=> root.d_pid;
-        d_exit <=> root.d_exit; d_created <=> root.d_created; d_started <=> root.d_started;
-        d_restart <=> root.d_restart; d_netmode <=> root.d_netmode; d_ports <=> root.d_ports;
-        d_mounts <=> root.d_mounts; d_networks <=> root.d_networks; d_entry <=> root.d_entry;
-        d_cmd <=> root.d_cmd; d_workdir <=> root.d_workdir; d_labels <=> root.d_labels;
-        i_short_id <=> root.i_short_id; i_repo_tags <=> root.i_repo_tags;
-        i_created <=> root.i_created; i_author <=> root.i_author;
-        i_size <=> root.i_size; i_platform <=> root.i_platform;
-        i_entrypoint <=> root.i_entrypoint; i_cmd <=> root.i_cmd;
-        i_workdir <=> root.i_workdir; i_ports <=> root.i_ports;
-        i_volumes <=> root.i_volumes; i_labels <=> root.i_labels;
-        i_env <=> root.i_env; i_id <=> root.i_id;
-        log_lines <=> root.log_lines;
+    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在 CardsArea 之后（同层直接子元素），
+    // 否则会被下方卡片区覆盖 / 裁掉 —— 与 prototype 的绝对定位下拉一致
+    if sub-bar.sort_open : SortMenu {
+        x: sub-bar.menu_x;
+        y: sub-bar.menu_y;
+        height: 170px;
+        field: root.sort_field;
+        desc: root.sort_desc;
+        pick(f) => { sub-bar.sort_open = false; AppActions.set_sort(f); }
     }
 
-    if root.pull_open: PullDialog {
-        input <=> root.pull_input; busy <=> root.pull_busy;
-        close => { root.pull_close(); } submit(val) => { root.pull_submit(val); } }
-    if root.cleanup_open: CleanupDialog {
-        stopped <=> root.cleanup_stopped; dangling <=> root.cleanup_dangling;
-        unused <=> root.cleanup_unused;
-        close => { root.cleanup_close(); }
-        submit(s, d, u) => { root.cleanup_submit(s, d, u); } }
+    if CardMenu.id != "" : CardMenuLayer {
+        x: CardMenu.mx;
+        y: CardMenu.my;
+        height: 110px;
+        id: CardMenu.id;
+        kind: CardMenu.kind;
+        can_stop: CardMenu.can_stop;
+        stop_card(id) => { AppActions.container_toggle(id); CardMenu.close(); }
+        logs(id) => { AppActions.container_logs(id); CardMenu.close(); }
+        details(id) => {
+            if (CardMenu.kind == 1) { AppActions.image_select(id); }
+            else if (CardMenu.kind == 2) { AppActions.network_select(id); }
+            else { AppActions.volume_select(id); }
+            CardMenu.close();
+        }
+        remove(id) => {
+            if (CardMenu.kind == 1) { AppActions.image_remove(id); }
+            else if (CardMenu.kind == 2) { AppActions.network_remove(id); }
+            else { AppActions.volume_remove(id); }
+            CardMenu.close();
+        }
+    }
+
+    PullDialog {
+        open <=> root.pull_open; input <=> root.pull_input;
+        busy <=> root.pull_busy;
+        progress <=> root.pull_progress;
+        status <=> root.pull_status;
+        close => { AppActions.pull_close(); }
+        submit(v) => { AppActions.pull_submit(v); }
+    }
+    CleanupDialog {
+        open <=> root.cleanup_open; stopped <=> root.cleanup_stopped;
+        dangling <=> root.cleanup_dangling;
+        unused_net <=> root.cleanup_unused_net;
+        unused_vol <=> root.cleanup_unused_vol;
+        cnt_stopped <=> root.cleanup_cnt_stopped;
+        cnt_dangling <=> root.cleanup_cnt_dangling;
+        cnt_unused_net <=> root.cleanup_cnt_unused_net;
+        cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
+        close => { AppActions.cleanup_close(); }
+        submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
+    }
+
+    // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛
+    // flip=true 时向下弹（锚点上方不够空间，如 TopBar 顶部按钮）
+    TipLayer {
+        flip: Tip.ay - self.height - 12px < Theme.s1;
+        x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
+        y: self.flip ? Tip.ay + Tip.btn_h + 4px : Math.max(Theme.s1, Tip.ay - self.height - 12px);
+    }
+    }
 }

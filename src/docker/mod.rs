@@ -6,31 +6,57 @@
 //! - 错误统一转中文 `String` 上抛，UI 层直接当 status_text 用
 //!
 //! 分层：
-//!   containers.rs  → 容器列表 + CRUD
-//!   images.rs      → 镜像列表 + 拉取 + 删除（拉取含进度回调）
-//!   system.rs      → prune 清理
+//!   containers.rs     → 容器列表 + CRUD
+//!   container_detail.rs → 容器详情 inspect + 存活性探针 probe
+//!   images.rs         → 镜像列表 + 拉取 + 删除（拉取含进度回调）
+//!   log_types.rs      → 日志流类型 / 错误分类 / 退避策略（纯类型）
+//!   logs.rs           → 日志流读取（把 Docker 日志搬成 Msg）
+//!   system.rs         → prune 清理
+
+use std::future::Future;
+use std::time::Duration;
 
 use bollard::Docker;
 
+pub(crate) mod container_detail;
 mod containers;
 mod image_details;
 mod images;
+pub(crate) mod log_types;
 mod logs;
 mod netvol;
 mod stats;
 mod system;
 
+pub use container_detail::{inspect_container, probe_container, ContainerReach};
 pub use containers::{
     list_containers, remove_container, restart_container, start_container, stop_container,
 };
 pub use image_details::inspect_image;
-pub use images::{list_images, pull_image, remove_image};
-pub use logs::{follow_logs, inspect_container};
-pub use netvol::{list_networks, list_volumes};
+pub use images::{image_layer_count, list_images, pull_image, remove_image};
+pub use log_types::{
+    retry_delay, LogStreamEnd, IDLE_RETRY_DELAY, KEEPALIVE_INTERVAL, LOG_IDLE_TIMEOUT,
+};
+pub use logs::follow_logs;
+pub use netvol::{list_networks, list_volumes, remove_network, remove_volume, volume_sizes};
 pub use stats::{compute_cpu_delta, fetch_stats, ContainerStatsSnapshot};
 pub use system::cleanup;
 
+/// 单次 Docker API 调用上限：守护进程无响应时不能让后台任务无限挂起，
+/// 否则 3s/6s interval 会反复叠加任务，最终把 tokio 工作线程耗尽
+///（表现为列表/日志停止更新，看起来像"卡死"）。
+pub const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 给任意 Docker 调用套统一超时（仅用于可重试的列表/采样/inspect）。
+pub async fn with_timeout<T>(fut: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+    match tokio::time::timeout(CALL_TIMEOUT, fut).await {
+        Ok(res) => res,
+        Err(_) => Err(crate::i18n::t("Docker API timeout")),
+    }
+}
+
 /// 建立本机 Docker 连接
 pub fn connect() -> Result<Docker, String> {
-    Docker::connect_with_local_defaults().map_err(|e| format!("连接 Docker 失败: {e}"))
+    Docker::connect_with_local_defaults()
+        .map_err(|e| crate::i18n::trf("Failed to connect to Docker: {0}", &[&e.to_string()]))
 }

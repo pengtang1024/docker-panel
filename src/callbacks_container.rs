@@ -3,36 +3,13 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
-use crate::models::{Msg, SortField};
+use crate::i18n::{t, trf};
+use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SelKind, SharedState};
 
 pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     let actions = ui.global::<AppActions>();
-
-    // —— 表头点击排序 ——
-    {
-        let s = state.clone();
-        actions.on_container_sort(move |field: i32| {
-            let sf = match field {
-                0 => SortField::Group,
-                1 => SortField::Name,
-                2 => SortField::Status,
-                3 => SortField::Cpu,
-                4 => SortField::Mem,
-                _ => return,
-            };
-            if let Ok(mut st) = s.lock() {
-                if st.sort_field == sf {
-                    st.sort_desc = !st.sort_desc;
-                } else {
-                    st.sort_field = sf;
-                    st.sort_desc = false;
-                }
-            }
-        });
-    }
-
     // 容器启停切换
     {
         let ui_a = ui.as_weak();
@@ -40,7 +17,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_toggle(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("切换容器状态..."));
+            ui.set_status_text(SharedString::from(t("Toggling container...").as_str()));
 
             let is_running = {
                 let Ok(st) = s.lock() else { return };
@@ -58,10 +35,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 rt_handle.spawn(async move {
                     match docker::stop_container(&id).await {
                         Ok(_) => {
-                            let _ = tx.send(Msg::ActionDone("容器已停止".into(), Ok("ok".into())));
+                            let _ = tx
+                                .send(Msg::ActionDone("Container stopped".into(), Ok("ok".into())));
                         }
                         Err(e) => {
-                            let _ = tx.send(Msg::ActionDone("停止失败".into(), Err(e)));
+                            let _ = tx.send(Msg::ActionDone("Failed to stop".into(), Err(e)));
                         }
                     }
                 });
@@ -69,10 +47,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 rt_handle.spawn(async move {
                     match docker::start_container(&id).await {
                         Ok(_) => {
-                            let _ = tx.send(Msg::ActionDone("容器已启动".into(), Ok("ok".into())));
+                            let _ = tx
+                                .send(Msg::ActionDone("Container started".into(), Ok("ok".into())));
                         }
                         Err(e) => {
-                            let _ = tx.send(Msg::ActionDone("启动失败".into(), Err(e)));
+                            let _ = tx.send(Msg::ActionDone("Failed to start".into(), Err(e)));
                         }
                     }
                 });
@@ -82,12 +61,9 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
 
     // 容器重启
     {
-        let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_container_restart(move |row_id: SharedString| {
             let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("重启容器..."));
             let (rt_handle, tx) = {
                 let Ok(st) = s.lock() else { return };
                 (st.rt.handle().clone(), st.tx.clone())
@@ -95,10 +71,13 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             rt_handle.spawn(async move {
                 match docker::restart_container(&id).await {
                     Ok(_) => {
-                        let _ = tx.send(Msg::ActionDone("容器已重启".into(), Ok("ok".into())));
+                        let _ = tx.send(Msg::ActionDone(
+                            "Container restarted".into(),
+                            Ok("ok".into()),
+                        ));
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::ActionDone("重启失败".into(), Err(e)));
+                        let _ = tx.send(Msg::ActionDone("Failed to restart".into(), Err(e)));
                     }
                 }
             });
@@ -107,12 +86,9 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
 
     // 容器删除
     {
-        let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_container_remove(move |row_id: SharedString| {
             let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from("删除容器..."));
             let (rt_handle, tx) = {
                 let Ok(st) = s.lock() else { return };
                 (st.rt.handle().clone(), st.tx.clone())
@@ -120,54 +96,178 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             rt_handle.spawn(async move {
                 match docker::remove_container(&id).await {
                     Ok(_) => {
-                        let _ = tx.send(Msg::ActionDone("容器已删除".into(), Ok("ok".into())));
+                        let _ =
+                            tx.send(Msg::ActionDone("Container removed".into(), Ok("ok".into())));
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::ActionDone("删除失败".into(), Err(e)));
+                        let _ = tx.send(Msg::ActionDone("Failed to remove".into(), Err(e)));
                     }
                 }
             });
         });
     }
 
-    // 容器 inspect（锁内）
-    let bind_inspect = |s: &SharedState, id: String| {
+    // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染。
+    // 同时清空 UI 上的旧日志文本与状态提示：clear_logs 不发 Msg，若只清 state，
+    // 新容器还没产生日志时日志页会一直显示上一个容器的内容。
+    let bind_inspect = |ui: &MainWindow, s: &SharedState, id: String| {
+        crate::ui_apply::clear_log_panel(ui);
         if let Ok(mut st) = s.lock() {
+            st.sel = SelKind::Container;
+            st.sel_key = id.clone();
             st.request_detail(id);
             st.clear_logs();
         }
     };
 
-    // —— 整行点击 → inspect + 切详情面板 ——
+    // 卡片点击 → 打开抽屉 + inspect
     {
         let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_container_select(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            // Rust 侧直接切面板 —— 行点击必然看详情
-            ui.set_active_view(0);
-            ui.set_status_text(SharedString::from(format!("查看 {id}")));
-            bind_inspect(&s, id);
+            ui.set_drawer_open(true);
+            ui.set_drawer_tab(0);
+            bind_inspect(&ui, &s, id);
         });
     }
 
-    // —— 日志按钮 → inspect + follow_logs + 切日志面板 ——
+    // 日志按钮 → 打开抽屉日志 tab + follow_logs
     {
         let ui_a = ui.as_weak();
         let s = state.clone();
         actions.on_container_logs(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_active_view(1); // 🆕 自动切到日志面板
-            bind_inspect(&s, id.clone());
-            let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
-                (st.rt.handle().clone(), st.tx.clone())
+            ui.set_drawer_open(true);
+            ui.set_drawer_tab(1);
+            bind_inspect(&ui, &s, id.clone());
+            let new_stream = match s.lock() {
+                Ok(mut st) => st.ensure_follow(&id),
+                Err(_) => false,
             };
-            rt_handle.spawn(async move {
-                let _ = docker::follow_logs(&id, tx, 200).await;
-            });
+            // 新建的流没有「正在重连」之类的历史状态，清掉残留提示
+            if new_stream {
+                crate::ui_apply::clear_log_status(&ui);
+            }
         });
     }
+
+    // Checkbox 切换选中
+    {
+        let ui_c = ui.as_weak();
+        let s = state.clone();
+        actions.on_container_toggle_select(move |row_id: SharedString| {
+            let Some(ui) = ui_c.upgrade() else { return };
+            if let Ok(mut st) = s.lock() {
+                st.batch.toggle(row_id.to_string());
+                let n = st.batch.selected_ids.len() as i32;
+                drop(st);
+                ui.set_batch_count(n);
+            }
+        });
+    }
+
+    // 批量清除
+    {
+        let ui_b = ui.as_weak();
+        let s = state.clone();
+        actions.on_batch_clear(move || {
+            if let Ok(mut st) = s.lock() {
+                st.batch.clear();
+                drop(st);
+                if let Some(ui) = ui_b.upgrade() {
+                    ui.set_batch_count(0);
+                    ui.set_sel_mode(false);
+                }
+            }
+        });
+    }
+
+    // 批量启动
+    {
+        let s = state.clone();
+        actions.on_batch_start(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Start);
+            }
+        });
+    }
+
+    // 批量停止
+    {
+        let s = state.clone();
+        actions.on_batch_stop(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Stop);
+            }
+        });
+    }
+
+    // 批量重启
+    {
+        let s = state.clone();
+        actions.on_batch_restart(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Restart);
+            }
+        });
+    }
+
+    // 批量删除
+    {
+        let s = state.clone();
+        actions.on_batch_remove(move || {
+            let ids = {
+                let Ok(st) = s.lock() else { return };
+                st.batch.ids_sorted()
+            };
+            for id in ids {
+                spawn_container_op(&s, &id, OpKind::Remove);
+            }
+        });
+    }
+}
+
+enum OpKind {
+    Start,
+    Stop,
+    Restart,
+    Remove,
+}
+
+fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
+    let (rt_handle, tx) = {
+        let Ok(st) = s.lock() else { return };
+        (st.rt.handle().clone(), st.tx.clone())
+    };
+    let id = id.to_string();
+    rt_handle.spawn(async move {
+        let (desc, result) = match op {
+            OpKind::Start => (trf("Start {0}", &[&id]), docker::start_container(&id).await),
+            OpKind::Stop => (trf("Stop {0}", &[&id]), docker::stop_container(&id).await),
+            OpKind::Restart => (
+                trf("Restart {0}", &[&id]),
+                docker::restart_container(&id).await,
+            ),
+            OpKind::Remove => (
+                trf("Remove {0}", &[&id]),
+                docker::remove_container(&id).await,
+            ),
+        };
+        let _ = tx.send(Msg::ActionDone(desc, result));
+    });
 }

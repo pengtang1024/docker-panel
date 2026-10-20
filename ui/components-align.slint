@@ -1,0 +1,42 @@
+// components-align.slint — 对齐基类 + 全局总线
+// 铁律：所有 Text 必须是这三个基类之一，禁止裸写 Text {}。
+// 三个基类覆盖 prototype.html 的三种对齐模式：
+//   CenterText   display:grid; place-items:center     — 双向居中
+//   VCenterText  display:flex; align-items:center      — 仅垂直居中（Slint Layout 默认顶部对齐）
+//   RightText    text-align:right                      — 水平靠右
+import { Theme } from "theme.slint";
+
+// ============ 全局总线 ============
+export global Tip {
+    in-out property <string> text: "";
+    in-out property <length> ax: 0;
+    in-out property <length> ay: 0;
+    in-out property <length> btn_h: 32px;
+}
+
+export global CardMenu {
+    in-out property <string> id: "";
+    in-out property <int> kind: 0;
+    in-out property <bool> can_stop: false;
+    in-out property <length> mx: 0;
+    in-out property <length> my: 0;
+    public function close() { id = ""; }
+}
+
+// ============ 对齐基类 ============
+/// 双向居中（IconBtn glyph、CheckCell ✓、EmptyState 三段文字）
+export component CenterText inherits Text {
+    horizontal-alignment: center;
+    vertical-alignment: center;
+}
+
+/// 仅垂直居中（HorizontalLayout 里的普通文字；Slint Layout 默认顶部对齐）
+export component VCenterText inherits Text {
+    vertical-alignment: center;
+}
+
+/// 水平靠右（Drawer .kv .k 标签）
+export component RightText inherits Text {
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}

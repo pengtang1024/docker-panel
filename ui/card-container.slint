@@ -1,0 +1,201 @@
+// card-container.slint — 容器卡片（spec 3.1）
+// 结构：.check(sel-mode) → .c-name → .c-img → .c-ports(≤3 +N) → .c-res(点/CPU/MEM/DISK/proj-tag)
+//       + 右上角 .card-actions（主按钮 + 更多菜单，hover 显形）
+// 「···」菜单本体在 app.slint 顶层渲染：本卡片带 clip，菜单冒泡走 CardMenu 总线。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn, Dot, CheckCell } from "components-interact.slint";
+import { MonoChip, Stat, ProjTag } from "components-chip.slint";
+import { ContainerRow } from "models.slint";
+
+export component ContainerCard inherits Rectangle {
+    in property <ContainerRow> data;
+    in property <bool> sel_mode: false;
+    callback select(string);
+    callback toggle(string);
+    callback restart(string);
+    callback logs(string);
+    callback remove(string);
+    /// 多选勾选（复选框 / Shift 点按 / sel-mode 点按），区别于 toggle（启停容器）
+    callback box(string);
+    /// 展开/收起「···」菜单：把类型、可停止标记与菜单锚点（窗口坐标）冒泡给 CardsArea
+    callback menu_toggle(string, int, bool, length, length);
+
+    private property <bool> shift_down: false;
+    /// 菜单展开态由 CardsArea 按 id 回灌（同一时刻只允许一个菜单）
+    in-out property <bool> menu_open: false;
+    /// 菜单锚点（窗口坐标）：右对齐 more_btn 右边缘（top:36px, right:9px，见 prototype .dropdown）
+    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 36px;
+    // 动作浮层显形：卡片 hover、动作按钮自身 hover（否则按钮显形后抢走 hover 会来回抖动）或菜单已展开
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: root.data.is_selected ? Theme.ink : (root.act_show ? Theme.ink_4 : Theme.line);
+    clip: true;
+    // SOFTWARE_RENDERER: drop-shadow 在软件渲染器下产生 artifact
+    // 保持注释状态
+    // 未来如果换 Skia/wgpu 渲染器可尝试
+
+    // 左侧状态条（prototype .card::before，--state = ok/stop）
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: root.data.is_running ? Theme.ok : Theme.stop;
+    }
+
+    // 卡片主体：菜单开着时优先收起；sel-mode 或按住 Shift 走多选；否则打开详情
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.shift_down = e.modifiers.shift; }
+        }
+        clicked => {
+            if (root.menu_open) {
+                root.menu_toggle(root.data.id, 0, false, 0px, 0px);
+            } else if (root.sel_mode || root.shift_down) {
+                root.box(root.data.id);
+            } else {
+                root.select(root.data.id);
+            }
+        }
+    }
+
+    // 每行 height 固定，VL height 精确 = 总和，不拉伸不压缩
+    // 0:c-name=18 + 1 + 1:c-img=14 + 1 + 2:c-ports=22 + 1 + 3:c-res=20 = 77px
+    VerticalLayout {
+        x: 11px;
+        y: 9px;
+        width: parent.width - 20px;
+        height: 77px;
+        spacing: 1px;
+
+        // .c-name（右留 70px 给动作浮层；勾选模式左侧让位给复选框）
+        HorizontalLayout {
+            width: 100%;
+            height: 18px;
+            padding-right: 70px;
+            padding-left: root.sel_mode ? 26px : 0px;
+            VCenterText {
+                text: root.data.name;
+                font-size: 14px;
+                font-weight: 700;
+                color: Theme.ink;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+
+        // .c-img（11px mono）
+        VCenterText {
+            height: 14px;
+            text: root.data.image;
+            font-size: Theme.fs_sm;
+            font-family: Theme.mono;
+            color: Theme.ink_2;
+            overflow: elide;
+        }
+
+        // .c-ports（最多 3 个 +N，超出部分进 tooltip；.port{font-size:10px;padding:1px 6px;border-radius:var(--r-xs)}）
+        if root.data.port1 != "" : HorizontalLayout {
+            width: 100%;
+            height: 22px;
+            alignment: start;
+            spacing: 4px;
+            padding-top: 3px;
+            MonoChip { label: root.data.port1; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
+            if root.data.port2 != "" : MonoChip { label: root.data.port2; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
+            if root.data.port3 != "" : MonoChip { label: root.data.port3; pad_h: 6px; pad_v: 1px; fs: 10px; rad: Theme.r_xs; tip: root.data.ports_text; }
+            if root.data.ports_more > 0 : MonoChip {
+                label: "+" + root.data.ports_more;
+                plain: true;
+                pad_h: 5px; pad_v: 1px; fs: 10px; rad: Theme.r_xs;
+                ink: Theme.ink_3;
+                tip: root.data.ports_text;
+            }
+        }
+
+        // .c-res：状态点 + CPU/MEM/DISK + compose 项目标签（margin-left:auto）
+        HorizontalLayout {
+            width: 100%;
+            height: 20px;
+            spacing: 10px;
+            padding-top: 2px;
+            cross-axis-alignment: center;
+            Dot { on: root.data.is_running; tip: root.data.is_running ? @tr("Running") : @tr("Stopped"); }
+            Stat {
+                icon_name: "cpu";
+                value: (root.data.is_running && root.data.cpu_percent != "") ? root.data.cpu_percent : "—";
+                tip: @tr("CPU usage");
+               
+            }
+            Stat {
+                icon_name: "memory";
+                value: (root.data.is_running && root.data.mem_usage != "") ? root.data.mem_usage : "—";
+                tip: @tr("Memory usage");
+               
+            }
+            Stat { icon_name: "disk"; value: root.data.disk; tip: @tr("Disk usage"); }
+            Rectangle { horizontal-stretch: 1; }
+            if root.data.compose_project != "" : ProjTag {
+                label: root.data.compose_project;
+                dot_color: root.data.compose_color;
+                tip: @tr("Compose project") + ": " + root.data.compose_project;
+            }
+        }
+    }
+
+    // .check（sel-mode 才出现；y 对齐 HorizontalLayout center 而非 top:9，让 CheckBox 和名字文字垂直居中）
+    if root.sel_mode : CheckCell {
+        x: 11px;
+        y: 19.5px;
+        box: 18px;
+        checked: root.data.is_selected;
+        toggled => { root.box(root.data.id); }
+    }
+
+    // .card-actions 主按钮（.ca-main{width:26px;height:26px;border-radius:var(--r-sm)}；top:9 right:9 gap:4）
+    main_btn := IconBtn {
+        x: parent.width - 65px;
+        y: 9px;
+        size: 26px;
+        icon_size: 13px;
+        outline: true;
+        hidden: root.act_show == false;
+        icon_name: root.data.is_running ? "restart" : "play";
+        tip: root.data.is_running ? @tr("Restart") : @tr("Start");
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.id, 0, false, 0px, 0px); }
+            else if (root.data.is_running) { root.restart(root.data.id); }
+            else { root.toggle(root.data.id); }
+        }
+    }
+
+    // .card-actions 更多菜单（.ca-menu{width:26px;height:26px}；停止 / 日志 / 删除在顶层渲染）
+    more_btn := IconBtn {
+        x: parent.width - 35px;
+        y: 9px;
+        size: 26px;
+        icon_size: 13px;
+        outline: true;
+        active: root.menu_open;
+        hidden: root.act_show == false;
+        icon_name: "more";
+        tip: @tr("More");
+        clicked => {
+            root.menu_toggle(
+                root.data.id,
+                0,
+                root.data.is_running,
+                root.menu_mx,
+                root.menu_my);
+        }
+    }
+}

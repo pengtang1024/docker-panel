@@ -1,0 +1,30 @@
+// components-feedback.slint — 反馈类组件（Snackbar toast）
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+
+// ============ Snackbar — 底部 toast 提示 ============
+// prototype.html 的 toast 函数：显示 2s 后恢复 Ready
+// 用法：Rust 侧设 status_text → 自动显示 + 定时恢复
+export component Snackbar inherits Rectangle {
+    in-out property <string> message: "";
+    in-out property <float> duration_ms: 2000.0;
+
+    visible: root.message != "";
+    height: 28px;
+    width: self.preferred-width + 32px;
+    border-radius: Theme.r_sm;
+    background: Theme.ink;
+
+    HorizontalLayout {
+        alignment: center;
+        width: 100%; height: 100%;
+        padding-left: 16px; padding-right: 16px;
+        alignment: center;
+        VCenterText {
+            text: root.message;
+            font-size: Theme.fs_sm;
+            font-weight: 500;
+            color: Theme.card;
+        }
+    }
+}

@@ -1,0 +1,172 @@
+// card-image.slint — 镜像卡片（spec 3.2）
+// 结构：.repo（仓库名）→ .tags（tag 芯片 ≤3 +N，latest 高亮）→ .img-stats（大小/层数/创建）
+//       + .card-actions（运行 + 更多菜单）；菜单走 CardMenu 总线顶层渲染。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
+import { MonoChip } from "components-chip.slint";
+import { ImageRow } from "models.slint";
+
+export component ImageCard inherits Rectangle {
+    in property <ImageRow> data;
+    callback select(string);
+    callback run(string);
+    callback remove(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    /// 菜单展开态由 CardsArea 按 id 回灌
+    in-out property <bool> menu_open: false;
+    private property <length> menu_mx: root.absolute-position.x + root.width - 9px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 36px;
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+
+    border-radius: Theme.r;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: root.act_show ? Theme.ink_4 : Theme.line;
+    clip: true;
+    // // drop-shadow-color: root.act_show ? Theme.shadow_hover : transparent;  // SOFTWARE_RENDERER
+    // // drop-shadow-blur: 12px;  // SOFTWARE_RENDERER
+    // // drop-shadow-offset-y: 2px;  // SOFTWARE_RENDERER
+    // // animate drop-shadow-color { duration: 180ms; easing: ease-out; }  // SOFTWARE_RENDERER
+
+    // 左侧状态条（prototype .card::before 默认 --ok）
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.ok;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.id, 1, false, 0px, 0px); }
+            else { root.select(root.data.id); }
+        }
+    }
+
+    // 每行 height 固定，VL height 精确 = 总和，不拉伸不压缩
+    // .repo=18 + 1 + .tags=22 + 1 + .img-stats=32 = 74px
+    VerticalLayout {
+        x: 11px;
+        y: 9px;
+        width: parent.width - 20px;
+        height: 74px;
+        spacing: 1px;
+
+        // .repo（右留 70px 给动作浮层）
+        HorizontalLayout {
+            width: 100%;
+            height: 18px;
+            padding-right: 70px;
+            VCenterText {
+                text: root.data.name;
+                font-size: 14px;
+                font-weight: 700;
+                color: Theme.ink;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+
+        // .tags：最多 3 个芯片 + 溢出计数（alignment:start 防止 preferred 污染导致均分拉伸）
+        HorizontalLayout {
+            width: 100%;
+            height: 22px;
+            alignment: start;
+            spacing: 4px;
+            padding-top: 2px;
+            MonoChip {
+                label: root.data.tag1;
+                fs: Theme.fs_sm;
+                rad: Theme.r_sm;
+                ink: root.data.tag1 == "latest" ? Theme.warn : Theme.ink;
+                tip: root.data.tags_text;
+            }
+            if root.data.tag2 != "" : MonoChip {
+                label: root.data.tag2;
+                fs: Theme.fs_sm;
+                rad: Theme.r_sm;
+                ink: root.data.tag2 == "latest" ? Theme.warn : Theme.ink;
+                tip: root.data.tags_text;
+            }
+            if root.data.tag3 != "" : MonoChip {
+                label: root.data.tag3;
+                fs: Theme.fs_sm;
+                rad: Theme.r_sm;
+                ink: root.data.tag3 == "latest" ? Theme.warn : Theme.ink;
+                tip: root.data.tags_text;
+            }
+            if root.data.tags_more > 0 : MonoChip {
+                label: "+" + root.data.tags_more;
+                fs: Theme.fs_sm;
+                rad: Theme.r_sm;
+                plain: true;
+                ink: Theme.ink_3;
+                tip: root.data.tags_text;
+            }
+        }
+
+        // .img-stats：值在上、标签在下（padding-top 让 VL 内部两行上下紧凑）
+        HorizontalLayout {
+            width: 100%;
+            height: 32px;
+            spacing: 16px;
+            padding-top: 4px;
+            VerticalLayout {
+                spacing: 1px;
+                height: 100%;
+                VCenterText { text: root.data.size; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Size"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+            }
+            VerticalLayout {
+                spacing: 1px;
+                height: 100%;
+                VCenterText { text: root.data.layers; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Layers"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+            }
+            VerticalLayout {
+                spacing: 1px;
+                height: 100%;
+                VCenterText { text: root.data.created; font-size: Theme.fs_md; font-weight: 600; font-family: Theme.mono; color: Theme.ink; }
+                VCenterText { text: @tr("Created"); font-size: Theme.fs_sm; color: Theme.ink_2; }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+
+    // .card-actions 运行（.ca-main{width:26px;height:26px}；仅状态栏提示，不真启动容器）
+    main_btn := IconBtn {
+        x: parent.width - 65px;
+        y: 9px;
+        size: 26px;
+        icon_size: 13px;
+        outline: true;
+        hidden: root.act_show == false;
+        icon_name: "play";
+        tip: @tr("Run");
+        clicked => {
+            if (root.menu_open) { root.menu_toggle(root.data.id, 1, false, 0px, 0px); }
+            else { root.run(root.data.id); }
+        }
+    }
+
+    // .card-actions 更多菜单（.ca-menu{width:26px;height:26px}；详情 / 删除）
+    more_btn := IconBtn {
+        x: parent.width - 35px;
+        y: 9px;
+        size: 26px;
+        icon_size: 13px;
+        outline: true;
+        active: root.menu_open;
+        hidden: root.act_show == false;
+        icon_name: "more";
+        tip: @tr("More");
+        clicked => { root.menu_toggle(root.data.id, 1, false, root.menu_mx, root.menu_my); }
+    }
+}

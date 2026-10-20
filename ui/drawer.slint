@@ -1,0 +1,201 @@
+// drawer.slint — 右侧抽屉（详情 / 日志 / 环境）
+//
+// 定位方式：由 app.slint 的根 HorizontalLayout 作为正式子元素承载
+//   （if root.drawer_open : Drawer），高度由布局引擎分配；不再使用绝对定位 overlay。
+//
+// 滚动容器统一使用 Material 3 组件库（@material）：
+//   行列表（详情 / 环境）用 ListView —— 运行时逐项读 delegate.height 累加内容高，
+//     delegate 必须显式 height: self.min-height，且 DetailRow 提供 min-height。
+//   连续文本（日志）用 ScrollView —— 内容高由 Flickable 依子布局 min-height 自动推导。
+//   两者都作为所在布局的直接子元素，由布局引擎分配视口高度，
+//   切勿再包一层 Rectangle + height:parent.height —— 那样 viewport 高度会解析失败。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
+import { TabItem } from "components-nav.slint";
+import { DetailPair, LogRow } from "models.slint";
+import { DetailRow } from "drawer-detail-row.slint";
+import { LogLineRow } from "drawer-log-row.slint";
+import { ScrollView, ListView } from "@material";
+
+export component Drawer inherits Rectangle {
+    in-out property <bool> open: false;
+    in-out property <int> tab: 0;
+    in-out property <bool> log_follow: true;
+
+    in-out property <string> title: "";
+    in-out property <string> sub: "";
+    in-out property <bool> tabs_visible: true;
+    in-out property <[DetailPair]> detail_rows: [];
+    in-out property <[DetailPair]> env_rows: [];
+    /// 日志行列表（虚拟化：只渲染视口内的行）
+    in-out property <[LogRow]> log_rows: [];
+    /// 日志流状态提示（重连中 / 已恢复 / 已停止）
+    in-out property <string> log_status: "";
+
+    callback close();
+    callback set_tab(int);
+    callback log_follow_click();
+    callback log_copy_click();
+    callback log_clear_click();
+    callback value_copy(string);
+
+    // 宽度固定；高度由父级 HorizontalLayout 跨轴拉伸分配（不要再写 height:100%，
+    // 布局子元素上显式高度会触发 Slint 1.18 的布局循环/塌陷问题）
+    width: Theme.drawer_w;
+    background: Theme.card;
+    // 子元素溢出 Drawer 矩形时裁剪：ListView 内容超出视口时，
+    // 溢出行默认会穿透 Drawer 右边界画到窗口外（Slint Rectangle 默认不裁剪）
+    clip: true;
+
+    body := VerticalLayout {
+        visible: root.open;
+        width: 100%;
+        height: 100%;
+        spacing: 0px;
+        // 底部 16px 不可滚动留白：三 tab 滚动视口统一缩短，
+        // 保证最后一行内容不贴 Drawer 底边
+        padding-bottom: Theme.s5;
+
+        // 顶部标题栏
+        Rectangle {
+            vertical-stretch: 0;
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 0px; padding-left: 20px; padding-right: 20px;
+                padding-top: 18px; padding-bottom: 14px;
+                VerticalLayout {
+                    horizontal-stretch: 1; spacing: 4px; alignment: start;
+                    padding-right: 30px;
+                    VCenterText { text: root.title; font-size: 18px; font-weight: 700; color: Theme.ink; overflow: elide; }
+                    VCenterText { text: root.sub; font-size: 12px; color: Theme.ink_2; font-family: Theme.mono; overflow: elide; }
+                }
+            }
+            IconBtn {
+                x: parent.width - 14px - 28px; y: 14px;
+                size: 28px; icon_size: 12px; icon_name: "x";
+                tip: @tr("Close");
+                clicked => { root.close(); }
+            }
+        }
+
+        // Tab 栏
+        if root.tabs_visible : Rectangle {
+            vertical-stretch: 0;
+            height: 36px;
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 2px; padding-left: 12px; padding-right: 12px;
+                TabItem { label: @tr("Details"); active: root.tab == 0; idx: 0; clicked(t) => { root.set_tab(t); } }
+                TabItem { label: @tr("Logs"); active: root.tab == 1; idx: 1; clicked(t) => { root.set_tab(t); } }
+                TabItem { label: @tr("Environment"); active: root.tab == 2; idx: 2; clicked(t) => { root.set_tab(t); } }
+            }
+        }
+
+        // ====== 详情 tab（ListView：逐项行高 + 内容高由 Slint 运行时列表布局计算）======
+        // 为什么必须用 ListView 而不是 ScrollView + VerticalLayout：
+        //   Flickable 的非布局子元素高度默认吃到 100% 视口高，Slint 布局引擎会把
+        //   N 行等比压缩进视口 → 内容永不溢出、无法滚动（实测 67 行被压成 9.388px/行）。
+        //   ListView 由运行时逐项读取 delegate.height 累加内容高，绕开该缺陷。
+        if (root.tabs_visible == false) || root.tab == 0 : detail_scroll := ListView {
+            width: 100%;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            // 锁死横向 viewport：禁止横向拖拽
+            // horizontal-scrollbar-policy:always-off 只隐藏滚动条 UI，不禁手势；
+            // Flickable 从子元素首选宽度（未折行文本宽）算 viewport-width，
+            // 即使渲染时文字折行，viewport-width 仍比可见宽度大 → 允许横向拖拽。
+            // 必须绑定 visible_width（= flickable.width，即扣除滚动条后的视口宽），
+            // 不能用 self.width：ScrollView 在竖向策略非 always-off 时会把
+            // flickable.width 缩掉 scroll_bar_size（6px），self.width 仍留 6px 横向余量，
+            // 表现为"还能左右拖一点点"。visible_width 相等 → 横向行程为 0。
+            content_width: self.visible_width;
+            // 同日志 tab：避免滚动容器抢鼠标拖拽
+            mouse_drag_pan_enabled: false;
+            for row[i] in root.detail_rows : DetailRow {
+                data: row; width: 100%;
+                height: self.min-height;
+                copy_request(v) => { root.value_copy(v); }
+            }
+        }
+
+        // ====== 日志 tab ======
+        if root.tabs_visible && root.tab == 1 : VerticalLayout {
+            width: 100%;
+            spacing: 0px;
+            Rectangle {
+                vertical-stretch: 0;
+                height: 36px;
+                HorizontalLayout {
+                    width: 100%; height: 100%; spacing: 8px; padding-left: 12px; padding-right: 12px;
+                    IconBtn {
+                        size: 26px; icon_size: 11px; icon_name: root.log_follow ? "pause" : "play"; active: root.log_follow; tip: @tr("Follow logs");
+                        clicked => {
+                            root.log_follow_click();
+                            // 重新开启跟随时立即贴底，不必等下一行日志到达
+                            if root.log_follow {
+                                log_scroll.content_y = log_scroll.visible_height - log_scroll.content_height;
+                            }
+                        }
+                    }
+                    IconBtn { size: 26px; icon_size: 12px; icon_name: "copy"; tip: @tr("Copy logs"); clicked => { root.log_copy_click(); } }
+                    IconBtn { size: 26px; icon_size: 12px; icon_name: "trash"; tip: @tr("Clear logs"); clicked => { root.log_clear_click(); } }
+                    // 日志流状态提示：重连中 / 已恢复 / 已停止（独立于底部状态栏）
+                    VCenterText {
+                        text: root.log_status;
+                        color: Theme.ink_3;
+                        font-size: 11px;
+                        visible: root.log_status != "";
+                        horizontal-stretch: 1;
+                    }
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                width: 100%;
+                background: Theme.log_bg;
+                // 虚拟化日志列表：ListView 只实例化视口内的行（Slint 1.18 运行时
+                // 虚拟化），新增日志只 push 新行（render::logs 差量同步），
+                // 渲染成本与视口高度成正比，与缓冲行数无关。
+                // 旧实现是「整段 500 行塞进一个 TextInput」，每次新增日志都要让
+                // 软件渲染器重排 + 重绘全部缓冲行 —— 实测吃掉一个 CPU 核。
+                log_scroll := ListView {
+                    width: 100%; height: 100%;
+                    vertical-scrollbar-policy: as-needed;
+                    horizontal-scrollbar-policy: always-off;
+                    // 锁死横向 viewport：日志按 char-wrap 折行显示，不允许横向拖拽
+                    content_width: self.visible_width;
+                    mouse_drag_pan_enabled: false;
+                    // 自动跟随：新增日志行 → 内容变高 → 贴底
+                    // （content_y 为负值表示向下滚，贴底 = visible_height - content_height）
+                    changed content_height => {
+                        if root.log_follow {
+                            self.content_y = self.visible_height - self.content_height;
+                        }
+                    }
+                    for row[i] in root.log_rows : LogLineRow {
+                        data: row; width: 100%;
+                        height: self.min-height;
+                    }
+                }
+            }
+        }
+
+        // ====== 环境 tab（ListView：行位置与内容高度由 Slint 运行时列表布局计算）======
+        if root.tabs_visible && root.tab == 2 : env_scroll := ListView {
+            width: 100%;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            // 锁死横向 viewport（同 detail tab，见上注释）：
+            // 此处原先漏了绑定 → Flickable 视口宽取子元素首选宽 → 环境 tab 可自由左右拖
+            content_width: self.visible_width;
+            // 同日志 tab：避免滚动容器抢鼠标拖拽（复制按钮/文本交互更稳定）
+            mouse_drag_pan_enabled: false;
+            for row[i] in root.env_rows : DetailRow {
+                data: row; width: 100%;
+                height: self.min-height;
+                copy_request(v) => { root.value_copy(v); }
+            }
+        }
+    }
+}

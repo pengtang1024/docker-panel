@@ -52,6 +52,18 @@ fn main() {
 
     let ui = MainWindow::new().expect("create window");
 
+    // Wayland 下必须显式声明 xdg app_id（= desktop 文件名去掉 .desktop 后缀）：
+    // 不设置时窗口没有 app_id，GNOME Shell 无法把它匹配到 docker-panel.desktop，
+    // 面板坞（Dock）会显示成「未识别程序」，图标退化成通用占位图。
+    // 时机：native window 在 ui.run() 里才创建，此刻设置仍然有效（早于 show）。
+    // 仅 Wayland 需要：X11 下 winit 用 argv[0] 回退生成 WM_CLASS（class 段 = docker-panel），
+    // 显式设置反而会让 WM_CLASS 的 class 段变空（Slint 固定传 with_name(app_id, "")）。
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        if let Err(e) = slint::set_xdg_app_id("docker-panel") {
+            eprintln!("set xdg app id failed: {e:?}");
+        }
+    }
+
     // select_bundled_translation 必须在第一个组件创建之后调用
     //（GLOBAL_CONTEXT 随组件创建而初始化，之前调用只会得到 NoTranslationsBundled）；
     // 切换后 translations_dirty 会标脏，@tr 绑定的属性自动重新求值。

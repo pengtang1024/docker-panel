@@ -26,6 +26,7 @@
 
 ### 修复
 
+- **Release 流水线构建失败**：GitHub runner 未预装 fontconfig/freetype 开发包，`yeslogic-fontconfig-sys` 的 build script 找不到 `fontconfig.pc` 而 panic（0.2.2、0.3.0 两次发版的流水线都停在 `cargo build`）。工作流 apt 列表补 `libfontconfig1-dev`（连带 `libfreetype-dev` → `zlib1g-dev`/`libbz2-dev`/`libpng-dev`/`libbrotli-dev`），并在 `docs/git-flow.md` 记录该依赖与本地复现方法。
 - **日志流自愈的静默缺口**：① 空闲超时（连接挂死）与真实错误共用失败预算，8 次后直接放弃跟随——改为 Idle 走独立保活分支，不计预算、永不放弃，预算耗尽转 30s 低频保活；② 容器被删除等致命错误零 UI 提示——非取消的结束一律提示「日志流已停止」；③ 「已恢复连接」只依赖首行日志且提示标志单向锁存——改为三个触发点（重连后首行日志 / Idle 结局 / 探针由不可达跃迁为可达）；④ 切换容器后旧流的状态提示残留在新容器面板——新增 `clear_log_panel` / `clear_log_status` 两个清除落点，`ensure_follow` 返回「是否新建流」驱动清除。
 - **日志洪峰/高频 Msg 导致 UI 卡死**：consumer 改为单批最多 2048 条的有界 drain + 120ms UI 节流；日志洪峰只**追加**日志行模型，不再每收一条日志就重建容器/镜像/网络/卷/抽屉。锁持有时间与 UI invoke 次数均变为有界，点击/搜索不再被饿死。
 - **日志行模型随缓冲整表错位**：旧环形缓冲每来一行就挤掉最旧一行，整表索引每行错位一次，Slint 的 ListView 每次都把可见行标记为脏并重新排版——这是卡顿主因。改为分块裁剪（攒够 1000 行才整体搬移一次）+ 追加式行模型，稳态下可见行完全不重排。

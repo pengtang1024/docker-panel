@@ -46,13 +46,22 @@ docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching
 ## 发版流程
 
 ```bash
+# 0. 发版前门禁（本地是唯一门禁，CI 不做提交期检查）
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo build --release --locked
+
 # 1. 从 develop 切出发布分支
 git flow release start 0.1.1
 
-# 2. 同步版本号（两处必须一致）
-#    Cargo.toml 的 version 字段
-#    packaging/debian/control 的 Version 字段
-#    CHANGELOG.md 新增对应版本段落
+# 2. 同步版本号 + 写版本更新日志（三处必须一致，缺一不可）
+#    a) Cargo.toml 的 version 字段
+#    b) packaging/debian/control 的 Version 字段
+#    c) CHANGELOG.md：把 [Unreleased] 段落改写成 ## [X.Y.Z] - YYYY-MM-DD，
+#       并在底部链接区补一行 [X.Y.Z]: .../releases/tag/X.Y.Z
+#    c) 最容易漏 —— 漏了就出现「有 tag、没更新日志」的断档版本。
+#       改完用 scripts/check-version.sh 核一遍三处是否一致。
 
 # 3. 提交发版准备改动
 git commit -am "chore: 发版 0.1.1"
@@ -60,30 +69,60 @@ git commit -am "chore: 发版 0.1.1"
 # 4. 完成发布：合入 master、打 tag 0.1.1、回灌 develop
 git flow release finish 0.1.1
 
-# 5. 推送（tag 必须推，否则 Release 流水线不会触发）
+# 5. 推送（tag 必须单独推：一次多 ref push 会吞掉 tag 事件，流水线不触发）
 git push origin master develop
-git push origin 0.1.1
+git push origin refs/tags/0.1.1
 ```
 
 `git flow release finish` 会询问 tag 说明，直接回车使用默认的 `release: vX.Y.Z` 即可。
 
 ### 版本号同步的三个位置
 
-| 文件 | 字段 |
-|------|------|
-| `Cargo.toml` | `version` |
-| `packaging/debian/control` | `Version` |
-| `CHANGELOG.md` | `## [X.Y.Z]` 段落与底部链接 |
+| 文件 | 字段 | 改法 |
+|------|------|------|
+| `Cargo.toml` | `version` | 改成 `X.Y.Z` |
+| `packaging/debian/control` | `Version` | 改成 `X.Y.Z` |
+| `CHANGELOG.md` | `## [X.Y.Z]` 段落与底部链接 | `[Unreleased]` 段落**改写**为 `## [X.Y.Z] - YYYY-MM-DD`（内容按 新增/变更/修复/移除 分类），底部链接区补 `[X.Y.Z]: .../releases/tag/X.Y.Z` |
 
 漏掉任何一处都会导致 deb 包里的版本号与实际不符，或更新日志断档。
 
-## 线上紧急修复
+核对命令：
 
 ```bash
-git flow hotfix start 0.1.2      # 从 master 切出
-# 修复并提交
-git flow hotfix finish 0.1.2     # 合入 master + 回灌 develop + 打 tag
-git push origin master develop && git push origin 0.1.2
+scripts/check-version.sh            # 比较三处版本 + CHANGELOG 段落 + 当前 tag
+```
+
+## 线上紧急修复
+
+hotfix 同样产出补丁版本，**同样要写版本更新日志**——热修不是"偷偷发个补丁"，
+`CHANGELOG.md` 必须新增 `[X.Y.Z]` 段落，版本号三处同步不能省。
+
+```bash
+# 1. 从 master 切出热修分支
+git flow hotfix start 0.1.2
+
+# 2. 修复并提交
+git commit -am "fix: ..."
+
+# 3. 同步版本号 + 写版本更新日志（三处，与发版流程同）
+#    a) Cargo.toml: version = "0.1.2"
+#    b) packaging/debian/control: Version: 0.1.2
+#    c) CHANGELOG.md: 新增 ## [0.1.2] - YYYY-MM-DD 段落 + 底部链接
+git commit -am "chore: bump version v0.1.2 (three-way sync)"
+scripts/check-version.sh
+
+# 4. 门禁（同发版流程）
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo build --release --locked
+
+# 5. 合入 master + 回灌 develop + 打 tag
+git flow hotfix finish 0.1.2
+
+# 6. 推送（tag 单独推）
+git push origin master develop
+git push origin refs/tags/0.1.2
 ```
 
 hotfix 同样会触发 Release 流水线，产出补丁版本。
@@ -117,9 +156,10 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | 现象 | 成因 | 正解 |
 |------|------|------|
 | master 上出现 `merge: develop 合入 master` | 直接把 develop 合进了 master | 走 `release` 分支，由 `release finish` 中转 |
-| 推了 tag 但没有 Release | 只推了分支没推 tag | `git push origin X.Y.Z` |
+| 推了 tag 但没有 Release | 只推了分支没推 tag | `git push origin refs/tags/X.Y.Z` |
 | 推了 tag 但 Release 流水线没触发 | tag 用了 `v` 前缀，不匹配正则 `[0-9]+.[0-9]+.[0-9]+` | 用纯数字 `X.Y.Z` |
 | 一次 `git push --all` 带上了 tag，流水线没触发 | 同一批 push 的 tag 事件被吞 | tag 单独 push 一次（`git push origin refs/tags/X.Y.Z`） |
 | CI 在 `cargo build` 处失败且报 fontconfig 缺失 | apt 列表缺 `libfontconfig1-dev` | 见上文「CI 的系统依赖」 |
-| deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改 |
+| Release 页面没有更新日志 / CHANGELOG 断档 | 漏改 `[Unreleased]` 段落 | 发版与 hotfix 都要把 `[Unreleased]` 改写为 `## [X.Y.Z]` 并补底部链接 |
+| deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改（`scripts/check-version.sh` 可一键核对） |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |

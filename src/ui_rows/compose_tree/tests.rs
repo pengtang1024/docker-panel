@@ -161,21 +161,25 @@ fn stopped_members_count_for_disk_only() {
 }
 
 #[test]
-fn band_bar_is_relative_to_the_largest_group_total() {
-    // 两个项目：big 的 CPU 总和是 small 的两倍 → big 的微条满格，small 约一半
+fn band_and_rows_share_one_bar_baseline() {
+    // A group with 2 members: the group's total (20.0%) > the largest single container (10.0%)
+    // → the whole column shares one baseline (20.0%): the group is full, the container is half
     let state = state_with(vec![
-        rc("big", "web", 10.0, 400, 1000),
-        rc("small", "web", 5.0, 100, 500),
+        rc("proj", "web", 10.0, 300, 1000),
+        rc("proj", "web", 10.0, 100, 500),
     ]);
     let st = state.lock().unwrap();
     let tree = build_ledger_tree(&st);
-    let big = tree.rows.iter().find(|r| r.name == "big").unwrap();
-    let small = tree.rows.iter().find(|r| r.name == "small").unwrap();
-    // 基准 = 各分组总和的最大值（不是行的单容器最大值）
-    assert_eq!(big.cpu_ratio, 1.0);
-    assert!((small.cpu_ratio - 0.5).abs() < 0.01);
-    assert_eq!(big.mem_ratio, 1.0);
-    assert!((small.mem_ratio - 0.25).abs() < 0.01);
+    let band = tree.rows.iter().find(|r| r.kind == KIND_PROJECT).unwrap();
+    let row = tree.rows.iter().find(|r| r.kind == KIND_CONTAINER).unwrap();
+    // The group's total is the column's max → full bar
+    assert_eq!(band.cpu_text, "20.0%");
+    assert_eq!(band.cpu_ratio, 1.0);
+    // The row's bar is scaled by the same baseline → half
+    assert!((row.cpu_ratio - 0.5).abs() < 0.01);
+    // Memory: the group's total (400M) is the column's max → full bar; the row (300M) → 3/4
+    assert_eq!(band.mem_ratio, 1.0);
+    assert!((row.mem_ratio - 0.75).abs() < 0.01);
 }
 
 #[test]

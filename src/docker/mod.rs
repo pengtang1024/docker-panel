@@ -40,7 +40,7 @@ pub use log_types::{
 };
 pub use logs::follow_logs;
 pub use netvol::{list_networks, list_volumes, remove_network, remove_volume, volume_sizes};
-pub use stats::{compute_cpu_delta, fetch_stats, ContainerStatsSnapshot};
+pub use stats::{compute_cpu_delta, sample_all, ContainerStatsSnapshot};
 pub use system::cleanup;
 
 /// 单次 Docker API 调用上限：守护进程无响应时不能让后台任务无限挂起，

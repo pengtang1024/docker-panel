@@ -1,0 +1,23 @@
+// ledger-cols.slint — 台账列宽契约（表头与行共用的唯一真相源）
+//
+// 台账的核心价值是「列起点固定」：眼睛沿着一列垂直扫读就能比较数值
+// （12.4% 与 87.4% 不用逐张对比）。表头与行必须用同一套列宽，
+// 否则两者列起点错位 → 扫读能力直接失效。
+export global LedgerCols {
+    out property <length> gap: 12px;      // 列间距
+    out property <length> pad_x: 14px;    // 左右内边距
+    out property <length> dot_w: 18px;    // 状态点 / 勾选框
+    out property <length> cpu_bar_w: 52px;
+    out property <length> cpu_val_w: 52px;
+    out property <length> mem_bar_w: 62px;
+    out property <length> mem_val_w: 52px;
+    out property <length> disk_w: 60px;
+    out property <length> ports_w: 118px;
+    out property <length> project_w: 108px;
+    out property <length> act_w: 84px;    // 操作区（3 个 22px 按钮 + 2 个 2px 间距）
+    /// 滚动条槽宽（@material ScrollView 的 scroll_bar_size = 8px）
+    ///
+    /// 表头在滚动区**之外**、行在滚动区**之内**（行宽 = 视口宽 = 区域宽 - 8px）。
+    /// 表头右侧要额外让出这 8px，两者内容宽度才完全一致 → 列起点才对齐。
+    out property <length> scrollbar_slot: 8px;
+}

@@ -8,21 +8,24 @@
 
 ## 功能特性
 
-### 四视图卡片网格
+### 容器台账 + 三视图卡片网格
 
-- 容器 / 镜像 / 网络 / 卷四种视图卡片式布局，筛选栏一键切换（Ctrl+1~4）
-- 容器卡片：状态指示灯、短 ID、名称、镜像、CPU% / 内存 / 网络流量实时指标（6s 采样）、Compose 项目彩色标签
-- Compose 项目分组排序，顶部筛选 chips（全部 / 运行中 / 已停止）
-- 网络 / 卷卡片支持搜索过滤（名称 / driver / 挂载点）
+- 容器视图是**密集台账**：概览带（总数 / 运行中 / 已停止 / 需关注 + CPU 占用 TOP4）→ 表头 → 30px 虚拟化台账行
+- 台账列：状态点、容器名、CPU（微条 + %）、内存（微条 + 容量）、磁盘、镜像、端口、Compose 项目、行内操作
+- 列起点严格固定（表头与每一行逐列同 x 同宽），CPU / 内存微条按**当前视图内最大值**归一，同列一眼比高低
+- 表头可点击排序（容器名 / CPU / 内存 / 磁盘），列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口 / 项目列）
+- 「需关注」= 死亡 / 暂停 / 重启中 / 正在移除 / 异常退出（退出码 ≠ 0），行首琥珀色状态轨标记
+- 镜像 / 网络 / 卷仍是自适应列数卡片网格，筛选栏一键切换视图（Ctrl+1~4）
+- 顶部筛选 chips（全部 / 运行中 / 已停止 / Compose 项目），网络 / 卷卡片支持搜索过滤（名称 / driver / 挂载点）
 
 ### 右侧抽屉（详情 / 日志 / 环境）
 
-- 点击容器卡片 → inspect 详情（18 字段）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab
+- 点击容器台账行 → inspect 详情（18 字段）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab
 - 点击镜像卡片 → 镜像详情（RepoTag / 大小 / Entrypoint / Cmd / Env 等）
 
 ### 操作
 
-- 卡片行内按钮：启停（▶/⏹）、重启（⟳）、删除（🗑）、日志（📜）；右键上下文菜单同样可用
+- 台账行内按钮：启停（▶/⏹）、重启（⟳）、日志（📜）、更多（···）；「···」菜单同样可用
 - 容器多选 + 批量操作浮动栏（启动 / 停止 / 删除）
 - 顶栏：拉取镜像（实时进度弹窗）/ 清理未使用资源（已停止容器 / 悬空镜像 / 未使用镜像组合 prune）
 - 操作完成立即刷新列表，不等 3s 定时周期
@@ -83,10 +86,10 @@ cargo build --release
 
 ## 使用说明
 
-1. 启动后默认显示容器卡片视图，Docker 连接成功会自动加载。
+1. 启动后默认显示容器台账视图，Docker 连接成功会自动加载。
 2. Ctrl+K 聚焦搜索框，输入关键词即时过滤；Ctrl+R 手动刷新。
-3. 容器卡片按钮：▶/⏹ 切换状态、⟳ 重启、🗑 删除、📜 查看日志；右键菜单同样可用。
-4. 点击容器卡片 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像卡片 → 镜像详情。
+3. 容器台账行内按钮：▶/⏹ 切换状态、⟳ 重启、📜 查看日志、··· 更多操作。
+4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像卡片 → 镜像详情。
 5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉或弹窗。
 6. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
 7. 底部栏显示 8 项资源概览与最近操作结果。
@@ -128,16 +131,19 @@ docker-panel/
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
-├── ui/                     # Slint UI 声明（28 文件按职责拆分，app.slint 唯一组装入口）
+├── ui/                     # Slint UI 声明（31 文件按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
-│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
+│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
 │   ├── sub-bar.slint       # SubBar：筛选 chips + 排序 + 4 视图 tabs
-│   ├── cards.slint         # 卡片网格容器（四种视图共用，含空状态与背景点击层）
-│   ├── card-container.slint # 容器卡片（含多选勾选 + 启停/重启/日志操作）
+│   ├── cards.slint         # 资源列表区：容器视图走台账，镜像/网络/卷走卡片网格（含空状态与背景点击层）
+│   ├── ledger.slint        # 容器台账区：列宽计算 + 表头 + @material ListView 虚拟化台账行
+│   ├── ledger-row.slint    # 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
+│   ├── ledger-band.slint   # 台账概览带：4 个计数 + CPU 占用 TOP4
+│   ├── ledger-cols.slint   # 台账列宽契约 global（表头与行共用同一组列宽）
 │   ├── card-image.slint    # 镜像卡片（含运行/删除操作）
 │   ├── card-netvol.slint   # 网络/卷卡片（共用布局，内建标记 + 容器数）
 │   ├── skel.slint          # 骨架屏占位
@@ -164,7 +170,7 @@ docker-panel/
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
-│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers / images / netvol（网络/卷）
+│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ images / netvol（网络/卷）
 │   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态

@@ -1,0 +1,116 @@
+// ledger-band.slint — 台账概览带（方向 A）
+//
+// 一眼看清当前视图的规模与异常：总数 / 运行中 / 已停止 / 需关注，
+// 外加 CPU 占用 TOP4（条长按 TOP1 归一）。
+//
+// 数字口径 = **当前筛选后的列表**（与台账行一致），与筛选栏芯片的
+// 全量计数不同 —— 选中「运行中」时这里显示的是筛选后的数。
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { MicroBar } from "components-chip.slint";
+import { LedgerSummary } from "models.slint";
+
+// ============ 统计块（标签 + 数值 + 右侧分隔线）============
+component StatBlock inherits Rectangle {
+    in property <string> label: "";
+    in property <string> value: "";
+    in property <color> value_color: Theme.ink;
+    width: 88px; height: 100%;
+    Rectangle {
+        x: parent.width - 1px; y: 12px;
+        width: 1px; height: parent.height - 24px;
+        background: Theme.line_2;
+    }
+    VCenterText {
+        x: 16px; y: 14px; width: 60px; height: 12px;
+        text: root.label;
+        font-size: Theme.fs_xs; color: Theme.ink_3;
+        overflow: elide;
+    }
+    VCenterText {
+        x: 16px; y: 27px; width: 60px; height: 24px;
+        text: root.value;
+        font-size: 19px; font-weight: 600; font-family: Theme.mono;
+        color: root.value_color;
+    }
+}
+
+// ============ TOP 条（名字 + 微条 + 百分比）============
+component TopRow inherits Rectangle {
+    in property <string> name: "";
+    in property <string> pct: "";
+    in property <float> ratio: 0;
+    width: 416px; height: 13px;
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 8px;
+        cross-axis-alignment: center;
+        VCenterText {
+            text: root.name;
+            width: 120px; horizontal-stretch: 0;
+            font-size: Theme.fs_xs; color: Theme.ink_2;
+            overflow: elide;
+        }
+        MicroBar {
+            bar_w: 240px; bar_h: 4px;
+            ratio: root.ratio;
+            fill: Theme.bar_cpu;
+        }
+        RightText {
+            text: root.pct;
+            width: 40px; horizontal-stretch: 0;
+            font-size: Theme.fs_xs; font-family: Theme.mono;
+            color: Theme.ink_3;
+        }
+    }
+}
+
+export component LedgerBand inherits Rectangle {
+    in property <LedgerSummary> data;
+    height: 66px;
+    background: Theme.card;
+    Rectangle {
+        y: parent.height - 1px;
+        width: 100%; height: 1px;
+        background: Theme.line;
+    }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+        cross-axis-alignment: center;
+
+        StatBlock {
+            label: @tr("Containers"); value: root.data.total;
+            value_color: Theme.ink;
+        }
+        StatBlock {
+            label: @tr("Running"); value: root.data.running;
+            value_color: Theme.ok;
+        }
+        StatBlock {
+            label: @tr("Stopped"); value: root.data.stopped;
+            value_color: Theme.ink_3;
+        }
+        StatBlock {
+            label: @tr("Needs attention"); value: root.data.attention;
+            value_color: Theme.warn;
+        }
+
+        // CPU TOP4：窄屏放不下就整块隐藏（宽度不够时半截内容比没有更糟）
+        if root.width >= 1100px : Rectangle {
+            horizontal-stretch: 1;
+            height: 100%;
+            clip: true;
+            VCenterText {
+                x: 18px; width: 64px; height: 100%;
+                text: @tr("CPU TOP");
+                font-size: Theme.fs_xs; color: Theme.ink_3;
+            }
+            TopRow { x: 96px; y: 4px;  name: root.data.top_name1; pct: root.data.top_pct1; ratio: root.data.top_ratio1; }
+            TopRow { x: 96px; y: 19px; name: root.data.top_name2; pct: root.data.top_pct2; ratio: root.data.top_ratio2; }
+            TopRow { x: 96px; y: 34px; name: root.data.top_name3; pct: root.data.top_pct3; ratio: root.data.top_ratio3; }
+            TopRow { x: 96px; y: 49px; name: root.data.top_name4; pct: root.data.top_pct4; ratio: root.data.top_ratio4; }
+        }
+    }
+}

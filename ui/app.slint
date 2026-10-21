@@ -11,7 +11,7 @@ import { CardsArea } from "cards.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow, LedgerSummary } from "models.slint";
 import { AppActions } from "app-actions.slint";
 import { MaterialTheme } from "material-theme.slint";
 import { MaterialPalette, MaterialSchemes } from "@material";
@@ -102,6 +102,8 @@ export component MainWindow inherits Window {
     // 日志行列表（虚拟化渲染：只实例化视口内的行）
     in-out property <[LogRow]> log_rows: [];
     in-out property <[ComposeRow]> compose_rows: [];
+    /// 台账概览带（方向 A）：4 个计数 + CPU TOP4，与容器行同批产出
+    in-out property <LedgerSummary> ledger_summary;
 
     // —— 抽屉 ——
     in-out property <bool> drawer_open: false;
@@ -243,6 +245,8 @@ export component MainWindow inherits Window {
                 images <=> root.image_rows;
                 networks <=> root.network_rows;
                 volumes <=> root.volume_rows;
+                ledger_summary <=> root.ledger_summary;
+                sort_field <=> root.sort_field;
                 c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
                 c_toggle(id) => { AppActions.container_toggle(id); }
                 c_restart(id) => { AppActions.container_restart(id); }
@@ -256,6 +260,8 @@ export component MainWindow inherits Window {
                 n_remove(id) => { AppActions.network_remove(id); }
                 v_select(id) => { CardMenu.close(); AppActions.volume_select(id); }
                 v_remove(id) => { AppActions.volume_remove(id); }
+                // 台账表头点列 → 走与筛选栏排序菜单同一条链路（同列再点自动翻方向）
+                sort_pick(f) => { AppActions.set_sort(f); }
             }
 
             FootBar {

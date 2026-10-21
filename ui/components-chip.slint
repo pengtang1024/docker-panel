@@ -1,7 +1,7 @@
 // components-chip.slint — 数据展示类组件
 // 架构：Chip 基类（MonoChip + ProjTag 同构）+ Stat 独立（异构垂直布局）
 import { Theme } from "theme.slint";
-import { Tip, VCenterText, CenterText } from "components-align.slint";
+import { Tip, VCenterText } from "components-align.slint";
 import { StateArea } from "components-state.slint";
 
 // ============ Chip 基类（严格对齐 prototype .chip/.tag/.view-tab）============
@@ -60,56 +60,33 @@ export component Chip inherits Rectangle {
 // ============ 向后兼容别名（各组件独立微调 padding）============
 // MonoChip 默认 = .tag{font-size:11px;padding:2px 8px}
 export component MonoChip inherits Chip { mono: true; bold: true; show_dot: false; pad_h: 8px; pad_v: 2px; }
-// ProjTag = .proj-tag{font-size:10px;font-weight:700;padding:2px 7px}
-export component ProjTag inherits Chip { mono: false; bold: true; show_dot: true; pad_h: 7px; pad_v: 2px; fs: 10px; }
 
-// ============ 资源指标（图标 + 数值，异构垂直布局，独立）============
-export component Stat inherits Rectangle {
-    in-out property <string> icon_name: "";
-    in-out property <string> value: "";
-    in-out property <string> tip: "";
+// ============ 微条（固定宽轨道 + 按比例填充；CPU / 内存占比）============
+// ratio 是 0..1 的归一化比例（按**当前视图内最大值**归一，列内可比，
+// 不是绝对占比）—— 12.4% 与 87.4% 不用逐张对比就能分出高低。
+// ⚠️ 内层填充条不能用 height: parent.height（Slint 1.18 编译期判定布局循环绑定），
+//    用显式 bar_h + 绝对定位。
+export component MicroBar inherits Rectangle {
+    in-out property <float> ratio: 0;
+    in-out property <color> fill: Theme.bar_cpu;
+    in-out property <length> bar_w: 52px;
+    in-out property <length> bar_h: 4px;
 
-    property <string> icon_commands: root.icon_name == "cpu" ? "M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M1 9h3 M1 15h3 M20 9h3 M20 15h3"
-        : root.icon_name == "memory" ? "M2 6h20v12H2z M6 10v4 M10 10v4 M14 10v4 M18 10v4"
-        : root.icon_name == "disk" ? "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 2a14.5 14.5 0 0 0 0 20 M12 2a14.5 14.5 0 0 1 0 20 M2 12h20"
-        : root.icon_name == "network" ? "M9 2h6v6H9z M2 16h6v6H2z M16 16h6v6h1z M12 8v4 M5 14v-2h14v2"
-        : "";
+    width: root.bar_w;
+    height: root.bar_h;
+    border-radius: root.bar_h / 2;
+    background: Theme.bar_bg;
 
-    // ⚠️ cross-axis-alignment:center 让 Rectangle 包裹的 Path 和 Text 垂直居中；
-    // Path 必须 Rectangle 包裹 + x/y 手动居中——HorizontalLayout 对 Path 不自动居中
-    HorizontalLayout {
-        alignment: center;
-        cross-axis-alignment: center;
-        spacing: 4px;  // .stat{gap:4px}
-        Rectangle {
-            width: 14px; height: 100%;
-            Path {
-                width: 14px; height: 14px;
-                commands: icon_commands;
-                stroke: Theme.ink_3;
-                stroke-width: 1.5px;
-                stroke-line-cap: round;
-                stroke-line-join: round;
-                viewbox-x: 0;
-                viewbox-y: 0;
-                viewbox-width: 24;
-                viewbox-height: 24;
-                fill: transparent;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-            }
-            visible: icon_commands != "";
-        }
-        VCenterText {
-            text: root.value; font-size: Theme.fs_sm; font-weight: 600;
-            color: Theme.ink; font-family: Theme.mono;
-        }
-    }
-
-    touch := TouchArea { width: 100%; height: 100%; }
-    private property <bool> tip_hover: touch.has-hover;
-    changed tip_hover => {
-        if (root.tip_hover && root.tip != "") { Tip.text = root.tip; Tip.ax = touch.absolute-position.x + touch.width / 2; Tip.ay = touch.absolute-position.y; }
-        else if (Tip.text == root.tip) { Tip.text = ""; }
+    Rectangle {
+        x: 0px; y: 0px;
+        width: root.bar_w * root.ratio;
+        height: root.bar_h;
+        border-radius: root.bar_h / 2;
+        background: root.fill;
     }
 }
+
+// ============ 资源指标（图标 + 数值，异构垂直布局，独立）============
+// 注：台账（方向 A）改用 MicroBar + 右对齐数值后，图标式 Stat 已无引用，
+//     故本文件不再保留 Stat —— 组件库不留无人使用的导出组件。
+

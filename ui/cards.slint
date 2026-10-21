@@ -1,12 +1,14 @@
-// cards.slint — 卡片网格区域（自适应列数 + 垂直滚动）
+// cards.slint — 资源列表区
+// 容器视图走**密集台账**（方向 A：概览带 + 表头 + 30px 虚拟化行，
+//   见 ledger.slint）；镜像 / 网络 / 卷仍是自适应列数卡片网格。
 // 4 个视图共用一套网格几何：按宽度算列数（prototype 1280px 下 = 4 列 310px），
 // 卡片绝对定位在 ScrollView 内容层里；空数据显示 EmptyState。
-// 三张卡片组件分别在 card-container / card-image / card-netvol.slint。
+// 卡片组件分别在 card-image / card-netvol.slint。
 import { Theme } from "theme.slint";
 import { CardMenu } from "components-align.slint";
 import { EmptyState } from "components-empty.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow } from "models.slint";
-import { ContainerCard } from "card-container.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LedgerSummary } from "models.slint";
+import { LedgerArea } from "ledger.slint";
 import { ImageCard } from "card-image.slint";
 import { NetworkCard, VolumeCard } from "card-netvol.slint";
 import { SkelGrid } from "skel.slint";
@@ -20,6 +22,10 @@ export component CardsArea inherits Rectangle {
     in-out property <[ImageRow]> images: [];
     in-out property <[NetworkRow]> networks: [];
     in-out property <[VolumeRow]> volumes: [];
+    /// 台账概览带（容器视图用）
+    in-out property <LedgerSummary> ledger_summary;
+    /// 当前排序列（0=名称 1=CPU 2=内存 3=磁盘），台账表头高亮用
+    in-out property <int> sort_field: 0;
     callback c_select(string);
     callback c_toggle(string);
     callback c_restart(string);
@@ -35,6 +41,8 @@ export component CardsArea inherits Rectangle {
     callback v_remove(string);
     /// 卡片「···」菜单请求（冒泡到本层，由 CardsArea 写 CardMenu 总线单例）
     callback menu_toggle(string, int, bool, length, length);
+    /// 台账表头点击排序（冒泡到本层，再交给 AppActions.set_sort）
+    callback sort_pick(int);
 
     // 单实例菜单总线：点自己收起、点别的卡片改写锚点（id 必须最后写，
     // 否则 id 先变会让菜单带着旧锚点先渲染一帧）
@@ -53,7 +61,7 @@ export component CardsArea inherits Rectangle {
     // —— 网格几何（prototype .content padding 8px / .grid gap 8px / 卡宽 310px @1280）——
     property <length> pad: Theme.s3;
     property <length> gap: Theme.s3;
-    property <length> card_h: 95px;  // VL heights: Container=77 Image=74 Network=68 Volume=68; + top y=9 + bottom buffer
+    property <length> card_h: 95px;  // VL heights: Image=74 Network=68 Volume=68; + top y=9 + bottom buffer
     property <length> card_min: 300px;
     property <float> per_row: Math.max(1, Math.floor((self.width - 2 * pad + gap) / (card_min + gap)));
     property <int> n: view == 0 ? containers.length
@@ -89,30 +97,24 @@ export component CardsArea inherits Rectangle {
             : "";
     }
 
-    if root.loading == false && root.view == 0 && root.n > 0 : ScrollView {
+    // 容器视图：密集台账（方向 A）
+    if root.loading == false && root.view == 0 && root.n > 0 : LedgerArea {
         width: 100%;
         height: 100%;
-        vertical-scrollbar-policy: as-needed;
-        content-width: self.width;
-        content-height: root.body_h;
-        for row[i] in root.containers : ContainerCard {
-            data: row;
-            sel_mode: root.sel_mode;
-            menu_open: CardMenu.id == row.id;
-            x: root.pad + (i - Math.floor(i / root.per_row) * root.per_row) * (root.pitch + root.gap);
-            y: root.pad + Math.floor(i / root.per_row) * (root.card_h + root.gap);
-            width: root.pitch;
-            height: root.card_h;
-            select(id) => { root.c_select(id); }
-            toggle(id) => { root.c_toggle(id); }
-            restart(id) => { root.c_restart(id); }
-            logs(id) => { root.c_logs(id); }
-            remove(id) => { root.c_remove(id); }
-            box(id) => { root.c_box(id); }
-            menu_toggle(id, kind, can_stop, mx, my) => {
-                root.menu_toggle(id, kind, can_stop, mx, my);
-            }
+        sel_mode <=> root.sel_mode;
+        containers <=> root.containers;
+        summary <=> root.ledger_summary;
+        sort_field <=> root.sort_field;
+        c_select(id) => { root.c_select(id); }
+        c_toggle(id) => { root.c_toggle(id); }
+        c_restart(id) => { root.c_restart(id); }
+        c_logs(id) => { root.c_logs(id); }
+        c_remove(id) => { root.c_remove(id); }
+        c_box(id) => { root.c_box(id); }
+        menu_toggle(id, kind, can_stop, mx, my) => {
+            root.menu_toggle(id, kind, can_stop, mx, my);
         }
+        sort_pick(f) => { root.sort_pick(f); }
     }
 
     if root.loading == false && root.view == 1 && root.n > 0 : ScrollView {

@@ -10,19 +10,35 @@ export struct ContainerRow {
     image: string,
     is_running: bool,
     is_selected: bool,
+    /// 需关注（非 0 退出 / dead / paused / restarting）→ 琥珀色状态轨
+    needs_attention: bool,
     // —— Compose 分组 ——
     compose_project: string,       // 空字符串表示非 Compose 容器
     compose_color: color,          // compose 项目标签配色（按项目名稳定散列）
-    // —— 资源监控 ——
-    cpu_percent: string,           // 如 "12.3%"（空字符串 = 未采样）
-    mem_usage: string,             // 如 "512MB"
-    disk: string,                  // 如 "12MB"（容器可写层占用）
-    // —— 端口（spec 3.1 .c-ports：最多 3 个 +N）——
-    port1: string,                 // 卡片展示的第 1 个端口短标签（空 = 无，如 "6399"）
-    port2: string,
-    port3: string,
-    ports_more: int,               // 超出 3 条的剩余数量（0 = 不显示 +N）
-    ports_text: string,            // 全部端口全文（如 "6399→6379/tcp"），芯片 tooltip
+    // —— 资源监控（台账：一位小数百分比，右对齐等宽体）——
+    cpu_text: string,              // 如 "12.4%"（停止时 "—"）
+    mem_text: string,              // 如 "673M"（停止时 "—"）
+    disk: string,                  // 如 "596K"（容器可写层占用）
+    /// 微条长度比例（0..1，按**当前视图内**最大值归一，列内可比）
+    cpu_ratio: float,
+    mem_ratio: float,
+    // —— 端口 ——
+    ports_text: string,            // 列内展示的短标签（空格分隔，如 "8081 8083"）
+}
+
+/// 台账概览带（方向 A）：4 个计数 + CPU 占用 TOP4
+///
+/// TOP4 展平成 4 组标量而不是数组 —— Slint struct 内禁止嵌套数组
+/// （会让 struct 失去 Send，无法跨线程投递）。
+export struct LedgerSummary {
+    total: int,
+    running: int,
+    stopped: int,
+    attention: int,                // 需关注数量
+    top_name1: string, top_pct1: string, top_ratio1: float,
+    top_name2: string, top_pct2: string, top_ratio2: float,
+    top_name3: string, top_pct3: string, top_ratio3: float,
+    top_name4: string, top_pct4: string, top_ratio4: float,
 }
 
 export struct ImageRow {

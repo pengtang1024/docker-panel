@@ -3,12 +3,14 @@
 //! 拆分理由：Compose 分组排序、端口压缩、相对时间等格式化逻辑较重，
 //! 全部堆在一个文件会超过 300 行上限。
 //!
-//!   containers.rs → 容器卡片行
+//!   containers.rs → 容器台账行（筛选 / 排序 / 归一化比例）
+//!   ledger.rs     → 台账概览带 + 台账入口
 //!   images.rs     → 镜像卡片行
 //!   netvol.rs     → 网络 / 卷卡片行
 
 mod containers;
 mod images;
+mod ledger;
 mod netvol;
 
 use std::collections::BTreeMap;
@@ -18,8 +20,8 @@ use slint::SharedString;
 use crate::slint_gen::ComposeRow;
 use crate::ui_state::AppState;
 
-pub use containers::build_container_rows;
 pub use images::build_image_rows;
+pub use ledger::build_container_ledger;
 pub use netvol::{build_network_rows, build_volume_rows};
 
 /// 卡片端口压缩：去掉 "ip:" 前缀、`(tcp)` 归一为 `/tcp`

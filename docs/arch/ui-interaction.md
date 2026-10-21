@@ -4,7 +4,7 @@
 
 ## 1. Slint UI 模块交互
 
-26 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+31 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
 
 ### 交互总图
 
@@ -12,7 +12,7 @@
                     app.slint（组装层 + 布局 + global-shortcuts 快捷键）
         ╱      ╱       ╱        ╲        ╲        ╲        ╲
    top-bar  sub-bar  cards   foot-bar  batch-bar  drawer  dialogs/menu-layers
-   (顶栏)   (筛选)  (卡片)    (底栏)    (批量栏)   (抽屉)   (弹层)
+   (顶栏)   (筛选)  (列表)    (底栏)    (批量栏)   (抽屉)   (弹层)
       │        │       │
       └────────┴───┬───┴──────────────┐
                    ▼                  ▼
@@ -20,7 +20,7 @@
           （9 个原子组件分组）      app-actions.slint（UI→Rust 回调 global）
                    │
                    ▼
-          models.slint（ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair）
+          models.slint（ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LedgerSummary）
 ```
 
 ### 交互模式
@@ -59,15 +59,18 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 361 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
+| `app.slint` | 367 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
 | `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
-| `models.slint` | 84 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow | 无 |
+| `models.slint` | 100 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
 | `sub-bar.slint` | 197 | 筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
-| `cards.slint` | 173 | 四种资源卡片网格 + 空状态 + 背景点击层 | theme / card-* / skel / components-* |
-| `card-container.slint` | 201 | 容器卡片（多选 + 启停/重启/日志） | theme / components-* |
+| `cards.slint` | 175 | 资源列表区：容器视图走台账，镜像/网络/卷走卡片网格 + 空状态 + 背景点击层 | theme / ledger / card-* / skel / components-* |
+| `ledger.slint` | 256 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
+| `ledger-row.slint` | 229 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
+| `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
+| `ledger-cols.slint` | 23 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
 | `card-image.slint` | 172 | 镜像卡片（运行/删除） | theme / components-* |
 | `card-netvol.slint` | 138 | 网络/卷卡片（共用布局） | theme / components-* |
 | `skel.slint` | 69 | 骨架屏占位 | theme |
@@ -81,7 +84,7 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 | `components-interact.slint` | 340 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |
 | `components-form.slint` | 102 | 输入/复选框等表单组件 | theme |
-| `components-chip.slint` | 115 | Chip / 标签类组件 | theme |
+| `components-chip.slint` | 92 | Chip / MonoChip / MicroBar 等数据展示组件 | theme |
 | `components-align.slint` | 42 | VCenterText / CenterText 对齐组件 | theme |
 | `components-state.slint` | 49 | StateArea 等状态层 | theme |
 | `components-empty.slint` | 35 | 空态组件 | theme |
@@ -133,8 +136,37 @@ consumer 只负责「按 Msg 增量刷新数据」，不负责「回写用户操
 需要防的另一种竞态（锁内建行、锁外应用，期间条件被改）用
 `AppState::rows_epoch` 判定：epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
 
-## 4. 窗口身份（xdg app_id）与 Dock 图标
+### 3.3 密集表格：弹性列的宽度不能交给 Slint 布局分配
 
+台账（`ledger.slint`）的核心承诺是**列起点固定**：表头与每一行逐列同 x 同宽，
+CPU / 内存两列能竖着扫读比较。
+
+Slint 的 `HorizontalLayout` 分配空间时，**先给每个子项「首选宽度」（文本的自然宽度）**，
+再把剩余空间按 `horizontal-stretch` 比例分。子项是 `Text` 时，首选宽度 = 文本多长
+→ 容器名一长，名称列就被撑宽 → CPU / 内存列的起点**逐行漂移**，表格直接失去意义。
+
+正确写法：**由父级统一算出列宽，显式下发给表头与行**。
+
+```slint
+// ledger.slint：LedgerArea 统一算，两个弹性列平分剩余宽度
+property <length> content_w: root.width - LedgerCols.scrollbar_slot - LedgerCols.pad_x * 2;
+property <length> name_w: (root.content_w - root.fixed_w - root.gaps_w) / 2;
+property <length> image_w: (root.content_w - root.fixed_w - root.gaps_w) / 2;
+// 表头与行都用显式宽度（不用 horizontal-stretch）
+VCenterText { text: root.data.name; width: root.name_w; horizontal-stretch: 0; overflow: elide; }
+```
+
+配套的两条约束：
+
+- **表头在滚动区外、行在滚动区内**：行列表视口比区域窄一个滚动条槽（8px），
+  所以表头的 `padding-right` 要额外加上 `scrollbar_slot`，表头内容宽才与行内容宽相等。
+- **响应式列显隐由父级统一判定**（`show_disk` / `show_ports` / `show_project`），
+  表头与行共用同一组判定，隐列时列数与间距数同步变化，不会出现「表头 10 列、行 9 列」。
+
+验收方式：MCP `get_element_tree` 取表头与各行的 `absolutePosition.x` / `size.width`，
+逐列比对必须完全相等（不要靠肉眼读截图，12px 的偏移肉眼很难发现）。
+
+## 4. 窗口身份（xdg app_id）与 Dock 图标
 桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。
 
 | 后端 | 机制 | 不设置的后果 |

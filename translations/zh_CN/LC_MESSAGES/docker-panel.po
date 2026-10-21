@@ -66,6 +66,16 @@ msgstr "网络"
 msgid "Volumes"
 msgstr "卷"
 
+# ===== 台账（方向 A）=====
+msgid "Needs attention"
+msgstr "需关注"
+
+msgid "CPU TOP"
+msgstr "CPU 占用 TOP"
+
+msgid "Project"
+msgstr "项目"
+
 # ===== 卡片 =====
 msgid "{0} in use"
 msgstr "{0} 个在用"

@@ -54,7 +54,7 @@ docker-panel/
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ images / netvol（网络/卷）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -84,11 +84,14 @@ docker-panel/
     ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
     ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态（is_dark 为 out）
     ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
-    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
+    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
-    ├── cards.slint            卡片网格容器（四种视图共用，含空状态 + 背景点击层）
-    ├── card-container.slint   容器卡片（多选勾选 + 启停/重启/日志）
+    ├── cards.slint            资源列表区：容器视图走台账，镜像/网络/卷走卡片网格（含空状态 + 背景点击层）
+    ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
+    ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
+    ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
+    ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
     ├── card-image.slint       镜像卡片（运行/删除）
     ├── card-netvol.slint      网络/卷卡片（共用布局，内建标记 + 容器数）
     ├── skel.slint             骨架屏占位
@@ -119,8 +122,9 @@ main.rs
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；
                      子文件依赖是**无环 DAG**：theme.slint 是叶子（所有文件都 import 它），
-                     composition 依赖只向下（cards→card-*/skel、drawer→drawer-*-row、dialogs→components-dialog、
-                     material-theme→theme），不存在互相 import / 循环
+                     composition 依赖只向下（cards→ledger/card-*/skel、ledger→ledger-row/ledger-band/ledger-cols、
+                     drawer→drawer-*-row、dialogs→components-dialog、material-theme→theme），
+                     不存在互相 import / 循环
 ```
 
 ## 3. 文件规范

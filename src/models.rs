@@ -82,6 +82,26 @@ impl ContainerInfo {
             self.mem_usage as f64 / self.mem_limit as f64 * 100.0
         }
     }
+
+    /// 是否「需关注」：非正常退出 / 挂死 / 暂停 / 反复重启
+    ///
+    /// 判定依据只用 `list_containers` 就有的字段（state + status 文本），
+    /// 不额外发 inspect 请求——43 个容器逐个 inspect 的代价无法接受。
+    /// Docker 的 status 形如 "Exited (137) 5 minutes ago"，退出码非 0 即异常。
+    pub fn needs_attention(&self) -> bool {
+        match self.state.as_str() {
+            "dead" | "paused" | "restarting" | "removing" => true,
+            "exited" => {
+                let code = self
+                    .status
+                    .strip_prefix("Exited (")
+                    .and_then(|s| s.split(')').next())
+                    .and_then(|s| s.trim().parse::<i32>().ok());
+                matches!(code, Some(c) if c != 0)
+            }
+            _ => false,
+        }
+    }
 }
 
 /// 镜像信息（卡片一行的数据）

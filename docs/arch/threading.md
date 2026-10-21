@@ -56,7 +56,7 @@ let res = std::mem::take(pending);
 let Ok(mut s) = state.lock() else { return };
 if res.refresh_now { s.refresh(); }
 // 每类列表独立标记：一条 stats 只重建容器行，不连带重建镜像/网络/卷
-let container_rows = res.containers_changed.then(|| ui_rows::build_container_rows(&s));
+let container_ledger = res.containers_changed.then(|| ui_rows::build_container_ledger(&s));
 let image_rows = res.images_changed.then(|| ui_rows::build_image_rows(&s));
 let network_rows = res.networks_changed.then(|| ui_rows::build_network_rows(&s));
 let volume_rows = res.volumes_changed.then(|| ui_rows::build_volume_rows(&s));
@@ -153,7 +153,7 @@ invoke_from_event_loop(move || {
                       ▼
          ┌──────────────────────────┐
          │ lock state               │
-         │ 只 build 变化区域          │  containers_changed → ui_rows::build_container_rows
+         │ 只 build 变化区域          │  containers_changed → ui_rows::build_container_ledger
          │ drop lock                │  drawer_changed → detail_fmt::build_drawer_data
          └────────────┬─────────────┘  logs_changed → log_sync_plan() → Append / Reset
                       │ invoke_from_event_loop

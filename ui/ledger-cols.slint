@@ -13,7 +13,8 @@ export global LedgerCols {
     out property <length> mem_val_w: 52px;
     out property <length> disk_w: 60px;
     out property <length> ports_w: 118px;
-    out property <length> project_w: 108px;
+    /// 内联树的层级缩进步长（项目带下的容器行 / 服务带各缩进一级）
+    out property <length> indent: 18px;
     out property <length> act_w: 84px;    // 操作区（3 个 22px 按钮 + 2 个 2px 间距）
     /// 滚动条槽宽（@material ScrollView 的 scroll_bar_size = 8px）
     ///

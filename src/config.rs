@@ -20,14 +20,14 @@ pub struct AppConfig {
     pub sort_desc: bool,
     pub search: String,
     pub log_follow: bool,
-    /// compose 范围类型 0=全部 1=项目 2=服务 3=独立容器
-    pub compose_kind: i64,
-    /// compose 项目名（kind=1/2）
-    pub compose_project: String,
-    /// compose 服务名（kind=2）
-    pub compose_service: String,
-    /// 侧栏树里展开的项目名
-    pub compose_expanded: Vec<String>,
+    /// 台账内联树里**收起**的分组键（`project:<名>` / `svc:<项目>/<服务>`）
+    pub compose_collapsed: Vec<String>,
+    /// 镜像列表排序（低 3 位=列下标，第 3 位=降序标记，见 ResourceSort）
+    pub sort_images: i64,
+    /// 网络列表排序（同上）
+    pub sort_networks: i64,
+    /// 卷列表排序（同上）
+    pub sort_volumes: i64,
 }
 
 impl Default for AppConfig {
@@ -40,10 +40,10 @@ impl Default for AppConfig {
             sort_desc: true,
             search: String::new(),
             log_follow: true,
-            compose_kind: 0,
-            compose_project: String::new(),
-            compose_service: String::new(),
-            compose_expanded: Vec::new(),
+            compose_collapsed: Vec::new(),
+            sort_images: 0,
+            sort_networks: 0,
+            sort_volumes: 0,
         }
     }
 }
@@ -94,23 +94,23 @@ impl AppConfig {
                 .get("log_follow")
                 .and_then(|x| x.as_bool())
                 .unwrap_or(d.log_follow),
-            compose_kind: v
-                .get("compose_kind")
+            sort_images: v
+                .get("sort_images")
                 .and_then(|x| x.as_i64())
-                .filter(|x| (0..=3).contains(x))
-                .unwrap_or(d.compose_kind),
-            compose_project: v
-                .get("compose_project")
-                .and_then(|x| x.as_str())
-                .unwrap_or(&d.compose_project)
-                .to_string(),
-            compose_service: v
-                .get("compose_service")
-                .and_then(|x| x.as_str())
-                .unwrap_or(&d.compose_service)
-                .to_string(),
-            compose_expanded: v
-                .get("compose_expanded")
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_images),
+            sort_networks: v
+                .get("sort_networks")
+                .and_then(|x| x.as_i64())
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_networks),
+            sort_volumes: v
+                .get("sort_volumes")
+                .and_then(|x| x.as_i64())
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_volumes),
+            compose_collapsed: v
+                .get("compose_collapsed")
                 .and_then(|x| x.as_array())
                 .map(|arr| {
                     arr.iter()
@@ -130,15 +130,15 @@ impl AppConfig {
                 return;
             }
         }
-        // compose_expanded 是字符串数组：手工拼 JSON（项目名走 json_escape）
-        let expanded = self
-            .compose_expanded
+        // compose_collapsed 是字符串数组：手工拼 JSON（分组键走 json_escape）
+        let collapsed = self
+            .compose_collapsed
             .iter()
             .map(|s| format!("\"{}\"", json_escape(s)))
             .collect::<Vec<_>>()
             .join(", ");
         let json = format!(
-            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"compose_kind\": {},\n  \"compose_project\": \"{}\",\n  \"compose_service\": \"{}\",\n  \"compose_expanded\": [{}]\n}}\n",
+            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
             self.theme,
             self.view,
             json_escape(&self.filter),
@@ -146,10 +146,10 @@ impl AppConfig {
             self.sort_desc,
             json_escape(&self.search),
             self.log_follow,
-            self.compose_kind,
-            json_escape(&self.compose_project),
-            json_escape(&self.compose_service),
-            expanded,
+            self.sort_images,
+            self.sort_networks,
+            self.sort_volumes,
+            collapsed,
         );
         let tmp = path.with_extension("json.tmp");
         if fs::write(&tmp, json).is_ok() {

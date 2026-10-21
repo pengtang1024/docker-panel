@@ -13,9 +13,10 @@ use crate::ui_state::AppState;
 
 use super::{compact_port, proj_color, short_port};
 
-/// 过滤后的容器列表（状态筛选 ∧ compose 范围 ∧ 搜索）。
+/// 过滤后的容器列表（状态筛选 ∧ 搜索）。
 ///
 /// 行构建与概览带共用同一份过滤结果 —— 概览带的数字必须与列表一致。
+/// compose 层级**不参与过滤**（树是分组不是筛选器，见 ui_rows/compose_tree.rs）。
 pub fn filtered_containers(s: &AppState) -> Vec<&ContainerInfo> {
     s.containers
         .iter()
@@ -26,10 +27,6 @@ pub fn filtered_containers(s: &AppState) -> Vec<&ContainerInfo> {
                 "running" if !running => return false,
                 "stopped" if running => return false,
                 _ => {}
-            }
-            // compose 范围（侧栏树：全部 / 项目 / 服务 / 独立容器）
-            if !s.compose.scope.matches(c) {
-                return false;
             }
             if s.container_query.is_empty() {
                 return true;
@@ -50,25 +47,6 @@ pub fn filtered_containers(s: &AppState) -> Vec<&ContainerInfo> {
                 || c.ports.to_lowercase().contains(&q)
         })
         .collect()
-}
-
-/// compose 范围内的容器数与运行中数量。
-///
-/// 筛选栏芯片（全部 / 运行中 / 已停止）是**状态**维度，计数口径应是
-/// 「当前 compose 范围内」的分布 —— 否则侧栏选中某个项目后，芯片还写着
-/// 全量数字（全部 7），而台账只剩 5 行，口径打架。
-pub fn scoped_counts(s: &AppState) -> (usize, usize) {
-    let mut total = 0usize;
-    let mut running = 0usize;
-    for c in &s.containers {
-        if s.compose.scope.matches(c) {
-            total += 1;
-            if c.is_running() {
-                running += 1;
-            }
-        }
-    }
-    (total, running)
 }
 
 /// 按当前排序字段排序（升/降序由 `desc` 决定）
@@ -174,6 +152,7 @@ pub fn container_row(
     max_cpu: f64,
     max_mem: u64,
     selected: bool,
+    depth: i32,
 ) -> ContainerRow {
     let running = c.is_running();
     let cpu_ratio = if running && max_cpu > 0.0 {
@@ -190,6 +169,11 @@ pub fn container_row(
         id: SharedString::from(c.id.clone()),
         name: SharedString::from(c.name.clone()),
         image: SharedString::from(c.image.clone()),
+        // 内联树：容器行（kind=0），depth = 所属层级
+        kind: super::compose_tree::KIND_CONTAINER,
+        depth,
+        expanded: false,
+        group_n: 0,
         is_running: running,
         is_selected: selected,
         needs_attention: c.needs_attention(),

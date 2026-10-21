@@ -4,15 +4,15 @@
 
 ## 1. Slint UI 模块交互
 
-31 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+33 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
 
 ### 交互总图
 
 ```
                     app.slint（组装层 + 布局 + global-shortcuts 快捷键）
         ╱      ╱       ╱        ╲        ╲        ╲        ╲
-   top-bar  sub-bar  cards   foot-bar  batch-bar  drawer  dialogs/menu-layers
-   (顶栏)   (筛选)  (列表)    (底栏)    (批量栏)   (抽屉)   (弹层)
+   top-bar  sub-bar  list-area  foot-bar  batch-bar  drawer  dialogs/menu-layers
+   (顶栏)   (筛选)   (列表)      (底栏)    (批量栏)   (抽屉)   (弹层)
       │        │       │
       └────────┴───┬───┴──────────────┐
                    ▼                  ▼
@@ -41,10 +41,10 @@ models.slint struct               Rust consumer 构造
 
 `include_modules!()` 在 `slint_gen.rs` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入。
 
-#### ② 卡片/行组件 ← app.slint：callback 属性注入
+#### ② 列表/行组件 ← app.slint：callback 属性注入
 
-卡片与行组件不 import AppActions global——只声明 `callback toggle(string)` 等。
-app.slint / cards.slint 组装处注入实现转发到 AppActions。
+列表与行组件不 import AppActions global——只声明 `callback toggle(string)` 等。
+app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 #### ③ top-bar / sub-bar ↔ app.slint：`<=>` 双向绑定
 
@@ -59,22 +59,24 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 370 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / dialogs / models / app-actions |
+| `app.slint` | 368 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / dialogs / models / app-actions |
 | `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
 | `models.slint` | 100 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
 | `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
-| `main-area.slint` | 168 | 主列表工作区：Compose 侧栏树 + SubBar + BatchBar + CardsArea | theme / sub-bar / batch-bar / cards / compose-tree / models |
-| `compose-tree.slint` | 147 | Compose 侧栏树：项目 → 服务两级 + 全部容器 / 独立容器（@material ListView） | theme / components-align / components-state / models / @material |
-| `cards.slint` | 175 | 资源列表区：容器视图走台账，镜像/网络/卷走卡片网格 + 空状态 + 背景点击层 | theme / ledger / card-* / skel / components-* |
-| `ledger.slint` | 256 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
-| `ledger-row.slint` | 229 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
+| `main-area.slint` | 166 | 主列表工作区：SubBar + BatchBar + ListArea | theme / sub-bar / batch-bar / list-area / models |
+| `list-area.slint` | 158 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
+| `ledger.slint` | 253 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
+| `ledger-row.slint` | 217 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
 | `ledger-cols.slint` | 23 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
-| `card-image.slint` | 172 | 镜像卡片（运行/删除） | theme / components-* |
-| `card-netvol.slint` | 138 | 网络/卷卡片（共用布局） | theme / components-* |
+| `ledger-tree-row.slint` | 107 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数，通栏） | theme / ledger-cols / models / components-* |
+| `image-list.slint` | 217 | 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序） | theme / components-list / components-interact / models / @material |
+| `network-list.slint` | 157 | 网络表格列表：名称 · driver · 子网（表头可点排序） | theme / components-list / models / @material |
+| `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
+| `components-list.slint` | 107 | 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 | theme / components-align |
 | `skel.slint` | 69 | 骨架屏占位 | theme |
 | `foot-bar.slint` | 109 | 底部 8 项资源概览 | theme / components-align |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
@@ -162,25 +164,28 @@ VCenterText { text: root.data.name; width: root.name_w; horizontal-stretch: 0; o
 
 - **表头在滚动区外、行在滚动区内**：行列表视口比区域窄一个滚动条槽（8px），
   所以表头的 `padding-right` 要额外加上 `scrollbar_slot`，表头内容宽才与行内容宽相等。
-- **响应式列显隐由父级统一判定**（`show_disk` / `show_ports` / `show_project`），
+- **响应式列显隐由父级统一判定**（`show_disk` / `show_ports`），
   表头与行共用同一组判定，隐列时列数与间距数同步变化，不会出现「表头 10 列、行 9 列」。
 
 验收方式：MCP `get_element_tree` 取表头与各行的 `absolutePosition.x` / `size.width`，
 逐列比对必须完全相等（不要靠肉眼读截图，12px 的偏移肉眼很难发现）。
 
-### 3.4 侧栏树（Compose）：两个热区 + 一个滚动容器
+### 3.4 台账内联树（Compose）：分组是分组，不是筛选器
 
-Compose 侧栏树（`compose-tree.slint`）踩过 / 固化下来的三条：
+Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有左侧栏。
+踩过 / 固化下来的四条：
 
 | 坑 | 正确做法 |
 |----|----------|
-| **一行两个热区**（展开箭头 + 标签） | 箭头 TouchArea 必须声明在标签 TouchArea **之前**（§3.1 命中顺序铁律）；反过来点箭头只会触发标签，展开功能变死代码 |
-| **多行列表不能用 ScrollView + VerticalLayout** | Flickable 的非布局子元素高度默认吃到 100% 视口高，N 行会被等比压扁、永不溢出（抽屉实测 67 行压成 9.388px/行）。树用 @material `ListView`，由运行时逐项读 delegate.height 累加内容高 |
-| **侧栏只在容器视图实例化** | 条件渲染移除焦点元素后焦点悬空 → 切视图后要主动 `global-shortcuts.focus()` 归还焦点（与 Esc 分支同款处置） |
+| **分组带一行两个热区**（展开箭头 + 分组名） | 箭头 TouchArea 必须声明在分组名热区**之前**（§3.1 命中顺序铁律）；反过来点箭头只会触发分组名，展开功能变死代码 |
+| **分组带通栏，不参与列宽计算** | 分组带是独立 delegate（`kind = 1/2`），不占用台账的列契约；否则「项目名」会被算成一列，表格列起点漂移 |
+| **分组名要与同层容器行的名称列起点对齐** | 箭头占 14px（与状态点列同槽）+ 色点 18px → 分组名落在 `44px + depth*18`，与同层容器行名称列**逐像素对齐**；层级只靠缩进表达，不靠「分组名比孩子更右」的半格错位 |
+| **分组是分组不是筛选器** | 排序字段只决定**组内**顺序，组间按组名稳定排；展开状态存「**收起**的分组键」集合（`project:<名>` / `svc:<项目>/<服务>`），不在集合里 = 展开 → 新分组默认展开 |
 
-筛选口径（与侧栏树配套）：树节点计数是**绝对值**（该组容器总数，不随状态筛选变化）；
-筛选栏 chips 的计数是 **compose 范围内的分布**（`ui_rows::scoped_counts`）——
-两者口径不同是有意的：树回答「这一组有多少」，chips 回答「当前范围内怎么分布」。
+计数口径：概览带与筛选 chips 都取**可见容器集合**（实际渲染成行的那些容器），
+折叠分组后计数同步变小——三个数字必须同源，否则会出现「台账 3 行但芯片写着全部 9」。
+
+没有 Compose 归属的容器**直接在顶层**（depth=0），不另设「独立容器」分组带。
 
 ## 4. 窗口身份（xdg app_id）与 Dock 图标
 桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。

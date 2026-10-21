@@ -1,0 +1,217 @@
+// image-list.slint — 镜像表格列表（表头可排序 + 30px 虚拟化行）
+//
+// 精简列：名称（+ tag 芯片）· 大小 · 创建时间
+// 列起点固定：表头与行共用同一组列宽（由本组件统一下发），表头右侧额外让出
+// 滚动条槽 8px（表头在滚动区之外，行在滚动区之内）。
+import { Theme } from "theme.slint";
+import { VCenterText, RightText, CardMenu } from "components-align.slint";
+import { IconBtn } from "components-interact.slint";
+import { ListCols, ListHeadCell } from "components-list.slint";
+import { ImageRow } from "models.slint";
+import { ListView } from "@material";
+
+// ============ 行（30px）============
+component ImageRowView inherits Rectangle {
+    in property <ImageRow> data;
+    /// 菜单展开态由列表按 id 回灌
+    in-out property <bool> menu_open: false;
+    in property <length> name_w: 200px;
+    in property <length> size_w: 96px;
+    in property <length> created_w: 110px;
+    in property <length> act_w: 56px;
+
+    callback select(string);
+    callback run(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+    private property <length> menu_mx: root.absolute-position.x + root.width - 14px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 26px;
+
+    height: 30px;
+    background: touch.has-hover ? Theme.row_hover : transparent;
+
+    // 行热区：必须声明在内容**之前**（命中顺序铁律，规范 #19）
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => {
+            if (root.menu_open) {
+                root.menu_toggle(root.data.id, 1, false, 0px, 0px);
+            } else {
+                root.select(root.data.id);
+            }
+        }
+    }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: ListCols.gap;
+        padding-left: ListCols.pad_x; padding-right: ListCols.pad_x;
+        cross-axis-alignment: center;
+
+        // 名称 = repo:tag（表格里用 `repo:tag` 单文本最紧凑；
+        // 全部 tag 列表在抽屉详情里看）
+        VCenterText {
+            text: root.data.tag1 == ""
+                ? root.data.name
+                : root.data.name + ":" + root.data.tag1;
+            width: root.name_w; horizontal-stretch: 0;
+            font-size: Theme.fs_md; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 大小
+        RightText {
+            text: root.data.size;
+            width: root.size_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 创建时间
+        RightText {
+            text: root.data.created;
+            width: root.created_w; horizontal-stretch: 0;
+            font-size: Theme.fs_sm;
+            color: Theme.ink_3;
+            overflow: elide;
+        }
+
+        // 操作区（hover 才显形）
+        Rectangle {
+            width: root.act_w; height: 22px;
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 2px;
+                cross-axis-alignment: center;
+                Rectangle { horizontal-stretch: 1; }
+                main_btn := IconBtn {
+                    size: 22px; icon_size: 12px;
+                    hidden: root.act_show == false;
+                    icon_name: "play";
+                    tip: @tr("Run");
+                    clicked => {
+                        if (root.menu_open) {
+                            root.menu_toggle(root.data.id, 1, false, 0px, 0px);
+                        } else {
+                            root.run(root.data.id);
+                        }
+                    }
+                }
+                more_btn := IconBtn {
+                    size: 22px; icon_size: 12px;
+                    active: root.menu_open;
+                    hidden: root.act_show == false;
+                    icon_name: "more";
+                    tip: @tr("More");
+                    clicked => {
+                        root.menu_toggle(root.data.id, 1, false, root.menu_mx, root.menu_my);
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component ImageList inherits Rectangle {
+    in-out property <[ImageRow]> rows: [];
+    /// 当前排序列（0=名称 1=大小 2=创建时间）
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: true;
+
+    callback sort_pick(int);
+    callback select(string);
+    callback run(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    // —— 列宽（表头与行共用）——
+    property <length> size_w: 96px;
+    property <length> created_w: 110px;
+    property <length> act_w: 56px;
+    property <length> content_w: root.width - ListCols.scrollbar_slot - ListCols.pad_x * 2;
+    property <length> name_w: root.content_w - root.size_w - root.created_w - root.act_w
+        - ListCols.gap * 3;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        // 表头（固定在滚动区之外 → 天然 sticky）
+        Rectangle {
+            vertical-stretch: 0;
+            height: ListCols.head_h;
+            background: Theme.bg;
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%; height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: ListCols.gap;
+                padding-left: ListCols.pad_x;
+                padding-right: ListCols.pad_x + ListCols.scrollbar_slot;
+                cross-axis-alignment: center;
+
+                ListHeadCell {
+                    text: @tr("Image");
+                    cell_w: root.name_w;
+                    active: root.sort_field == 0;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(0); }
+                }
+                ListHeadCell {
+                    text: @tr("Size");
+                    right: true;
+                    cell_w: root.size_w;
+                    active: root.sort_field == 1;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(1); }
+                }
+                ListHeadCell {
+                    text: @tr("Created");
+                    right: true;
+                    cell_w: root.created_w;
+                    active: root.sort_field == 2;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(2); }
+                }
+                // 操作列占位
+                Rectangle { width: root.act_w; height: 1px; }
+            }
+        }
+
+        // 行列表（虚拟化：只渲染视口内的行）
+        list := ListView {
+            vertical-stretch: 1;
+            width: 100%;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            content_width: self.visible_width;
+            mouse_drag_pan_enabled: false;
+            for row[i] in root.rows : ImageRowView {
+                data: row;
+                menu_open: CardMenu.id == row.id;
+                width: 100%;
+                height: ListCols.row_h;
+                name_w: root.name_w;
+                size_w: root.size_w;
+                created_w: root.created_w;
+                act_w: root.act_w;
+                select(id) => { root.select(id); }
+                run(id) => { root.run(id); }
+                menu_toggle(id, kind, can_stop, mx, my) => {
+                    root.menu_toggle(id, kind, can_stop, mx, my);
+                }
+            }
+        }
+    }
+}

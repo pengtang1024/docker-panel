@@ -300,16 +300,6 @@ msgstr "请输入镜像名"
 msgid "Select at least one item"
 msgstr "请至少勾选一项"
 
-# ===== Rust 动态：分组 =====
-msgid "Standalone containers"
-msgstr "独立容器"
-
-msgid "All containers"
-msgstr "全部容器"
-
-msgid "Unnamed service"
-msgstr "未命名服务"
-
 # ===== Rust 动态：Docker 层错误/结果 =====
 msgid "inspect container failed: {0}"
 msgstr "inspect 容器失败：{0}"

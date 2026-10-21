@@ -5,6 +5,7 @@ pub use super::callbacks_container::bind_container_actions;
 use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_image::bind_image_actions;
 pub use super::callbacks_netvol::bind_netvol_actions;
+use super::callbacks_sort::bind as bind_sort_actions;
 
 use std::sync::atomic::Ordering;
 
@@ -27,6 +28,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     bind_compose_actions(ui, &actions, state);
     bind_image_actions(ui, state);
     bind_netvol_actions(ui, state);
+    bind_sort_actions(ui, &actions, state);
 }
 
 /// 启动时把持久化的配置灌回 Slint 属性
@@ -38,6 +40,10 @@ fn restore_config(ui: &MainWindow, state: &SharedState) {
     ui.set_view(s.view as i32);
     ui.set_filter(SharedString::from(s.filter.as_str()));
     ui.set_sort_field(s.sort_field.to_ui_index() as i32);
+    // 三个资源列表的排序（打包值：低 3 位=列下标，第 3 位=降序标记）
+    ui.set_sort_images(s.sort_images.to_ui());
+    ui.set_sort_networks(s.sort_networks.to_ui());
+    ui.set_sort_volumes(s.sort_volumes.to_ui());
     ui.set_sort_desc(s.sort_desc);
     ui.set_search_q(SharedString::from(s.container_query.as_str()));
     ui.set_log_follow(s.log_follow);

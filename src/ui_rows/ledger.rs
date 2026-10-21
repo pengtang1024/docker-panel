@@ -1,8 +1,8 @@
 //! 台账概览带 + 台账入口（方向 A）
 //!
 //! 概览带 = 总数 / 运行中 / 已停止 / 需关注 + CPU 占用 TOP4 条形。
-//! 数字口径 = **当前筛选后的列表**（与台账行一致），与筛选栏芯片的
-//! 全量计数不同 —— 选中「运行中」时这里显示的是筛选后的数。
+//! 数字口径 = **当前可见的容器集合**（= 内联树实际渲染成行的那些容器），
+//! 与台账行数一致 —— 收起一个分组时两边同步变小。
 
 use slint::SharedString;
 
@@ -10,7 +10,7 @@ use crate::models::ContainerInfo;
 use crate::slint_gen::{ContainerRow, LedgerSummary};
 use crate::ui_state::AppState;
 
-use super::containers::{container_row, filtered_containers, sort_containers};
+use super::compose_tree::build_ledger_tree;
 
 /// 概览带：4 个计数 + CPU TOP4（名字 / 百分比 / 归一化比例）
 ///
@@ -74,23 +74,11 @@ pub fn build_ledger_summary(list: &[&ContainerInfo], max_cpu: f64) -> LedgerSumm
     }
 }
 
-/// 构建台账（行 + 概览带）
+/// 构建台账（内联树行 + 概览带 + 可见计数）
 ///
-/// 行与概览带出自**同一份过滤结果**：概览带说「38 个运行中」时，
-/// 列表里就该是 38 行。两处分批算就会在筛选边界上自相矛盾。
-pub fn build_container_ledger(s: &AppState) -> (Vec<ContainerRow>, LedgerSummary) {
-    let list = filtered_containers(s);
-    // 归一化上限取**当前视图内**的最大值（列内可比，不是绝对占比）
-    let max_cpu = list.iter().fold(0.0f64, |m, c| m.max(c.cpu_percent));
-    let max_mem = list.iter().map(|c| c.mem_usage).max().unwrap_or(0);
-    let summary = build_ledger_summary(&list, max_cpu);
-
-    let rows = sort_containers(list, s.sort_field, s.sort_desc)
-        .into_iter()
-        .map(|c| {
-            let selected = s.batch.contains(&c.id);
-            container_row(c, max_cpu, max_mem, selected)
-        })
-        .collect();
-    (rows, summary)
+/// 行与概览带出自**同一份可见集合**：概览带说「38 个运行中」时，
+/// 列表里就该是 38 个容器行。两处分批算就会在折叠 / 筛选边界上自相矛盾。
+pub fn build_container_ledger(s: &AppState) -> (Vec<ContainerRow>, LedgerSummary, (usize, usize)) {
+    let tree = build_ledger_tree(s);
+    (tree.rows, tree.summary, tree.visible)
 }

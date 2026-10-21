@@ -8,27 +8,31 @@
 
 ## 功能特性
 
-### 容器台账 + 三视图卡片网格
+### 统一列表布局（无侧栏）
 
+- 四个视图（容器 / 镜像 / 网络 / 卷）**全部是列表**：没有左侧栏，没有卡片网格
 - 容器视图是**密集台账**：概览带（总数 / 运行中 / 已停止 / 需关注 + CPU 占用 TOP4）→ 表头 → 30px 虚拟化台账行
-- 台账列：状态点、容器名、CPU（微条 + %）、内存（微条 + 容量）、磁盘、镜像、端口、Compose 项目、行内操作
+- 台账列：状态点、容器名、CPU（微条 + %）、内存（微条 + 容量）、磁盘、镜像、端口、行内操作
 - 列起点严格固定（表头与每一行逐列同 x 同宽），CPU / 内存微条按**当前视图内最大值**归一，同列一眼比高低
-- 表头可点击排序（容器名 / CPU / 内存 / 磁盘），列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口 / 项目列）
+- 表头可点击排序（容器名 / CPU / 内存 / 磁盘），列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口列）
 - 「需关注」= 死亡 / 暂停 / 重启中 / 正在移除 / 异常退出（退出码 ≠ 0），行首琥珀色状态轨标记
-- 镜像 / 网络 / 卷仍是自适应列数卡片网格，筛选栏一键切换视图（Ctrl+1~4）
-- 顶部筛选 chips（全部 / 运行中 / 已停止），网络 / 卷卡片支持搜索过滤（名称 / driver / 挂载点）
+- 镜像 / 网络 / 卷是**表格列表**（精简列 + 表头可点排序）：镜像 = `repo:tag` · 大小 · 创建时间；网络 = 名称 · driver · 子网；卷 = 名称 · 大小 · 挂载点
+- 三个资源列表的排序**各自独立**（切视图回来保留）并持久化；排序方向在表头用 ↑/↓ 标出
+- 筛选栏一键切换视图（Ctrl+1~4）；状态 chips / 排序菜单 / 多选按钮**只在容器视图出现**
 
-### Compose 侧栏树
+### 台账内联 Compose 树
 
-- 容器视图左侧 208px 导航树：全部容器 → Compose 项目（彩色点 + 容器数，可展开）→ 服务；非 compose 容器归入「独立容器」
-- 点箭头 = 展开 / 收起（不改筛选）；点标签 = 选中该范围（项目 / 服务 / 独立容器），再点一次取消
-- 台账按选中范围过滤；筛选 chips 的计数同步换成**当前 compose 范围内**的分布（与台账行数同口径）
-- 选中范围与展开状态持久化到配置文件，启动自动恢复；收起项目时仍留左侧强调条，筛选不会凭空消失
+- 台账内部按 Compose 层级分组：**项目带 → 服务带 → 容器行**（1~2 级，只有多容器服务才出现服务带）
+- 点箭头或点分组名 = 展开 / 收起（分组是**分组不是筛选器**）：排序字段只决定**组内**顺序，组间按组名稳定排
+- 没有 Compose 归属的容器**直接在顶层**（不分「独立容器」组）
+- 计数口径 = **可见容器集合**（实际渲染成行的那些容器）：概览带与筛选 chips 同源，折叠分组后计数同步变小
+- 分组带通栏（不参与列宽计算），分组名与**同层**容器行的名称列起点严格对齐，层级只靠缩进表达
+- 收起状态持久化到配置文件，启动自动恢复；新分组默认展开
 
 ### 右侧抽屉（详情 / 日志 / 环境）
 
 - 点击容器台账行 → inspect 详情（18 字段）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab
-- 点击镜像卡片 → 镜像详情（RepoTag / 大小 / Entrypoint / Cmd / Env 等）
+- 点击镜像 / 网络 / 卷行 → 对应资源详情
 
 ### 操作
 
@@ -49,7 +53,7 @@
 
 ### 配置持久化
 
-- 主题 / 视图 / 筛选 / 排序 / 搜索词 / 日志跟随 / Compose 范围与展开状态 持久化到用户配置目录，启动自动恢复
+- 主题 / 视图 / 筛选 / 排序 / 搜索词 / 日志跟随 / 台账内联树的收起分组 / 三个资源列表各自的排序 持久化到用户配置目录，启动自动恢复
 
 ### 连接状态
 
@@ -96,8 +100,9 @@ cargo build --release
 1. 启动后默认显示容器台账视图，Docker 连接成功会自动加载。
 2. Ctrl+K 聚焦搜索框，输入关键词即时过滤；Ctrl+R 手动刷新。
 3. 容器台账行内按钮：▶/⏹ 切换状态、⟳ 重启、📜 查看日志、··· 更多操作。
-4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像卡片 → 镜像详情。
+4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像 / 网络 / 卷行 → 对应资源详情。
 5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉或弹窗。
+6. 容器视图点分组带的箭头展开 / 收起 Compose 分组；镜像 / 网络 / 卷点表头按列排序。
 6. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
 7. 底部栏显示 8 项资源概览与最近操作结果。
 
@@ -138,23 +143,25 @@ docker-panel/
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
-├── ui/                     # Slint UI 声明（33 文件按职责拆分，app.slint 唯一组装入口）
+├── ui/                     # Slint UI 声明（按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
-│   ├── main-area.slint     # 主列表工作区：Compose 侧栏树 + SubBar + BatchBar + CardsArea
+│   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
-│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / ComposeNode / DetailPair / LogRow / LedgerSummary struct
+│   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
-│   ├── sub-bar.slint       # SubBar：状态筛选 chips + 排序 + 4 视图 tabs
-│   ├── compose-tree.slint  # Compose 侧栏树：项目 → 服务两级 + 全部容器 / 独立容器
-│   ├── cards.slint         # 资源列表区：容器视图走台账，镜像/网络/卷走卡片网格（含空状态与背景点击层）
+│   ├── sub-bar.slint       # SubBar：状态筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
+│   ├── list-area.slint     # 资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态与背景点击层）
 │   ├── ledger.slint        # 容器台账区：列宽计算 + 表头 + @material ListView 虚拟化台账行
 │   ├── ledger-row.slint    # 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
+│   ├── ledger-tree-row.slint # 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数，通栏）
 │   ├── ledger-band.slint   # 台账概览带：4 个计数 + CPU 占用 TOP4
 │   ├── ledger-cols.slint   # 台账列宽契约 global（表头与行共用同一组列宽）
-│   ├── card-image.slint    # 镜像卡片（含运行/删除操作）
-│   ├── card-netvol.slint   # 网络/卷卡片（共用布局，内建标记 + 容器数）
+│   ├── image-list.slint    # 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
+│   ├── network-list.slint  # 网络表格列表：名称 · driver · 子网（表头可点排序）
+│   ├── volume-list.slint   # 卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
+│   ├── components-list.slint # 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
 │   ├── skel.slint          # 骨架屏占位
 │   ├── foot-bar.slint      # 底部 8 项资源概览
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
@@ -172,7 +179,7 @@ docker-panel/
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail 等
+│   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
 │   ├── ui_state/config_io.rs # AppState ↔ config.json 读写（字段搬运，越界值回落默认）
@@ -180,8 +187,7 @@ docker-panel/
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
-│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（侧栏树节点）/ images / netvol（网络/卷）
-│   ├── compose_scope.rs    # Compose 侧栏树状态：筛选范围（全部/项目/服务/独立容器）+ 展开集合
+│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行）/ images / netvol（网络/卷）
 │   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态
@@ -190,7 +196,8 @@ docker-panel/
 │   ├── callbacks_drawer.rs     # 抽屉 Tab 切换（日志 Tab 触发 ensure_follow）+ 跟随/复制/清空
 │   ├── callbacks_image.rs      # AppActions image_* 回调
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
-│   ├── callbacks_compose.rs    # Compose 侧栏树回调（选中范围 / 展开收起，唯一写入方）
+│   ├── callbacks_compose.rs    # 台账内联树回调（分组展开 / 收起，唯一写入方）
+│   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove

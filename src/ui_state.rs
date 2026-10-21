@@ -6,7 +6,7 @@
 //!   → consumer 的 recv() 永远不阻塞主线程拿 state 锁
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -15,13 +15,13 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
-use crate::compose_scope::ComposeState;
 use crate::docker::{
     inspect_container, list_containers, list_images, list_networks, list_volumes,
     ContainerStatsSnapshot,
 };
 use crate::models::{
-    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
+    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, ResourceSort, SortField,
+    VolumeInfo,
 };
 
 /// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
@@ -119,15 +119,19 @@ pub struct AppState {
     /// 日志自动跟随
     pub log_follow: bool,
     pub batch: BatchState,
-    /// Compose 侧栏树状态（当前范围 + 展开的项目集合）
+    /// 台账内联树：**收起**的分组键集合
+    ///
+    /// 键格式：`project:<项目名>` / `svc:<项目名>/<服务名>`。
+    /// 存「收起」而不是「展开」——新出现的分组默认展开（集合里没有 = 展开）。
     ///
     /// 用户操作过的状态 —— 只由 UI 回调写，consumer 只读。
-    pub compose: ComposeState,
-    /// 树模型 epoch：compose 范围 / 展开集合变化时递增。
-    ///
-    /// 与 rows_epoch 同一套做法：consumer 在锁内快照树、锁外才写 UI，
-    /// 期间用户若改了范围，那批树就是旧范围的，落地会与选中态打架。
-    pub compose_epoch: Arc<AtomicU64>,
+    pub compose_collapsed: BTreeSet<String>,
+    /// 镜像列表排序（0=名称 1=大小 2=创建时间）
+    pub sort_images: ResourceSort,
+    /// 网络列表排序（0=名称 1=driver 2=子网）
+    pub sort_networks: ResourceSort,
+    /// 卷列表排序（0=名称 1=大小 2=挂载点）
+    pub sort_volumes: ResourceSort,
 }
 
 impl AppState {
@@ -147,7 +151,10 @@ impl AppState {
         let theme = cfg.theme;
         let log_follow = cfg.log_follow;
         let query = cfg.query.clone();
-        let compose = cfg.compose;
+        let compose_collapsed = cfg.compose_collapsed;
+        let sort_images = cfg.sort_images;
+        let sort_networks = cfg.sort_networks;
+        let sort_volumes = cfg.sort_volumes;
 
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self {
@@ -188,8 +195,10 @@ impl AppState {
             theme,
             log_follow,
             batch: BatchState::default(),
-            compose,
-            compose_epoch: Arc::new(AtomicU64::new(0)),
+            compose_collapsed,
+            sort_images,
+            sort_networks,
+            sort_volumes,
         }));
         (state, rx)
     }

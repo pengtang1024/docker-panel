@@ -26,7 +26,6 @@ export component LedgerRow inherits Rectangle {
     // 响应式列显隐（父级统一判定，保证表头与行的列起点一致）
     in property <bool> show_disk: true;
     in property <bool> show_ports: true;
-    in property <bool> show_project: true;
 
     callback select(string);
     callback toggle(string);
@@ -98,12 +97,19 @@ export component LedgerRow inherits Rectangle {
         }
 
         // 容器名（宽度由父级下发，与表头、与其它行严格对齐）
-        VCenterText {
-            text: root.data.name;
-            width: root.name_w; horizontal-stretch: 0;
-            font-size: Theme.fs_md; font-weight: 600;
-            color: Theme.ink;
-            overflow: elide;
+        // 内联树层级：文本按 depth 右移，**列起点不变**（规范 #20）
+        Rectangle {
+            width: root.name_w; height: 100%;
+            horizontal-stretch: 0;
+            VCenterText {
+                x: root.data.depth * LedgerCols.indent;
+                width: root.name_w - root.data.depth * LedgerCols.indent;
+                horizontal-stretch: 0;
+                text: root.data.name;
+                font-size: Theme.fs_md; font-weight: 600;
+                color: Theme.ink;
+                overflow: elide;
+            }
         }
 
         // CPU 微条 + 数值
@@ -162,24 +168,6 @@ export component LedgerRow inherits Rectangle {
             font-size: Theme.fs_sm; font-family: Theme.mono;
             color: Theme.ink_3;
             overflow: elide;
-        }
-
-        // Compose 项目（彩色圆点 + 名称）
-        if root.show_project : Rectangle {
-            width: LedgerCols.project_w; height: 18px;
-            Rectangle {
-                x: 0px; y: 6px;
-                width: 6px; height: 6px; border-radius: 3px;
-                background: root.data.compose_color;
-                visible: root.data.compose_project != "";
-            }
-            VCenterText {
-                x: 11px; width: 97px; height: 18px;
-                text: root.data.compose_project;
-                font-size: Theme.fs_sm; font-weight: 600;
-                color: Theme.ink_2;
-                overflow: elide;
-            }
         }
 
         // 操作区（右对齐；hover 才显形）

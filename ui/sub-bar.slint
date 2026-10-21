@@ -95,17 +95,17 @@ export component SubBar inherits Rectangle {
         padding-right: 14px;
         cross-axis-alignment: center;
 
-        // 计数口径 = 当前 compose 范围（侧栏树选中的范围）内的分布，
-        // 不是全量 —— 否则台账只剩 5 行而芯片写着「全部 7」
-        Chip { label: @tr("All"); n: root.chip_total; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: @tr("Running"); n: root.chip_running; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: @tr("Stopped"); n: root.chip_total - root.chip_running; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
-        // ⚠️ 这里不再放 compose 项目 chips —— compose 选择已移到左侧栏树
-        //    （见 compose-tree.slint）：同一个筛选两处入口必然状态打架。
+        // —— 容器视图专属：状态芯片 + 排序菜单 + 多选 ——
+        // 芯片计数口径 = **可见容器集合**（内联树展开后实际渲染成行的那些容器），
+        // 与台账行数同源；其它三个视图各有自己的表头排序，这些控件对它们无意义。
+        if root.view == 0 : Chip { label: @tr("All"); n: root.chip_total; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
+        if root.view == 0 : Chip { label: @tr("Running"); n: root.chip_running; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
+        if root.view == 0 : Chip { label: @tr("Stopped"); n: root.chip_total - root.chip_running; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
 
         Rectangle { horizontal-stretch: 1; }
 
         sort_btn := Rectangle {
+            visible: root.view == 0;
             horizontal-stretch: 0;
             height: 28px;
             border-radius: Theme.r_sm;

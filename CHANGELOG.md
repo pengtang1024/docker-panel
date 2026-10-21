@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-21
+
+### 修复
+
+- **启动后 CPU / 内存要等近一分钟才有值**：CPU% 靠相邻两帧差值计算，而首帧采样时本地还没有前一帧 → `compute_cpu_delta` 只能返回 0.0%，于是「6s 采样周期 + 等下一个周期凑齐差值」= 启动后 12s 内 CPU 列全是 0.0%、概览带的 CPU TOP4 是一片空白、内存 / 网络列要空到 6s 才出现。现改用 Docker 同帧返回的 `precpu_stats`（非流式 stats 请求时守护进程会先采一帧 pre、等约 1s 再采当前帧，两帧一并返回）**兜底首帧差值** → 进程刚起就有真实 CPU%；同时采样循环**不再跳过首轮**，且首屏拿到容器列表后**立刻补采一轮** → 启动约 1s 内 CPU / 内存 / 网络全部就位。
+- **底部状态栏的 CPU / 内存 / 磁盘汇总恒为 0**：`ui/app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性早已绑定到 `FootBar`，但 Rust 侧**从未写过这三个属性** → 状态栏右下角长期显示 "0% CPU / 0MB 内存 / 0MB 磁盘"（与台账行里明明有值的数字自相矛盾）。现由 `consumer::apply_ui` 独占写入，口径 = 全部容器（与「N/N 容器」同源）：CPU / 内存只累加运行中容器，磁盘累加全部容器 —— 与分组带汇总同口径。
+- **点「磁盘」表头排序毫无反应**：台账「磁盘」列显示的是 `size_rw`（可写层占用），排序却用了 `block_read + block_write` —— 这两个字段**从未被任何代码赋值，恒为 0** → 所有容器的排序键相等，稳定排序保持原序 → 点表头既不换顺序也不换箭头含义（而「磁盘」恰好还是默认排序字段）。现把排序键改为与显示值同源的 `size_rw`，并删掉恒 0 的死字段 `block_read` / `block_write`。
+
 ## [0.4.0] - 2026-10-21
 
 ### 新增
@@ -199,6 +207,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.4.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.1
 [0.4.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.0
 [0.3.4]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.4
 [0.3.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.3

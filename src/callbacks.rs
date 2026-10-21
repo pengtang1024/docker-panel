@@ -1,5 +1,6 @@
 //! UI 回调绑定
 
+pub use super::callbacks_compose::bind as bind_compose_actions;
 pub use super::callbacks_container::bind_container_actions;
 use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_image::bind_image_actions;
@@ -23,6 +24,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     bind_cleanup_dialog(ui, &actions, state);
     bind_drawer(ui, &actions, state);
     bind_container_actions(ui, state);
+    bind_compose_actions(ui, &actions, state);
     bind_image_actions(ui, state);
     bind_netvol_actions(ui, state);
 }

@@ -5,13 +5,11 @@ import { Tip, CardMenu } from "components-align.slint";
 import { TipLayer } from "components-interact.slint";
 import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { TopBar } from "top-bar.slint";
-import { SubBar } from "sub-bar.slint";
-import { BatchBar } from "batch-bar.slint";
-import { CardsArea } from "cards.slint";
+import { MainArea } from "main-area.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow, LedgerSummary } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeNode, DetailPair, LogRow, LedgerSummary } from "models.slint";
 import { AppActions } from "app-actions.slint";
 import { MaterialTheme } from "material-theme.slint";
 import { MaterialPalette, MaterialSchemes } from "@material";
@@ -101,7 +99,11 @@ export component MainWindow inherits Window {
     in-out property <[VolumeRow]> volume_rows: [];
     // 日志行列表（虚拟化渲染：只实例化视口内的行）
     in-out property <[LogRow]> log_rows: [];
-    in-out property <[ComposeRow]> compose_rows: [];
+    /// Compose 侧栏树节点（扁平可见列表：展开的项目带出其服务）
+    in-out property <[ComposeNode]> compose_nodes: [];
+    /// 筛选栏芯片计数（compose 范围内的容器数 / 运行中数，与台账行数同口径）
+    in-out property <int> chip_total: 0;
+    in-out property <int> chip_running: 0;
     /// 台账概览带（方向 A）：4 个计数 + CPU TOP4，与容器行同批产出
     in-out property <LedgerSummary> ledger_summary;
 
@@ -161,7 +163,7 @@ export component MainWindow inherits Window {
                 top-bar.focus_search();
                 accept
             } else if (e.text == Key.Escape) {
-                sub-bar.sort_open = false;
+                main-area.sort_open = false;
                 CardMenu.close();
                 if (root.drawer_open || root.pull_open || root.cleanup_open) {
                     root.drawer_open = false;
@@ -206,62 +208,63 @@ export component MainWindow inherits Window {
                 search(val) => { AppActions.search(val); }
             }
 
-            sub-bar := SubBar {
-                height: Theme.sub_h;
-                view <=> root.view;
-                filter <=> root.filter;
-                sort_field <=> root.sort_field;
-                sort_desc <=> root.sort_desc;
-                sel_mode <=> root.sel_mode;
-                compose_rows <=> root.compose_rows;
-                total_containers <=> root.total_containers;
-                running_containers <=> root.running_containers;
-                total_images <=> root.total_images;
-                total_networks <=> root.total_networks;
-                total_volumes <=> root.total_volumes;
-                set_view(v) => { AppActions.set_view(v); }
-                set_filter(f) => { AppActions.set_filter(f); }
-                set_sort(f) => { AppActions.set_sort(f); }
-                set_sort_dir() => { AppActions.set_sort_dir(); }
-                sel_toggle() => { root.sel_mode = root.sel_mode == false; if (root.sel_mode == false) { AppActions.batch_clear(); } }
-            }
+            // 列表工作区：SubBar + BatchBar + CardsArea 收在 main-area.slint
+            // （app.slint 正文曾达 295/300 行，接侧栏前先拆）
+            body-row := HorizontalLayout {
+                horizontal-stretch: 1;
+                // 允许被抽屉压缩：否则子元素固有最小宽度会顶穿窗口右缘
+                min-width: 0px;
+                spacing: 0px;
 
-            if root.batch_count > 0: BatchBar {
-                height: Theme.batch_h;
-                count <=> root.batch_count;
-                start => { AppActions.batch_start(); }
-                stop => { AppActions.batch_stop(); }
-                restart => { AppActions.batch_restart(); }
-                remove => { AppActions.batch_remove(); }
-                clear => { AppActions.batch_clear(); }
-            }
-
-            CardsArea {
-                vertical-stretch: 1;
-                view <=> root.view;
-                sel_mode <=> root.sel_mode;
-                loading <=> root.loading;
-                containers <=> root.container_rows;
-                images <=> root.image_rows;
-                networks <=> root.network_rows;
-                volumes <=> root.volume_rows;
-                ledger_summary <=> root.ledger_summary;
-                sort_field <=> root.sort_field;
-                c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
-                c_toggle(id) => { AppActions.container_toggle(id); }
-                c_restart(id) => { AppActions.container_restart(id); }
-                c_logs(id) => { AppActions.container_logs(id); }
-                c_remove(id) => { AppActions.container_remove(id); }
-                c_box(id) => { AppActions.container_toggle_select(id); }
-                i_select(id) => { CardMenu.close(); AppActions.image_select(id); }
-                i_run(id) => { AppActions.image_run(id); }
-                i_remove(id) => { AppActions.image_remove(id); }
-                n_select(id) => { CardMenu.close(); AppActions.network_select(id); }
-                n_remove(id) => { AppActions.network_remove(id); }
-                v_select(id) => { CardMenu.close(); AppActions.volume_select(id); }
-                v_remove(id) => { AppActions.volume_remove(id); }
-                // 台账表头点列 → 走与筛选栏排序菜单同一条链路（同列再点自动翻方向）
-                sort_pick(f) => { AppActions.set_sort(f); }
+                main-area := MainArea {
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                    view <=> root.view;
+                    filter <=> root.filter;
+                    sort_field <=> root.sort_field;
+                    sort_desc <=> root.sort_desc;
+                    sel_mode <=> root.sel_mode;
+                    loading <=> root.loading;
+                    container_rows <=> root.container_rows;
+                    image_rows <=> root.image_rows;
+                    network_rows <=> root.network_rows;
+                    volume_rows <=> root.volume_rows;
+                    ledger_summary <=> root.ledger_summary;
+                    total_containers <=> root.total_containers;
+                    running_containers <=> root.running_containers;
+                    total_images <=> root.total_images;
+                    total_networks <=> root.total_networks;
+                    total_volumes <=> root.total_volumes;
+                    batch_count <=> root.batch_count;
+                    compose_nodes <=> root.compose_nodes;
+                    chip_total <=> root.chip_total;
+                    chip_running <=> root.chip_running;
+                    set_view(v) => { AppActions.set_view(v); }
+                    set_filter(f) => { AppActions.set_filter(f); }
+                    set_sort(f) => { AppActions.set_sort(f); }
+                    set_sort_dir() => { AppActions.set_sort_dir(); }
+                    compose_select(k, p, sv) => { AppActions.compose_select(k, p, sv); }
+                    compose_toggle(p) => { AppActions.compose_toggle(p); }
+                    sel_toggle() => { root.sel_mode = root.sel_mode == false; if (root.sel_mode == false) { AppActions.batch_clear(); } }
+                    batch_start => { AppActions.batch_start(); }
+                    batch_stop => { AppActions.batch_stop(); }
+                    batch_restart => { AppActions.batch_restart(); }
+                    batch_remove => { AppActions.batch_remove(); }
+                    batch_clear => { AppActions.batch_clear(); }
+                    c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
+                    c_toggle(id) => { AppActions.container_toggle(id); }
+                    c_restart(id) => { AppActions.container_restart(id); }
+                    c_logs(id) => { AppActions.container_logs(id); }
+                    c_remove(id) => { AppActions.container_remove(id); }
+                    c_box(id) => { AppActions.container_toggle_select(id); }
+                    i_select(id) => { CardMenu.close(); AppActions.image_select(id); }
+                    i_run(id) => { AppActions.image_run(id); }
+                    i_remove(id) => { AppActions.image_remove(id); }
+                    n_select(id) => { CardMenu.close(); AppActions.network_select(id); }
+                    n_remove(id) => { AppActions.network_remove(id); }
+                    v_select(id) => { CardMenu.close(); AppActions.volume_select(id); }
+                    v_remove(id) => { AppActions.volume_remove(id); }
+                }
             }
 
             FootBar {
@@ -301,15 +304,15 @@ export component MainWindow inherits Window {
         }
     }
 
-    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在 CardsArea 之后（同层直接子元素），
+    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在列表区之后（同层直接子元素），
     // 否则会被下方卡片区覆盖 / 裁掉 —— 与 prototype 的绝对定位下拉一致
-    if sub-bar.sort_open : SortMenu {
-        x: sub-bar.menu_x;
-        y: sub-bar.menu_y;
+    if main-area.sort_open : SortMenu {
+        x: main-area.menu_x;
+        y: main-area.menu_y;
         height: 170px;
         field: root.sort_field;
         desc: root.sort_desc;
-        pick(f) => { sub-bar.sort_open = false; AppActions.set_sort(f); }
+        pick(f) => { main-area.sort_open = false; AppActions.set_sort(f); }
     }
 
     if CardMenu.id != "" : CardMenuLayer {

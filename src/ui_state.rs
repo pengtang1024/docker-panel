@@ -15,6 +15,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
+use crate::compose_scope::ComposeState;
 use crate::docker::{
     inspect_container, list_containers, list_images, list_networks, list_volumes,
     ContainerStatsSnapshot,
@@ -24,6 +25,7 @@ use crate::models::{
 };
 
 /// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
+pub mod config_io;
 pub mod log_sync;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
 
@@ -117,6 +119,15 @@ pub struct AppState {
     /// 日志自动跟随
     pub log_follow: bool,
     pub batch: BatchState,
+    /// Compose 侧栏树状态（当前范围 + 展开的项目集合）
+    ///
+    /// 用户操作过的状态 —— 只由 UI 回调写，consumer 只读。
+    pub compose: ComposeState,
+    /// 树模型 epoch：compose 范围 / 展开集合变化时递增。
+    ///
+    /// 与 rows_epoch 同一套做法：consumer 在锁内快照树、锁外才写 UI，
+    /// 期间用户若改了范围，那批树就是旧范围的，落地会与选中态打架。
+    pub compose_epoch: Arc<AtomicU64>,
 }
 
 impl AppState {
@@ -128,27 +139,15 @@ impl AppState {
             .expect("tokio runtime");
 
         // 首次启动（无配置文件）用内置默认；之后以配置文件为准
-        let (sort_field, sort_desc, filter, view, theme, log_follow, query) =
-            match crate::config::AppConfig::load() {
-                Some(c) => (
-                    SortField::from_config_index(c.sort_field),
-                    c.sort_desc,
-                    c.filter,
-                    c.view,
-                    c.theme,
-                    c.log_follow,
-                    c.search,
-                ),
-                None => (
-                    SortField::Group,
-                    false,
-                    "all".into(),
-                    0,
-                    0,
-                    true,
-                    String::new(),
-                ),
-            };
+        let cfg = config_io::load();
+        let sort_field = cfg.sort_field;
+        let sort_desc = cfg.sort_desc;
+        let filter = cfg.filter;
+        let view = cfg.view;
+        let theme = cfg.theme;
+        let log_follow = cfg.log_follow;
+        let query = cfg.query.clone();
+        let compose = cfg.compose;
 
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self {
@@ -189,22 +188,15 @@ impl AppState {
             theme,
             log_follow,
             batch: BatchState::default(),
+            compose,
+            compose_epoch: Arc::new(AtomicU64::new(0)),
         }));
         (state, rx)
     }
 
     /// 把当前 UI 状态写入配置文件（低频回调/退出时调用；小文件原子写）
     pub fn persist(&self) {
-        crate::config::AppConfig {
-            theme: self.theme,
-            view: self.view,
-            filter: self.filter.clone(),
-            sort_field: self.sort_field.to_config_index(),
-            sort_desc: self.sort_desc,
-            search: self.container_query.clone(),
-            log_follow: self.log_follow,
-        }
-        .save();
+        config_io::save(self);
     }
 
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。

@@ -112,10 +112,17 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let volume_rows = res
         .volumes_changed
         .then(|| crate::ui_rows::build_volume_rows(&s));
-    // compose 芯片由容器列表派生，与容器行同批重建
-    let compose_rows = res
+    // Compose 侧栏树由容器列表派生，与容器行同批重建
+    let compose_tree = res
         .containers_changed
-        .then(|| crate::ui_rows::build_compose_rows(&s));
+        .then(|| crate::ui_rows::build_compose_tree(&s));
+    // 树模型 epoch：compose 范围 / 展开集合是用户操作过的状态，回调改了就递增。
+    // consumer 锁内快照、锁外比对 —— 期间用户改了范围，这批树就是旧范围的，
+    // 落地会与选中态打架（与 rows_epoch 同一套做法）。
+    let compose_epoch = s.compose_epoch.load(Ordering::Acquire);
+    let compose_epoch_ref = s.compose_epoch.clone();
+    // 筛选栏芯片计数：compose 范围内的分布（与台账行数同口径）
+    let (chip_total, chip_running) = crate::ui_rows::scoped_counts(&s);
     // 抽屉详情含 CPU/内存/磁盘（来自列表 stats），容器 stats 变化时也要重建，
     // 但纯日志消息不触发（drawer_changed / 各列表标记都为 false）
     let drawer_data = if res.drawer_changed {
@@ -196,8 +203,14 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             if let Some(rows) = volume_rows {
                 ui.set_volume_rows(crate::render::volumes(rows));
             }
-            if let Some(rows) = compose_rows {
-                ui.set_compose_rows(crate::render::compose_rows(rows));
+        }
+        // 侧栏树不依赖排序 / 筛选（计数是绝对值），只依赖容器列表与 compose 范围，
+        // 故走自己的 compose_epoch 判定，不受 rows_epoch 牵连
+        if let Some(rows) = compose_tree {
+            if compose_epoch_ref.load(Ordering::Acquire) == compose_epoch {
+                ui.set_compose_nodes(crate::render::compose_tree(rows));
+                ui.set_chip_total(chip_total as i32);
+                ui.set_chip_running(chip_running as i32);
             }
         }
         if let Some((action, epoch_ref, epoch)) = log_sync {

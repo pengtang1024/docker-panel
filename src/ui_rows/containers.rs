@@ -13,31 +13,23 @@ use crate::ui_state::AppState;
 
 use super::{compact_port, proj_color, short_port};
 
-/// 过滤后的容器列表（状态 / Compose 项目筛选 + 搜索）。
+/// 过滤后的容器列表（状态筛选 ∧ compose 范围 ∧ 搜索）。
 ///
 /// 行构建与概览带共用同一份过滤结果 —— 概览带的数字必须与列表一致。
 pub fn filtered_containers(s: &AppState) -> Vec<&ContainerInfo> {
     s.containers
         .iter()
         .filter(|c| {
-            // 状态 / Compose 项目筛选（芯片 key：all / running / stopped / <项目名>）
+            // 状态筛选（筛选栏 chips：all / running / stopped）
+            let running = c.is_running();
             match s.filter.as_str() {
-                "" | "all" => {}
-                "running" => {
-                    if !c.is_running() {
-                        return false;
-                    }
-                }
-                "stopped" => {
-                    if c.is_running() {
-                        return false;
-                    }
-                }
-                project => {
-                    if c.compose_project.as_deref() != Some(project) {
-                        return false;
-                    }
-                }
+                "running" if !running => return false,
+                "stopped" if running => return false,
+                _ => {}
+            }
+            // compose 范围（侧栏树：全部 / 项目 / 服务 / 独立容器）
+            if !s.compose.scope.matches(c) {
+                return false;
             }
             if s.container_query.is_empty() {
                 return true;
@@ -58,6 +50,25 @@ pub fn filtered_containers(s: &AppState) -> Vec<&ContainerInfo> {
                 || c.ports.to_lowercase().contains(&q)
         })
         .collect()
+}
+
+/// compose 范围内的容器数与运行中数量。
+///
+/// 筛选栏芯片（全部 / 运行中 / 已停止）是**状态**维度，计数口径应是
+/// 「当前 compose 范围内」的分布 —— 否则侧栏选中某个项目后，芯片还写着
+/// 全量数字（全部 7），而台账只剩 5 行，口径打架。
+pub fn scoped_counts(s: &AppState) -> (usize, usize) {
+    let mut total = 0usize;
+    let mut running = 0usize;
+    for c in &s.containers {
+        if s.compose.scope.matches(c) {
+            total += 1;
+            if c.is_running() {
+                running += 1;
+            }
+        }
+    }
+    (total, running)
 }
 
 /// 按当前排序字段排序（升/降序由 `desc` 决定）

@@ -59,13 +59,15 @@ app.slint / cards.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 367 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / sub-bar / batch-bar / cards / foot-bar / drawer / dialogs / models / app-actions |
+| `app.slint` | 370 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / dialogs / models / app-actions |
 | `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
 | `models.slint` | 100 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
-| `sub-bar.slint` | 197 | 筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
+| `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
+| `main-area.slint` | 168 | 主列表工作区：Compose 侧栏树 + SubBar + BatchBar + CardsArea | theme / sub-bar / batch-bar / cards / compose-tree / models |
+| `compose-tree.slint` | 147 | Compose 侧栏树：项目 → 服务两级 + 全部容器 / 独立容器（@material ListView） | theme / components-align / components-state / models / @material |
 | `cards.slint` | 175 | 资源列表区：容器视图走台账，镜像/网络/卷走卡片网格 + 空状态 + 背景点击层 | theme / ledger / card-* / skel / components-* |
 | `ledger.slint` | 256 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
 | `ledger-row.slint` | 229 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
@@ -165,6 +167,20 @@ VCenterText { text: root.data.name; width: root.name_w; horizontal-stretch: 0; o
 
 验收方式：MCP `get_element_tree` 取表头与各行的 `absolutePosition.x` / `size.width`，
 逐列比对必须完全相等（不要靠肉眼读截图，12px 的偏移肉眼很难发现）。
+
+### 3.4 侧栏树（Compose）：两个热区 + 一个滚动容器
+
+Compose 侧栏树（`compose-tree.slint`）踩过 / 固化下来的三条：
+
+| 坑 | 正确做法 |
+|----|----------|
+| **一行两个热区**（展开箭头 + 标签） | 箭头 TouchArea 必须声明在标签 TouchArea **之前**（§3.1 命中顺序铁律）；反过来点箭头只会触发标签，展开功能变死代码 |
+| **多行列表不能用 ScrollView + VerticalLayout** | Flickable 的非布局子元素高度默认吃到 100% 视口高，N 行会被等比压扁、永不溢出（抽屉实测 67 行压成 9.388px/行）。树用 @material `ListView`，由运行时逐项读 delegate.height 累加内容高 |
+| **侧栏只在容器视图实例化** | 条件渲染移除焦点元素后焦点悬空 → 切视图后要主动 `global-shortcuts.focus()` 归还焦点（与 Esc 分支同款处置） |
+
+筛选口径（与侧栏树配套）：树节点计数是**绝对值**（该组容器总数，不随状态筛选变化）；
+筛选栏 chips 的计数是 **compose 范围内的分布**（`ui_rows::scoped_counts`）——
+两者口径不同是有意的：树回答「这一组有多少」，chips 回答「当前范围内怎么分布」。
 
 ## 4. 窗口身份（xdg app_id）与 Dock 图标
 桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。

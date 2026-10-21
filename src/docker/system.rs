@@ -1,23 +1,25 @@
 //! 系统级 API：清理（prune）
 //!
-//! cleanup(stopped, dangling, unused) 三个 bool 可以任意组合：
-//!   - stopped  → prune_containers（删所有停止的容器）
-//!   - dangling → prune_images(dangling=true)
-//!   - unused   → prune_images(dangling=false)，等价 `docker image prune -a`
-//!     勾选 unused 时 dangling 自动被包含（因为 unused 范围更大）
-//!     所以有 `if dangling && !unused` 的判断——避免对 dangling 做两次 prune
+//! cleanup(stopped, dangling, unused_net, unused_vol) 四个 bool 可以任意组合，
+//! 与清理弹窗的四个复选框**一一对应**：
+//!   - stopped    → prune_containers（删所有已停止的容器）
+//!   - dangling   → prune_images(dangling=true)（只删悬空镜像）
+//!   - unused_net → prune_networks（删所有未被容器引用的网络）
+//!   - unused_vol → prune_volumes（删所有未被容器引用的卷）
 //!
-//! 为啥不直接把三个全跑一遍：
-//! 因为 dangling 是 unused 的子集。全跑会导致 dangling 已删完，
-//! 再跑 unused 时 dangling 那部分就变成了"删没东西的空操作"。
-//! 结果一样但效率低。
+//! ⚠️ 历史包袱：早期实现只有三个开关（stopped / dangling / unused-images），
+//!    其中 unused-images 走 prune_images(dangling=false)（= `docker image prune -a`，
+//!    会连带删掉**带 Tag** 的未使用镜像）。UI 改成四复选框（原型口径：
+//!    容器 / 镜像 / 网络 / 卷）后，网络开关被错接到了这个「未使用镜像」分支上——
+//!    勾「未使用的网络」实际删的是未使用镜像，「未使用的卷」则完全无效果。
+//!    现按 UI 语义一一对应；「所有未使用镜像」不再从弹窗暴露（原型口径里就没有这一项）。
 //!
 //! 错误处理：每项独立 try，失败不中断其他项（Docker API 独立）。
-//! 如果三项全勾都没效果 → 返回 Err("请至少勾选一项清理内容")。
+//! 如果四项全勾都没效果 → 返回 Err("请至少勾选一项清理内容")。
 
 use std::collections::HashMap;
 
-use bollard::query_parameters::PruneImagesOptionsBuilder;
+use bollard::query_parameters::{PruneImagesOptionsBuilder, PruneVolumesOptionsBuilder};
 
 use crate::i18n::trf;
 
@@ -38,8 +40,13 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-/// 清理：停止的容器 / 悬空镜像 / 未使用镜像（可组合勾选）
-pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<String, String> {
+/// 清理：已停止容器 / 悬空镜像 / 未使用网络 / 未使用卷（可组合勾选）
+pub async fn cleanup(
+    stopped: bool,
+    dangling: bool,
+    unused_net: bool,
+    unused_vol: bool,
+) -> Result<String, String> {
     let docker = connect()?;
     let mut lines: Vec<String> = Vec::new();
 
@@ -59,7 +66,7 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         ));
     }
 
-    if dangling && !unused {
+    if dangling {
         let mut filters = HashMap::new();
         filters.insert("dangling".to_string(), vec!["true".to_string()]);
         let options = PruneImagesOptionsBuilder::new().filters(&filters).build();
@@ -75,18 +82,26 @@ pub async fn cleanup(stopped: bool, dangling: bool, unused: bool) -> Result<Stri
         ));
     }
 
-    if unused {
-        let mut filters = HashMap::new();
-        filters.insert("dangling".to_string(), vec!["false".to_string()]);
-        let options = PruneImagesOptionsBuilder::new().filters(&filters).build();
+    if unused_net {
         let resp = docker
-            .prune_images(Some(options))
+            .prune_networks(None)
             .await
-            .map_err(|e| trf("Cleanup unused images failed: {0}", &[&e.to_string()]))?;
-        let n = resp.images_deleted.as_ref().map_or(0, std::vec::Vec::len);
+            .map_err(|e| trf("Cleanup unused networks failed: {0}", &[&e.to_string()]))?;
+        let n = resp.networks_deleted.as_ref().map_or(0, std::vec::Vec::len);
+        lines.push(trf("Unused networks: removed {0}", &[&n.to_string()]));
+    }
+
+    if unused_vol {
+        // 不加 all 过滤器：Docker 默认只 prune 匿名卷（与弹窗回填的「匿名卷」计数同口径）
+        let options = PruneVolumesOptionsBuilder::new().build();
+        let resp = docker
+            .prune_volumes(Some(options))
+            .await
+            .map_err(|e| trf("Cleanup unused volumes failed: {0}", &[&e.to_string()]))?;
+        let n = resp.volumes_deleted.as_ref().map_or(0, std::vec::Vec::len);
         let space = resp.space_reclaimed.unwrap_or(0);
         lines.push(trf(
-            "Unused images: removed {0}, freed {1}",
+            "Unused volumes: removed {0}, freed {1}",
             &[&n.to_string(), &format_bytes(space as u64)],
         ));
     }

@@ -1,6 +1,6 @@
 [package]
 name = "docker-panel"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
 

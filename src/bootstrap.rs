@@ -9,14 +9,17 @@ use std::time::Duration;
 use slint::ComponentHandle;
 
 use crate::docker::{
-    fetch_stats, inspect_container, list_containers, list_images, list_networks, list_volumes,
-    volume_sizes, with_timeout,
+    inspect_container, list_containers, list_images, list_networks, list_volumes, volume_sizes,
+    with_timeout,
 };
 use crate::models::Msg;
 use crate::slint_gen::MainWindow;
 use crate::ui_state::{SharedState, VOLUME_SIZE_INTERVAL};
 
 /// 6s stats 采样：对所有运行中容器并发 docker.stats()，双采样 CPU% 在 consumer 侧计算
+///
+/// ⚠️ 首轮**不**跳过：启动即采一轮，容器列表尚未到达时 ids 为空 → 空轮次无副作用。
+/// 真正的首次有效采样由 `spawn_initial_load` 在拿到容器列表后立刻补一轮（见该函数）。
 pub fn spawn_stats_interval(state: &SharedState) {
     let state_s = state.clone();
     let rt_h = {
@@ -25,7 +28,6 @@ pub fn spawn_stats_interval(state: &SharedState) {
     };
     rt_h.spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(6));
-        tick.tick().await; // 跳过首次立即触发
         loop {
             tick.tick().await;
             let (tx, ids): (_, Vec<String>) = {
@@ -40,20 +42,7 @@ pub fn spawn_stats_interval(state: &SharedState) {
                 )
             };
             // 整轮采样打包成一条消息：逐容器单发会让卡片数值分批阶梯跳动
-            let futs: Vec<_> = ids
-                .into_iter()
-                .map(|id| async move {
-                    with_timeout(fetch_stats(&id))
-                        .await
-                        .ok()
-                        .map(|snap| (id, snap))
-                })
-                .collect();
-            let batch: Vec<_> = futures::future::join_all(futs)
-                .await
-                .into_iter()
-                .flatten()
-                .collect();
+            let batch = crate::docker::sample_all(&ids).await;
             if !batch.is_empty() {
                 let _ = tx.send(Msg::StatsBatch(batch));
             }
@@ -85,6 +74,10 @@ pub fn spawn_volume_size_interval(state: &SharedState) {
 }
 
 /// 首屏：连接 Docker + 并发拉四类列表 + inspect 第一个容器填充详情面板
+///
+/// 列表拿到后**立刻补一轮 stats 采样**：否则首帧 CPU / 内存要等
+/// 「6s interval + 首次双采样」共 12s 才有值（用户看到的是开机后近一分钟数据不准）。
+/// 非流式 stats 自带 pre 帧 → 这一轮就能算出真实 CPU%。
 pub fn spawn_initial_load(state: &SharedState) {
     let Ok(s) = state.lock() else { return };
     let tx = s.tx.clone();
@@ -102,10 +95,25 @@ pub fn spawn_initial_load(state: &SharedState) {
             .as_ref()
             .ok()
             .and_then(|list| list.first().map(|c| c.id.clone()));
+        // 首屏立即采样所需的容器 id（只采运行中的）
+        let stats_ids: Vec<String> = c_res
+            .as_ref()
+            .map(|list| {
+                list.iter()
+                    .filter(|c| c.is_running())
+                    .map(|c| c.id.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         let _ = tx.send(Msg::Containers(c_res));
         let _ = tx.send(Msg::Images(i_res));
         let _ = tx.send(Msg::Networks(n_res));
         let _ = tx.send(Msg::Volumes(v_res));
+        // 首屏立即采样：运行中容器的 CPU / 内存 / 网络这一轮就有值
+        let batch = crate::docker::sample_all(&stats_ids).await;
+        if !batch.is_empty() {
+            let _ = tx.send(Msg::StatsBatch(batch));
+        }
         if let Some(id) = first_id {
             if let Ok(detail) = with_timeout(inspect_container(&id)).await {
                 let _ = tx.send(Msg::ContainerDetail(Ok(detail)));

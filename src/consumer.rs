@@ -161,6 +161,18 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let images_len = s.images.len();
     let networks_len = s.networks.len();
     let volumes_len = s.volumes.len();
+    // 底部状态栏的资源汇总（全局口径 = 全部容器，与「N/N 容器」同源，
+    // 不是筛选后的可见集合）：
+    //   CPU / 内存只累加**运行中**容器（停止的容器没有实时占用，
+    //   且其 cpu_percent 是停止前残留的陈旧值）；磁盘是可写层累计值，
+    //   停止后依然成立 → 累加全部（口径与分组带汇总一致）。
+    let mut cpu_total = 0.0f64;
+    let mut mem_total = 0u64;
+    for c in s.containers.iter().filter(|c| c.is_running()) {
+        cpu_total += c.cpu_percent;
+        mem_total += c.mem_usage;
+    }
+    let disk_total: u64 = s.containers.iter().map(|c| c.size_rw).sum();
     // 行模型 epoch：排序/筛选/搜索变更时回调会重建行并递增 epoch。
     // 这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
     // 落地就会让列表顺序与排序箭头打架，故应用前比对 epoch，不一致就丢弃。
@@ -208,6 +220,14 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         ui.set_total_images(images_len as i32);
         ui.set_total_networks(networks_len as i32);
         ui.set_total_volumes(volumes_len as i32);
+        // 底部状态栏资源汇总（此前这三个属性从未被写入 → 恒显示 0% / 0MB）
+        ui.set_cpu_total(SharedString::from(format!("{cpu_total:.1}%")));
+        ui.set_mem_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
+            mem_total,
+        )));
+        ui.set_disk_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
+            disk_total,
+        )));
         if let Some(ok) = res.docker_ok {
             ui.set_docker_ok(ok);
         }

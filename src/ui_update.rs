@@ -144,7 +144,11 @@ impl AppState {
             // Stats：整轮采样一次到达，逐容器写回 containers（累加）
             Msg::StatsBatch(batch) => {
                 for (id, curr) in batch {
-                    let cpu = compute_cpu_delta(self.stats_prev.get(&id), &curr);
+                    // CPU% 需要差值。本地还没有 prev 时（进程刚起 / 该容器首次采样）
+                    // 用 Docker 同帧返回的 pre 帧兜底 → 首轮就有真实 CPU%，
+                    // 不必空等一个采样周期显示 0.0%。
+                    let prev = self.stats_prev.get(&id).copied().or_else(|| curr.precpu());
+                    let cpu = compute_cpu_delta(prev.as_ref(), &curr);
                     self.stats_prev.insert(id.clone(), curr);
                     if let Some(c) = self.containers.iter_mut().find(|c| c.id == id) {
                         c.cpu_percent = cpu;

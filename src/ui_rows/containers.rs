@@ -116,7 +116,11 @@ pub fn sort_containers(
             }
         }),
         SortField::Disk => list.sort_by(|a, b| {
-            let cmp = (a.block_read + a.block_write).cmp(&(b.block_read + b.block_write));
+            // 排序键必须与台账「磁盘」列的显示值同源（size_rw = 可写层占用），
+            // 否则点表头排序看到的顺序与列里的数字对不上。
+            // 曾经用 block_read + block_write 排序，而这两个字段从未被赋值（恒 0）
+            // → 所有容器排序键相等，稳定排序保持原序 → 点「磁盘」排序毫无反应。
+            let cmp = a.size_rw.cmp(&b.size_rw);
             if desc {
                 cmp.reverse()
             } else {
@@ -195,5 +199,42 @@ pub fn container_row(
         cpu_ratio: cpu_ratio as f32,
         mem_ratio: mem_ratio as f32,
         ports_text: SharedString::from(port_short_labels(c)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_disk(name: &str, size_rw: u64) -> ContainerInfo {
+        ContainerInfo {
+            name: name.to_string(),
+            size_rw,
+            ..Default::default()
+        }
+    }
+
+    /// 「磁盘」列显示的是 size_rw → 排序键必须同源，
+    /// 否则点表头排序看到的顺序与列里的数字对不上（曾经用恒 0 的 block_read/block_write）。
+    #[test]
+    fn disk_sort_uses_size_rw() {
+        let list = [
+            with_disk("mid", 500),
+            with_disk("big", 900),
+            with_disk("small", 100),
+        ];
+        let refs: Vec<&ContainerInfo> = list.iter().collect();
+
+        let asc = sort_containers(refs.clone(), SortField::Disk, false);
+        assert_eq!(
+            asc.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["small", "mid", "big"]
+        );
+
+        let desc = sort_containers(refs, SortField::Disk, true);
+        assert_eq!(
+            desc.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["big", "mid", "small"]
+        );
     }
 }

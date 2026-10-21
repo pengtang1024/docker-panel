@@ -161,25 +161,40 @@ fn stopped_members_count_for_disk_only() {
 }
 
 #[test]
-fn band_and_rows_share_one_bar_baseline() {
-    // A group with 2 members: the group's total (20.0%) > the largest single container (10.0%)
-    // → the whole column shares one baseline (20.0%): the group is full, the container is half
+fn row_and_band_bars_use_their_own_scale() {
+    // Two groups, each with 2 members:
+    //   proj-a: 10.0% + 10.0% → group total 20.0%, largest single container 10.0%
+    //   proj-b:  5.0% +  5.0% → group total 10.0%, largest single container  5.0%
+    // Row scale = largest single container (10.0%) → the largest container is full
+    //   (the group's total does not eat away at the rows' resolution)
+    // Group scale = largest group total (20.0%) → the largest group is full, the other is proportional
     let state = state_with(vec![
-        rc("proj", "web", 10.0, 300, 1000),
-        rc("proj", "web", 10.0, 100, 500),
+        rc("proj-a", "web", 10.0, 300, 1000),
+        rc("proj-a", "web", 10.0, 100, 500),
+        rc("proj-b", "api", 5.0, 50, 400),
+        rc("proj-b", "api", 5.0, 50, 400),
     ]);
     let st = state.lock().unwrap();
     let tree = build_ledger_tree(&st);
-    let band = tree.rows.iter().find(|r| r.kind == KIND_PROJECT).unwrap();
-    let row = tree.rows.iter().find(|r| r.kind == KIND_CONTAINER).unwrap();
-    // The group's total is the column's max → full bar
-    assert_eq!(band.cpu_text, "20.0%");
-    assert_eq!(band.cpu_ratio, 1.0);
-    // The row's bar is scaled by the same baseline → half
-    assert!((row.cpu_ratio - 0.5).abs() < 0.01);
-    // Memory: the group's total (400M) is the column's max → full bar; the row (300M) → 3/4
-    assert_eq!(band.mem_ratio, 1.0);
-    assert!((row.mem_ratio - 0.75).abs() < 0.01);
+    let bands: Vec<&ContainerRow> = tree
+        .rows
+        .iter()
+        .filter(|r| r.kind == KIND_PROJECT)
+        .collect();
+    let big = bands.iter().find(|r| r.name == "proj-a").unwrap();
+    let small = bands.iter().find(|r| r.name == "proj-b").unwrap();
+    // Group scale: the largest group total is full, the other is proportional
+    assert_eq!(big.cpu_text, "20.0%");
+    assert_eq!(big.cpu_ratio, 1.0);
+    assert!((small.cpu_ratio - 0.5).abs() < 0.01);
+    // Row scale: the largest single container is full (not squeezed to half by the group total)
+    let row = tree
+        .rows
+        .iter()
+        .find(|r| r.kind == KIND_CONTAINER && r.cpu_text == "10.0%")
+        .unwrap();
+    assert_eq!(row.cpu_ratio, 1.0);
+    assert_eq!(row.mem_ratio, 1.0);
 }
 
 #[test]

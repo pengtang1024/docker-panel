@@ -41,10 +41,6 @@ pub struct ContainerInfo {
     pub mem_usage: u64,
     /// 内存上限（字节）
     pub mem_limit: u64,
-    /// 磁盘读（字节）
-    pub block_read: u64,
-    /// 磁盘写（字节）
-    pub block_write: u64,
     /// 容器可写层占用（字节，来自 `list_containers` sizeRw）
     pub size_rw: u64,
     /// 容器根文件系统总大小（字节，含镜像只读层，来自 sizeRootFs）

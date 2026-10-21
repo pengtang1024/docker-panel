@@ -200,7 +200,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（卡片数值同帧更新，不阶梯跳动） |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（卡片数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
 
 ## 代码规范
 
@@ -229,6 +229,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 23. **分组带的命中顺序与几何**——分组带**通栏**（独立 delegate `kind=1/2`，不参与列宽计算），内部镜像 `ledger-row.slint` 的列结构（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`），使带内数值与容器行**同 x**；展开箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 两者**不重叠**，互不抢事件（规范 #19）；分组名落在 `44px + depth*18`（箭头 16px + 色点 18px + 间隙），与**同层**容器行的名称列起点逐像素对齐，层级只靠缩进表达；无 Compose 归属的容器直接排在顶层（depth=0），不另设「独立容器」分组带。
 24. **资源列表的排序状态三个视图各自独立**——`ResourceSort { field, desc }`（列下标 + 方向）在 Rust → Slint 之间**打包成一个 int**（低 3 位=列下标，第 3 位=降序标记）；Slint 1.18 不支持 `%` 与 `&` 运算符，解包用 `Math.mod(x, 8)` / `x >= 8`。排序状态只由 `callbacks_sort.rs` 写（规范 #18），consumer 只读。表头方向箭头：左对齐列跟在标签后（不占布局宽度），右对齐列用**覆盖层**放在列左端（值仍右对齐，列起点不漂移）。
 25. **分组带的资源汇总是「成员之和」**——分组带显示该组的 CPU / 内存 / 磁盘**总和**，落在台账的 CPU / 内存 / 磁盘列上（与容器行同 x，规范 #20）。口径：CPU / 内存只累加**运行中**成员（停止的容器行上显示「—」），磁盘累加**全部**成员（可写层占用是累计值，停止后依然成立）；一个运行成员都没有时 CPU / 内存显示「—」。汇总描述的是「这个组占了多少」→ **与组是否展开无关**，收起时数字照旧。**微条两套刻度**：行按「视图内最大的单容器」归一（满格 = 最大的容器），分组带按「各分组总和的最大值」归一（满格 = 最大的分组，`group_totals::max_base`）。行与分组是**两种量纲**（个体 / 聚合），共用一个刻度必然失真：分组的和 ≥ 组内任一成员（恒等式）→ 分组总和恒为本列最大值 → 分组带恒为满格（不携带信息）、成员的条被压掉一半分辨率（最大的容器只剩 56%）。跨量纲的比大小（分组总和 vs 单容器）靠**数字**，不靠条。实现见 `src/ui_rows/group_totals.rs`（`GroupTotals`），结果写进分组行的 `cpu_text` / `mem_text` / `disk` 三个字段（复用容器行的同名字段）与 `cpu_ratio` / `mem_ratio`。⚠️ 改 `ui/ledger-row.slint` 的列结构时必须同步改 `ui/ledger-tree-row.slint`，否则带与行的数值列错位。
+26. **底部状态栏的资源汇总由 consumer 独占写入**——`app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性绑定到 `FootBar`，**必须**在 `consumer::apply_ui` 里每轮 `set`（Rust 侧不写 → 恒显示 "0%" / "0MB"）。口径 = **全部容器**（与「N/N 容器」同源，不是筛选后的可见集合）：CPU / 内存只累加**运行中**容器（停止容器的 `cpu_percent` 是停止前的残留值），磁盘累加**全部**容器（`size_rw` 是累计值）——与分组带汇总（规范 #25）同口径。
+27. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
 
 ## 构建命令
 

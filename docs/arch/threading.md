@@ -104,7 +104,9 @@ invoke_from_event_loop(move || {
 - **3s 列表刷新**（`consumer::spawn_refresh_interval`）：锁内 clone handle → drop → spawn `interval(REFRESH_INTERVAL)` 循环，每 tick `s.refresh()` 并发刷新容器/镜像/网络/卷，结果走 `tx.send(Msg::*)`。
   - `refresh()` 带 in-flight 去重：上一轮未完成时本轮直接跳过，避免慢 Docker 下每 3s 再叠 4 个调用。
   - 所有列表/统计/inspect 调用都经 `docker::with_timeout`（10s），防止守护进程无响应时后台任务无限挂起、耗尽 tokio 工作线程。
-- **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats，首帧跳过——双采样 CPU% 算法需要前一帧。
+- **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats。
+  - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s。
+  - CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
 - **30s 卷占用**（`bootstrap::spawn_volume_size_interval`）：`/system/df` 遍历卷目录，低频单独跑。
 - UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
 - 这符合 Slint 线程安全模型：只有主线程可以修改 Model。
@@ -118,7 +120,7 @@ invoke_from_event_loop(move || {
 | `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 后台补查层数 |
 | `Networks(Result<Vec<NetworkInfo>>)` | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，卡片数值同帧更新） |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，卡片数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |

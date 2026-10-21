@@ -28,6 +28,7 @@
 | `prune_volumes` | 参数是 `Option<impl Into<PruneVolumesOptions>>`（泛型） | `None` 无法推断类型；用 `PruneVolumesOptionsBuilder::new().build()` 得到具体值再传 `Some(options)`。**注意** builder 不实现 `Into`，不能直接传 builder 本身 |
 | `Network` struct 字段 | 没有 `containers` 映射 | driver/scope/name/id 都是 `Option<String>` |
 | `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
+| `ContainerStatsResponse.precpu_stats` | `Option<ContainerCpuStats>` | 非流式 stats（`stream=false`）时守护进程会**先采一帧 pre、等约 1s 再采当前帧**，两帧一并返回 → **首次采样就能算出 CPU%**，不必等下一个采样周期（本项目 `ContainerStatsSnapshot::precpu()` 用它兜底） |
 | `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |
 | `docker.df()` | `SystemDataUsageResponse` 只建模了废弃的 `VolumeUsage` 键 | 守护进程（API ≥1.25）返回的是 `Volumes` 数组 → 走 bollard 解析出来的卷占用**恒空**；改走 `docker::raw_http::get("/system/df?type=volume")` 自己读 `Volumes` |
 | 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` 调 `.next().await` / `join_all` |

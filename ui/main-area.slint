@@ -1,0 +1,168 @@
+// main-area.slint — 主列表工作区（SubBar + BatchBar + CardsArea）
+//
+// 从 app.slint 拆出（app.slint 正文曾达 295/300 行，接侧栏前必须先拆）。
+// 本组件只负责「列表工作区」：筛选栏 / 批量操作栏 / 资源列表区。
+// 顶栏（TopBar）、底栏（FootBar）、侧栏（ComposeTree）、抽屉（Drawer）仍在 app.slint，
+// 保证顶栏与底栏通栏、侧栏只占列表区高度。
+//
+// 排序菜单（SortMenu）是浮层，必须渲染在最上层 → 留在 app.slint；
+// 锚点由本组件的 out property menu_x / menu_y 提供。
+import { Theme } from "theme.slint";
+import { SubBar } from "sub-bar.slint";
+import { BatchBar } from "batch-bar.slint";
+import { CardsArea } from "cards.slint";
+import { ComposeTree } from "compose-tree.slint";
+import {
+    ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeNode, LedgerSummary
+} from "models.slint";
+
+export component MainArea inherits Rectangle {
+    // —— 视图与筛选 ——
+    in-out property <int> view: 0;
+    in-out property <string> filter: "all";
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: true;
+    in-out property <bool> sel_mode: false;
+    in-out property <bool> loading: false;
+
+    // —— 数据 ——
+    in-out property <[ContainerRow]> container_rows: [];
+    in-out property <[ImageRow]> image_rows: [];
+    in-out property <[NetworkRow]> network_rows: [];
+    in-out property <[VolumeRow]> volume_rows: [];
+    /// 台账概览带（容器视图用）
+    in-out property <LedgerSummary> ledger_summary;
+
+    // —— 计数 ——
+    in-out property <int> total_containers: 0;
+    in-out property <int> running_containers: 0;
+    in-out property <int> total_images: 0;
+    in-out property <int> total_networks: 0;
+    in-out property <int> total_volumes: 0;
+
+    // —— 批量操作 ——
+    in-out property <int> batch_count: 0;
+
+    // —— Compose 侧栏树 ——
+    in-out property <[ComposeNode]> compose_nodes: [];
+    /// 筛选栏芯片计数（compose 范围内的容器数 / 运行中数）
+    in-out property <int> chip_total: 0;
+    in-out property <int> chip_running: 0;
+
+    // —— 排序菜单（浮层在 app.slint，这里只提供开关与锚点）——
+    in-out property <bool> sort_open: false;
+    out property <length> menu_x: 0;
+    out property <length> menu_y: 0;
+
+    // —— 回调（由 app.slint 注入 AppActions）——
+    callback set_view(int);
+    callback set_filter(string);
+    callback set_sort(int);
+    callback set_sort_dir();
+    callback sel_toggle();
+    callback batch_start();
+    callback batch_stop();
+    callback batch_restart();
+    callback batch_remove();
+    callback batch_clear();
+    callback c_select(string);
+    callback c_toggle(string);
+    callback c_restart(string);
+    callback c_logs(string);
+    callback c_remove(string);
+    callback c_box(string);
+    callback i_select(string);
+    callback i_run(string);
+    callback i_remove(string);
+    callback n_select(string);
+    callback n_remove(string);
+    callback v_select(string);
+    callback v_remove(string);
+    /// 树节点选中（kind / project / service）
+    callback compose_select(int, string, string);
+    /// 树节点展开收起（project）
+    callback compose_toggle(string);
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: 0px;
+
+        // Compose 侧栏：仅容器视图出现（切视图时整块消失，主区变宽）
+        if root.view == 0 : ComposeTree {
+            width: 208px;
+            horizontal-stretch: 0;
+            nodes <=> root.compose_nodes;
+            select(k, p, s) => { root.compose_select(k, p, s); }
+            toggle(p) => { root.compose_toggle(p); }
+        }
+
+        list-col := VerticalLayout {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            spacing: 0px;
+
+            sub-bar := SubBar {
+                height: Theme.sub_h;
+                view <=> root.view;
+                filter <=> root.filter;
+                sort_field <=> root.sort_field;
+                sort_desc <=> root.sort_desc;
+                sel_mode <=> root.sel_mode;
+                total_containers <=> root.total_containers;
+                running_containers <=> root.running_containers;
+                chip_total <=> root.chip_total;
+                chip_running <=> root.chip_running;
+                total_images <=> root.total_images;
+                total_networks <=> root.total_networks;
+                total_volumes <=> root.total_volumes;
+                sort_open <=> root.sort_open;
+                menu_x <=> root.menu_x;
+                menu_y <=> root.menu_y;
+                set_view(v) => { root.set_view(v); }
+                set_filter(f) => { root.set_filter(f); }
+                set_sort(f) => { root.set_sort(f); }
+                set_sort_dir() => { root.set_sort_dir(); }
+                sel_toggle() => { root.sel_toggle(); }
+            }
+
+            if root.batch_count > 0 : BatchBar {
+                height: Theme.batch_h;
+                count <=> root.batch_count;
+                start => { root.batch_start(); }
+                stop => { root.batch_stop(); }
+                restart => { root.batch_restart(); }
+                remove => { root.batch_remove(); }
+                clear => { root.batch_clear(); }
+            }
+
+            CardsArea {
+                vertical-stretch: 1;
+                view <=> root.view;
+                sel_mode <=> root.sel_mode;
+                loading <=> root.loading;
+                containers <=> root.container_rows;
+                images <=> root.image_rows;
+                networks <=> root.network_rows;
+                volumes <=> root.volume_rows;
+                ledger_summary <=> root.ledger_summary;
+                sort_field <=> root.sort_field;
+                c_select(id) => { root.c_select(id); }
+                c_toggle(id) => { root.c_toggle(id); }
+                c_restart(id) => { root.c_restart(id); }
+                c_logs(id) => { root.c_logs(id); }
+                c_remove(id) => { root.c_remove(id); }
+                c_box(id) => { root.c_box(id); }
+                i_select(id) => { root.i_select(id); }
+                i_run(id) => { root.i_run(id); }
+                i_remove(id) => { root.i_remove(id); }
+                n_select(id) => { root.n_select(id); }
+                n_remove(id) => { root.n_remove(id); }
+                v_select(id) => { root.v_select(id); }
+                v_remove(id) => { root.v_remove(id); }
+                // 台账表头点列 → 走与筛选栏排序菜单同一条链路（同列再点自动翻方向）
+                sort_pick(f) => { root.set_sort(f); }
+            }
+        }
+    }
+}

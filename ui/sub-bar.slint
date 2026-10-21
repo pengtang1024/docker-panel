@@ -2,7 +2,6 @@
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { Dropdown, MenuItem, IconBtn } from "components-interact.slint";
-import { ComposeRow } from "models.slint";
 import { StateArea } from "components-state.slint";
 
 // ============ Chip（严格对齐 prototype .chip{height:28px;padding:0 12px;border-radius:14px;font-size:12px;font-weight:600}）============
@@ -67,16 +66,20 @@ export component SubBar inherits Rectangle {
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: true;
     in-out property <bool> sel_mode: false;
-    in-out property <[ComposeRow]> compose_rows: [];
     in-out property <int> total_containers: 0;
     in-out property <int> running_containers: 0;
+    /// 筛选栏芯片计数（compose 范围内的容器数 / 运行中数）
+    in-out property <int> chip_total: 0;
+    in-out property <int> chip_running: 0;
     in-out property <int> total_images: 0;
     in-out property <int> total_networks: 0;
     in-out property <int> total_volumes: 0;
 
+    // 排序菜单锚点：写在本组件内（点排序按钮时），读方是 app.slint 的 SortMenu 浮层。
+    // 必须声明为 in-out —— 上层 MainArea 要把它透传出去（out 属性不可被外部赋值）。
     in-out property <bool> sort_open: false;
-    out property <length> menu_x: 0;
-    out property <length> menu_y: 0;
+    in-out property <length> menu_x: 0;
+    in-out property <length> menu_y: 0;
 
     callback set_view(int);
     callback set_filter(string);
@@ -92,16 +95,13 @@ export component SubBar inherits Rectangle {
         padding-right: 14px;
         cross-axis-alignment: center;
 
-        Chip { label: @tr("All"); n: root.total_containers; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: @tr("Running"); n: root.running_containers; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
-        Chip { label: @tr("Stopped"); n: root.total_containers - root.running_containers; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
-        for row[i] in root.compose_rows : Chip {
-            label: row.name;
-            n: row.n;
-            key: row.name;
-            active: root.filter == row.name;
-            clicked(k) => { root.set_filter(k); }
-        }
+        // 计数口径 = 当前 compose 范围（侧栏树选中的范围）内的分布，
+        // 不是全量 —— 否则台账只剩 5 行而芯片写着「全部 7」
+        Chip { label: @tr("All"); n: root.chip_total; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: @tr("Running"); n: root.chip_running; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
+        Chip { label: @tr("Stopped"); n: root.chip_total - root.chip_running; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
+        // ⚠️ 这里不再放 compose 项目 chips —— compose 选择已移到左侧栏树
+        //    （见 compose-tree.slint）：同一个筛选两处入口必然状态打架。
 
         Rectangle { horizontal-stretch: 1; }
 

@@ -14,6 +14,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | [arch/threading.md](arch/threading.md) | 线程模型、消息流（Msg 变体 + 流水线）、Rust 回调绑定铁律、Rust 拆分原则 |
 | [arch/ui-interaction.md](arch/ui-interaction.md) | Slint UI 模块交互（交互总图 + 4 种交互模式 + 文件清单）、Slint 拆分原则 |
 | [arch/docker-bollard.md](arch/docker-bollard.md) | Docker 接入约定、bollard 0.21 易踩坑速查（**唯一权威源**） |
+| [arch/compose-tree.md](arch/compose-tree.md) | Compose 侧栏树：形态、状态、筛选语义、落点清单、验收标准 |
 
 ## 1. 技术栈（精确版本）
 
@@ -47,14 +48,16 @@ docker-panel/
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
+│   ├── compose_scope.rs       Compose 侧栏树状态：ComposeScope（全部/项目/服务/独立容器）+ ComposeState（范围 + 展开集合）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
+│   ├── ui_state/config_io.rs  AppState ↔ config.json 读写（字段搬运，越界值回落默认；从 ui_state 拆出）
 │   ├── follow_runtime.rs       日志流运行时：建流/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ images / netvol（网络/卷）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行 + compose 范围过滤 + scoped_counts）/ ledger（概览带 + 台账入口）/ compose_tree（侧栏树节点）/ images / netvol（网络/卷）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -63,6 +66,7 @@ docker-panel/
 │   ├── callbacks_drawer.rs    抽屉 Tab 切换（切到日志 Tab 触发 ensure_follow）
 │   ├── callbacks_image.rs     镜像删除 / 选中（AppActions global）
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
+│   ├── callbacks_compose.rs   Compose 侧栏树回调（选中范围 / 展开收起；compose_scope 与展开集合的唯一写入方）
 │   │
 │   └── docker/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
@@ -123,7 +127,8 @@ main.rs
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；
                      子文件依赖是**无环 DAG**：theme.slint 是叶子（所有文件都 import 它），
                      composition 依赖只向下（cards→ledger/card-*/skel、ledger→ledger-row/ledger-band/ledger-cols、
-                     drawer→drawer-*-row、dialogs→components-dialog、material-theme→theme），
+                     drawer→drawer-*-row、dialogs→components-dialog、material-theme→theme、
+                     main-area→compose-tree/cards/sub-bar/batch-bar、compose-tree→models/components），
                      不存在互相 import / 循环
 ```
 

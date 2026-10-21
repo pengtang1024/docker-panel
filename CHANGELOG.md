@@ -7,6 +7,7 @@
 
 ### 新增
 
+- **Compose 侧栏树（方向 B）**：容器视图左侧新增 208px 导航树，层级为「全部容器 → Compose 项目 → 服务」，非 compose 容器归入顶层「独立容器」。点**箭头** = 展开 / 收起该项目的服务（不改筛选），点**标签** = 选中该范围（项目 / 服务 / 独立容器）并把台账过滤到该范围，再点一次取消选中。侧栏只在容器视图出现，切到镜像 / 网络 / 卷时整块消失、主区变宽（卡片反而多一列）。筛选栏原有的 compose 项目 chips 一并移除——同一个筛选留两个入口必然状态打架；compose 选择现在只有侧栏树一个入口，筛选栏 chips 只管状态维度（全部 / 运行中 / 已停止）。两类计数口径有意区分：树节点数字是**绝对值**（该组容器总数，与 Docker Desktop 侧栏一致），筛选栏 chips 的数字是**当前 compose 范围内的分布**（与台账行数同口径，不会出现「台账 5 行而芯片写着全部 7」）。选中的服务藏在收起的项目里时，项目节点仍保留左侧强调条，筛选不会凭空消失。选中范围与展开状态持久化到 `config.json`，重启自动恢复。设计文档见 [docs/arch/compose-tree.md](docs/arch/compose-tree.md)。
 - **容器视图改为密集台账**：容器视图从卡片网格换成**台账形态**——概览带（总数 / 运行中 / 已停止 / 需关注 + CPU 占用 TOP4）→ 表头 → 30px 虚拟化台账行（@material ListView）。台账行含状态轨（正常绿 / 需关注琥珀）、状态点或多选勾选框、容器名、CPU（52px 微条 + 百分比）、内存（62px 微条 + 容量）、磁盘、镜像、端口、Compose 项目、hover 出行的启停 / 重启 / 日志 / 更多四个操作按钮。**CPU / 内存微条按当前视图内的最大值归一**（不是各自对 100% 的占比），同一列里 12.4% 与 87.4% 一眼可分；概览带的 TOP4 条长与列表行用同一归一化基准。表头可点击排序（容器名 / CPU / 内存 / 磁盘），列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口 / 项目列）。镜像 / 网络 / 卷仍是自适应列数卡片网格，不受影响。新增 `ui/ledger{,-row,-band,-cols}.slint` 四个文件与 `src/ui_rows/ledger.rs`；`ui/card-container.slint`（容器卡片）与 `components-chip.slint` 里已无引用的 `Stat` / `ProjTag` 组件一并删除（组件库不留无人使用的导出组件）。
 - **「需关注」判定**：容器处于死亡 / 暂停 / 重启中 / 正在移除状态，或已退出且退出码 ≠ 0（如 `Exited (137)`）时，行首显示琥珀色状态轨，概览带「需关注」计数同步 +1。判定只用 `list_containers` 已有的字段解析，不额外发 inspect 请求。
 
@@ -18,6 +19,7 @@
 
 ### 工程
 
+- **`ui/app.slint` 与 `src/ui_state.rs` 双双逼近 300 行上限**：接入 Compose 侧栏树需要新增布局与状态字段，两个文件都会破限（app.slint 295→295+ 侧栏接线，ui_state.rs 290→307）。现按职责拆分：`ui/app.slint` 抽出 `ui/main-area.slint`（主列表工作区 = SubBar + BatchBar + CardsArea，侧栏树也落在这里，app.slint 只留属性与回调绑定，排序菜单浮层仍在 app.slint 保证渲染在最上层）；`src/ui_state.rs` 抽出 `src/ui_state/config_io.rs`（`AppState ↔ config.json` 读写）。两个文件拆分后分别回到 295 / 275 行正文。新增 `src/compose_scope.rs`（侧栏树的筛选范围与展开集合）、`src/ui_rows/compose_tree.rs`（树节点构建）、`src/callbacks_compose.rs`（树回调，compose 状态的唯一写入方），单测从 22 条增至 29 条。
 - **AGENTS.md 组件库描述与实际实现不符**：文档写「用了 Modal（inherits Modal），项目自己的 DialogShell 在 Modal 上盖了自定义 card」，但 `ui/components-dialog.slint` 实际是手搓的 `inherits Rectangle`，从未 import Material Modal。已按实际实现改写，并把 Material Modal 的坑表换成项目 DialogShell 的真实约束（TouchArea 的 100% 对 Rectangle 父级不可靠、slot 覆盖层级、`@children` 唯一性等），另补「M3 接项目主题」一节：全局属性赋值语句不合法、必须经本组件属性中转、赋值不会打断 `<=>` 绑定（依据 `i-slint-core-1.18.1` 源码）、M3 滑块自动隐藏时的像素验收姿势。同步更新 README / architecture.md / docs/arch/ui-interaction.md 的模块地图与文件行数。
 
 ## [0.3.4] - 2026-10-20

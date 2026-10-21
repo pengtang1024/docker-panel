@@ -17,7 +17,7 @@ use std::rc::Rc;
 use slint::{Model, ModelRc, VecModel};
 
 use crate::slint_gen::{
-    ComposeRow, ContainerRow, DetailPair, ImageRow, LogRow, NetworkRow, VolumeRow,
+    ComposeNode, ContainerRow, DetailPair, ImageRow, LogRow, NetworkRow, VolumeRow,
 };
 
 thread_local! {
@@ -27,7 +27,7 @@ thread_local! {
     static VOLUMES: Rc<VecModel<VolumeRow>> = Rc::new(VecModel::default());
     static DETAIL: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static ENV: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
-    static COMPOSE: Rc<VecModel<ComposeRow>> = Rc::new(VecModel::default());
+    static COMPOSE: Rc<VecModel<ComposeNode>> = Rc::new(VecModel::default());
     static LOGS: Rc<VecModel<LogRow>> = Rc::new(VecModel::default());
 }
 
@@ -80,8 +80,8 @@ pub fn env_rows(data: Vec<DetailPair>) -> ModelRc<DetailPair> {
     ENV.with(|m| sync(Rc::clone(m), data))
 }
 
-/// Compose 项目筛选芯片模型（须在 UI 线程调用）
-pub fn compose_rows(data: Vec<ComposeRow>) -> ModelRc<ComposeRow> {
+/// Compose 侧栏树模型（须在 UI 线程调用）
+pub fn compose_tree(data: Vec<ComposeNode>) -> ModelRc<ComposeNode> {
     COMPOSE.with(|m| sync(Rc::clone(m), data))
 }
 

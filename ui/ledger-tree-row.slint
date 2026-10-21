@@ -8,13 +8,15 @@
 //    父级下发的同一组 name_w / image_w / show_disk / show_ports。
 //    ⚠️ 改 ledger-row.slint 的列结构时**必须同步改这里**，否则带与行的列起点错位。
 //
-// ⚠️ 微条位留空：微条按「单容器最大值」归一，分组是**总和**，画出来必然满格 → 只给数字。
+// ⚠️ 微条基准与行不同：行的微条按「单容器最大值」归一；分组是**总和**，量级更大，
+//    共用行的基准必然永远满格 → 分组带用**自己的基准**（各分组总和的最大值）。
 //
 // ⚠️ 命中顺序铁律（规范 #19）：箭头的 TouchArea 与名称热区**不重叠**
 //    （箭头在状态点列内按 depth 缩进，名称热区从名称起点开始），互不抢事件。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
 import { StateArea } from "components-state.slint";
+import { MicroBar } from "components-chip.slint";
 import { LedgerCols } from "ledger-cols.slint";
 import { ContainerRow } from "models.slint";
 
@@ -106,8 +108,12 @@ export component TreeBand inherits Rectangle {
             }
         }
 
-        // CPU 微条位（分组是总和，微条必然满格 → 留空）
-        Rectangle { width: LedgerCols.cpu_bar_w; height: 1px; }
+        // CPU 微条（分组带用**自己的基准**：各分组总和的最大值）
+        MicroBar {
+            bar_w: LedgerCols.cpu_bar_w;
+            ratio: root.data.cpu_ratio;
+            fill: Theme.bar_cpu;
+        }
         // CPU 汇总
         RightText {
             text: root.data.cpu_text;
@@ -118,8 +124,12 @@ export component TreeBand inherits Rectangle {
             overflow: elide;
         }
 
-        // 内存微条位（留空）
-        Rectangle { width: LedgerCols.mem_bar_w; height: 1px; }
+        // 内存微条（同上，基准 = 各分组内存总和的最大值）
+        MicroBar {
+            bar_w: LedgerCols.mem_bar_w;
+            ratio: root.data.mem_ratio;
+            fill: Theme.bar_mem;
+        }
         // 内存汇总
         RightText {
             text: root.data.mem_text;

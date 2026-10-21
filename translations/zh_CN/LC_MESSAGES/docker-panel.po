@@ -374,6 +374,9 @@ msgstr "网络列表失败：{0}"
 msgid "Failed to list volumes: {0}"
 msgstr "卷列表失败：{0}"
 
+msgid "Failed to read volume sizes: {0}"
+msgstr "读取卷占用失败：{0}"
+
 msgid "Empty stats response"
 msgstr "stats 空响应"
 

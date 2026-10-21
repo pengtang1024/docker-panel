@@ -2,11 +2,10 @@
 
 use std::collections::HashMap;
 
-use bollard::query_parameters::{
-    DataUsageOptionsBuilder, ListNetworksOptionsBuilder, RemoveVolumeOptionsBuilder,
-};
+use bollard::query_parameters::{ListNetworksOptionsBuilder, RemoveVolumeOptionsBuilder};
 
 use super::connect;
+use super::raw_http;
 use crate::models::{NetworkInfo, VolumeInfo};
 
 /// Docker 内置网络：不可删除、不可改名
@@ -72,24 +71,28 @@ pub async fn list_volumes() -> Result<Vec<VolumeInfo>, String> {
 ///
 /// 列表 API 不返回卷大小，必须单独走 system df。该接口会遍历卷目录统计磁盘
 /// 占用（有 I/O 成本），故只由低频 interval 调用，不做 3s 轮询。
+///
+/// ⚠️ **不走 bollard 的 `df()`**：bollard 0.21 的 `SystemDataUsageResponse` 只建模了
+/// 废弃的 `VolumeUsage` 键，而守护进程（API ≥1.25）返回的是 `Volumes` 数组
+/// → `df()` 解析出来的卷占用恒空。这里自己发一条裸 HTTP 请求（见 `raw_http.rs`），
+/// 直接读 `Volumes` 键。
 pub async fn volume_sizes() -> Result<HashMap<String, u64>, String> {
-    let docker = connect()?;
-    let opts = DataUsageOptionsBuilder::default()
-        ._type(vec!["volume".to_string()])
-        .build();
-    let resp = docker
-        .df(Some(opts))
-        .await
-        .map_err(|e| crate::i18n::trf("Failed to list volumes: {0}", &[&e.to_string()]))?;
+    let body = raw_http::get("/system/df?type=volume").await?;
+    let resp: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|e| crate::i18n::trf("Failed to read volume sizes: {0}", &[&e.to_string()]))?;
     let mut out = HashMap::new();
-    // `VolumeUsage.Items` 为未建模的原始 JSON，逐项取 Name / UsageData.Size
-    let items = resp.volume_usage.and_then(|u| u.items).unwrap_or_default();
-    for item in items {
+    let volumes = resp
+        .get("Volumes")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for item in volumes {
         let name = item.get("Name").and_then(|v| v.as_str());
         let size = item
             .get("UsageData")
             .and_then(|u| u.get("Size"))
             .and_then(|s| s.as_i64());
+        // Size = -1 表示「不可用」（非 local 驱动的卷）
         if let (Some(name), Some(size)) = (name, size) {
             if size >= 0 {
                 out.insert(name.to_string(), size as u64);

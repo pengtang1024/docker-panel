@@ -25,6 +25,7 @@ mod images;
 pub(crate) mod log_types;
 mod logs;
 mod netvol;
+pub(crate) mod raw_http;
 mod stats;
 mod system;
 

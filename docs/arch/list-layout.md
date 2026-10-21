@@ -130,16 +130,18 @@
 
 - **汇总描述的是「这个组占了多少」，与组是否展开无关** → 收起时数字照旧
   （汇总按组成员累加，折叠只是不渲染子行）。
-- **微条位留空**：微条按「单容器最大值」归一，分组是**总和**，画出来必然满格 →
-  只给数字，不画条。
+- **微条用分组自己的基准**：行的微条按「单容器最大值」归一；分组是**总和**，量级天然更大，
+  共用行的基准必然永远满格 → 分组带按**各分组总和的最大值**归一（`group_totals::max_base`），
+  组与组之间可直接比大小且不会溢出。
 - 项目带汇总 = 该项目**全部**容器之和（含服务带下的容器）；服务带汇总 = 该服务自己的容器之和。
 - 带行虽然通栏，但**必须镜像 `ledger-row.slint` 的列结构与列宽**（同一套 `LedgerCols` +
   父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`），
   否则汇总值与容器行的数值列对不上号。
   ⚠️ 改 `ledger-row.slint` 的列结构时必须同步改 `ledger-tree-row.slint`。
 - 实现：`src/ui_rows/group_totals.rs`（`GroupTotals::of(members)` 累加 +
-  `cpu_text` / `mem_text` / `disk_text` 格式化），结果写进分组行的
-  `cpu_text` / `mem_text` / `disk` 三个字段（复用容器行的同名字段）。
+  `cpu_text` / `mem_text` / `disk_text` 格式化 + `max_base` 微条基准），
+  结果写进分组行的 `cpu_text` / `mem_text` / `disk`（复用容器行的同名字段）与
+  `cpu_ratio` / `mem_ratio`。
 
 ---
 
@@ -245,12 +247,12 @@
 |------|------|
 | **行模型从 1 种变 3 种** | `kind` 字段 + delegate 内分支；带行独立组件（`ledger-tree-row.slint`），不把 `ledger-row.slint` 撑爆（现 229 行，逼近 300 上限） |
 | **带行通栏 → 列起点漂移** | 带行不参与列宽计算；容器行的列宽仍由 `LedgerCols` 统一下发（规范 #20 不变）。带内的**汇总值**例外：它镜像 `ledger-row.slint` 的列结构，与容器行同 x（§3.6） |
-| **分组汇总画微条会满格** | 微条按「单容器最大值」归一，分组是总和 → 微条位留空，只给数字（§3.6） |
+| **分组汇总画微条会满格** | 分组带用**自己的基准**（各分组总和的最大值），不共用行的单容器基准（§3.6） |
 | **计数与列表不一致** | 概览带 / chips 计数一律取「展开后可见集合」，与列表行数同源 |
 | **列表行模型复用 render 缓存** | `render.rs` 的 CachedModel 差量同步按行比对；行型混合后 `PartialEq` 仍可用（struct 派生） |
 | **镜像层数 / 卷大小回填是异步的** | 回填消息到达后重建对应列表行（既有 Msg 通路：`ImageLayers` / `VolumeSizes`） |
 | **R2 300 行上限** | 新增文件按职责拆；`ui/cards.slint` 删除后总量下降；`src/ui_rows/containers.rs` 行构建变复杂 → 树行构建单独成文件；`ui/app.slint` 拆分后正文 294 行（去掉侧栏时代遗留的空 `body-row` 包裹层 + 色板应用抽成回调） |
-| **卷「大小」列在本机取不到值** | ⚠️ **既有缺陷，与本设计无关**：bollard 0.21 的 `SystemDataUsageResponse` 只有 `VolumeUsage` 键，而 Docker API ≥1.44 的 `/system/df?type=volume` 返回 `Volumes` 键 → `volume_sizes()` 恒空 → 显示「—」、按大小排序无意义。要修需要自己发裸 HTTP 请求（bollard 无公开的 raw API），单独立项 |
+| ~~卷「大小」列取不到值~~ | ✅ **已修**：bollard 0.21 的 `SystemDataUsageResponse` 只建模废弃的 `VolumeUsage` 键，而守护进程返回 `Volumes` 数组 → 改走裸 HTTP 请求（`docker/raw_http.rs`）自己读 `Volumes` 键，卷大小与按大小排序恢复正常 |
 
 ---
 

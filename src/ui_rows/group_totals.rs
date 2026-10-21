@@ -37,6 +37,16 @@ impl GroupTotals {
         t
     }
 
+    /// CPU 汇总（%）：只含运行中成员
+    pub fn cpu(&self) -> f64 {
+        self.cpu
+    }
+
+    /// 内存汇总（字节）：只含运行中成员
+    pub fn mem(&self) -> u64 {
+        self.mem
+    }
+
     /// CPU 汇总文本（无运行成员 → "—"，与容器行口径一致）
     pub fn cpu_text(&self) -> SharedString {
         if self.running == 0 {
@@ -58,5 +68,26 @@ impl GroupTotals {
     /// 磁盘汇总文本（全部成员累加）
     pub fn disk_text(&self) -> SharedString {
         SharedString::from(format_bytes_compact(self.disk))
+    }
+}
+
+/// 微条归一化基准：各分组**总和**里的 CPU / 内存最大值
+///
+/// 行的微条按「单容器最大值」归一；分组的值是**总和**，量级天然更大，
+/// 若共用行的基准必然永远满格 → 分组带用**自己的基准**（分组总和的最大值），
+/// 组与组之间可直接比大小，也不会溢出。
+pub fn max_base(totals: &[&GroupTotals]) -> (f64, u64) {
+    (
+        totals.iter().map(|t| t.cpu()).fold(0.0f64, f64::max),
+        totals.iter().map(|t| t.mem()).max().unwrap_or(0),
+    )
+}
+
+/// 微条比例：值 / 基准（基准为 0 → 0）
+pub fn ratio(value: f64, max: f64) -> f32 {
+    if max > 0.0 {
+        (value / max).clamp(0.0, 1.0) as f32
+    } else {
+        0.0
     }
 }

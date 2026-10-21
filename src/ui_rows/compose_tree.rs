@@ -168,13 +168,15 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
     let max_mem_row = visible.iter().map(|c| c.mem_usage).max().unwrap_or(0);
     let summary = build_ledger_summary(&visible, max_cpu_row);
 
-    // —— 4b) 微条归一化基准 = **本列的最大值**（行与分组共用同一个基准）——
+    // —— 4b) 微条**两套刻度**：行按「单容器最大值」，分组按「各分组总和的最大值」——
     //
-    // 微条的意义是「列内可比」：条长与数值成正比，眼睛沿着一列扫就能比大小。
-    // 行与分组若各用各的基准，同一列里 3.0% 的分组和 1.6% 的容器**都是满格**，
-    // 条长与数值对不上号 → 基准必须统一。
-    // 分组的和 ≥ 组内任一成员 → 分组总和通常就是本列最大值，
-    // 行的条按比例缩短（真实反映「这个组比任何单个容器都大」）。
+    // 微条是「同一量纲内比大小」的工具。行与分组是**两种量纲**（个体 / 聚合），
+    // 共用一个刻度必然失真：分组的和 ≥ 组内任一成员（恒等式）→ 分组总和永远是
+    // 本列最大值 → 分组带恒为满格（不携带信息），成员的条被压掉一半分辨率
+    // （最大的容器只剩 56%）。故两种量纲各用各的刻度：
+    //   · 行：视图内最大的单容器 = 满格 → 沿容器列扫就能比大小
+    //   · 分组：视图内最大的分组总和 = 满格 → 沿分组列扫就能比大小
+    // 跨量纲的对比（分组总和 vs 单容器）靠数字，不靠条。
     let bands: Vec<&GroupTotals> = nodes
         .iter()
         .filter_map(|n| match n {
@@ -182,9 +184,7 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
             Node::Container { .. } => None,
         })
         .collect();
-    let (band_cpu, band_mem) = group_totals::max_base(&bands);
-    let max_cpu = max_cpu_row.max(band_cpu);
-    let max_mem = max_mem_row.max(band_mem);
+    let (band_max_cpu, band_max_mem) = group_totals::max_base(&bands);
 
     // —— 5) 出行 ——
     let mut rows: Vec<ContainerRow> = Vec::with_capacity(nodes.len());
@@ -211,14 +211,14 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                 cpu_text: totals.cpu_text(),
                 mem_text: totals.mem_text(),
                 disk: totals.disk_text(),
-                // 微条：与行共用「本列最大值」这个基准（列内可比）
-                cpu_ratio: group_totals::ratio(totals.cpu(), max_cpu),
-                mem_ratio: group_totals::ratio(totals.mem() as f64, max_mem as f64),
+                // 微条：分组用自己的刻度（各分组总和的最大值）
+                cpu_ratio: group_totals::ratio(totals.cpu(), band_max_cpu),
+                mem_ratio: group_totals::ratio(totals.mem() as f64, band_max_mem as f64),
                 ..Default::default()
             }),
             Node::Container { c, depth } => {
                 let selected = s.batch.contains(&c.id);
-                rows.push(container_row(c, max_cpu, max_mem, selected, *depth));
+                rows.push(container_row(c, max_cpu_row, max_mem_row, selected, *depth));
             }
         }
     }

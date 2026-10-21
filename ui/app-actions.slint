@@ -9,11 +9,13 @@ export global AppActions {
     callback set_filter(string);
     callback set_sort(int);
     callback set_sort_dir();
+    // —— 资源列表排序（镜像 / 网络 / 卷的表头点击）——
+    callback sort_images(int);
+    callback sort_networks(int);
+    callback sort_volumes(int);
     callback search(string);
-    // —— Compose 侧栏树 ——
-    /// 选中节点（kind / project / service）；kind: 0=全部 1=项目 2=服务 3=独立容器
-    callback compose_select(int, string, string);
-    /// 展开收起项目（project）
+    // —— 台账内联树 ——
+    /// 展开 / 收起分组（分组键：project:<项目名> / svc:<项目>/<服务>）
     callback compose_toggle(string);
     callback container_toggle(string);
     callback container_restart(string);

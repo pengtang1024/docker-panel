@@ -1,0 +1,158 @@
+// list-area.slint — 资源列表区（四个视图统一为表格列表）
+//
+// 容器视图走**密集台账**（方向 A：概览带 + 表头 + 30px 虚拟化行 + 内联树，
+//   见 ledger.slint）；镜像 / 网络 / 卷走各自的表格列表（表头可点排序）。
+// 空数据显示 EmptyState，首次拉取期间显示骨架屏。
+import { Theme } from "theme.slint";
+import { CardMenu } from "components-align.slint";
+import { EmptyState } from "components-empty.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LedgerSummary } from "models.slint";
+import { LedgerArea } from "ledger.slint";
+import { ImageList } from "image-list.slint";
+import { NetworkList } from "network-list.slint";
+import { VolumeList } from "volume-list.slint";
+import { SkelGrid } from "skel.slint";
+
+export component ListArea inherits Rectangle {
+    in-out property <int> view: 0;
+    in-out property <bool> sel_mode: false;
+    in-out property <bool> loading: false;
+    in-out property <[ContainerRow]> containers: [];
+    in-out property <[ImageRow]> images: [];
+    in-out property <[NetworkRow]> networks: [];
+    in-out property <[VolumeRow]> volumes: [];
+    /// 台账概览带（容器视图用）
+    in-out property <LedgerSummary> ledger_summary;
+    /// 当前排序列（0=名称 1=CPU 2=内存 3=磁盘），台账表头高亮用
+    in-out property <int> sort_field: 0;
+    // —— 三个资源列表各自的排序（打包值：低 3 位=列下标，第 3 位=降序标记）——
+    in-out property <int> sort_images: 0;
+    in-out property <int> sort_networks: 0;
+    in-out property <int> sort_volumes: 0;
+
+    callback c_select(string);
+    callback c_toggle(string);
+    callback c_restart(string);
+    callback c_logs(string);
+    callback c_remove(string);
+    callback c_box(string);
+    callback i_select(string);
+    callback i_run(string);
+    callback i_remove(string);
+    callback n_select(string);
+    callback n_remove(string);
+    callback v_select(string);
+    callback v_remove(string);
+    /// 卡片「···」菜单请求（冒泡到本层，由 ListArea 写 CardMenu 总线单例）
+    callback menu_toggle(string, int, bool, length, length);
+    /// 台账表头点击排序（冒泡到本层，再交给 AppActions.set_sort）
+    callback sort_pick(int);
+    /// 内联树分组展开 / 收起（冒泡到本层）
+    callback tree_toggle(string);
+    /// 三个资源列表的表头排序
+    callback sort_images_pick(int);
+    callback sort_networks_pick(int);
+    callback sort_volumes_pick(int);
+
+    /// 当前视图的行数（空态判定）
+    property <int> n: root.view == 0 ? root.containers.length
+        : root.view == 1 ? root.images.length
+        : root.view == 2 ? root.networks.length
+        : root.volumes.length;
+
+    // 单实例菜单总线：点自己收起、点别的卡片改写锚点（id 必须最后写，
+    // 否则 id 先变会让菜单带着旧锚点先渲染一帧）
+    menu_toggle(id, kind, can_stop, mx, my) => {
+        if (CardMenu.id == id) {
+            CardMenu.close();
+        } else {
+            CardMenu.kind = kind;
+            CardMenu.can_stop = can_stop;
+            CardMenu.mx = mx;
+            CardMenu.my = my;
+            CardMenu.id = id;
+        }
+    }
+
+    // 空白区点击兜底：点卡片以外区域应收起「···」菜单
+    // （置于最底层：行 / 空白态在源码顺序上后绘，命中优先于本层，不影响行交互）
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { CardMenu.close(); }
+    }
+
+    // loading 骨架屏（首次数据拉取期间）
+    if root.loading : SkelGrid { width: 100%; height: 100%; }
+    // 空状态（prototype .empty：无数据 / 无匹配）
+    if root.loading == false && root.n == 0 : EmptyState {
+        width: 100%;
+        height: 100%;
+        icon_name: "";
+        title: root.view == 0 ? @tr("No matching containers")
+            : root.view == 1 ? @tr("No matching images")
+            : root.view == 2 ? @tr("No matching networks")
+            : @tr("No matching volumes");
+        desc: root.view == 0 ? @tr("Try adjusting filters or keywords")
+            : root.view == 1 ? @tr("Pull new image or adjust search")
+            : "";
+    }
+
+    // 容器视图：密集台账（方向 A）
+    if root.loading == false && root.view == 0 && root.n > 0 : LedgerArea {
+        width: 100%;
+        height: 100%;
+        sel_mode <=> root.sel_mode;
+        containers <=> root.containers;
+        summary <=> root.ledger_summary;
+        sort_field <=> root.sort_field;
+        c_select(id) => { root.c_select(id); }
+        c_toggle(id) => { root.c_toggle(id); }
+        c_restart(id) => { root.c_restart(id); }
+        c_logs(id) => { root.c_logs(id); }
+        c_remove(id) => { root.c_remove(id); }
+        c_box(id) => { root.c_box(id); }
+        menu_toggle(id, kind, can_stop, mx, my) => {
+            root.menu_toggle(id, kind, can_stop, mx, my);
+        }
+        sort_pick(f) => { root.sort_pick(f); }
+        tree_toggle(k) => { root.tree_toggle(k); }
+    }
+
+    // 镜像视图：表格列表
+    if root.loading == false && root.view == 1 && root.n > 0 : ImageList {
+        width: 100%;
+        height: 100%;
+        rows <=> root.images;
+        sort_field: Math.mod(root.sort_images, 8);
+        sort_desc: root.sort_images >= 8;
+        sort_pick(f) => { root.sort_images_pick(f); }
+        select(id) => { root.i_select(id); }
+        run(id) => { root.i_run(id); }
+        menu_toggle(id, kind, can_stop, mx, my) => {
+            root.menu_toggle(id, kind, can_stop, mx, my);
+        }
+    }
+
+    // 网络视图：表格列表
+    if root.loading == false && root.view == 2 && root.n > 0 : NetworkList {
+        width: 100%;
+        height: 100%;
+        rows <=> root.networks;
+        sort_field: Math.mod(root.sort_networks, 8);
+        sort_desc: root.sort_networks >= 8;
+        sort_pick(f) => { root.sort_networks_pick(f); }
+        select(id) => { root.n_select(id); }
+    }
+
+    // 卷视图：表格列表
+    if root.loading == false && root.view == 3 && root.n > 0 : VolumeList {
+        width: 100%;
+        height: 100%;
+        rows <=> root.volumes;
+        sort_field: Math.mod(root.sort_volumes, 8);
+        sort_desc: root.sort_volumes >= 8;
+        sort_pick(f) => { root.sort_volumes_pick(f); }
+        select(id) => { root.v_select(id); }
+    }
+}

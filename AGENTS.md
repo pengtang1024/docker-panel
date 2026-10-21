@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.0（Phase 2+ 已交付：**容器密集台账 + 镜像/网络/卷卡片网格** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.4（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
@@ -120,7 +120,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 #### M3（@material）接项目主题（**已实现：`ui/material-theme.slint` + `ui/app.slint`**）
 
-> 目标：`@material` 的 ScrollView / ListView（drawer 日志 + 详情面板）与 std-widgets(fluent) 卡片网格滚动条，
+> 目标：`@material` 的 ScrollView / ListView（drawer 日志 + 详情面板 + 各资源列表）与 std-widgets(fluent) 滚动条，
 > 全部跟随**应用主题**（auto/light/dark）而非 OS 主题，颜色全部由项目 `Theme.*` 令牌派生。
 
 | 坑 | 正确做法 |
@@ -155,10 +155,10 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（33 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar / sub-bar / **main-area（主列表工作区：Compose 侧栏树 + SubBar + BatchBar + CardsArea）**/ **compose-tree（Compose 侧栏树：项目 → 服务两级 + 全部容器 / 独立容器）**/ **cards（资源列表区：容器视图走台账，镜像/网络/卷走卡片网格）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ card-{image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ **compose_scope（侧栏树状态：范围 + 展开集合）**/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例 + compose 范围过滤）,ledger（概览带 + 台账入口）,compose_tree（侧栏树节点）,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
+| `ui/` | Slint 声明层（33 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar / sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（30px 分组带 delegate：项目带 / 服务带，通栏）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
-| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
+| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
 | 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
 
@@ -223,10 +223,11 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 17. **Wayland 必须显式设置 xdg app_id**——`main.rs` 在 `MainWindow::new()` 之后、`ui.run()` 之前调用 `slint::set_xdg_app_id("docker-panel")`（仅当 `WAYLAND_DISPLAY` 存在时）。不设置时 toplevel 没有 app_id（Wayland trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`，**面板坞（Dock）会显示成「未识别程序」、图标退化成通用占位图**。仅在 Wayland 下设置：X11 由 winit 用 argv[0] 回退生成 `WM_CLASS`（class 段 = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致），显式设置反而会让 class 段变空（Slint 固定传 `with_name(app_id, "")`）。
 18. **UI 状态单一写入方——回调写，consumer 禁回写**——用户操作过的 Slint 属性（`sort_field` / `sort_desc` / `filter` / `view`）一律由 UI 回调独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。consumer 的 3s 心跳**只刷数据、不回写这些属性**：它在锁内取快照、锁外才写 UI，期间用户改了条件时回写的就是**旧值**（排序状态与上下箭头偶发对不上、箭头滞后最多 3s）。需要防「锁内建行、锁外应用，期间条件被改」的竞态时用 `AppState::rows_epoch`：排序/筛选/搜索变更时递增，consumer 应用行模型前比对，epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
 19. **TouchArea 命中顺序——热区声明在布局之前**——Slint 按声明顺序做命中测试，后声明的兄弟节点先拿事件。按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，会盖住布局内部自己声明的 TouchArea（死代码：点箭头只会触发外层热区）。统一写法：`StateArea` / TouchArea 在前、内容布局在后（见 `Chip` / `ViewTab` / 排序按钮）；布局里的 `Text` 无 input region，点击会穿透到下面的热区。
-20. **台账列宽必须由父级统一计算后显式下发**——Slint `HorizontalLayout` 先给每个子项「首选宽度」（`Text` = 文本自然宽度），再把剩余空间按 `horizontal-stretch` 分。弹性列（名称 / 镜像）若直接写 `horizontal-stretch: 1`，文本一长列就被撑宽 → CPU / 内存列起点**逐行漂移**，表格失去扫读价值。正确写法：`LedgerArea` 算出 `name_w` / `image_w` 后显式下发给表头与行（`width: root.name_w; horizontal-stretch: 0;`）。响应式隐列（磁盘 / 端口 / 项目）也由父级统一判定，表头与行共用同一组判定。验收用 MCP `get_element_tree` 逐列比对 `absolutePosition.x` 与 `size.width`，不要靠肉眼读截图。详见 [docs/arch/ui-interaction.md](docs/arch/ui-interaction.md) §3.3。
+20. **台账列宽必须由父级统一计算后显式下发**——Slint `HorizontalLayout` 先给每个子项「首选宽度」（`Text` = 文本自然宽度），再把剩余空间按 `horizontal-stretch` 分。弹性列（名称 / 镜像）若直接写 `horizontal-stretch: 1`，文本一长列就被撑宽 → CPU / 内存列起点**逐行漂移**，表格失去扫读价值。正确写法：`LedgerArea` 算出 `name_w` / `image_w` 后显式下发给表头与行（`width: root.name_w; horizontal-stretch: 0;`）。响应式隐列（磁盘 / 端口）也由父级统一判定，表头与行共用同一组判定。验收用 MCP `get_element_tree` 逐列比对 `absolutePosition.x` 与 `size.width`，不要靠肉眼读截图。详见 [docs/arch/ui-interaction.md](docs/arch/ui-interaction.md) §3.3。
 21. **排序基线一律自然升序**——`sort_containers` 各分支的比较器都必须是「小的在前」，`sort_desc` 只负责反向。曾经 CPU / 内存 / 磁盘三列的基线写成降序，导致 `sort_desc=true`（UI 上的 ↓ 箭头）反而从小到大排，与「名称」列和箭头方向全都不一致。
-22. **compose 筛选只有侧栏树一个入口**——`compose_scope`（全部 / 项目 / 服务 / 独立容器）由 `callbacks_compose.rs` 独占写，consumer 只读；筛选栏 chips 只管**状态**维度（全部 / 运行中 / 已停止），其计数取 **compose 范围内的分布**（`ui_rows::scoped_counts`），不能写全量数字（否则台账 5 行而芯片写着「全部 7」）。树节点计数是**绝对值**（不随状态筛选变化），与 Docker Desktop 侧栏一致。
-23. **侧栏树的命中顺序与焦点**——展开箭头的 TouchArea 必须声明在标签 TouchArea **之前**（规范 #19）；树是 @material `ListView`（ScrollView + VerticalLayout 会把多行等比压扁、永不溢出）；侧栏只在容器视图实例化，条件渲染移除焦点元素后要主动 `global-shortcuts.focus()` 归还焦点。
+22. **compose 分组是分组，不是筛选器**——台账内联树（`ui_rows/compose_tree.rs` 产出的分组带 + 容器行）没有「范围筛选」概念：排序字段只决定**组内**顺序，组间按组名稳定排。`compose_collapsed`（**收起的**分组键集合）由 `callbacks_compose.rs` 独占写，consumer 只读；不在集合里 = 展开 → 新分组默认展开。概览带与筛选 chips 的计数一律取**可见容器集合**（实际渲染成行的那些容器），折叠分组后两个数字同步变小。
+23. **分组带的命中顺序与几何**——展开箭头的 TouchArea 必须声明在分组名热区**之前**（规范 #19）；分组带**通栏**（独立 delegate `kind=1/2`，不参与列宽计算）；分组名落在 `44px + depth*18`（箭头 14px + 色点 18px + 间隙），与**同层**容器行的名称列起点逐像素对齐，层级只靠缩进表达；无 Compose 归属的容器直接排在顶层（depth=0），不另设「独立容器」分组带。
+24. **资源列表的排序状态三个视图各自独立**——`ResourceSort { field, desc }`（列下标 + 方向）在 Rust → Slint 之间**打包成一个 int**（低 3 位=列下标，第 3 位=降序标记）；Slint 1.18 不支持 `%` 与 `&` 运算符，解包用 `Math.mod(x, 8)` / `x >= 8`。排序状态只由 `callbacks_sort.rs` 写（规范 #18），consumer 只读。表头方向箭头：左对齐列跟在标签后（不占布局宽度），右对齐列用**覆盖层**放在列左端（值仍右对齐，列起点不漂移）。
 
 ## 构建命令
 
@@ -274,7 +275,8 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 ## 当前已知限制
 
 - **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
-- **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
+- **镜像 / 网络 / 卷行不支持多选批量**（当前只有容器视图支持 CheckBox 多选）
+- **卷的「大小」列在 Docker API ≥1.44 下恒为「—」**：bollard 0.21 的 `SystemDataUsageResponse` 只有 `VolumeUsage` 键，而守护进程 `/system/df?type=volume` 返回的是 `Volumes` 键 → `volume_sizes()` 恒空（**既有缺陷**，与列表化改造无关；要修需自己发裸 HTTP 请求，bollard 无公开 raw API）
 - **断流窗口的日志不补回**：异常断流后以 `tail=0` 从当前时刻接续，断流窗口内产生的日志会丢；要补齐需改用 timestamps + `since` 游标
 - **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
 - **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
@@ -283,6 +285,6 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 ## 文档导航
 
 - [规则配置层](docs/agents-rules.md) — 规则地图、红线约束、四阶段门禁、冲突记录、文档同步规范
-- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、Docker/bollard 坑条）
+- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、列表布局、Docker/bollard 坑条）
 - [Git Flow 规范](docs/git-flow.md)
 - [更新日志](CHANGELOG.md)

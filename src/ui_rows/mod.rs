@@ -5,7 +5,7 @@
 //!
 //!   containers.rs   → 容器台账行（筛选 / 排序 / 归一化比例）
 //!   ledger.rs       → 台账概览带 + 台账入口
-//!   compose_tree.rs → Compose 侧栏树节点（项目 / 服务两级）
+//!   compose_tree.rs → 台账内联树行（项目带 / 服务带 + 容器行的混合列表）
 //!   images.rs       → 镜像卡片行
 //!   netvol.rs       → 网络 / 卷卡片行
 
@@ -15,8 +15,6 @@ mod images;
 mod ledger;
 mod netvol;
 
-pub use compose_tree::build_compose_tree;
-pub use containers::scoped_counts;
 pub use images::build_image_rows;
 pub use ledger::build_container_ledger;
 pub use netvol::{build_network_rows, build_volume_rows};

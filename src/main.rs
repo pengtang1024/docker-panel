@@ -20,7 +20,7 @@ mod callbacks_container;
 mod callbacks_drawer;
 mod callbacks_image;
 mod callbacks_netvol;
-mod compose_scope;
+mod callbacks_sort;
 mod config;
 mod consumer;
 mod detail_fmt;

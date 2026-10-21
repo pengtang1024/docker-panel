@@ -1,0 +1,107 @@
+// ledger-tree-row.slint — 台账内联树的分节带（项目带 / 服务带）
+//
+// 通栏分节：整行浅底 + 左侧 2px 项目色条 + 箭头 + 名称 + 计数。
+// 分节带**不参与列宽计算** → 它上下的容器行列起点不受影响（规范 #20）。
+//
+// ⚠️ 命中顺序铁律（规范 #19）：箭头 TouchArea 必须声明在名称热区**之前**
+//    —— Slint 按声明顺序命中，后声明的兄弟节点先拿事件，反过来箭头点不到。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
+import { LedgerCols } from "ledger-cols.slint";
+import { ContainerRow } from "models.slint";
+
+export component TreeBand inherits Rectangle {
+    in property <ContainerRow> data;
+    /// 展开 / 收起该分组（分组键：project:<项目名> / svc:<项目>/<服务>）
+    callback toggle(string);
+
+    height: 28px;
+    background: Theme.line_2;
+
+    /// 缩进起点（项目带 depth=0，服务带 depth=1）
+    ///
+    /// 箭头占 14px（与状态点列同槽），色点 18px，名称 30px
+    /// → 分组名与**同层容器行**的名称列起点严格对齐（44px + depth*18），
+    /// 层级只靠缩进表达，不靠「分组名比孩子更右」这种半格错位。
+    property <length> band_x: LedgerCols.pad_x + root.data.depth * LedgerCols.indent;
+
+    // 左侧项目色条（2px，通栏分节的标识）
+    Rectangle {
+        x: 0px; width: 2px; height: 28px;
+        background: root.data.compose_color;
+    }
+
+    // —— 展开箭头（声明在名称热区之前）——
+    Rectangle {
+        x: root.band_x;
+        width: 16px; height: 28px;
+        StateArea {
+            layer_color: Theme.ink_3;
+            layer_radius: Theme.r_xs;
+            clicked => { root.toggle(root.data.id); }
+        }
+        Path {
+            width: 10px;
+            height: 10px;
+            commands: root.data.expanded ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6";
+            viewbox-x: 0;
+            viewbox-y: 0;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            stroke: Theme.ink_3;
+            stroke-width: 2px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    // —— 项目色点（服务带不画：颜色由父项目带承载）——
+    Rectangle {
+        x: root.band_x + 18px;
+        y: 10px;
+        width: 8px; height: 8px;
+        border-radius: 4px;
+        background: root.data.compose_color;
+        visible: root.data.kind == 1;
+    }
+
+    // —— 名称 + 计数（点名称 = 展开 / 收起，同箭头）——
+    Rectangle {
+        x: root.band_x + 30px;
+        y: 0px;
+        width: parent.width - self.x - LedgerCols.pad_x;
+        height: 28px;
+        StateArea {
+            layer_color: Theme.ink;
+            layer_radius: Theme.r_xs;
+            clicked => { root.toggle(root.data.id); }
+        }
+        HorizontalLayout {
+            width: 100%;
+            height: 100%;
+            spacing: 8px;
+            cross-axis-alignment: center;
+
+            VCenterText {
+                text: root.data.name;
+                horizontal-stretch: 1;
+                min-width: 0px;
+                font-size: Theme.fs_sm;
+                font-weight: 700;
+                color: Theme.ink;
+                overflow: elide;
+            }
+
+            VCenterText {
+                text: root.data.group_n;
+                font-size: Theme.fs_xs;
+                font-family: Theme.mono;
+                color: Theme.ink_3;
+            }
+        }
+    }
+}

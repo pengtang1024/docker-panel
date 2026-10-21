@@ -268,6 +268,51 @@ pub struct ImageDetail {
     pub volumes: String,       // join(", ")
 }
 
+/// 资源列表（镜像 / 网络 / 卷）的排序状态（**每个视图独立**）
+///
+/// 字段下标的含义随视图而定：
+/// - 镜像：0=名称 1=大小 2=创建时间
+/// - 网络：0=名称 1=driver 2=子网
+/// - 卷：  0=名称 1=大小 2=挂载点
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ResourceSort {
+    /// 排序列下标
+    pub field: u8,
+    /// 是否降序
+    pub desc: bool,
+}
+
+impl ResourceSort {
+    /// 点表头：换列用新列（同方向规则与容器台账一致：默认降序），
+    /// 同列重复点击则翻转方向。
+    pub fn pick(&mut self, field: u8) {
+        self.desc = self.field != field || !self.desc;
+        self.field = field;
+    }
+
+    /// 打包成 UI 传值（低 3 位=列下标，第 3 位=降序标记）
+    pub fn to_ui(self) -> i32 {
+        self.field as i32 + if self.desc { 8 } else { 0 }
+    }
+
+    /// 打包进配置文件（同 to_ui 的编码）
+    pub fn to_config(self) -> i64 {
+        self.to_ui() as i64
+    }
+
+    /// 配置值 → 排序状态（越界回落默认：按名称升序）
+    pub fn from_config(v: i64) -> Self {
+        let field = v & 7;
+        if field > 2 {
+            return Self::default();
+        }
+        Self {
+            field: field as u8,
+            desc: v & 8 != 0,
+        }
+    }
+}
+
 /// 容器列表排序字段——点击表头切换
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortField {

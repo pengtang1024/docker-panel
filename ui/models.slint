@@ -8,6 +8,14 @@ export struct ContainerRow {
     id: string,
     name: string,
     image: string,
+    // —— 内联树行型（0=容器行 1=项目带 2=服务带）——
+    kind: int,
+    /// 层级缩进（0=项目带 1=项目下的容器 / 服务带 2=服务下的容器）
+    depth: int,
+    /// 分组带是否展开（仅 kind>=1 有意义）
+    expanded: bool,
+    /// 分组带的成员数（仅 kind>=1 有意义）
+    group_n: int,
     is_running: bool,
     is_selected: bool,
     /// 需关注（非 0 退出 / dead / paused / restarting）→ 琥珀色状态轨
@@ -75,25 +83,6 @@ export struct VolumeRow {
     mountpoint: string,
     size: string,                 // 来自低频 /system/df；未采样时 "—"
     anonymous: bool,
-}
-
-/// Compose 侧栏树节点（项目 → 服务两级 + 全部容器 / 独立容器）
-///
-/// kind:  0=全部容器 1=项目 2=服务 3=独立容器
-/// depth: 0=项目层 1=服务层
-/// struct 内禁止嵌套数组（本结构全是标量 ✓）
-export struct ComposeNode {
-    kind: int,
-    depth: int,
-    project: string,      // 所属项目（kind=2 时是父项目名；kind=3 为空）
-    service: string,      // 服务名（kind=2）
-    label: string,        // 展示名
-    color: color,         // 项目色（按项目名稳定散列，与原 compose chips 同色）
-    n: int,               // 容器数（绝对值，不随状态筛选变化）
-    expanded: bool,       // 项目是否展开（仅 kind=1 有意义）
-    selected: bool,       // 是否为当前 compose 范围
-    /// 该节点的子树里藏着选中项（项目收起时，提示「筛选在里头」）
-    contains_selected: bool,
 }
 
 // 日志行（虚拟化列表的一行 = 一条日志）

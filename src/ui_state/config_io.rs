@@ -5,9 +5,10 @@
 //!
 //! 纪律：这里只做**字段搬运**，不含任何筛选 / 排序逻辑；越界值一律回落默认值。
 
-use crate::compose_scope::{ComposeScope, ComposeState};
 use crate::config::AppConfig;
-use crate::models::SortField;
+use std::collections::BTreeSet;
+
+use crate::models::{ResourceSort, SortField};
 
 use super::AppState;
 
@@ -20,7 +21,14 @@ pub struct UiConfig {
     pub theme: i64,
     pub log_follow: bool,
     pub query: String,
-    pub compose: ComposeState,
+    /// 台账内联树里**收起**的分组键
+    pub compose_collapsed: BTreeSet<String>,
+    /// 镜像列表排序
+    pub sort_images: ResourceSort,
+    /// 网络列表排序
+    pub sort_networks: ResourceSort,
+    /// 卷列表排序
+    pub sort_volumes: ResourceSort,
 }
 
 /// 读配置
@@ -37,15 +45,11 @@ pub fn load() -> UiConfig {
             theme: c.theme,
             log_follow: c.log_follow,
             query: c.search.clone(),
-            // Compose 侧栏：范围 + 展开集合（越界 / 缺字段回落默认）
-            compose: ComposeState {
-                scope: ComposeScope::from_code(
-                    c.compose_kind,
-                    &c.compose_project,
-                    &c.compose_service,
-                ),
-                expanded: c.compose_expanded.iter().cloned().collect(),
-            },
+            // 内联树：收起的分组（缺字段 = 全展开）
+            compose_collapsed: c.compose_collapsed.iter().cloned().collect(),
+            sort_images: ResourceSort::from_config(c.sort_images),
+            sort_networks: ResourceSort::from_config(c.sort_networks),
+            sort_volumes: ResourceSort::from_config(c.sort_volumes),
         },
         None => UiConfig {
             sort_field: SortField::Group,
@@ -55,14 +59,16 @@ pub fn load() -> UiConfig {
             theme: 0,
             log_follow: true,
             query: String::new(),
-            compose: ComposeState::default(),
+            compose_collapsed: BTreeSet::new(),
+            sort_images: ResourceSort::default(),
+            sort_networks: ResourceSort::default(),
+            sort_volumes: ResourceSort::default(),
         },
     }
 }
 
 /// 把当前 UI 状态写入配置文件（低频回调 / 退出时调用；小文件原子写）
 pub fn save(s: &AppState) {
-    let (compose_kind, compose_project, compose_service) = s.compose.scope.to_code();
     AppConfig {
         theme: s.theme,
         view: s.view,
@@ -71,10 +77,10 @@ pub fn save(s: &AppState) {
         sort_desc: s.sort_desc,
         search: s.container_query.clone(),
         log_follow: s.log_follow,
-        compose_kind,
-        compose_project,
-        compose_service,
-        compose_expanded: s.compose.expanded.iter().cloned().collect(),
+        compose_collapsed: s.compose_collapsed.iter().cloned().collect(),
+        sort_images: s.sort_images.to_config(),
+        sort_networks: s.sort_networks.to_config(),
+        sort_volumes: s.sort_volumes.to_config(),
     }
     .save();
 }

@@ -14,7 +14,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | [arch/threading.md](arch/threading.md) | 线程模型、消息流（Msg 变体 + 流水线）、Rust 回调绑定铁律、Rust 拆分原则 |
 | [arch/ui-interaction.md](arch/ui-interaction.md) | Slint UI 模块交互（交互总图 + 4 种交互模式 + 文件清单）、Slint 拆分原则 |
 | [arch/docker-bollard.md](arch/docker-bollard.md) | Docker 接入约定、bollard 0.21 易踩坑速查（**唯一权威源**） |
-| [arch/compose-tree.md](arch/compose-tree.md) | Compose 侧栏树：形态、状态、筛选语义、落点清单、验收标准 |
+| [arch/list-layout.md](arch/list-layout.md) | 统一列表布局：四个视图的列表形态、台账内联 Compose 树、三个资源列表的表头排序、落点清单、验收标准 |
 
 ## 1. 技术栈（精确版本）
 
@@ -46,9 +46,8 @@ docker-panel/
 │   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流 + 3s 刷新 interval
 │   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 主题监听
 │   │
-│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail
+│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
-│   ├── compose_scope.rs       Compose 侧栏树状态：ComposeScope（全部/项目/服务/独立容器）+ ComposeState（范围 + 展开集合）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
@@ -57,7 +56,7 @@ docker-panel/
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行 + compose 范围过滤 + scoped_counts）/ ledger（概览带 + 台账入口）/ compose_tree（侧栏树节点）/ images / netvol（网络/卷）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -66,7 +65,8 @@ docker-panel/
 │   ├── callbacks_drawer.rs    抽屉 Tab 切换（切到日志 Tab 触发 ensure_follow）
 │   ├── callbacks_image.rs     镜像删除 / 选中（AppActions global）
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
-│   ├── callbacks_compose.rs   Compose 侧栏树回调（选中范围 / 展开收起；compose_scope 与展开集合的唯一写入方）
+│   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起；compose_collapsed 的唯一写入方）
+│   ├── callbacks_sort.rs      三个资源列表的表头排序回调（各自独立状态 + 持久化）
 │   │
 │   └── docker/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
@@ -90,14 +90,17 @@ docker-panel/
     ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
     ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
-    ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
-    ├── cards.slint            资源列表区：容器视图走台账，镜像/网络/卷走卡片网格（含空状态 + 背景点击层）
+    ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
+    ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
     ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
     ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
+    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数，通栏）
     ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
     ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
-    ├── card-image.slint       镜像卡片（运行/删除）
-    ├── card-netvol.slint      网络/卷卡片（共用布局，内建标记 + 容器数）
+    ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
+    ├── network-list.slint     网络表格列表：名称 · driver · 子网（表头可点排序）
+    ├── volume-list.slint      卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
+    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
     ├── skel.slint             骨架屏占位
     ├── foot-bar.slint         底部 8 项资源概览
     ├── batch-bar.slint        批量操作浮动栏
@@ -126,9 +129,11 @@ main.rs
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；
                      子文件依赖是**无环 DAG**：theme.slint 是叶子（所有文件都 import 它），
-                     composition 依赖只向下（cards→ledger/card-*/skel、ledger→ledger-row/ledger-band/ledger-cols、
+                     composition 依赖只向下（list-area→ledger/image-list/network-list/volume-list/skel、
+                     ledger→ledger-row/ledger-tree-row/ledger-band/ledger-cols、
+                     image-list/network-list/volume-list→components-list/models/components、
                      drawer→drawer-*-row、dialogs→components-dialog、material-theme→theme、
-                     main-area→compose-tree/cards/sub-bar/batch-bar、compose-tree→models/components），
+                     main-area→list-area/sub-bar/batch-bar），
                      不存在互相 import / 循环
 ```
 

@@ -41,14 +41,17 @@ pub fn apply_lists(
 /// UI 线程内按当前 AppState 立即重建四个资源列表（搜索/筛选/排序回调的即时反馈）。
 /// 网络/卷不在 3s 定时刷新范围内，不主动重建则过滤永不生效。
 pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
-    // 台账行与概览带同批产出：概览带数字口径 = 当前筛选后的列表
-    let (rows, summary) = crate::ui_rows::build_container_ledger(s);
+    // 台账行与概览带同批产出：概览带数字口径 = 当前**可见**的容器集合
+    let (rows, summary, visible) = crate::ui_rows::build_container_ledger(s);
     let cm = crate::render::containers(rows);
     let im = crate::render::images(crate::ui_rows::build_image_rows(s));
     let nm = crate::render::networks(crate::ui_rows::build_network_rows(s));
     let vm = crate::render::volumes(crate::ui_rows::build_volume_rows(s));
     apply_lists(ui, cm, im, nm, vm);
     ui.set_ledger_summary(summary);
+    // 筛选栏芯片计数：可见容器集合的分布（与台账行数同口径）
+    ui.set_chip_total(visible.0 as i32);
+    ui.set_chip_running(visible.1 as i32);
 }
 
 /// 清空整个日志面板（日志行 + 状态提示）。

@@ -56,7 +56,7 @@ docker-panel/
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -75,7 +75,8 @@ docker-panel/
 │       ├── logs.rs            follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
 │       ├── log_types.rs       日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs           fetch_stats + compute_cpu_delta（双采样 CPU%）
-│       ├── netvol.rs          list_networks + list_volumes
+│       ├── netvol.rs          list_networks + list_volumes + volume_sizes（裸 HTTP 读 Volumes 键）
+│       ├── raw_http.rs        裸 HTTP 请求（Unix socket + chunked 解码；bollard 未建模的接口）
 │       ├── image_details.rs   inspect_image → ImageDetail
 │       ├── container_detail.rs inspect_container + probe_container（存活性探针）
 │       └── system.rs          cleanup prune

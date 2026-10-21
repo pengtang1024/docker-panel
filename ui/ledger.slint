@@ -245,6 +245,11 @@ export component LedgerArea inherits Rectangle {
                     data: row;
                     width: 100%;
                     height: 28px;
+                    // 与容器行同一组列宽 / 显隐 → 带的汇总值与行的数值列严格对齐
+                    name_w: root.name_w;
+                    image_w: root.image_w;
+                    show_disk: root.show_disk;
+                    show_ports: root.show_ports;
                     toggle(k) => { root.tree_toggle(k); }
                 }
             }

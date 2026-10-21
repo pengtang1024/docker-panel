@@ -72,7 +72,7 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `ledger-row.slint` | 217 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
 | `ledger-cols.slint` | 23 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
-| `ledger-tree-row.slint` | 107 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数，通栏） | theme / ledger-cols / models / components-* |
+| `ledger-tree-row.slint` | 124 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
 | `image-list.slint` | 217 | 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序） | theme / components-list / components-interact / models / @material |
 | `network-list.slint` | 157 | 网络表格列表：名称 · driver · 子网（表头可点排序） | theme / components-list / models / @material |
 | `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
@@ -177,10 +177,11 @@ Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有
 
 | 坑 | 正确做法 |
 |----|----------|
-| **分组带一行两个热区**（展开箭头 + 分组名） | 箭头 TouchArea 必须声明在分组名热区**之前**（§3.1 命中顺序铁律）；反过来点箭头只会触发分组名，展开功能变死代码 |
+| **分组带一行两个热区**（展开箭头 + 分组名） | 两个热区**互不重叠**：箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 谁也不抢谁的事件（§3.1 命中顺序铁律） |
 | **分组带通栏，不参与列宽计算** | 分组带是独立 delegate（`kind = 1/2`），不占用台账的列契约；否则「项目名」会被算成一列，表格列起点漂移 |
 | **分组名要与同层容器行的名称列起点对齐** | 箭头占 14px（与状态点列同槽）+ 色点 18px → 分组名落在 `44px + depth*18`，与同层容器行名称列**逐像素对齐**；层级只靠缩进表达，不靠「分组名比孩子更右」的半格错位 |
 | **分组是分组不是筛选器** | 排序字段只决定**组内**顺序，组间按组名稳定排；展开状态存「**收起**的分组键」集合（`project:<名>` / `svc:<项目>/<服务>`），不在集合里 = 展开 → 新分组默认展开 |
+| **分组带要显示资源汇总** | 汇总 = **组内成员之和**（CPU / 内存只算运行中成员，磁盘算全部成员），落在与容器行**同 x** 的 CPU / 内存 / 磁盘列 → 分组带内部必须**镜像 `ledger-row.slint` 的列结构与列宽**（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`）；⚠️ 改一行必须同步改另一行。微条位留空：微条按「单容器最大值」归一，分组是总和，画出来必然满格 |
 
 计数口径：概览带与筛选 chips 都取**可见容器集合**（实际渲染成行的那些容器），
 折叠分组后计数同步变小——三个数字必须同源，否则会出现「台账 3 行但芯片写着全部 9」。

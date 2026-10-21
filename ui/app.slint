@@ -5,20 +5,44 @@ import { Tip, CardMenu } from "components-align.slint";
 import { TipLayer } from "components-interact.slint";
 import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { TopBar } from "top-bar.slint";
-import { SubBar } from "sub-bar.slint";
-import { BatchBar } from "batch-bar.slint";
-import { CardsArea } from "cards.slint";
+import { MainArea } from "main-area.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, ComposeRow, DetailPair, LogRow } from "models.slint";
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, DetailPair, LogRow, LedgerSummary } from "models.slint";
 import { AppActions } from "app-actions.slint";
+import { MaterialTheme } from "material-theme.slint";
+import { MaterialPalette, MaterialSchemes } from "@material";
+import { Palette } from "std-widgets.slint";
 // 再导出：Slint 只把「主文件导出的类型」暴露给 Rust（否则 AppActions 变成内部类型，
 // Rust 侧 ui.global::<AppActions>() 找不到符号）
 export { AppActions }
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
+
+    // —— M3 组件库接项目主题 ——
+    // 1) Palette.color-scheme 跟随应用主题（而不是 OS 主题）：
+    //    @material 的 MaterialPalette 用它选 light/dark 板；std-widgets(fluent) 自己也用它。
+    //    不接管的话，用户在应用里选「浅色」而 OS 是深色时，M3 组件仍按深色渲染。
+    // 2) MaterialPalette.schemes 灌入项目设计令牌映射：
+    //    否则 M3 组件用 M3 默认蓝灰板（primary rgb(68,94,145)），与项目 Theme 不同源。
+    //
+    // ⚠️ Slint 语法：不能直接写 `Palette.color-scheme := ...`（全局属性赋值语句不合法，
+    // 且属性名是 kebab-case）。必须经由本组件属性做双向绑定中转。
+    in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;
+    in-out property <MaterialSchemes> m3_schemes <=> MaterialPalette.schemes;
+    /// 灌 M3 色板：light/dark 两个槽位填同一份映射（项目 Theme 已按 is_dark 解析，
+    /// 真正决定用哪套的是 Palette.color-scheme）
+    callback apply_palette();
+    apply_palette => {
+        root.color_scheme = Theme.is_dark ? ColorScheme.dark : ColorScheme.light;
+        root.m3_schemes = { light: MaterialTheme.scheme, dark: MaterialTheme.scheme };
+    }
+    // ⚠️ Slint 不允许 `changed <全局属性> => {}`，只能盯本组件的属性。
+    //    theme_mode / system_dark 是 Theme.is_dark 的两个输入，任一变化都要重灌色板。
+    changed theme_mode => { root.apply_palette(); }
+    changed system_dark => { root.apply_palette(); }
     // 用 preferred-* 而非 width/height：显式 width/height 会把 min/max 一起钉死
     // → 窗口被锁成固定尺寸、无法缩放拖拽。preferred 只给初始尺寸，min 给下限。
     preferred-width: 1280px;
@@ -31,7 +55,11 @@ export component MainWindow inherits Window {
     // init 里先试一次；Rust 在事件循环启动后置 boot_tick 再兜底一次
     // （testing/winit 后端下 init 阶段焦点可能在窗口 show 时被清掉）
     in-out property <int> boot_tick: 0;
-    init => { global-shortcuts.focus(); }
+    init => {
+        global-shortcuts.focus();
+        // M3 组件库接项目主题：首次灌色板 + 选 light/dark 板
+        root.apply_palette();
+    }
     changed boot_tick => { if root.boot_tick > 0 { global-shortcuts.focus(); } }
 
     // —— 视图与筛选 ——
@@ -71,7 +99,15 @@ export component MainWindow inherits Window {
     in-out property <[VolumeRow]> volume_rows: [];
     // 日志行列表（虚拟化渲染：只实例化视口内的行）
     in-out property <[LogRow]> log_rows: [];
-    in-out property <[ComposeRow]> compose_rows: [];
+    /// 筛选栏芯片计数（**可见容器集合**的容器数 / 运行中数，与台账行数同口径）
+    in-out property <int> chip_total: 0;
+    in-out property <int> chip_running: 0;
+    /// 台账概览带（方向 A）：4 个计数 + CPU TOP4，与容器行同批产出
+    in-out property <LedgerSummary> ledger_summary;
+    // —— 三个资源列表各自的排序（低 3 位=列下标，第 3 位=降序标记）——
+    in-out property <int> sort_images: 0;
+    in-out property <int> sort_networks: 0;
+    in-out property <int> sort_volumes: 0;
 
     // —— 抽屉 ——
     in-out property <bool> drawer_open: false;
@@ -129,7 +165,7 @@ export component MainWindow inherits Window {
                 top-bar.focus_search();
                 accept
             } else if (e.text == Key.Escape) {
-                sub-bar.sort_open = false;
+                main-area.sort_open = false;
                 CardMenu.close();
                 if (root.drawer_open || root.pull_open || root.cleanup_open) {
                     root.drawer_open = false;
@@ -174,45 +210,46 @@ export component MainWindow inherits Window {
                 search(val) => { AppActions.search(val); }
             }
 
-            sub-bar := SubBar {
-                height: Theme.sub_h;
+            // 列表工作区：SubBar + BatchBar + 资源列表区 收在 main-area.slint
+            main-area := MainArea {
+                horizontal-stretch: 1;
+                min-width: 0px;
                 view <=> root.view;
                 filter <=> root.filter;
                 sort_field <=> root.sort_field;
                 sort_desc <=> root.sort_desc;
                 sel_mode <=> root.sel_mode;
-                compose_rows <=> root.compose_rows;
+                loading <=> root.loading;
+                container_rows <=> root.container_rows;
+                image_rows <=> root.image_rows;
+                network_rows <=> root.network_rows;
+                volume_rows <=> root.volume_rows;
+                ledger_summary <=> root.ledger_summary;
+                sort_images <=> root.sort_images;
+                sort_networks <=> root.sort_networks;
+                sort_volumes <=> root.sort_volumes;
                 total_containers <=> root.total_containers;
                 running_containers <=> root.running_containers;
                 total_images <=> root.total_images;
                 total_networks <=> root.total_networks;
                 total_volumes <=> root.total_volumes;
+                batch_count <=> root.batch_count;
+                chip_total <=> root.chip_total;
+                chip_running <=> root.chip_running;
                 set_view(v) => { AppActions.set_view(v); }
                 set_filter(f) => { AppActions.set_filter(f); }
                 set_sort(f) => { AppActions.set_sort(f); }
                 set_sort_dir() => { AppActions.set_sort_dir(); }
+                compose_toggle(k) => { AppActions.compose_toggle(k); }
+                sort_images_pick(f) => { AppActions.sort_images(f); }
+                sort_networks_pick(f) => { AppActions.sort_networks(f); }
+                sort_volumes_pick(f) => { AppActions.sort_volumes(f); }
                 sel_toggle() => { root.sel_mode = root.sel_mode == false; if (root.sel_mode == false) { AppActions.batch_clear(); } }
-            }
-
-            if root.batch_count > 0: BatchBar {
-                height: Theme.batch_h;
-                count <=> root.batch_count;
-                start => { AppActions.batch_start(); }
-                stop => { AppActions.batch_stop(); }
-                restart => { AppActions.batch_restart(); }
-                remove => { AppActions.batch_remove(); }
-                clear => { AppActions.batch_clear(); }
-            }
-
-            CardsArea {
-                vertical-stretch: 1;
-                view <=> root.view;
-                sel_mode <=> root.sel_mode;
-                loading <=> root.loading;
-                containers <=> root.container_rows;
-                images <=> root.image_rows;
-                networks <=> root.network_rows;
-                volumes <=> root.volume_rows;
+                batch_start => { AppActions.batch_start(); }
+                batch_stop => { AppActions.batch_stop(); }
+                batch_restart => { AppActions.batch_restart(); }
+                batch_remove => { AppActions.batch_remove(); }
+                batch_clear => { AppActions.batch_clear(); }
                 c_select(id) => { CardMenu.close(); AppActions.container_select(id); }
                 c_toggle(id) => { AppActions.container_toggle(id); }
                 c_restart(id) => { AppActions.container_restart(id); }
@@ -265,15 +302,15 @@ export component MainWindow inherits Window {
         }
     }
 
-    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在 CardsArea 之后（同层直接子元素），
+    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在列表区之后（同层直接子元素），
     // 否则会被下方卡片区覆盖 / 裁掉 —— 与 prototype 的绝对定位下拉一致
-    if sub-bar.sort_open : SortMenu {
-        x: sub-bar.menu_x;
-        y: sub-bar.menu_y;
+    if main-area.sort_open : SortMenu {
+        x: main-area.menu_x;
+        y: main-area.menu_y;
         height: 170px;
         field: root.sort_field;
         desc: root.sort_desc;
-        pick(f) => { sub-bar.sort_open = false; AppActions.set_sort(f); }
+        pick(f) => { main-area.sort_open = false; AppActions.set_sort(f); }
     }
 
     if CardMenu.id != "" : CardMenuLayer {

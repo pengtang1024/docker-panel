@@ -14,6 +14,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | [arch/threading.md](arch/threading.md) | 线程模型、消息流（Msg 变体 + 流水线）、Rust 回调绑定铁律、Rust 拆分原则 |
 | [arch/ui-interaction.md](arch/ui-interaction.md) | Slint UI 模块交互（交互总图 + 4 种交互模式 + 文件清单）、Slint 拆分原则 |
 | [arch/docker-bollard.md](arch/docker-bollard.md) | Docker 接入约定、bollard 0.21 易踩坑速查（**唯一权威源**） |
+| [arch/list-layout.md](arch/list-layout.md) | 统一列表布局：四个视图的列表形态、台账内联 Compose 树、三个资源列表的表头排序、落点清单、验收标准 |
 
 ## 1. 技术栈（精确版本）
 
@@ -45,16 +46,17 @@ docker-panel/
 │   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流 + 3s 刷新 interval
 │   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 主题监听
 │   │
-│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail
+│   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
+│   ├── ui_state/config_io.rs  AppState ↔ config.json 读写（字段搬运，越界值回落默认；从 ui_state 拆出）
 │   ├── follow_runtime.rs       日志流运行时：建流/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers / images / netvol（网络/卷）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -63,6 +65,8 @@ docker-panel/
 │   ├── callbacks_drawer.rs    抽屉 Tab 切换（切到日志 Tab 触发 ensure_follow）
 │   ├── callbacks_image.rs     镜像删除 / 选中（AppActions global）
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
+│   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起；compose_collapsed 的唯一写入方）
+│   ├── callbacks_sort.rs      三个资源列表的表头排序回调（各自独立状态 + 持久化）
 │   │
 │   └── docker/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
@@ -71,7 +75,8 @@ docker-panel/
 │       ├── logs.rs            follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
 │       ├── log_types.rs       日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs           fetch_stats + compute_cpu_delta（双采样 CPU%）
-│       ├── netvol.rs          list_networks + list_volumes
+│       ├── netvol.rs          list_networks + list_volumes + volume_sizes（裸 HTTP 读 Volumes 键）
+│       ├── raw_http.rs        裸 HTTP 请求（Unix socket + chunked 解码；bollard 未建模的接口）
 │       ├── image_details.rs   inspect_image → ImageDetail
 │       ├── container_detail.rs inspect_container + probe_container（存活性探针）
 │       └── system.rs          cleanup prune
@@ -79,23 +84,33 @@ docker-panel/
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   gettext 翻译（编译期嵌入）
 │
-└── ui/                        Slint 层（所有 ≤ 300 行）
-    ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
-    ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态
-    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow struct
+└── ui/                        Slint 层（正文均 ≤ 300 行）
+    ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装 + M3 色板接线
+    ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
+    ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态（is_dark 为 out）
+    ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
+    ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
-    ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs
-    ├── cards.slint             卡片网格容器（四种视图共用，含空状态 + 背景点击层）
-    ├── card-container.slint    容器卡片（多选勾选 + 启停/重启/日志）
-    ├── card-image.slint        镜像卡片（运行/删除）
-    ├── card-netvol.slint       网络/卷卡片（共用布局，内建标记 + 容器数）
-    ├── foot-bar.slint          底部 8 项资源概览
-    ├── batch-bar.slint         批量操作浮动栏
-    ├── drawer.slint            右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
-    ├── drawer-log-row.slint    日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
-    ├── dialogs.slint           PullDialog + CleanupDialog 弹窗
-    ├── menu-layers.slint       浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
-    └── components.slint        IconBtn / Dot / CheckCell / MenuItem / Dropdown / TipLayer 等原子组件
+    ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
+    ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
+    ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
+    ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
+    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏）
+    ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
+    ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
+    ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
+    ├── network-list.slint     网络表格列表：名称 · driver · 子网（表头可点排序）
+    ├── volume-list.slint      卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
+    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
+    ├── skel.slint             骨架屏占位
+    ├── foot-bar.slint         底部 8 项资源概览
+    ├── batch-bar.slint        批量操作浮动栏
+    ├── drawer.slint           右侧抽屉：详情/日志/环境 三 Tab（四种资源共用，滚动容器用 @material ScrollView+ListView）
+    ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）
+    ├── drawer-log-row.slint   日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
+    ├── dialogs.slint          PullDialog + CleanupDialog 弹窗（继承 DialogShell）
+    ├── menu-layers.slint      浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
+    └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```
 
 ### 依赖方向（严格单向，无循环）
@@ -113,8 +128,14 @@ main.rs
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
-ui/*.slint           app.slint 是唯一组装入口，import 其余子文件，
-                     子文件之间不互相 import（避免 Slint 跨文件 global 兼容性坑）
+ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；
+                     子文件依赖是**无环 DAG**：theme.slint 是叶子（所有文件都 import 它），
+                     composition 依赖只向下（list-area→ledger/image-list/network-list/volume-list/skel、
+                     ledger→ledger-row/ledger-tree-row/ledger-band/ledger-cols、
+                     image-list/network-list/volume-list→components-list/models/components、
+                     drawer→drawer-*-row、dialogs→components-dialog、material-theme→theme、
+                     main-area→list-area/sub-bar/batch-bar），
+                     不存在互相 import / 循环
 ```
 
 ## 3. 文件规范

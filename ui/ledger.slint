@@ -1,0 +1,258 @@
+// ledger.slint — 密集台账区（方向 A）
+//
+// 结构：概览带（固定）→ 表头（固定）→ 虚拟化行列表（滚动）
+// 概览带与表头都在滚动区之外 → 表头天然 sticky，不需要自定义滚动联动。
+//
+// 列起点固定是台账的核心价值，所以表头与行必须用同一套列宽（ledger-cols.slint），
+// 且两者的内容宽度必须完全一致（表头右侧额外让出滚动条槽 8px）。
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { CardMenu } from "components-align.slint";
+import { LedgerCols } from "ledger-cols.slint";
+import { ContainerRow, LedgerSummary } from "models.slint";
+import { LedgerBand } from "ledger-band.slint";
+import { LedgerRow } from "ledger-row.slint";
+import { TreeBand } from "ledger-tree-row.slint";
+import { ListView } from "@material";
+
+// ============ 表头单元格（可点击排序的列用）============
+component HeadCell inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> right: false;
+    in property <bool> active: false;
+    in property <length> cell_w: 60px;
+    callback picked();
+
+    width: root.cell_w; height: 100%;
+    // 热区先声明：Slint 按声明顺序命中，后声明的兄弟先拿事件；
+    // 这里的布局只含 Text（无输入区），点击会穿透到热区
+    area := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.picked(); }
+    }
+    background: area.has-hover ? Theme.line_2 : transparent;
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        if root.right : RightText {
+            text: root.text;
+            horizontal-stretch: 1; min-width: 0px;
+            font-size: Theme.fs_xs;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? Theme.ink : Theme.ink_3;
+        }
+        if root.right == false : VCenterText {
+            text: root.text;
+            horizontal-stretch: 1; min-width: 0px;
+            font-size: Theme.fs_xs;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? Theme.ink : Theme.ink_3;
+        }
+    }
+}
+
+export component LedgerArea inherits Rectangle {
+    in-out property <bool> sel_mode: false;
+    in-out property <[ContainerRow]> containers: [];
+    in-out property <LedgerSummary> summary;
+    /// 当前排序列（0=名称 1=CPU 2=内存 3=磁盘），与 AppActions.set_sort 的下标一致
+    in-out property <int> sort_field: 0;
+
+    callback c_select(string);
+    callback c_toggle(string);
+    callback c_restart(string);
+    callback c_logs(string);
+    callback c_remove(string);
+    callback c_box(string);
+    callback menu_toggle(string, int, bool, length, length);
+    callback sort_pick(int);
+    /// 内联树分组展开 / 收起（分组键）
+    callback tree_toggle(string);
+
+    // 响应式列显隐：表头与行共用同一判定 → 列起点始终一致
+    property <bool> show_disk: root.width >= 1000px;
+    property <bool> show_ports: root.width >= 1150px;
+
+    // —— 列宽契约（由本层统一算好后下发给表头与行）——
+    //
+    // ⚠️ 关键：弹性列（名称 / 镜像）的宽度**不能**交给 Slint 布局按文本长度分配。
+    // 布局先给每个子项「首选宽度」（= 文本自然宽度），再把剩余空间按 stretch 比例分；
+    // 文本一长，弹性列就被撑宽 → CPU / 内存列的起点逐行漂移 → 沿列扫读直接失效。
+    // 所以这里显式算好两个弹性列的宽度，表头与行都用同一组数字 → 列起点严格对齐。
+    //
+    // content_w = 行列表视口宽（区域宽 - 滚动条槽）- 左右内边距
+    property <length> content_w: root.width - LedgerCols.scrollbar_slot - LedgerCols.pad_x * 2;
+    /// 固定列总宽（不含名称 / 镜像两个弹性列）
+    property <length> fixed_w: LedgerCols.dot_w + LedgerCols.cpu_bar_w + LedgerCols.cpu_val_w
+        + LedgerCols.mem_bar_w + LedgerCols.mem_val_w + LedgerCols.act_w
+        + (root.show_disk ? LedgerCols.disk_w : 0px)
+        + (root.show_ports ? LedgerCols.ports_w : 0px);
+    /// 列数（间距总数 = 列数 - 1）
+    property <int> col_cnt: 7
+        + (root.show_disk ? 1 : 0)
+        + (root.show_ports ? 1 : 0);
+    property <length> gaps_w: (root.col_cnt - 1) * LedgerCols.gap;
+    /// 剩余宽度由名称 / 镜像两列平分
+    property <length> name_w: (root.content_w - root.fixed_w - root.gaps_w) / 2;
+    property <length> image_w: (root.content_w - root.fixed_w - root.gaps_w) / 2;
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        // 概览带
+        LedgerBand {
+            data: root.summary;
+            vertical-stretch: 0;
+        }
+
+        // 表头（固定在滚动区之外 → 天然 sticky）
+        Rectangle {
+            vertical-stretch: 0;
+            height: 28px;
+            background: Theme.bg;
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%; height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: LedgerCols.gap;
+                padding-left: LedgerCols.pad_x;
+                // 右侧多让出滚动条槽：行在滚动区内（宽 = 区域宽 - 8px），
+                // 表头在滚动区外，两边内容宽度必须一致，否则列起点错位
+                padding-right: LedgerCols.pad_x + LedgerCols.scrollbar_slot;
+                cross-axis-alignment: center;
+
+                // 状态点列占位
+                Rectangle { width: LedgerCols.dot_w; height: 1px; }
+
+                // 容器（可点击排序）
+                Rectangle {
+                    width: root.name_w; height: 100%;
+                    area := TouchArea {
+                        width: 100%; height: 100%;
+                        clicked => { root.sort_pick(0); }
+                    }
+                    background: area.has-hover ? Theme.line_2 : transparent;
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        VCenterText {
+                            text: @tr("Containers");
+                            horizontal-stretch: 1; min-width: 0px;
+                            font-size: Theme.fs_xs;
+                            font-weight: root.sort_field == 0 ? 700 : 500;
+                            color: root.sort_field == 0 ? Theme.ink : Theme.ink_3;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // CPU 条占位 + CPU（可点击排序）
+                Rectangle { width: LedgerCols.cpu_bar_w; height: 1px; }
+                HeadCell {
+                    text: "CPU"; right: true;
+                    cell_w: LedgerCols.cpu_val_w;
+                    active: root.sort_field == 1;
+                    picked => { root.sort_pick(1); }
+                }
+
+                // 内存条占位 + 内存（可点击排序）
+                Rectangle { width: LedgerCols.mem_bar_w; height: 1px; }
+                HeadCell {
+                    text: @tr("Memory"); right: true;
+                    cell_w: LedgerCols.mem_val_w;
+                    active: root.sort_field == 2;
+                    picked => { root.sort_pick(2); }
+                }
+
+                // 磁盘（可点击排序）
+                if root.show_disk : HeadCell {
+                    text: @tr("Disk"); right: true;
+                    cell_w: LedgerCols.disk_w;
+                    active: root.sort_field == 3;
+                    picked => { root.sort_pick(3); }
+                }
+
+                // 镜像
+                Rectangle {
+                    width: root.image_w; height: 100%;
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        VCenterText {
+                            text: @tr("Image");
+                            horizontal-stretch: 1; min-width: 0px;
+                            font-size: Theme.fs_xs; color: Theme.ink_3;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // 端口
+                if root.show_ports : Rectangle {
+                    width: LedgerCols.ports_w; height: 100%;
+                    HorizontalLayout {
+                        width: 100%; height: 100%;
+                        VCenterText {
+                            text: @tr("Ports");
+                            horizontal-stretch: 1; min-width: 0px;
+                            font-size: Theme.fs_xs; color: Theme.ink_3;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // 操作列占位
+                Rectangle { width: LedgerCols.act_w; height: 1px; }
+            }
+        }
+
+        // 行列表（虚拟化：只渲染视口内的行）
+        list := ListView {
+            vertical-stretch: 1;
+            width: 100%;
+            vertical-scrollbar-policy: as-needed;
+            horizontal-scrollbar-policy: always-off;
+            // 锁死横向 viewport：行是定宽表格，不允许横向拖拽
+            content_width: self.visible_width;
+            mouse_drag_pan_enabled: false;
+            // 行模型是**混合列表**：kind=0 容器行 / kind>=1 分节带（项目 / 服务）
+            // 分节带通栏，不参与列宽计算 → 容器行的列起点不受影响
+            for row[i] in root.containers : Rectangle {
+                width: 100%;
+                height: row.kind == 0 ? 30px : 28px;
+                if row.kind == 0 : LedgerRow {
+                    data: row;
+                    width: 100%;
+                    height: 30px;
+                    sel_mode: root.sel_mode;
+                    menu_open: CardMenu.id == row.id;
+                    name_w: root.name_w;
+                    image_w: root.image_w;
+                    show_disk: root.show_disk;
+                    show_ports: root.show_ports;
+                    select(id) => { root.c_select(id); }
+                    toggle(id) => { root.c_toggle(id); }
+                    restart(id) => { root.c_restart(id); }
+                    logs(id) => { root.c_logs(id); }
+                    box(id) => { root.c_box(id); }
+                    menu_toggle(id, kind, can_stop, mx, my) => {
+                        root.menu_toggle(id, kind, can_stop, mx, my);
+                    }
+                }
+                if row.kind > 0 : TreeBand {
+                    data: row;
+                    width: 100%;
+                    height: 28px;
+                    // 与容器行同一组列宽 / 显隐 → 带的汇总值与行的数值列严格对齐
+                    name_w: root.name_w;
+                    image_w: root.image_w;
+                    show_disk: root.show_disk;
+                    show_ports: root.show_ports;
+                    toggle(k) => { root.tree_toggle(k); }
+                }
+            }
+        }
+    }
+}

@@ -15,10 +15,12 @@
 mod batch;
 mod bootstrap;
 mod callbacks;
+mod callbacks_compose;
 mod callbacks_container;
 mod callbacks_drawer;
 mod callbacks_image;
 mod callbacks_netvol;
+mod callbacks_sort;
 mod config;
 mod consumer;
 mod detail_fmt;

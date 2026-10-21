@@ -82,6 +82,26 @@ impl ContainerInfo {
             self.mem_usage as f64 / self.mem_limit as f64 * 100.0
         }
     }
+
+    /// 是否「需关注」：非正常退出 / 挂死 / 暂停 / 反复重启
+    ///
+    /// 判定依据只用 `list_containers` 就有的字段（state + status 文本），
+    /// 不额外发 inspect 请求——43 个容器逐个 inspect 的代价无法接受。
+    /// Docker 的 status 形如 "Exited (137) 5 minutes ago"，退出码非 0 即异常。
+    pub fn needs_attention(&self) -> bool {
+        match self.state.as_str() {
+            "dead" | "paused" | "restarting" | "removing" => true,
+            "exited" => {
+                let code = self
+                    .status
+                    .strip_prefix("Exited (")
+                    .and_then(|s| s.split(')').next())
+                    .and_then(|s| s.trim().parse::<i32>().ok());
+                matches!(code, Some(c) if c != 0)
+            }
+            _ => false,
+        }
+    }
 }
 
 /// 镜像信息（卡片一行的数据）
@@ -246,6 +266,51 @@ pub struct ImageDetail {
     pub env: String,           // join("\n") 多行 KEY=VALUE
     pub exposed_ports: String, // join(", ")
     pub volumes: String,       // join(", ")
+}
+
+/// 资源列表（镜像 / 网络 / 卷）的排序状态（**每个视图独立**）
+///
+/// 字段下标的含义随视图而定：
+/// - 镜像：0=名称 1=大小 2=创建时间
+/// - 网络：0=名称 1=driver 2=子网
+/// - 卷：  0=名称 1=大小 2=挂载点
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ResourceSort {
+    /// 排序列下标
+    pub field: u8,
+    /// 是否降序
+    pub desc: bool,
+}
+
+impl ResourceSort {
+    /// 点表头：换列用新列（同方向规则与容器台账一致：默认降序），
+    /// 同列重复点击则翻转方向。
+    pub fn pick(&mut self, field: u8) {
+        self.desc = self.field != field || !self.desc;
+        self.field = field;
+    }
+
+    /// 打包成 UI 传值（低 3 位=列下标，第 3 位=降序标记）
+    pub fn to_ui(self) -> i32 {
+        self.field as i32 + if self.desc { 8 } else { 0 }
+    }
+
+    /// 打包进配置文件（同 to_ui 的编码）
+    pub fn to_config(self) -> i64 {
+        self.to_ui() as i64
+    }
+
+    /// 配置值 → 排序状态（越界回落默认：按名称升序）
+    pub fn from_config(v: i64) -> Self {
+        let field = v & 7;
+        if field > 2 {
+            return Self::default();
+        }
+        Self {
+            field: field as u8,
+            desc: v & 8 != 0,
+        }
+    }
 }
 
 /// 容器列表排序字段——点击表头切换

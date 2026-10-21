@@ -6,7 +6,7 @@
 //!   → consumer 的 recv() 永远不阻塞主线程拿 state 锁
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -20,10 +20,12 @@ use crate::docker::{
     ContainerStatsSnapshot,
 };
 use crate::models::{
-    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, SortField, VolumeInfo,
+    ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, ResourceSort, SortField,
+    VolumeInfo,
 };
 
 /// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
+pub mod config_io;
 pub mod log_sync;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
 
@@ -117,6 +119,19 @@ pub struct AppState {
     /// 日志自动跟随
     pub log_follow: bool,
     pub batch: BatchState,
+    /// 台账内联树：**收起**的分组键集合
+    ///
+    /// 键格式：`project:<项目名>` / `svc:<项目名>/<服务名>`。
+    /// 存「收起」而不是「展开」——新出现的分组默认展开（集合里没有 = 展开）。
+    ///
+    /// 用户操作过的状态 —— 只由 UI 回调写，consumer 只读。
+    pub compose_collapsed: BTreeSet<String>,
+    /// 镜像列表排序（0=名称 1=大小 2=创建时间）
+    pub sort_images: ResourceSort,
+    /// 网络列表排序（0=名称 1=driver 2=子网）
+    pub sort_networks: ResourceSort,
+    /// 卷列表排序（0=名称 1=大小 2=挂载点）
+    pub sort_volumes: ResourceSort,
 }
 
 impl AppState {
@@ -128,27 +143,18 @@ impl AppState {
             .expect("tokio runtime");
 
         // 首次启动（无配置文件）用内置默认；之后以配置文件为准
-        let (sort_field, sort_desc, filter, view, theme, log_follow, query) =
-            match crate::config::AppConfig::load() {
-                Some(c) => (
-                    SortField::from_config_index(c.sort_field),
-                    c.sort_desc,
-                    c.filter,
-                    c.view,
-                    c.theme,
-                    c.log_follow,
-                    c.search,
-                ),
-                None => (
-                    SortField::Group,
-                    false,
-                    "all".into(),
-                    0,
-                    0,
-                    true,
-                    String::new(),
-                ),
-            };
+        let cfg = config_io::load();
+        let sort_field = cfg.sort_field;
+        let sort_desc = cfg.sort_desc;
+        let filter = cfg.filter;
+        let view = cfg.view;
+        let theme = cfg.theme;
+        let log_follow = cfg.log_follow;
+        let query = cfg.query.clone();
+        let compose_collapsed = cfg.compose_collapsed;
+        let sort_images = cfg.sort_images;
+        let sort_networks = cfg.sort_networks;
+        let sort_volumes = cfg.sort_volumes;
 
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self {
@@ -189,22 +195,17 @@ impl AppState {
             theme,
             log_follow,
             batch: BatchState::default(),
+            compose_collapsed,
+            sort_images,
+            sort_networks,
+            sort_volumes,
         }));
         (state, rx)
     }
 
     /// 把当前 UI 状态写入配置文件（低频回调/退出时调用；小文件原子写）
     pub fn persist(&self) {
-        crate::config::AppConfig {
-            theme: self.theme,
-            view: self.view,
-            filter: self.filter.clone(),
-            sort_field: self.sort_field.to_config_index(),
-            sort_desc: self.sort_desc,
-            search: self.container_query.clone(),
-            log_follow: self.log_follow,
-        }
-        .save();
+        config_io::save(self);
     }
 
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。

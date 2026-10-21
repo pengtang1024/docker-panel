@@ -66,6 +66,16 @@ msgstr "网络"
 msgid "Volumes"
 msgstr "卷"
 
+# ===== 台账（方向 A）=====
+msgid "Needs attention"
+msgstr "需关注"
+
+msgid "CPU TOP"
+msgstr "CPU 占用 TOP"
+
+msgid "Project"
+msgstr "项目"
+
 # ===== 卡片 =====
 msgid "{0} in use"
 msgstr "{0} 个在用"
@@ -290,10 +300,6 @@ msgstr "请输入镜像名"
 msgid "Select at least one item"
 msgstr "请至少勾选一项"
 
-# ===== Rust 动态：分组 =====
-msgid "Standalone"
-msgstr "独立容器"
-
 # ===== Rust 动态：Docker 层错误/结果 =====
 msgid "inspect container failed: {0}"
 msgstr "inspect 容器失败：{0}"
@@ -304,8 +310,11 @@ msgstr "停止的容器：删除 {0} 个，释放 {1}"
 msgid "Dangling images: removed {0}, freed {1}"
 msgstr "悬空镜像：删除 {0} 项，释放 {1}"
 
-msgid "Unused images: removed {0}, freed {1}"
-msgstr "未使用镜像：删除 {0} 项，释放 {1}"
+msgid "Unused networks: removed {0}"
+msgstr "未使用的网络：删除 {0} 项"
+
+msgid "Unused volumes: removed {0}, freed {1}"
+msgstr "未使用的卷：删除 {0} 项，释放 {1}"
 
 msgid "Cleanup stopped containers failed: {0}"
 msgstr "清理停止容器失败：{0}"
@@ -313,8 +322,11 @@ msgstr "清理停止容器失败：{0}"
 msgid "Cleanup dangling images failed: {0}"
 msgstr "清理悬空镜像失败：{0}"
 
-msgid "Cleanup unused images failed: {0}"
-msgstr "清理未使用镜像失败：{0}"
+msgid "Cleanup unused networks failed: {0}"
+msgstr "清理未使用网络失败：{0}"
+
+msgid "Cleanup unused volumes failed: {0}"
+msgstr "清理未使用卷失败：{0}"
 
 msgid "Nothing to clean up"
 msgstr "没有可清理的内容"
@@ -361,6 +373,9 @@ msgstr "网络列表失败：{0}"
 
 msgid "Failed to list volumes: {0}"
 msgstr "卷列表失败：{0}"
+
+msgid "Failed to read volume sizes: {0}"
+msgstr "读取卷占用失败：{0}"
 
 msgid "Empty stats response"
 msgstr "stats 空响应"

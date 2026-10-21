@@ -1,0 +1,107 @@
+// components-list.slint — 资源列表共用基件（表头单元格 + 列宽契约）
+//
+// 四个列表（容器台账 / 镜像 / 网络 / 卷）共用同一套表头单元格：
+//   - 命中顺序铁律（规范 #19）：热区先声明、内容布局在后 —— 布局里的 Text 没有
+//     输入区，点击会穿透到热区；反过来热区会被布局内元素盖住。
+//   - 列起点固定是表格的核心价值：表头与行必须用同一组列宽（由各列表统一下发）。
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+
+/// 列表列宽契约（表头与行共用的几何真相源）
+export global ListCols {
+    out property <length> gap: 12px;      // 列间距
+    out property <length> pad_x: 14px;    // 左右内边距
+    out property <length> scrollbar_slot: 8px; // 滚动条槽（表头在滚动区外，要额外让出）
+    out property <length> row_h: 30px;    // 行高
+    out property <length> head_h: 28px;   // 表头行高
+}
+
+/// 表头单元格（可点击排序）
+export component ListHeadCell inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> right: false;
+    in property <bool> active: false;
+    /// 是否降序（配合 show_arrow 画方向箭头）
+    in property <bool> desc: false;
+    /// 是否画排序方向箭头（容器台账的方向在筛选栏按钮上，故不画）
+    in property <bool> show_arrow: false;
+    in property <length> cell_w: 60px;
+    callback picked();
+
+    width: root.cell_w; height: 100%;
+    // 热区先声明：Slint 按声明顺序命中，后声明的兄弟先拿事件；
+    // 这里的布局只含 Text（无输入区），点击会穿透到热区
+    area := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.picked(); }
+    }
+    background: area.has-hover ? Theme.line_2 : transparent;
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 4px;
+        // ⚠️ 必须显式 center：布局默认把子元素顶到上沿，
+        //    方向箭头（10px 方块）会浮在标签上方而不是与文字同轴
+        cross-axis-alignment: center;
+        // —— 左对齐列：标签在前，方向箭头紧随其后 ——
+        //    箭头不占布局宽度以外的格子 → 列起点不受影响
+        if root.right == false : VCenterText {
+            text: root.text;
+            horizontal-stretch: 0; min-width: 0px;
+            font-size: Theme.fs_xs;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? Theme.ink : Theme.ink_3;
+            overflow: elide;
+        }
+        if root.right == false && root.active && root.show_arrow : Rectangle {
+            width: 10px; height: 10px;
+            Path {
+                width: 9px; height: 9px;
+                commands: root.desc
+                    ? "M12 5v14 M5 12l7 7 7-7"
+                    : "M12 19V5 M5 12l7-7 7 7";
+                viewbox-x: 0; viewbox-y: 0;
+                viewbox-width: 24; viewbox-height: 24;
+                stroke: Theme.ink_3;
+                stroke-width: 2px;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                fill: transparent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        // —— 右对齐列：值右对齐，方向箭头用**覆盖层**放在列左端 ——
+        //    箭头不参与布局 → 值的右边缘仍与行内数值严格对齐（规范 #20）
+        if root.right : RightText {
+            text: root.text;
+            horizontal-stretch: 0;
+            font-size: Theme.fs_xs;
+            font-weight: root.active ? 700 : 500;
+            color: root.active ? Theme.ink : Theme.ink_3;
+        }
+    }
+
+    // 右对齐列的排序方向箭头（覆盖层：绝对定位，不影响布局与对齐）
+    if root.right && root.active && root.show_arrow : Rectangle {
+        x: 0px;
+        y: (parent.height - self.height) / 2;
+        width: 10px; height: 10px;
+        Path {
+            width: 9px; height: 9px;
+            commands: root.desc
+                ? "M12 5v14 M5 12l7 7 7-7"
+                : "M12 19V5 M5 12l7-7 7 7";
+            viewbox-x: 0; viewbox-y: 0;
+            viewbox-width: 24; viewbox-height: 24;
+            stroke: Theme.ink_3;
+            stroke-width: 2px;
+            stroke-line-cap: round;
+            stroke-line-join: round;
+            fill: transparent;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+}

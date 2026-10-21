@@ -1,0 +1,176 @@
+// ledger-tree-row.slint — 台账内联树的分节带（项目带 / 服务带，28px）
+//
+// 通栏分节：整行浅底 + 左侧 2px 项目色条 + 箭头 + 名称 + 计数 + 资源汇总。
+//
+// ⚠️ 列契约（规范 #20）：带虽然**通栏**（不参与列宽计算），但带内的**资源汇总值
+//    必须落在台账的 CPU / 内存 / 磁盘 列上**（与容器行同 x），否则数字对不上号。
+//    所以这里**镜像 ledger-row.slint 的列结构与列宽**：同一套 LedgerCols 契约 +
+//    父级下发的同一组 name_w / image_w / show_disk / show_ports。
+//    ⚠️ 改 ledger-row.slint 的列结构时**必须同步改这里**，否则带与行的列起点错位。
+//
+// ⚠️ 微条**两套刻度**：行按「视图内最大的单容器」归一，本行（分组带）按
+//    「各分组总和的最大值」归一。行与分组是两种量纲（个体 / 聚合），
+//    共用一个刻度会失真：分组的和 ≥ 组内任一成员 → 分组总和恒为列最大值，
+//    分组带永远满格、成员的条被压掉一半分辨率。跨量纲比大小请看数字。
+//
+// ⚠️ 命中顺序铁律（规范 #19）：箭头的 TouchArea 与名称热区**不重叠**
+//    （箭头在状态点列内按 depth 缩进，名称热区从名称起点开始），互不抢事件。
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { StateArea } from "components-state.slint";
+import { MicroBar } from "components-chip.slint";
+import { LedgerCols } from "ledger-cols.slint";
+import { ContainerRow } from "models.slint";
+
+export component TreeBand inherits Rectangle {
+    in property <ContainerRow> data;
+    /// 名称 / 镜像两列的宽度（由 LedgerArea 统一算好下发，与表头、容器行同一组）
+    in property <length> name_w: 200px;
+    in property <length> image_w: 200px;
+    // 响应式列显隐（父级统一判定，保证表头 / 行 / 带三者列起点一致）
+    in property <bool> show_disk: true;
+    in property <bool> show_ports: true;
+    /// 展开 / 收起该分组（分组键：project:<项目名> / svc:<项目>/<服务>）
+    callback toggle(string);
+
+    height: 28px;
+    background: Theme.line_2;
+
+    // 左侧项目色条（2px，通栏分节的标识）
+    Rectangle {
+        x: 0px; width: 2px; height: 28px;
+        background: root.data.compose_color;
+    }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: LedgerCols.gap;
+        padding-left: LedgerCols.pad_x; padding-right: LedgerCols.pad_x;
+        cross-axis-alignment: center;
+
+        // 状态点列：展开箭头（按 depth 缩进，箭头占 16px）
+        Rectangle {
+            width: LedgerCols.dot_w; height: 100%;
+            Rectangle {
+                x: root.data.depth * LedgerCols.indent;
+                width: 16px; height: 28px;
+                StateArea {
+                    layer_color: Theme.ink_3;
+                    layer_radius: Theme.r_xs;
+                    clicked => { root.toggle(root.data.id); }
+                }
+                Path {
+                    width: 10px;
+                    height: 10px;
+                    commands: root.data.expanded ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6";
+                    viewbox-x: 0;
+                    viewbox-y: 0;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    stroke: Theme.ink_3;
+                    stroke-width: 2px;
+                    stroke-line-cap: round;
+                    stroke-line-join: round;
+                    fill: transparent;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+        }
+
+        // 名称列：项目色点 + 分组名
+        Rectangle {
+            width: root.name_w; height: 100%;
+            horizontal-stretch: 0;
+            // 项目色点：紧贴名称左侧 4px（depth=0 时正好落在列间隙里）
+            Rectangle {
+                x: root.data.depth * LedgerCols.indent - 12px;
+                y: 10px; width: 8px; height: 8px;
+                border-radius: 4px;
+                background: root.data.compose_color;
+                visible: root.data.kind == 1;
+            }
+            // 名称 + 热区（热区只覆盖名称本体 → 不会抢箭头的点击区）
+            Rectangle {
+                x: root.data.depth * LedgerCols.indent;
+                width: root.name_w - root.data.depth * LedgerCols.indent;
+                height: 100%;
+                StateArea {
+                    layer_color: Theme.ink;
+                    layer_radius: Theme.r_xs;
+                    clicked => { root.toggle(root.data.id); }
+                }
+                VCenterText {
+                    width: 100%; height: 100%;
+                    text: root.data.name;
+                    font-size: Theme.fs_sm; font-weight: 700;
+                    color: Theme.ink;
+                    overflow: elide;
+                }
+            }
+        }
+
+        // CPU 微条（分组带用**自己的基准**：各分组总和的最大值）
+        MicroBar {
+            bar_w: LedgerCols.cpu_bar_w;
+            ratio: root.data.cpu_ratio;
+            fill: Theme.bar_cpu;
+        }
+        // CPU 汇总
+        RightText {
+            text: root.data.cpu_text;
+            width: LedgerCols.cpu_val_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 内存微条（同上，基准 = 各分组内存总和的最大值）
+        MicroBar {
+            bar_w: LedgerCols.mem_bar_w;
+            ratio: root.data.mem_ratio;
+            fill: Theme.bar_mem;
+        }
+        // 内存汇总
+        RightText {
+            text: root.data.mem_text;
+            width: LedgerCols.mem_val_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 磁盘汇总
+        if root.show_disk : RightText {
+            text: root.data.disk;
+            width: LedgerCols.disk_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink_2;
+            overflow: elide;
+        }
+
+        // 镜像 / 端口列：分组无对应值（留空保持列起点）
+        Rectangle { width: root.image_w; height: 1px; horizontal-stretch: 0; }
+        if root.show_ports : Rectangle { width: LedgerCols.ports_w; height: 1px; horizontal-stretch: 0; }
+
+        // 操作列：容器计数（右对齐，与容器行的操作区同一起点）
+        Rectangle {
+            width: LedgerCols.act_w; height: 22px;
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 2px;
+                cross-axis-alignment: center;
+                Rectangle { horizontal-stretch: 1; }
+                VCenterText {
+                    text: root.data.group_n;
+                    font-size: Theme.fs_xs;
+                    font-family: Theme.mono;
+                    color: Theme.ink_3;
+                }
+            }
+        }
+    }
+}

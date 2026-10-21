@@ -16,9 +16,7 @@ use std::rc::Rc;
 
 use slint::{Model, ModelRc, VecModel};
 
-use crate::slint_gen::{
-    ComposeRow, ContainerRow, DetailPair, ImageRow, LogRow, NetworkRow, VolumeRow,
-};
+use crate::slint_gen::{ContainerRow, DetailPair, ImageRow, LogRow, NetworkRow, VolumeRow};
 
 thread_local! {
     static CONTAINERS: Rc<VecModel<ContainerRow>> = Rc::new(VecModel::default());
@@ -27,7 +25,6 @@ thread_local! {
     static VOLUMES: Rc<VecModel<VolumeRow>> = Rc::new(VecModel::default());
     static DETAIL: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
     static ENV: Rc<VecModel<DetailPair>> = Rc::new(VecModel::default());
-    static COMPOSE: Rc<VecModel<ComposeRow>> = Rc::new(VecModel::default());
     static LOGS: Rc<VecModel<LogRow>> = Rc::new(VecModel::default());
 }
 
@@ -78,11 +75,6 @@ pub fn detail_rows(data: Vec<DetailPair>) -> ModelRc<DetailPair> {
 /// 抽屉环境行模型（须在 UI 线程调用）
 pub fn env_rows(data: Vec<DetailPair>) -> ModelRc<DetailPair> {
     ENV.with(|m| sync(Rc::clone(m), data))
-}
-
-/// Compose 项目筛选芯片模型（须在 UI 线程调用）
-pub fn compose_rows(data: Vec<ComposeRow>) -> ModelRc<ComposeRow> {
-    COMPOSE.with(|m| sync(Rc::clone(m), data))
 }
 
 /// 日志行模型的同步动作（须在 UI 线程执行）。

@@ -3,23 +3,22 @@
 //! 拆分理由：Compose 分组排序、端口压缩、相对时间等格式化逻辑较重，
 //! 全部堆在一个文件会超过 300 行上限。
 //!
-//!   containers.rs → 容器卡片行
-//!   images.rs     → 镜像卡片行
-//!   netvol.rs     → 网络 / 卷卡片行
+//!   containers.rs   → 容器台账行（筛选 / 排序 / 归一化比例）
+//!   ledger.rs       → 台账概览带 + 台账入口
+//!   compose_tree.rs → 台账内联树行（项目带 / 服务带 + 容器行的混合列表）
+//!   group_totals.rs → 分组资源汇总（组内成员之和）
+//!   images.rs       → 镜像卡片行
+//!   netvol.rs       → 网络 / 卷卡片行
 
+mod compose_tree;
 mod containers;
+mod group_totals;
 mod images;
+mod ledger;
 mod netvol;
 
-use std::collections::BTreeMap;
-
-use slint::SharedString;
-
-use crate::slint_gen::ComposeRow;
-use crate::ui_state::AppState;
-
-pub use containers::build_container_rows;
 pub use images::build_image_rows;
+pub use ledger::build_container_ledger;
 pub use netvol::{build_network_rows, build_volume_rows};
 
 /// 卡片端口压缩：去掉 "ip:" 前缀、`(tcp)` 归一为 `/tcp`
@@ -63,24 +62,4 @@ pub(crate) fn proj_color(name: &str) -> slint::Color {
     }
     let c = PALETTE[h as usize % PALETTE.len()];
     slint::Color::from_rgb_u8((c >> 16) as u8, (c >> 8) as u8, c as u8)
-}
-
-/// SubBar 的 Compose 项目筛选芯片（按项目名去重、计数、稳定配色、名称升序）
-pub fn build_compose_rows(s: &AppState) -> Vec<ComposeRow> {
-    let mut counts: BTreeMap<String, i32> = BTreeMap::new();
-    for c in &s.containers {
-        if let Some(p) = c.compose_project.as_deref() {
-            if !p.is_empty() {
-                *counts.entry(p.to_string()).or_insert(0) += 1;
-            }
-        }
-    }
-    counts
-        .into_iter()
-        .map(|(name, n)| ComposeRow {
-            color: proj_color(&name),
-            name: SharedString::from(name),
-            n,
-        })
-        .collect()
 }

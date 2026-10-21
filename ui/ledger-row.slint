@@ -1,0 +1,217 @@
+// ledger-row.slint — 密集台账的一行（30px，方向 A）
+//
+// 设计要点：
+//   - 列起点固定 → 眼睛沿着一列垂直扫读就能比大小（列宽契约见 ledger-cols.slint）
+//   - 数值右对齐 + 等宽体 → 小数点对齐，扫一列直接比高低
+//   - CPU / 内存用微条，长度按**当前视图内最大值**归一（列内可比，不是绝对占比）
+//   - 只有两个强调色：蓝 = CPU、紫 = 内存；异常用琥珀色（状态轨 + 状态点）
+//   - 操作按钮 hover 才显形，不跟内容抢视觉
+import { Theme } from "theme.slint";
+import { VCenterText, RightText } from "components-align.slint";
+import { IconBtn, Dot, CheckCell } from "components-interact.slint";
+import { MicroBar } from "components-chip.slint";
+import { LedgerCols } from "ledger-cols.slint";
+import { ContainerRow } from "models.slint";
+
+export component LedgerRow inherits Rectangle {
+    in property <ContainerRow> data;
+    in property <bool> sel_mode: false;
+    in property <bool> menu_open: false;
+    /// 名称 / 镜像两列的宽度（由 LedgerArea 统一算好下发）
+    ///
+    /// ⚠️ 不能让布局按文本长度分配这两个弹性列：文本一长，列就被撑宽，
+    ///    CPU / 内存列的起点会逐行漂移 → 沿列扫读失效。
+    in property <length> name_w: 200px;
+    in property <length> image_w: 200px;
+    // 响应式列显隐（父级统一判定，保证表头与行的列起点一致）
+    in property <bool> show_disk: true;
+    in property <bool> show_ports: true;
+
+    callback select(string);
+    callback toggle(string);
+    callback restart(string);
+    callback logs(string);
+    callback box(string);
+    callback menu_toggle(string, int, bool, length, length);
+
+    private property <bool> shift_down: false;
+    // 动作浮层显形：行 hover、按钮自身 hover（否则按钮显形后抢走 hover 会来回抖动）
+    // 或菜单已展开
+    private property <bool> act_show: touch.has-hover || root.menu_open
+        || main_btn.hovered || more_btn.hovered;
+    /// 菜单锚点（窗口坐标）：右对齐 more_btn 右边缘
+    private property <length> menu_mx: root.absolute-position.x + root.width - 14px - 124px;
+    private property <length> menu_my: root.absolute-position.y + 26px;
+
+    height: 30px;
+    background: root.data.is_selected ? Theme.row_sel
+        : (touch.has-hover ? Theme.row_hover : transparent);
+
+    // 左侧状态色轨（3px，绝对定位在行左，不占列）
+    Rectangle {
+        x: 0px; y: 0px;
+        width: 3px; height: 30px;
+        background: root.data.needs_attention ? Theme.warn
+            : (root.data.is_running ? Theme.ok : Theme.stop);
+    }
+
+    // 行热区：必须声明在内容**之前**（Slint 按声明顺序做命中测试，
+    // 后声明的兄弟节点先拿事件 —— 整行热区若声明在后面会盖住行内按钮）
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.shift_down = e.modifiers.shift; }
+        }
+        clicked => {
+            if (root.menu_open) {
+                root.menu_toggle(root.data.id, 0, false, 0px, 0px);
+            } else if (root.sel_mode || root.shift_down) {
+                root.box(root.data.id);
+            } else {
+                root.select(root.data.id);
+            }
+        }
+    }
+
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: LedgerCols.gap;
+        padding-left: LedgerCols.pad_x; padding-right: LedgerCols.pad_x;
+        cross-axis-alignment: center;
+
+        // 状态点 / 勾选框
+        Rectangle {
+            width: LedgerCols.dot_w; height: 18px;
+            if root.sel_mode : CheckCell {
+                width: 18px; height: 18px;
+                box: 18px;
+                checked: root.data.is_selected;
+                toggled => { root.box(root.data.id); }
+            }
+            if root.sel_mode == false : Dot {
+                on: root.data.is_running;
+                alert: root.data.needs_attention;
+                tip: root.data.needs_attention ? @tr("Needs attention")
+                    : (root.data.is_running ? @tr("Running") : @tr("Stopped"));
+            }
+        }
+
+        // 容器名（宽度由父级下发，与表头、与其它行严格对齐）
+        // 内联树层级：文本按 depth 右移，**列起点不变**（规范 #20）
+        Rectangle {
+            width: root.name_w; height: 100%;
+            horizontal-stretch: 0;
+            VCenterText {
+                x: root.data.depth * LedgerCols.indent;
+                width: root.name_w - root.data.depth * LedgerCols.indent;
+                horizontal-stretch: 0;
+                text: root.data.name;
+                font-size: Theme.fs_md; font-weight: 600;
+                color: Theme.ink;
+                overflow: elide;
+            }
+        }
+
+        // CPU 微条 + 数值
+        MicroBar {
+            bar_w: LedgerCols.cpu_bar_w;
+            ratio: root.data.cpu_ratio;
+            fill: root.data.needs_attention ? Theme.warn : Theme.bar_cpu;
+        }
+        RightText {
+            text: root.data.cpu_text;
+            width: LedgerCols.cpu_val_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 内存微条 + 数值
+        MicroBar {
+            bar_w: LedgerCols.mem_bar_w;
+            ratio: root.data.mem_ratio;
+            fill: Theme.bar_mem;
+        }
+        RightText {
+            text: root.data.mem_text;
+            width: LedgerCols.mem_val_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink;
+            overflow: elide;
+        }
+
+        // 磁盘
+        if root.show_disk : RightText {
+            text: root.data.disk;
+            width: LedgerCols.disk_w; horizontal-stretch: 0;
+            font-size: Theme.fs; font-weight: 600;
+            font-family: Theme.mono;
+            color: Theme.ink_2;
+            overflow: elide;
+        }
+
+        // 镜像（宽度由父级下发）
+        VCenterText {
+            text: root.data.image;
+            width: root.image_w; horizontal-stretch: 0;
+            font-size: Theme.fs_sm; font-family: Theme.mono;
+            color: Theme.ink_3;
+            overflow: elide;
+        }
+
+        // 端口（短标签；完整映射见抽屉详情）
+        if root.show_ports : VCenterText {
+            text: root.data.ports_text;
+            width: LedgerCols.ports_w; horizontal-stretch: 0;
+            font-size: Theme.fs_sm; font-family: Theme.mono;
+            color: Theme.ink_3;
+            overflow: elide;
+        }
+
+        // 操作区（右对齐；hover 才显形）
+        Rectangle {
+            width: LedgerCols.act_w; height: 22px;
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: 2px;
+                cross-axis-alignment: center;
+                Rectangle { horizontal-stretch: 1; }
+                main_btn := IconBtn {
+                    size: 22px; icon_size: 12px;
+                    hidden: root.act_show == false;
+                    icon_name: root.data.is_running ? "restart" : "play";
+                    tip: root.data.is_running ? @tr("Restart") : @tr("Start");
+                    clicked => {
+                        if (root.menu_open) { root.menu_toggle(root.data.id, 0, false, 0px, 0px); }
+                        else if (root.data.is_running) { root.restart(root.data.id); }
+                        else { root.toggle(root.data.id); }
+                    }
+                }
+                logs_btn := IconBtn {
+                    size: 22px; icon_size: 12px;
+                    hidden: root.act_show == false;
+                    icon_name: "file-text";
+                    tip: @tr("Logs");
+                    clicked => { root.logs(root.data.id); }
+                }
+                more_btn := IconBtn {
+                    size: 22px; icon_size: 12px;
+                    active: root.menu_open;
+                    hidden: root.act_show == false;
+                    icon_name: "more";
+                    tip: @tr("More");
+                    clicked => {
+                        root.menu_toggle(
+                            root.data.id,
+                            0,
+                            root.data.is_running,
+                            root.menu_mx,
+                            root.menu_my);
+                    }
+                }
+            }
+        }
+    }
+}

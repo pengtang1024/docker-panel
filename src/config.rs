@@ -20,6 +20,14 @@ pub struct AppConfig {
     pub sort_desc: bool,
     pub search: String,
     pub log_follow: bool,
+    /// 台账内联树里**收起**的分组键（`project:<名>` / `svc:<项目>/<服务>`）
+    pub compose_collapsed: Vec<String>,
+    /// 镜像列表排序（低 3 位=列下标，第 3 位=降序标记，见 ResourceSort）
+    pub sort_images: i64,
+    /// 网络列表排序（同上）
+    pub sort_networks: i64,
+    /// 卷列表排序（同上）
+    pub sort_volumes: i64,
 }
 
 impl Default for AppConfig {
@@ -32,6 +40,10 @@ impl Default for AppConfig {
             sort_desc: true,
             search: String::new(),
             log_follow: true,
+            compose_collapsed: Vec::new(),
+            sort_images: 0,
+            sort_networks: 0,
+            sort_volumes: 0,
         }
     }
 }
@@ -82,6 +94,31 @@ impl AppConfig {
                 .get("log_follow")
                 .and_then(|x| x.as_bool())
                 .unwrap_or(d.log_follow),
+            sort_images: v
+                .get("sort_images")
+                .and_then(|x| x.as_i64())
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_images),
+            sort_networks: v
+                .get("sort_networks")
+                .and_then(|x| x.as_i64())
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_networks),
+            sort_volumes: v
+                .get("sort_volumes")
+                .and_then(|x| x.as_i64())
+                .filter(|x| (0..=10).contains(x))
+                .unwrap_or(d.sort_volumes),
+            compose_collapsed: v
+                .get("compose_collapsed")
+                .and_then(|x| x.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 
@@ -93,8 +130,15 @@ impl AppConfig {
                 return;
             }
         }
+        // compose_collapsed 是字符串数组：手工拼 JSON（分组键走 json_escape）
+        let collapsed = self
+            .compose_collapsed
+            .iter()
+            .map(|s| format!("\"{}\"", json_escape(s)))
+            .collect::<Vec<_>>()
+            .join(", ");
         let json = format!(
-            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {}\n}}\n",
+            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
             self.theme,
             self.view,
             json_escape(&self.filter),
@@ -102,6 +146,10 @@ impl AppConfig {
             self.sort_desc,
             json_escape(&self.search),
             self.log_follow,
+            self.sort_images,
+            self.sort_networks,
+            self.sort_volumes,
+            collapsed,
         );
         let tmp = path.with_extension("json.tmp");
         if fs::write(&tmp, json).is_ok() {

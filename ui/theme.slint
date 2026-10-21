@@ -7,7 +7,8 @@ export global Theme {
     in-out property <int> theme_mode: 0;   // 0=auto, 1=light, 2=dark
     in-out property <bool> system_dark: false; // Rust 侧检测系统主题后设置
 
-    private property <bool> is_dark: theme_mode == 2 || (theme_mode == 0 && system_dark);
+    /// 当前是否深色（对外可见：M3 组件库接线用 Palette.color-scheme）
+    out property <bool> is_dark: theme_mode == 2 || (theme_mode == 0 && system_dark);
 
     // ===== 色彩：浅色 / 深色 =====
     out property <color> bg: is_dark ? #0c0c0e : #f7f7f8;

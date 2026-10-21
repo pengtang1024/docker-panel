@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.0（Phase 2+ 已交付：卡片化四视图 + 右侧抽屉详情/日志/环境 + 网络/卷视图与容器计数 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
+**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.4（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
@@ -69,7 +69,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | Rust | stable | edition 2021 | — |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
-| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。用了 Modal（inherits Modal），没用到 Dialog 内置组件——项目自己的 DialogShell 在 Modal 上盖了自定义 card |
+| Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。**实际只用到 ScrollView / ListView**（drawer 日志 + 详情面板）+ **MaterialPalette 色板**；**未使用 Modal / Dialog 内置组件**——项目自己的 DialogShell 是手搓 `inherits Rectangle`（坑条见 Slint 限制表）。色板经 `ui/material-theme.slint` 映射到项目设计令牌 |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
@@ -101,18 +101,36 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | **条件渲染移除焦点元素后焦点悬空** | 弹窗/抽屉关闭后其内部焦点丢失，后续按键无人处理 | 关闭处主动调 `global-shortcuts.focus()` 归还焦点（app.slint Esc 分支） |
 | **`select_bundled_translation` 必须在首个组件创建之后调用** | 之前调用 GLOBAL_CONTEXT 未初始化 → 恒报 `NoTranslationsBundled`（debug/release 都一样） | 放在 `MainWindow::new()` 之后；切换后 `translations_dirty` 自动重算 `@tr` 属性 |
 
-#### Material Modal / Dialog 踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
+#### Dialog 弹窗踩坑（**DialogShell 已按正确写法固化，后续 Dialog 子类直接继承即可**）
 
-> DialogShell（`components-dialog.slint`）继承 Material Modal 1.1.0，以下是踩过的真实坑条。
+> DialogShell（`components-dialog.slint`）是**手搓**的 `inherits Rectangle`——**没有**继承 Material Modal
+> （Material Modal 是裸组件，Window 层级不给 100% 尺寸；它的 `background_layer` 语义也与项目遮罩冲突）。
+> 以下是踩过的真实坑条。
 
 | 坑 | 正确做法 |
 |----|----------|
-| **Material Modal 不是 Rectangle 组件** | 必须显式 `width: 100%; height: 100%`，它没有默认 `parent.width` |
-| **Material Modal 默认 `background_layer` 是空 Rectangle** | 覆盖它加全屏半透明遮罩：`background_layer := Rectangle { background: Theme.overlay; width/height: parent.width/height; TouchArea { ... } }` |
-| **VerticalLayout 子元素显式 `height` 被忽略** | 必须用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
-| **Modal 外层 TouchArea 会吞所有子内容点击** | card 内部必须再包一层 TouchArea，否则点击按钮/CheckBox 会穿透触发遮罩关闭 |
-| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 Material BaseDialog 的 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **DialogShell 必须 inherits Rectangle** | Material Modal 是裸组件、没有默认 `parent.width`；项目自己继承 Rectangle 并显式 `width: 100%; height: 100%` |
+| **TouchArea 的 `width/height: 100%` 对 Rectangle 父级不可靠** | 遮罩 TouchArea 必须显式写 `root.width` / `root.height` |
+| **子类只能在父类声明的层级里覆盖 slot** | 用 `:=` 覆盖的元素必须与父类声明同层级，否则 Slint 会在根级新建实例；所以父类只提供 card 容器 + `@children`，子类写完整 Header/Body/Footer |
+| **一个组件只能有一个 `@children` 入口** | 父类不能再开第二个 `@children` |
+| **遮罩 TouchArea 会吞掉所有子内容点击** | card 内部必须再包一层 TouchArea，否则点按钮/CheckBox 会穿透触发遮罩关闭 |
+| **`TouchArea { layout := VerticalLayout { ... } }` 的 `layout.min_width/min_height` 在 Slint 1.18 下不可靠** | 放弃 auto-size 模式，改用硬值 `width: 420px; height: root.card_height;` 显式居中 |
+| **VerticalLayout 子元素显式 `height` 被忽略** | 用 `min-height: 60px`（Header/Footer）+ `vertical-stretch` 分配剩余空间（Body `vertical-stretch: 1`）。**永远不要在 VerticalLayout 子元素写 `height:`！** |
 | **Dialog 内三段 VerticalLayout 必须显式 `height: 100%`** | `VerticalLayout { width:100%; height:100%; ... Header/min-height:60 ... Body/stretch:1 ... Footer/min-height:56 }` |
+
+#### M3（@material）接项目主题（**已实现：`ui/material-theme.slint` + `ui/app.slint`**）
+
+> 目标：`@material` 的 ScrollView / ListView（drawer 日志 + 详情面板 + 各资源列表）与 std-widgets(fluent) 滚动条，
+> 全部跟随**应用主题**（auto/light/dark）而非 OS 主题，颜色全部由项目 `Theme.*` 令牌派生。
+
+| 坑 | 正确做法 |
+|----|----------|
+| **全局属性赋值语句不合法** | `Palette.color-scheme := ...` / `MaterialPalette.schemes := {...}` 都是 Parse error（`Palette` 被 import 后是**类型名**，表达式里要写 `Palette.color-scheme`） |
+| **不能 `changed <全局属性> =>`** | 只能盯本组件属性（写 `changed theme_mode =>`，**无 `root.` 前缀**）；一个组件只能有一个 `init` |
+| **必须经本组件属性中转** | `in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;` + `in-out property <MaterialSchemes> m3_schemes <=> MaterialPalette.schemes;`，再在 `init` / `changed theme_mode` / `changed system_dark` 里赋值灌色板 |
+| **赋值不会打断 `<=>` 绑定**（已查源码坐实） | `i-slint-core-1.18.1/properties.rs:1029` `Property::set` → `if !previous_binding_intercepted { remove_binding() }`；`properties/two_way_binding.rs:21` `TwoWayBinding::intercept_set` 返回 `true` 并把值同步到对端 → **赋值照常透传且绑定保留**，主题切换实时跟随 |
+| **light/dark 两个槽位填同一份映射** | `Theme.*` 本身已按 `is_dark` 解析，真正决定用哪套的是 `Palette.color-scheme`；两槽同填不冲突 |
+| **M3 ScrollBar 滑块自动隐藏，像素验收要用 MCP 悬停** | 滑块 `opacity` = 滚动中 40% / 悬停 70% / 静止 1.5s 后淡出；采样必须用 MCP `move_pointer` 悬停到滚动条上再 `take_screenshot`，否则采样全 miss |
 
 #### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
 
@@ -137,10 +155,10 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（27 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ models / top-bar / sub-bar / cards + card-{container,image,netvol}（三视图卡片）/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 Material Modal 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，inherits Material Modal 1.1.0，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models / ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers,images,netvol}（行构建 + Compose 分组）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system} |
+| `ui/` | Slint 声明层（33 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar / sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer + drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ menu-layers（浮动菜单层）/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
-| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
+| `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
 | 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
 
@@ -205,6 +223,12 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 17. **Wayland 必须显式设置 xdg app_id**——`main.rs` 在 `MainWindow::new()` 之后、`ui.run()` 之前调用 `slint::set_xdg_app_id("docker-panel")`（仅当 `WAYLAND_DISPLAY` 存在时）。不设置时 toplevel 没有 app_id（Wayland trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`，**面板坞（Dock）会显示成「未识别程序」、图标退化成通用占位图**。仅在 Wayland 下设置：X11 由 winit 用 argv[0] 回退生成 `WM_CLASS`（class 段 = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致），显式设置反而会让 class 段变空（Slint 固定传 `with_name(app_id, "")`）。
 18. **UI 状态单一写入方——回调写，consumer 禁回写**——用户操作过的 Slint 属性（`sort_field` / `sort_desc` / `filter` / `view`）一律由 UI 回调独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。consumer 的 3s 心跳**只刷数据、不回写这些属性**：它在锁内取快照、锁外才写 UI，期间用户改了条件时回写的就是**旧值**（排序状态与上下箭头偶发对不上、箭头滞后最多 3s）。需要防「锁内建行、锁外应用，期间条件被改」的竞态时用 `AppState::rows_epoch`：排序/筛选/搜索变更时递增，consumer 应用行模型前比对，epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
 19. **TouchArea 命中顺序——热区声明在布局之前**——Slint 按声明顺序做命中测试，后声明的兄弟节点先拿事件。按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，会盖住布局内部自己声明的 TouchArea（死代码：点箭头只会触发外层热区）。统一写法：`StateArea` / TouchArea 在前、内容布局在后（见 `Chip` / `ViewTab` / 排序按钮）；布局里的 `Text` 无 input region，点击会穿透到下面的热区。
+20. **台账列宽必须由父级统一计算后显式下发**——Slint `HorizontalLayout` 先给每个子项「首选宽度」（`Text` = 文本自然宽度），再把剩余空间按 `horizontal-stretch` 分。弹性列（名称 / 镜像）若直接写 `horizontal-stretch: 1`，文本一长列就被撑宽 → CPU / 内存列起点**逐行漂移**，表格失去扫读价值。正确写法：`LedgerArea` 算出 `name_w` / `image_w` 后显式下发给表头与行（`width: root.name_w; horizontal-stretch: 0;`）。响应式隐列（磁盘 / 端口）也由父级统一判定，表头与行共用同一组判定。验收用 MCP `get_element_tree` 逐列比对 `absolutePosition.x` 与 `size.width`，不要靠肉眼读截图。详见 [docs/arch/ui-interaction.md](docs/arch/ui-interaction.md) §3.3。
+21. **排序基线一律自然升序**——`sort_containers` 各分支的比较器都必须是「小的在前」，`sort_desc` 只负责反向。曾经 CPU / 内存 / 磁盘三列的基线写成降序，导致 `sort_desc=true`（UI 上的 ↓ 箭头）反而从小到大排，与「名称」列和箭头方向全都不一致。
+22. **compose 分组是分组，不是筛选器**——台账内联树（`ui_rows/compose_tree.rs` 产出的分组带 + 容器行）没有「范围筛选」概念：排序字段只决定**组内**顺序，组间按组名稳定排。`compose_collapsed`（**收起的**分组键集合）由 `callbacks_compose.rs` 独占写，consumer 只读；不在集合里 = 展开 → 新分组默认展开。概览带与筛选 chips 的计数一律取**可见容器集合**（实际渲染成行的那些容器），折叠分组后两个数字同步变小。
+23. **分组带的命中顺序与几何**——分组带**通栏**（独立 delegate `kind=1/2`，不参与列宽计算），内部镜像 `ledger-row.slint` 的列结构（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`），使带内数值与容器行**同 x**；展开箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 两者**不重叠**，互不抢事件（规范 #19）；分组名落在 `44px + depth*18`（箭头 16px + 色点 18px + 间隙），与**同层**容器行的名称列起点逐像素对齐，层级只靠缩进表达；无 Compose 归属的容器直接排在顶层（depth=0），不另设「独立容器」分组带。
+24. **资源列表的排序状态三个视图各自独立**——`ResourceSort { field, desc }`（列下标 + 方向）在 Rust → Slint 之间**打包成一个 int**（低 3 位=列下标，第 3 位=降序标记）；Slint 1.18 不支持 `%` 与 `&` 运算符，解包用 `Math.mod(x, 8)` / `x >= 8`。排序状态只由 `callbacks_sort.rs` 写（规范 #18），consumer 只读。表头方向箭头：左对齐列跟在标签后（不占布局宽度），右对齐列用**覆盖层**放在列左端（值仍右对齐，列起点不漂移）。
+25. **分组带的资源汇总是「成员之和」**——分组带显示该组的 CPU / 内存 / 磁盘**总和**，落在台账的 CPU / 内存 / 磁盘列上（与容器行同 x，规范 #20）。口径：CPU / 内存只累加**运行中**成员（停止的容器行上显示「—」），磁盘累加**全部**成员（可写层占用是累计值，停止后依然成立）；一个运行成员都没有时 CPU / 内存显示「—」。汇总描述的是「这个组占了多少」→ **与组是否展开无关**，收起时数字照旧。**微条两套刻度**：行按「视图内最大的单容器」归一（满格 = 最大的容器），分组带按「各分组总和的最大值」归一（满格 = 最大的分组，`group_totals::max_base`）。行与分组是**两种量纲**（个体 / 聚合），共用一个刻度必然失真：分组的和 ≥ 组内任一成员（恒等式）→ 分组总和恒为本列最大值 → 分组带恒为满格（不携带信息）、成员的条被压掉一半分辨率（最大的容器只剩 56%）。跨量纲的比大小（分组总和 vs 单容器）靠**数字**，不靠条。实现见 `src/ui_rows/group_totals.rs`（`GroupTotals`），结果写进分组行的 `cpu_text` / `mem_text` / `disk` 三个字段（复用容器行的同名字段）与 `cpu_ratio` / `mem_ratio`。⚠️ 改 `ui/ledger-row.slint` 的列结构时必须同步改 `ui/ledger-tree-row.slint`，否则带与行的数值列错位。
 
 ## 构建命令
 
@@ -252,7 +276,7 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 ## 当前已知限制
 
 - **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
-- **镜像行不支持多选批量**（当前只有容器 Tab 支持 CheckBox 多选）
+- **镜像 / 网络 / 卷行不支持多选批量**（当前只有容器视图支持 CheckBox 多选）
 - **断流窗口的日志不补回**：异常断流后以 `tail=0` 从当前时刻接续，断流窗口内产生的日志会丢；要补齐需改用 timestamps + `since` 游标
 - **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
 - **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
@@ -261,6 +285,6 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 ## 文档导航
 
 - [规则配置层](docs/agents-rules.md) — 规则地图、红线约束、四阶段门禁、冲突记录、文档同步规范
-- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、Docker/bollard 坑条）
+- [架构设计](docs/architecture.md) — 总纲 + arch/ 主题文档（线程/消息/回调、Slint 交互、列表布局、Docker/bollard 坑条）
 - [Git Flow 规范](docs/git-flow.md)
 - [更新日志](CHANGELOG.md)

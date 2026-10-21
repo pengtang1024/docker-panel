@@ -99,9 +99,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
 
     // 只重建本批变化的区域：日志洪峰时其余列表一律跳过；
     // 列表之间也分开标记（一条 stats 只重建容器行，不连带重建镜像/网络/卷）
-    let container_rows = res
+    // 容器台账：行 + 概览带同批产出（概览带的数字必须与行一致）
+    let container_ledger = res
         .containers_changed
-        .then(|| crate::ui_rows::build_container_rows(&s));
+        .then(|| crate::ui_rows::build_container_ledger(&s));
     let image_rows = res
         .images_changed
         .then(|| crate::ui_rows::build_image_rows(&s));
@@ -111,10 +112,6 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let volume_rows = res
         .volumes_changed
         .then(|| crate::ui_rows::build_volume_rows(&s));
-    // compose 芯片由容器列表派生，与容器行同批重建
-    let compose_rows = res
-        .containers_changed
-        .then(|| crate::ui_rows::build_compose_rows(&s));
     // 抽屉详情含 CPU/内存/磁盘（来自列表 stats），容器 stats 变化时也要重建，
     // 但纯日志消息不触发（drawer_changed / 各列表标记都为 false）
     let drawer_data = if res.drawer_changed {
@@ -182,8 +179,12 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         // epoch 变了 = 排序/筛选/搜索条件已被回调改过，这批行是旧条件建的
         // （回调已用新条件重建并应用），丢弃以免顺序与箭头不一致
         if rows_epoch_ref.load(Ordering::Acquire) == rows_epoch {
-            if let Some(rows) = container_rows {
+            if let Some((rows, summary, visible)) = container_ledger {
                 ui.set_container_rows(crate::render::containers(rows));
+                ui.set_ledger_summary(summary);
+                // 筛选栏芯片计数：可见容器集合的分布（与台账行数同口径）
+                ui.set_chip_total(visible.0 as i32);
+                ui.set_chip_running(visible.1 as i32);
             }
             if let Some(rows) = image_rows {
                 ui.set_image_rows(crate::render::images(rows));
@@ -193,9 +194,6 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             }
             if let Some(rows) = volume_rows {
                 ui.set_volume_rows(crate::render::volumes(rows));
-            }
-            if let Some(rows) = compose_rows {
-                ui.set_compose_rows(crate::render::compose_rows(rows));
             }
         }
         if let Some((action, epoch_ref, epoch)) = log_sync {

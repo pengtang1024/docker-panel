@@ -6,11 +6,13 @@
 //!   containers.rs   → 容器台账行（筛选 / 排序 / 归一化比例）
 //!   ledger.rs       → 台账概览带 + 台账入口
 //!   compose_tree.rs → 台账内联树行（项目带 / 服务带 + 容器行的混合列表）
+//!   group_totals.rs → 分组资源汇总（组内成员之和）
 //!   images.rs       → 镜像卡片行
 //!   netvol.rs       → 网络 / 卷卡片行
 
 mod compose_tree;
 mod containers;
+mod group_totals;
 mod images;
 mod ledger;
 mod netvol;

@@ -56,7 +56,7 @@ docker-panel/
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行）/ images / netvol（网络/卷，含排序）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
@@ -94,7 +94,7 @@ docker-panel/
     ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
     ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
     ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
-    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数，通栏）
+    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏）
     ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
     ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
     ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）

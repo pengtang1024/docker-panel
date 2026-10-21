@@ -27,6 +27,7 @@ use crate::slint_gen::{ContainerRow, LedgerSummary};
 use crate::ui_state::AppState;
 
 use super::containers::{container_row, filtered_containers, sort_containers};
+use super::group_totals::GroupTotals;
 use super::ledger::build_ledger_summary;
 use super::proj_color;
 
@@ -58,6 +59,8 @@ enum Node<'a> {
         color: slint::Color,
         n: usize,
         expanded: bool,
+        /// 资源汇总（组内成员之和）
+        totals: GroupTotals,
     },
     /// 容器行
     Container { c: &'a ContainerInfo, depth: i32 },
@@ -103,6 +106,8 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
             color: proj_color(project),
             n: members.len(),
             expanded,
+            // 项目带汇总 = 该项目**全部**容器之和（含服务带下的容器）
+            totals: GroupTotals::of(members),
         });
         if !expanded {
             continue;
@@ -128,6 +133,8 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                     color: proj_color(project),
                     n: svc_members.len(),
                     expanded: sexpanded,
+                    // 服务带汇总 = 该服务自己的容器之和
+                    totals: GroupTotals::of(svc_members),
                 });
                 if !sexpanded {
                     continue;
@@ -173,6 +180,7 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                 color,
                 n,
                 expanded,
+                totals,
             } => rows.push(ContainerRow {
                 id: SharedString::from(key.clone()),
                 name: name.clone(),
@@ -181,6 +189,10 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                 expanded: *expanded,
                 group_n: *n as i32,
                 compose_color: *color,
+                // 资源汇总：复用容器行的三个字段（分组带渲染它们）
+                cpu_text: totals.cpu_text(),
+                mem_text: totals.mem_text(),
+                disk: totals.disk_text(),
                 ..Default::default()
             }),
             Node::Container { c, depth } => {
@@ -207,6 +219,19 @@ mod tests {
         ContainerInfo {
             compose_project: (!project.is_empty()).then(|| project.to_string()),
             compose_service: (!service.is_empty()).then(|| service.to_string()),
+            ..Default::default()
+        }
+    }
+
+    /// 带资源读数的容器（running）
+    fn rc(project: &str, service: &str, cpu: f64, mem: u64, disk: u64) -> ContainerInfo {
+        ContainerInfo {
+            compose_project: (!project.is_empty()).then(|| project.to_string()),
+            compose_service: (!service.is_empty()).then(|| service.to_string()),
+            state: "running".to_string(),
+            cpu_percent: cpu,
+            mem_usage: mem,
+            size_rw: disk,
             ..Default::default()
         }
     }
@@ -286,5 +311,72 @@ mod tests {
         assert_eq!(kinds, vec![KIND_PROJECT, KIND_CONTAINER, KIND_CONTAINER]);
         assert_eq!(tree.rows[2].depth, 0);
         assert_eq!(tree.visible.0, 2);
+    }
+
+    #[test]
+    fn band_totals_are_sum_of_members() {
+        let state = state_with(vec![
+            rc("proj", "web", 10.0, 100, 1000),
+            rc("proj", "web", 5.5, 200, 2000),
+        ]);
+        let st = state.lock().unwrap();
+        let tree = build_ledger_tree(&st);
+        let band = &tree.rows[0];
+        assert_eq!(band.kind, KIND_PROJECT);
+        // 项目带汇总 = 全部成员之和
+        assert_eq!(band.cpu_text, "15.5%");
+        assert_eq!(band.mem_text, "300B");
+        assert_eq!(band.disk, "2K");
+        // 服务带汇总 = 该服务自己的成员之和（与项目带同源同值）
+        let svc = tree.rows.iter().find(|r| r.kind == KIND_SERVICE).unwrap();
+        assert_eq!(svc.cpu_text, "15.5%");
+        assert_eq!(svc.mem_text, "300B");
+    }
+
+    #[test]
+    fn collapsed_band_keeps_totals() {
+        let state = state_with(vec![rc("proj", "web", 12.0, 500, 1000)]);
+        let mut st = state.lock().unwrap();
+        st.compose_collapsed.insert(project_key("proj"));
+        let tree = build_ledger_tree(&st);
+        // 收起 → 行不渲染，但汇总描述的是「这个组占了多少」→ 数字照旧
+        assert_eq!(tree.rows.len(), 1);
+        assert!(!tree.rows[0].expanded);
+        assert_eq!(tree.rows[0].cpu_text, "12.0%");
+        assert_eq!(tree.rows[0].mem_text, "500B");
+        assert_eq!(tree.rows[0].disk, "1000B");
+    }
+
+    #[test]
+    fn stopped_members_count_for_disk_only() {
+        let state = state_with(vec![
+            rc("proj", "web", 10.0, 100, 1000),
+            ContainerInfo {
+                compose_project: Some("proj".to_string()),
+                compose_service: Some("web".to_string()),
+                state: "exited".to_string(),
+                cpu_percent: 20.0,
+                mem_usage: 500,
+                size_rw: 2000,
+                ..Default::default()
+            },
+        ]);
+        let st = state.lock().unwrap();
+        let tree = build_ledger_tree(&st);
+        let band = &tree.rows[0];
+        // 停止的容器没有实时占用 → CPU / 内存不计；磁盘是累计值 → 照计
+        assert_eq!(band.cpu_text, "10.0%");
+        assert_eq!(band.mem_text, "100B");
+        assert_eq!(band.disk, "2K");
+    }
+
+    #[test]
+    fn band_without_running_members_shows_dash_for_cpu_and_mem() {
+        let state = state_with(vec![c("proj", "web")]);
+        let st = state.lock().unwrap();
+        let tree = build_ledger_tree(&st);
+        let band = &tree.rows[0];
+        assert_eq!(band.cpu_text, "—");
+        assert_eq!(band.mem_text, "—");
     }
 }

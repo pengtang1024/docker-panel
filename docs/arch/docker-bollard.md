@@ -10,7 +10,7 @@
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
 - `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，**整批** `tx.send(Msg::LogBatch(epoch, lines))`（满 1024 行或距首行 60ms 投一批；逐行 send 在洪峰下会形成惊群）；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；返回 `LogStreamOutcome { end, lines }`（`LogStreamEnd`：Cancelled/Eof/Idle/Error(LogError) + 已推送行数），`LogError` 保留 Docker HTTP 状态码用于判定致命错误；超过 `LOG_IDLE_TIMEOUT`（180s）无新日志判定为 Idle（连接挂死）；重连策略由 `follow_runtime` 负责；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
 - 可重试调用统一 `docker::with_timeout`（10s）：列表 / stats / inspect / 卷占用；`refresh_inflight` 防止 3s 刷新叠加
-- 清理：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused→prune_images(-a)`，可任意组合
+- 清理：`cleanup(stopped, dangling, unused_net, unused_vol)` 四个开关与清理弹窗的四个复选框一一对应，可任意组合：`stopped→prune_containers` / `dangling→prune_images(dangling=true)` / `unused_net→prune_networks` / `unused_vol→prune_volumes`（不加 `all` 过滤器，Docker 默认只 prune 匿名卷，与弹窗回填的「匿名卷」计数同口径）
 
 ## 2. bollard 0.21 易踩坑速查
 
@@ -24,6 +24,7 @@
 | `StatsOptionsBuilder` 路径 | `bollard::query_parameters::StatsOptionsBuilder` | **不是** `bollard::stats::*` |
 | `list_networks` | 不用泛型参数 | `Some(ListNetworksOptionsBuilder::default().build())` |
 | `list_volumes` | 需要 type annotation | `list_volumes(None::<ListVolumesOptions>)` |
+| `prune_volumes` | 参数是 `Option<impl Into<PruneVolumesOptions>>`（泛型） | `None` 无法推断类型；用 `PruneVolumesOptionsBuilder::new().build()` 得到具体值再传 `Some(options)`。**注意** builder 不实现 `Into`，不能直接传 builder 本身 |
 | `Network` struct 字段 | 没有 `containers` 映射 | driver/scope/name/id 都是 `Option<String>` |
 | `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
 | `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |

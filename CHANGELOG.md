@@ -12,6 +12,7 @@
 
 ### 修复
 
+- **清理弹窗的「未使用的网络」实际删的是未使用镜像，「未使用的卷」完全没效果**：清理弹窗按原型口径有四个复选框（已停止的容器 / 悬空镜像 / 未使用的网络 / 未使用的卷），但 Rust 侧的 `docker::cleanup` 还是早期三开关版本的签名 `cleanup(stopped, dangling, unused)`，其中 `unused` 走的是 `prune_images(dangling=false)`（= `docker image prune -a`，会连带删掉**带 Tag** 的未使用镜像）。UI 重构成四复选框后，网络开关被错接到这个「未使用镜像」分支上，卷开关则被直接丢弃——**勾「未使用的网络」会删掉所有未被引用的镜像，勾「未使用的卷」则什么都不会发生**。现把 `cleanup` 改为 `cleanup(stopped, dangling, unused_net, unused_vol)` 四个开关，与弹窗一一对应：未使用网络走 `prune_networks`、未使用卷走 `prune_volumes`（不加 `all` 过滤器，与弹窗回填的「匿名卷」计数同口径，Docker 默认只 prune 匿名卷）；「所有未使用镜像」不再从弹窗暴露（原型口径里本就没有这一项）。新增 4 条 i18n 文案（未使用网络 / 未使用卷的清理结果与失败提示）。
 - **按 CPU / 内存 / 磁盘排序时箭头方向与实际顺序相反**：`sort_containers` 这三个分支的比较器基线写成了降序，`sort_desc=true`（UI 上显示 ↓ 箭头）反而从小到大排，与「名称」列的方向语义完全相反。已把三处基线统一为自然升序，`sort_desc` 只负责反向——现在 ↓ = 大的在前，↑ = 小的在前，与箭头含义一致。台账把排序提到表头一级功能后，这个矛盾会直接暴露在主交互路径上。
 - **抽屉滚动条与卡片网格滚动条不跟随应用主题**：抽屉详情 / 日志面板用的是内置 Material 3 组件库（`@material`）的 ScrollView / ListView，其色板由 `MaterialPalette` 提供；卡片网格滚动条来自 std-widgets(fluent)。此前项目从未给 `Palette.color-scheme` 赋值，两者全部走 OS 主题——用户在应用里选「浅色」而系统是深色时，抽屉滚动条仍按深色渲染（浅底上的深色滑块几乎不可见），网格滚动条同理。现新增 `ui/material-theme.slint`，把项目设计令牌映射成完整的 `MaterialScheme`（53 个角色全覆盖）接入 `MaterialPalette.schemes`，并把 `Palette.color-scheme` 接到应用主题（auto / light / dark），两处滚动条及后续 M3 组件全部跟随应用主题。
 

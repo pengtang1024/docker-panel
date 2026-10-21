@@ -269,7 +269,7 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
                     (st.rt.handle().clone(), st.tx.clone())
                 };
                 rt_handle.spawn(async move {
-                    let result = docker::cleanup(stopped, dangling, unused_net).await;
+                    let result = docker::cleanup(stopped, dangling, unused_net, unused_vol).await;
                     let _ = tx.send(Msg::CleanupDone(result));
                 });
             },

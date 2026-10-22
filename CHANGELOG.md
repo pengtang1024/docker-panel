@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-22
+
+### 修复
+
+- **台账微条让分组带与容器行「数字差一倍、条却一样长」**：微条此前按「视图内最大值归一」——分组带用「各分组总和的最大值」、容器行用「最大的单容器」，两者是**不同量纲**（个体 vs 聚合）却画在同一列、同一根 52px 轨道上。结果：分组带的汇总数字是组内最大成员的 2 倍（实测 live-games 组 3.8% vs 成员 live-nats 1.9%），条却都是满格 52px，完全看不出差别；而且只有一个 compose 分组时它自己就是「最大的分组」→ 分组带**恒为满格**，条形零信息量，成员条还被压掉一半分辨率。现改为与 `docker stats` 的两个百分比同义的**绝对占比**：CPU = 相对单核的百分比 / 100（1.0 = 占满一核），内存 = `mem_usage / mem_limit`（1.0 = 占满配额）——与容器旁的数字同源；**分组带的条 = 组内成员条之和** → 父子关系自洽，全列同量纲可比（实测分组带 CPU 条 5px / 内存 9px，成员条 1px，父子关系一眼可辨）。极小占比给 1px 可见下限（`MIN_BAR_RATIO`），补偿只在**成员层**做、分组带累加补偿后的成员条 → 「组条 = 成员条之和」严格成立。概览带的 CPU TOP4 同步改用该基准（240px 轨道下绝对占比本就可见，不加补偿，保留排名区分度）。
+
+### 工程
+
+- **微条基准从「视图内最大值归一」改为绝对占比**：随旧刻度一并删除 `group_totals::max_base`（各分组总和的最大值）与 `group_totals::ratio`（值 / 基准）；新增 `containers::bar_ratio`（docker 口径 + 最小可见补偿）与 `containers::mem_ratio`（usage / limit）作为唯一入口，`GroupTotals` 改为直接累加**补偿后**的成员条比例，概览带 `build_ledger_summary` 不再需要传入 `max_cpu`。相关单测重写为 `bars_use_docker_scale`（容器行 / 分组带的绝对占比与父子可加性）与 `tiny_ratios_keep_a_visible_floor_and_stay_additive`（可见下限 + 父子可加性）。
+
 ## [0.4.1] - 2026-10-21
 
 ### 修复
@@ -207,6 +217,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.4.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.2
 [0.4.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.1
 [0.4.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.0
 [0.3.4]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.4

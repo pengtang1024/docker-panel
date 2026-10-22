@@ -12,11 +12,12 @@ use crate::ui_state::AppState;
 
 use super::compose_tree::build_ledger_tree;
 
-/// 概览带：4 个计数 + CPU TOP4（名字 / 百分比 / 归一化比例）
+/// 概览带：4 个计数 + CPU TOP4（名字 / 百分比 / 条长比例）
 ///
-/// `max_cpu` 由调用侧算好（当前视图内最大值）传入 —— 概览带的条长
-/// 与列表行的条长用同一个归一化基准，两处视觉才一致。
-pub fn build_ledger_summary(list: &[&ContainerInfo], max_cpu: f64) -> LedgerSummary {
+/// TOP4 的条用 **docker 口径**（与台账行、概览带同一基准）：
+/// 比例 = 相对单核的百分比 / 100（1.0 = 占满一核）。
+/// 这样概览带与台账里同一个容器的条**长度可直接比较**（轨道不同但比例相同）。
+pub fn build_ledger_summary(list: &[&ContainerInfo]) -> LedgerSummary {
     let total = list.len() as i32;
     let running = list.iter().filter(|c| c.is_running()).count() as i32;
     let attention = list.iter().filter(|c| c.needs_attention()).count() as i32;
@@ -40,12 +41,8 @@ pub fn build_ledger_summary(list: &[&ContainerInfo], max_cpu: f64) -> LedgerSumm
     for c in &top {
         names.push(SharedString::from(c.name.clone()));
         pcts.push(SharedString::from(format!("{:.1}%", c.cpu_percent)));
-        let ratio = if max_cpu > 0.0 {
-            (c.cpu_percent / max_cpu).clamp(0.0, 1.0) as f32
-        } else {
-            0.0
-        };
-        ratios.push(ratio);
+        // docker 口径：相对单核的百分比 → /100 即条长比例（1.0 = 占满一核）
+        ratios.push((c.cpu_percent / 100.0).clamp(0.0, 1.0) as f32);
     }
     // 不足 4 个用空槽补齐（Slint struct 内禁止嵌套数组，否则失去 Send）
     while names.len() < 4 {

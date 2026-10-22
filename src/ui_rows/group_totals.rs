@@ -6,11 +6,19 @@
 //! 口径与容器行保持一致：
 //!   - CPU / 内存只累加**运行中**成员（停止的容器没有实时占用，行上显示 "—"）
 //!   - 磁盘累加**全部**成员（可写层占用是累计值，停止后依然成立）
+//!
+//! 微条口径 = **docker stats 口径**（见 `containers::container_row`）：
+//!   - CPU：相对**单核**的百分比（100% = 占满一核）
+//!   - 内存：占 **limit** 的比例（100% = 占满配额）
+//!
+//! 分组带的条 = **组内成员条之和**（成员条首尾相接的长度），
+//! 故父子关系自洽：组条的视觉长度 = 它的成员条长度之和。
 
 use slint::SharedString;
 
 use crate::detail_fmt::format_bytes_compact;
 use crate::models::ContainerInfo;
+use crate::ui_rows::containers::bar_ratio;
 
 /// 分组资源汇总（组内成员之和）
 #[derive(Default, Clone, Copy)]
@@ -20,6 +28,10 @@ pub struct GroupTotals {
     cpu: f64,
     mem: u64,
     disk: u64,
+    /// 组内成员 **CPU 条** 之和（每人 cpu%/100）
+    cpu_ratio: f64,
+    /// 组内成员 **内存条** 之和（每人 usage/limit）
+    mem_ratio: f64,
 }
 
 impl GroupTotals {
@@ -31,20 +43,23 @@ impl GroupTotals {
                 t.running += 1;
                 t.cpu += c.cpu_percent;
                 t.mem += c.mem_usage;
+                // 条比例累加**补偿后**的成员条 → 组条 = 成员条之和严格成立
+                t.cpu_ratio += bar_ratio(c.cpu_percent / 100.0);
+                t.mem_ratio += bar_ratio(crate::ui_rows::containers::mem_ratio(c));
             }
             t.disk += c.size_rw;
         }
         t
     }
 
-    /// CPU 汇总（%）：只含运行中成员
-    pub fn cpu(&self) -> f64 {
-        self.cpu
+    /// CPU 微条比例（= 成员条之和，1.0 = 占满一核）
+    pub fn cpu_ratio(&self) -> f64 {
+        self.cpu_ratio
     }
 
-    /// 内存汇总（字节）：只含运行中成员
-    pub fn mem(&self) -> u64 {
-        self.mem
+    /// 内存微条比例（= 成员条之和，1.0 = 占满配额）
+    pub fn mem_ratio(&self) -> f64 {
+        self.mem_ratio
     }
 
     /// CPU 汇总文本（无运行成员 → "—"，与容器行口径一致）
@@ -71,23 +86,10 @@ impl GroupTotals {
     }
 }
 
-/// 各分组**总和**里的 CPU / 内存最大值（分组带微条的刻度）
+/// 微条比例：docker 口径的绝对占比（1.0 = 满格），超出的部分截断到 1.0
 ///
-/// 微条两套刻度：行按「视图内最大的单容器」归一，分组带按本函数给出的
-/// 「各分组总和的最大值」归一。行与分组是两种量纲（个体 / 聚合），
-/// 共用一个刻度必然失真（详见 `compose_tree.rs` 的 4b 注释）。
-pub fn max_base(totals: &[&GroupTotals]) -> (f64, u64) {
-    (
-        totals.iter().map(|t| t.cpu()).fold(0.0f64, f64::max),
-        totals.iter().map(|t| t.mem()).max().unwrap_or(0),
-    )
-}
-
-/// 微条比例：值 / 基准（基准为 0 → 0）
-pub fn ratio(value: f64, max: f64) -> f32 {
-    if max > 0.0 {
-        (value / max).clamp(0.0, 1.0) as f32
-    } else {
-        0.0
-    }
+/// 分组带的条 = 成员条之和，组内成员合计超过一核 / 满配额时只能满格
+/// （数字仍显示真实值，不截断）。
+pub fn ratio_abs(value: f64) -> f32 {
+    value.clamp(0.0, 1.0) as f32
 }

@@ -1,8 +1,9 @@
-//! 容器台账行构建（筛选 + 排序 + 归一化资源比例 + 异常标记）
+//! 容器台账行构建（筛选 + 排序 + 资源占比比例 + 异常标记）
 //!
 //! 台账形态（方向 A）：一行一个容器，列起点固定、数值右对齐等宽体，
-//! CPU / 内存用微条表示，**长度按当前视图内的最大值归一**（列内可比，
-//! 不是绝对值占比）——这样 12.4% 和 87.4% 一眼可分。
+//! CPU / 内存用微条表示，**长度 = docker stats 口径的绝对占比**
+//! （CPU = 相对单核的百分比 / 100，内存 = usage / limit）——
+//! 与容器旁的数字同源，与分组带的条（成员条之和）同量纲。
 
 use slint::SharedString;
 
@@ -147,25 +148,55 @@ fn port_short_labels(c: &ContainerInfo) -> String {
         .join(" ")
 }
 
+/// 微条的最小可见比例（约等于 1px / 52px 轨道）
+///
+/// docker 口径是绝对占比，低负载机器上真实比例可能只有 0.01（0.5px）→
+/// 几乎看不见。给**大于 0** 的比例加一个 1px 的可见下限，
+/// 精确值由旁边的数字给出。
+///
+/// ⚠️ 补偿必须在**成员**这一层做，分组带再把补偿后的成员条相加
+/// → 「组条 = 成员条之和」严格成立（否则组条会比成员条之和还短，父子反向失真）。
+pub const MIN_BAR_RATIO: f64 = 0.02;
+
+/// 微条比例：docker 口径 + 最小可见补偿（0 → 0，不画条）
+pub fn bar_ratio(value: f64) -> f64 {
+    if value > 0.0 {
+        value.clamp(MIN_BAR_RATIO, 1.0)
+    } else {
+        0.0
+    }
+}
+
+/// 内存微条比例（docker stats 的 MEM% 口径）：占 **limit** 的比例
+///
+/// limit 缺失（停止的容器没有 stats 采样）→ 0（行上本来就显示「—」）。
+pub fn mem_ratio(c: &ContainerInfo) -> f64 {
+    if c.mem_limit == 0 {
+        0.0
+    } else {
+        c.mem_usage as f64 / c.mem_limit as f64
+    }
+}
+
 /// 单个容器的台账行数据
 ///
-/// `max_cpu` / `max_mem` 是**当前视图内**的最大值：微条长度按它归一，
-/// 这样同一列里 12.4% 与 87.4% 直接可比（而不是各自对 100% 的占比）。
-pub fn container_row(
-    c: &ContainerInfo,
-    max_cpu: f64,
-    max_mem: u64,
-    selected: bool,
-    depth: i32,
-) -> ContainerRow {
+/// **微条口径 = docker stats 口径**（与 `docker stats` 的两个百分比同义）：
+///   - CPU：相对**单核**的百分比 → 1.0 = 占满一核
+///   - 内存：占 **limit** 的比例 → 1.0 = 占满配额
+///
+/// 刻意不用「视图内最大值归一」：那种相对刻度让**分组带与容器行量纲不同**
+/// （分组总和 vs 单容器），同一列里会出现「组数字是成员的 2 倍、条却一样长」。
+/// 绝对口径下两者同量纲（都是占上限的比例），且分组带 = 成员条之和。
+pub fn container_row(c: &ContainerInfo, selected: bool, depth: i32) -> ContainerRow {
     let running = c.is_running();
-    let cpu_ratio = if running && max_cpu > 0.0 {
-        (c.cpu_percent / max_cpu).clamp(0.0, 1.0)
+    // CPU：docker 口径已是「相对单核的百分比」→ /100 即条长比例
+    let cpu_ratio = if running {
+        bar_ratio(c.cpu_percent / 100.0)
     } else {
         0.0
     };
-    let mem_ratio = if running && max_mem > 0 {
-        (c.mem_usage as f64 / max_mem as f64).clamp(0.0, 1.0)
+    let mem_ratio = if running {
+        bar_ratio(mem_ratio(c))
     } else {
         0.0
     };

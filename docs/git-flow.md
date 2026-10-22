@@ -180,4 +180,5 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | CI 在 `cargo build` 处失败且报 fontconfig 缺失 | apt 列表缺 `libfontconfig1-dev` | 见上文「CI 的系统依赖」 |
 | Release 页面没有更新日志 / CHANGELOG 断档 | 漏改 `[Unreleased]` 段落 | 发版与 hotfix 都要把 `[Unreleased]` 改写为 `## [X.Y.Z]` 并补底部链接 |
 | deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改（`scripts/check-version.sh` 可一键核对） |
+| 推了 tag 但流水线没触发，重推后却跑出**两个** run，第二个报 `Cannot delete asset from an immutable release` | 第一次 run 已发布 Release 并把它设为 immutable；重推 tag 又触发一次 run，它想先删同名旧资产 → 被 immutable 拒绝 | 第二个 run 失败**不影响结果**（Release 与资产已由第一个 run 生成好）；排查时先确认 `gh release list` 里有没有该版本，再决定要不要重推。推 tag 前先 `git push origin refs/tags/X.Y.Z`，若 `gh run list` 查不到，等 1~2 分钟再重推（重推会留下两条流水线记录） |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |

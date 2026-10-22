@@ -27,7 +27,7 @@ export struct ContainerRow {
     cpu_text: string,              // 如 "12.4%"（停止时 "—"）
     mem_text: string,              // 如 "673M"（停止时 "—"）
     disk: string,                  // 如 "596K"（容器可写层占用）
-    /// 微条长度比例（0..1，按**当前视图内**最大值归一，列内可比）
+    /// 微条长度比例（0..1，docker stats 口径的绝对占比：占上限的比例）
     cpu_ratio: float,
     mem_ratio: float,
     // —— 端口 ——

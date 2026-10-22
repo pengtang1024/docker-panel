@@ -62,8 +62,8 @@ export component Chip inherits Rectangle {
 export component MonoChip inherits Chip { mono: true; bold: true; show_dot: false; pad_h: 8px; pad_v: 2px; }
 
 // ============ 微条（固定宽轨道 + 按比例填充；CPU / 内存占比）============
-// ratio 是 0..1 的归一化比例（按**当前视图内最大值**归一，列内可比，
-// 不是绝对占比）—— 12.4% 与 87.4% 不用逐张对比就能分出高低。
+// ratio 是 0..1 的比例（docker stats 口径的绝对占比 = 占上限的比例）：
+// CPU = 相对单核的百分比 / 100，内存 = usage / limit。
 // ⚠️ 内层填充条不能用 height: parent.height（Slint 1.18 编译期判定布局循环绑定），
 //    用显式 bar_h + 绝对定位。
 export component MicroBar inherits Rectangle {

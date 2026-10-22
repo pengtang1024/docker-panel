@@ -156,7 +156,7 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
         nodes.push(Node::Container { c, depth: 0 });
     }
 
-    // —— 4) 可见集合（= 渲染成行的容器）→ 归一化上限 / 概览带 / chips 计数 ——
+    // —— 4) 可见集合（= 渲染成行的容器）→ 概览带 / chips 计数 ——
     let visible: Vec<&ContainerInfo> = nodes
         .iter()
         .filter_map(|n| match n {
@@ -164,27 +164,21 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
             Node::Band { .. } => None,
         })
         .collect();
-    let max_cpu_row = visible.iter().fold(0.0f64, |m, c| m.max(c.cpu_percent));
-    let max_mem_row = visible.iter().map(|c| c.mem_usage).max().unwrap_or(0);
-    let summary = build_ledger_summary(&visible, max_cpu_row);
+    let summary = build_ledger_summary(&visible);
 
-    // —— 4b) 微条**两套刻度**：行按「单容器最大值」，分组按「各分组总和的最大值」——
+    // —— 4b) 微条刻度：**docker 口径的绝对占比**（不再按视图内最大值归一）——
     //
-    // 微条是「同一量纲内比大小」的工具。行与分组是**两种量纲**（个体 / 聚合），
-    // 共用一个刻度必然失真：分组的和 ≥ 组内任一成员（恒等式）→ 分组总和永远是
-    // 本列最大值 → 分组带恒为满格（不携带信息），成员的条被压掉一半分辨率
-    // （最大的容器只剩 56%）。故两种量纲各用各的刻度：
-    //   · 行：视图内最大的单容器 = 满格 → 沿容器列扫就能比大小
-    //   · 分组：视图内最大的分组总和 = 满格 → 沿分组列扫就能比大小
-    // 跨量纲的对比（分组总和 vs 单容器）靠数字，不靠条。
-    let bands: Vec<&GroupTotals> = nodes
-        .iter()
-        .filter_map(|n| match n {
-            Node::Band { totals, .. } => Some(totals),
-            Node::Container { .. } => None,
-        })
-        .collect();
-    let (band_max_cpu, band_max_mem) = group_totals::max_base(&bands);
+    // CPU = 相对单核的百分比 / 100（1.0 = 占满一核）
+    // 内存 = usage / limit（1.0 = 占满配额）
+    //
+    // 为什么不用「视图内最大值归一」：那种相对刻度下**分组带与容器行量纲不同**
+    // （分组是成员之和，成员是个体）→ 同一列里出现「组数字是成员的 2 倍、
+    // 条却一样长」（唯一分组时组条恒 100% 满格，零信息量）。
+    // 绝对口径下两者同量纲（都是「占上限的比例」），且
+    // **分组带 = 组内成员条之和** → 父子关系自洽，成员条不会被压掉分辨率。
+    //
+    // 代价：低负载机器上绝对占比很小，条偏短 —— 精确值由数字给出。
+    // 概览带 TOP4 的条同样用这套基准（见 `build_ledger_summary`）。
 
     // —— 5) 出行 ——
     let mut rows: Vec<ContainerRow> = Vec::with_capacity(nodes.len());
@@ -211,14 +205,14 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                 cpu_text: totals.cpu_text(),
                 mem_text: totals.mem_text(),
                 disk: totals.disk_text(),
-                // 微条：分组用自己的刻度（各分组总和的最大值）
-                cpu_ratio: group_totals::ratio(totals.cpu(), band_max_cpu),
-                mem_ratio: group_totals::ratio(totals.mem() as f64, band_max_mem as f64),
+                // 微条：分组带 = 组内成员条之和（与容器行同量纲，可直接比较）
+                cpu_ratio: group_totals::ratio_abs(totals.cpu_ratio()),
+                mem_ratio: group_totals::ratio_abs(totals.mem_ratio()),
                 ..Default::default()
             }),
             Node::Container { c, depth } => {
                 let selected = s.batch.contains(&c.id);
-                rows.push(container_row(c, max_cpu_row, max_mem_row, selected, *depth));
+                rows.push(container_row(c, selected, *depth));
             }
         }
     }

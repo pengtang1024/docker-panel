@@ -26,6 +26,19 @@ fn rc(project: &str, service: &str, cpu: f64, mem: u64, disk: u64) -> ContainerI
     }
 }
 
+/// 带内存配额（limit）的容器 —— 内存条按 usage/limit 算，必须有 limit
+fn rcl(project: &str, service: &str, cpu: f64, mem: u64, mem_limit: u64) -> ContainerInfo {
+    ContainerInfo {
+        compose_project: (!project.is_empty()).then(|| project.to_string()),
+        compose_service: (!service.is_empty()).then(|| service.to_string()),
+        state: "running".to_string(),
+        cpu_percent: cpu,
+        mem_usage: mem,
+        mem_limit,
+        ..Default::default()
+    }
+}
+
 fn state_with(containers: Vec<ContainerInfo>) -> crate::ui_state::SharedState {
     let (state, _rx) = crate::ui_state::AppState::new();
     {
@@ -160,41 +173,72 @@ fn stopped_members_count_for_disk_only() {
     assert_eq!(band.disk, "2K");
 }
 
+/// 微条口径 = **docker stats 口径**（与 `docker stats` 的两个百分比同义）：
+///   - CPU：相对**单核**的百分比 → 1.0 = 占满一核
+///   - 内存：占 **limit** 的比例 → 1.0 = 占满配额
+///
+/// 分组带与容器行**同量纲**（都是「占上限的比例」），且
+/// **组条 = 组内成员条之和** → 父子关系自洽，成员条不会被压掉分辨率。
 #[test]
-fn row_and_band_bars_use_their_own_scale() {
-    // Two groups, each with 2 members:
-    //   proj-a: 10.0% + 10.0% → group total 20.0%, largest single container 10.0%
-    //   proj-b:  5.0% +  5.0% → group total 10.0%, largest single container  5.0%
-    // Row scale = largest single container (10.0%) → the largest container is full
-    //   (the group's total does not eat away at the rows' resolution)
-    // Group scale = largest group total (20.0%) → the largest group is full, the other is proportional
+fn bars_use_docker_scale() {
     let state = state_with(vec![
-        rc("proj-a", "web", 10.0, 300, 1000),
-        rc("proj-a", "web", 10.0, 100, 500),
-        rc("proj-b", "api", 5.0, 50, 400),
-        rc("proj-b", "api", 5.0, 50, 400),
+        rcl("proj", "web", 50.0, 200, 1000),
+        rcl("proj", "api", 20.0, 500, 1000),
     ]);
     let st = state.lock().unwrap();
     let tree = build_ledger_tree(&st);
-    let bands: Vec<&ContainerRow> = tree
+
+    // 容器行：CPU 50% → 0.5；内存 200/1000 → 0.2
+    let web = tree
         .rows
         .iter()
-        .filter(|r| r.kind == KIND_PROJECT)
-        .collect();
-    let big = bands.iter().find(|r| r.name == "proj-a").unwrap();
-    let small = bands.iter().find(|r| r.name == "proj-b").unwrap();
-    // Group scale: the largest group total is full, the other is proportional
-    assert_eq!(big.cpu_text, "20.0%");
-    assert_eq!(big.cpu_ratio, 1.0);
-    assert!((small.cpu_ratio - 0.5).abs() < 0.01);
-    // Row scale: the largest single container is full (not squeezed to half by the group total)
+        .find(|r| r.kind == KIND_CONTAINER && r.cpu_text == "50.0%")
+        .unwrap();
+    assert!((web.cpu_ratio - 0.5).abs() < 0.001, "cpu {}", web.cpu_ratio);
+    assert!((web.mem_ratio - 0.2).abs() < 0.001, "mem {}", web.mem_ratio);
+
+    // 分组带 = 成员条之和（0.5 + 0.2 = 0.7；内存 0.2 + 0.5 = 0.7）
+    let band = &tree.rows[0];
+    assert_eq!(band.kind, KIND_PROJECT);
+    assert!(
+        (band.cpu_ratio - 0.7).abs() < 0.001,
+        "band cpu {}",
+        band.cpu_ratio
+    );
+    assert!(
+        (band.mem_ratio - 0.7).abs() < 0.001,
+        "band mem {}",
+        band.mem_ratio
+    );
+}
+
+/// 极小占比给 1px 可见下限，且**补偿在成员层做** → 组条 = 成员条之和仍成立
+#[test]
+fn tiny_ratios_keep_a_visible_floor_and_stay_additive() {
+    let state = state_with(vec![
+        rcl("proj", "a", 0.5, 1, 1000),
+        rcl("proj", "b", 0.4, 1, 1000),
+    ]);
+    let st = state.lock().unwrap();
+    let tree = build_ledger_tree(&st);
+
     let row = tree
         .rows
         .iter()
-        .find(|r| r.kind == KIND_CONTAINER && r.cpu_text == "10.0%")
+        .find(|r| r.kind == KIND_CONTAINER && r.cpu_text == "0.5%")
         .unwrap();
-    assert_eq!(row.cpu_ratio, 1.0);
-    assert_eq!(row.mem_ratio, 1.0);
+    // 0.5% → 0.005 → 抬到可见下限 MIN_BAR_RATIO
+    let floor = super::super::containers::MIN_BAR_RATIO as f32;
+    assert!((row.cpu_ratio - floor).abs() < 0.0001);
+
+    // 组条 = 两个成员条之和（都是下限值）
+    let band = &tree.rows[0];
+    let expect = (super::super::containers::MIN_BAR_RATIO * 2.0) as f32;
+    assert!(
+        (band.cpu_ratio - expect).abs() < 0.0001,
+        "band cpu {} vs {expect}",
+        band.cpu_ratio
+    );
 }
 
 #[test]

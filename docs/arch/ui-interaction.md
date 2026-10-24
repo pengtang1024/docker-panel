@@ -4,7 +4,7 @@
 
 ## 1. Slint UI 模块交互
 
-33 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+35 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
 
 ### 交互总图
 
@@ -60,19 +60,19 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
 | `app.slint` | 368 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / dialogs / models / app-actions |
-| `app-actions.slint` | 41 | AppActions global：UI → Rust 回调声明 | 无 |
+| `app-actions.slint` | 48 | AppActions global：UI → Rust 回调声明 | 无 |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
-| `models.slint` | 100 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
+| `models.slint` | 102 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
 | `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
 | `main-area.slint` | 166 | 主列表工作区：SubBar + BatchBar + ListArea | theme / sub-bar / batch-bar / list-area / models |
 | `list-area.slint` | 158 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
-| `ledger.slint` | 253 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
-| `ledger-row.slint` | 217 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
+| `ledger.slint` | 258 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
+| `ledger-row.slint` | 218 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
-| `ledger-cols.slint` | 23 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
-| `ledger-tree-row.slint` | 124 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
+| `ledger-cols.slint` | 24 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
+| `ledger-tree-row.slint` | 176 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
 | `image-list.slint` | 217 | 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序） | theme / components-list / components-interact / models / @material |
 | `network-list.slint` | 157 | 网络表格列表：名称 · driver · 子网（表头可点排序） | theme / components-list / models / @material |
 | `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
@@ -84,8 +84,8 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
 | `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
-| `menu-layers.slint` | 133 | 排序菜单 + 卡片「···」菜单 | theme / models |
-| `components-interact.slint` | 340 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
+| `menu-layers.slint` | 133 | 排序菜单 + 行「···」菜单 | theme / models |
+| `components-interact.slint` | 342 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |
 | `components-form.slint` | 102 | 输入/复选框等表单组件 | theme |
 | `components-chip.slint` | 92 | Chip / MonoChip / MicroBar 等数据展示组件 | theme |
@@ -99,7 +99,7 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 - app.slint 做组装层——只放 MainWindow 骨架 + global-shortcuts FocusScope + import 语句 + 布局 markup
 - 子文件之间不互相 import——避免循环依赖和跨文件 global 可见性问题
-- 卡片/行组件用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
+- 行组件用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
 - 顶栏/筛选栏用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见
 - **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸
 

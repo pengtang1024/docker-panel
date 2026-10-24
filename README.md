@@ -3,8 +3,20 @@
 极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、**纯软件渲染器**——零 GPU 依赖、零 Electron、零运行时。
 
 [![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#环境要求)
 
-文档导航：[架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+文档导航：[Wiki](https://github.com/pengtang1024/docker-panel/wiki) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+
+## 界面预览
+
+| 容器台账（内联 Compose 树） | 镜像表格列表 |
+|:---:|:---:|
+| ![容器台账](assets/screenshots/ledger-expanded.png) | ![镜像列表](assets/screenshots/images.png) |
+| **右侧抽屉（详情 / 日志 / 环境）** | **清理弹窗** |
+| ![右侧抽屉](assets/screenshots/drawer.png) | ![清理弹窗](assets/screenshots/cleanup.png) |
+
+> 截图来自 Linux + Wayland + 深色主题，使用 Slint MCP 直接抓取窗口，未做后期合成。
 
 ## 功能特性
 
@@ -92,8 +104,17 @@ Linux 上 Slint software renderer 只依赖系统字体，不需要 libgl1：
 cargo run
 
 # 发布构建（体积最小化 profile：opt-level=z + LTO + strip + panic=abort）
-cargo build --release
+cargo build --release --locked
 ./target/release/docker-panel
+```
+
+### 开发与验证
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo check --all-targets
 ```
 
 ## 使用说明
@@ -106,6 +127,15 @@ cargo build --release
 6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；镜像 / 网络 / 卷点表头按列排序。
 7. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
 8. 底部栏显示 8 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 磁盘）与最近操作结果。
+
+## 已知限制
+
+- 无 Docker Compose 导入 / 导出、无定时清理
+- 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
+- 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
+- 断流窗口的日志不补回；日志窗口最多保留 2000 行
+- 容器停止后不自动重连日志流，需要重新切到日志 Tab
+- `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
 
 ## 架构概览
 
@@ -140,7 +170,7 @@ cargo build --release
 
 ```
 docker-panel/
-├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / futures
+├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / futures
 ├── Cargo.lock
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
@@ -148,7 +178,7 @@ docker-panel/
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
-│   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
+│   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
 │   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
@@ -170,7 +200,7 @@ docker-panel/
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
-│   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染）
+│   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染）
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）

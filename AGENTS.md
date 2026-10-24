@@ -200,7 +200,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（卡片数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（容器行数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
 
 ## 代码规范
 

@@ -120,7 +120,7 @@ invoke_from_event_loop(move || {
 | `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 后台补查层数 |
 | `Networks(Result<Vec<NetworkInfo>>)` | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，卡片数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，容器行数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |

@@ -1,4 +1,4 @@
-//! docker-panel — 极简 Docker 桌面管理工具
+//! docker-panel — 极简 Docker Engine 桌面管理面板
 //!
 //! Slint 原生 GUI + 软件渲染器，零 GPU 依赖。
 //!

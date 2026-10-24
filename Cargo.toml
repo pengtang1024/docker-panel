@@ -2,7 +2,7 @@
 name = "docker-panel"
 version = "0.4.2"
 edition = "2021"
-description = "极简 Docker 桌面管理工具（Slint 原生 GUI，软件渲染器零 GPU 依赖）"
+description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"
 
 [dependencies]
 # Slint：关闭默认 backend，手动选 winit + 软件渲染器，极致轻量

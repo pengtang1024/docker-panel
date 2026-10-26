@@ -3,7 +3,16 @@
 本文件记录 Docker Panel 的重要变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+> 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
+> 历史变更记录保留在此处，但不再提供下载。
+
 ## [Unreleased]
+
+## [0.4.4] - 2026-10-26
+
+### 工程
+
+- **下架不合规旧版本**：删除 0.1.0–0.4.2 的 GitHub Release 与 git tag，旧发行物不再提供下载；`CHANGELOG` 保留历史记录并移除失效外链。
 
 ## [0.4.3] - 2026-10-26
 
@@ -13,7 +22,7 @@
 - **删除未使用的 `vendor/` Slint 源码副本**：`[patch.crates-io]` 早在 516709f 已移除，两个目录（61 个文件）不再参与构建，却会让公开仓库在 MIT 名下分发 Slint 源码；删除后构建仍使用 crates.io 原版 crate。
 - **许可证门禁**：新增 `deny.toml` 与 `.github/workflows/license.yml`，push / PR 跑 `cargo-deny check licenses`；allow-list 只放行 MIT / Apache-2.0 / BSD / ISC / Zlib / Unicode 等宽松许可与 `LicenseRef-Slint-Royalty-free-2.0`，GPL / AGPL / LGPL / SSPL / BUSL / Commons Clause 一律失败。
 
-## [0.4.2] - 2026-10-22
+## 0.4.2 - 2026-10-22
 
 ### 修复
 
@@ -23,7 +32,7 @@
 
 - **微条基准从「视图内最大值归一」改为绝对占比**：随旧刻度一并删除 `group_totals::max_base`（各分组总和的最大值）与 `group_totals::ratio`（值 / 基准）；新增 `containers::bar_ratio`（docker 口径 + 最小可见补偿）与 `containers::mem_ratio`（usage / limit）作为唯一入口，`GroupTotals` 改为直接累加**补偿后**的成员条比例，概览带 `build_ledger_summary` 不再需要传入 `max_cpu`。相关单测重写为 `bars_use_docker_scale`（容器行 / 分组带的绝对占比与父子可加性）与 `tiny_ratios_keep_a_visible_floor_and_stay_additive`（可见下限 + 父子可加性）。
 
-## [0.4.1] - 2026-10-21
+## 0.4.1 - 2026-10-21
 
 ### 修复
 
@@ -31,7 +40,7 @@
 - **底部状态栏的 CPU / 内存 / 磁盘汇总恒为 0**：`ui/app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性早已绑定到 `FootBar`，但 Rust 侧**从未写过这三个属性** → 状态栏右下角长期显示 "0% CPU / 0MB 内存 / 0MB 磁盘"（与台账行里明明有值的数字自相矛盾）。现由 `consumer::apply_ui` 独占写入，口径 = 全部容器（与「N/N 容器」同源）：CPU / 内存只累加运行中容器，磁盘累加全部容器 —— 与分组带汇总同口径。
 - **点「磁盘」表头排序毫无反应**：台账「磁盘」列显示的是 `size_rw`（可写层占用），排序却用了 `block_read + block_write` —— 这两个字段**从未被任何代码赋值，恒为 0** → 所有容器的排序键相等，稳定排序保持原序 → 点表头既不换顺序也不换箭头含义（而「磁盘」恰好还是默认排序字段）。现把排序键改为与显示值同源的 `size_rw`，并删掉恒 0 的死字段 `block_read` / `block_write`。
 
-## [0.4.0] - 2026-10-21
+## 0.4.0 - 2026-10-21
 
 ### 新增
 
@@ -55,33 +64,33 @@
 - **新增/删除的文件**（按职责拆分）：新增 `src/docker/raw_http.rs`（裸 HTTP 请求：Unix socket + chunked 解码，绕开 bollard 未建模的 `Volumes` 键）；新增 `src/ui_rows/group_totals.rs`（分组资源汇总：`GroupTotals` 累加组内成员的 CPU / 内存 / 磁盘 + 文本格式化；从 `compose_tree.rs` 拆出以守住 300 行上限，`compose_tree.rs` 正文 297 行）；新增 `ui/list-area.slint`（四个视图的列表宿主 + 空态 + 背景点击层）、`ui/image-list.slint` / `ui/network-list.slint` / `ui/volume-list.slint`（三个表格列表）、`ui/components-list.slint`（`ListCols` 列宽契约 + `ListHeadCell` 表头单元格）、`ui/ledger-tree-row.slint`（项目带 / 服务带 delegate）、`src/callbacks_sort.rs`（三个资源列表的排序回调）；删除 `ui/cards.slint` / `ui/card-image.slint` / `ui/card-netvol.slint` / `ui/compose-tree.slint`（卡片网格与侧栏树作废）、`src/compose_scope.rs`（`ComposeScope` 范围筛选整体作废，只留 `compose_collapsed`）。`src/ui_rows/compose_tree.rs` 改写为台账树行构建（`KIND_CONTAINER` / `KIND_PROJECT` / `KIND_SERVICE` + 分组键生成），其单测拆到 `src/ui_rows/compose_tree/tests.rs`（正文 159 行，与 `follow_runtime/tests.rs` 同一写法）以守住 300 行上限，`src/ui_rows/images.rs` / `netvol.rs` 补排序。
 - **AGENTS.md 组件库描述与实际实现不符**：文档写「用了 Modal（inherits Modal），项目自己的 DialogShell 在 Modal 上盖了自定义 card」，但 `ui/components-dialog.slint` 实际是手搓的 `inherits Rectangle`，从未 import Material Modal。已按实际实现改写，并把 Material Modal 的坑表换成项目 DialogShell 的真实约束（TouchArea 的 100% 对 Rectangle 父级不可靠、slot 覆盖层级、`@children` 唯一性等），另补「M3 接项目主题」一节：全局属性赋值语句不合法、必须经本组件属性中转、赋值不会打断 `<=>` 绑定（依据 `i-slint-core-1.18.1` 源码）、M3 滑块自动隐藏时的像素验收姿势。同步更新 README / architecture.md / docs/arch/ui-interaction.md 的模块地图与文件行数。
 
-## [0.3.4] - 2026-10-20
+## 0.3.4 - 2026-10-20
 
 ### 修复
 
 - **排序状态与上下箭头偶发对不上**：排序状态有两个写入方——UI 回调改了 `AppState` 却没写 Slint 属性，只有 consumer 的 3s 心跳才回写，且回写的是锁内快照的旧值。用户改完排序后心跳写回的仍是旧方向，箭头最长滞后 3s，甚至与实际排序方向相反。现改为回调在 UI 线程同步写 `sort_field` / `sort_desc`（与筛选 / 视图同一套路），consumer 只刷数据不回写用户操作过的状态；另加 `AppState::rows_epoch`，consumer 应用行模型前比对 epoch，锁内建行、锁外应用期间排序条件被改时丢弃这批旧行。
 - **点排序方向箭头没反应（只会打开菜单）**：排序按钮的外层 `TouchArea` 声明在 `HorizontalLayout` 之后，Slint 按声明顺序命中，外层热区盖住了布局内箭头自己的 `TouchArea`，`set_sort_dir()` 永远收不到点击。已把按钮热区移到布局之前（与 `Chip` / `ViewTab` 的 `StateArea` 写法一致），方向箭头恢复可点：点箭头直接翻转升/降序，点按钮其余部分仍然展开排序菜单。
 
-## [0.3.3] - 2026-10-20
+## 0.3.3 - 2026-10-20
 
 ### 修复
 
 - **历史 Release 页面的更新日志没能回填**：回填步骤用 `git tag --list` 列历史版本，但 `actions/checkout` 默认 shallow clone，仓库里只有触发流水线的那个 tag，取不到任何历史 tag，回填循环空转。改用 `gh release list`（API）列 release，与 clone 深度无关；immutable release 改不了则跳过并告警，不影响本次发布。
 
-## [0.3.2] - 2026-10-20
+## 0.3.2 - 2026-10-20
 
 ### 修复
 
 - **GitHub Release 页面没有更新日志**：工作流只用 `generate_release_notes`，而本仓库没有 PR，GitHub 自动生成的正文只有一行 `**Full Changelog**: <compare 链接>`，发出去的版本在发布页面上看不到任何更新日志。现在新增 `scripts/release-notes.sh` 从 `CHANGELOG.md` 抽出对应 `## [X.Y.Z]` 段落，由工作流以 `body_path` 传给发布步骤（`generate_release_notes` 保留，compare 链接追加在后面）；抽不到段落时流水线直接失败，避免发出没有更新日志的版本。另加「回填历史 Release 更新日志」步骤，把流水线修好之前发的 0.3.0 / 0.3.1 页面正文补齐（immutable release 改不了则跳过，不影响本次发布）。
 - **发版流程漏掉版本更新日志这一步**：`docs/git-flow.md` 的发版流程写着「两处必须一致」却列了三项，hotfix 流程更是完全没有版本同步与 CHANGELOG 步骤。现已补齐三处同步的可执行动作、hotfix 的完整 6 步、门禁步骤与两次推送（tag 必须单独推），并新增 `scripts/check-version.sh` 核对 Cargo.toml / deb control / CHANGELOG 段落 / 底部链接 / 最新 tag 五项。
 
-## [0.3.1] - 2026-10-20
+## 0.3.1 - 2026-10-20
 
 ### 修复
 
 - **面板坞（Dock）显示「未识别程序」、图标变成通用占位图**：Slint 1.18 的 winit backend 只有在 `WindowInner::xdg_app_id()` 有值时才调用 `with_name(app_id, "")`，本项目从未设置过 → Wayland toplevel 完全没有 app_id（`WAYLAND_DEBUG` trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`。现在于 `MainWindow::new()` 之后、`ui.run()` 之前在 Wayland 下显式调用 `slint::set_xdg_app_id("docker-panel")`；X11 保持不设（winit 用 argv[0] 回退生成 `WM_CLASS`，显式设置会让 class 段变空）。
 
-## [0.3.0] - 2026-10-20
+## 0.3.0 - 2026-10-20
 
 ### 新增
 
@@ -132,7 +141,7 @@
 
 - 旧三栏布局（Sidebar + 内嵌 DetailPanel）由新布局与右侧 Drawer 取代。
 
-## [0.2.3] - 2026-10-17
+## 0.2.3 - 2026-10-17
 
 ### 新增
 
@@ -143,14 +152,14 @@
 
 - **Slint padding 警告**：detail-panel / image-detail-panel / log-panel 中 Text 元素的 padding-top/bottom 改用 VerticalBox 包裹，release build 零警告。
 
-## [0.2.2] - 2026-10-16
+## 0.2.2 - 2026-10-16
 
 ### 新增
 
 - **镜像详情面板**：点击镜像行 → `inspect_image` → 右侧面板切到第 3 Tab（镜像），显示 RepoTag / 创建时间 / 作者 / 大小 / 平台 / Entrypoint / Cmd / 工作目录 / 暴露端口 / Volumes / Labels / Env 共 14 字段。
 - **网络 Tab 真实容器计数**：从容器列表反推每个网络的连接容器数，零额外 API 调用，网络行右侧实时显示。
 
-## [0.2.1] - 2026-10-16
+## 0.2.1 - 2026-10-16
 
 ### 新增
 
@@ -191,7 +200,7 @@
 - `ContainerStatsResponse.networks`：`Option<HashMap<String, ContainerNetworkStats>>`，`rx_bytes/tx_bytes` 是 **u64**（不是 `Option<u64>`）
 - `docker.stats()` 返回 Stream：`.next().await` 取第一帧
 
-## [0.2.0] - 2026-10-16
+## 0.2.0 - 2026-10-16
 
 ### 完全重写
 
@@ -225,18 +234,5 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[0.4.3]: https://github.com/pengtang1024/docker-panel/compare/0.4.2...0.4.3
-[0.4.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.2
-[0.4.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.1
-[0.4.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.0
-[0.3.4]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.4
-[0.3.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.3
-[0.3.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.2
-[0.3.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.1
-[0.3.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.3.0
-[0.2.3]: https://github.com/pengtang1024/docker-panel/tree/v0.2.3
-[0.2.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.2
-[0.2.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.1
-[0.2.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.2.0
-[0.1.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.1
-[0.1.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.1.0
+[0.4.4]: https://github.com/pengtang1024/docker-panel/compare/0.4.3...0.4.4
+[0.4.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.3

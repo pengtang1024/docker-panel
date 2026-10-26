@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-26
+
 ### 工程
 
 - **下架不合规旧版本**：删除 0.1.0–0.4.2 的 GitHub Release 与 git tag，旧发行物不再提供下载；`CHANGELOG` 保留历史记录并移除失效外链。
@@ -232,4 +234,5 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.4.4]: https://github.com/pengtang1024/docker-panel/compare/0.4.3...0.4.4
 [0.4.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.3

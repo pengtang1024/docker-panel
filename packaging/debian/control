@@ -1,9 +1,9 @@
 Package: docker-panel
-Version: 0.4.2
+Version: 0.4.3
 Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: pengtang1024 <pengtang1024@users.noreply.github.com>
 Depends: libc6
-Description: 极简 Docker 桌面管理工具（Rust + Slint 原生 GUI，
- 软件渲染器零 GPU 依赖，单二进制、无 Electron、无运行时依赖）
+Description: 极简 Docker Engine 桌面管理面板（Rust + Slint 原生 GUI，
+ 纯软件渲染、零 GPU 依赖；单二进制，无 Electron / Node 运行时）

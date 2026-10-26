@@ -87,7 +87,7 @@ docker-panel/
 └── ui/                        Slint 层（正文均 ≤ 300 行）
     ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装 + M3 色板接线
     ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
-    ├── theme.slint            浅/深双主题 22 语义色令牌 + theme_mode 三态（is_dark 为 out）
+    ├── theme.slint            浅/深双套色板（31 个颜色令牌）+ theme_mode 三态（is_dark 为 out）
     ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
     ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
@@ -109,7 +109,7 @@ docker-panel/
     ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）
     ├── drawer-log-row.slint   日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
     ├── dialogs.slint          PullDialog + CleanupDialog 弹窗（继承 DialogShell）
-    ├── menu-layers.slint      浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染，否则被卡片 clip 裁掉）
+    ├── menu-layers.slint      浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染，否则被列表 clip 裁掉）
     └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```
 

@@ -41,12 +41,12 @@ docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching
    cargo clippy --all-targets --all-features -- -D warnings
    cargo build --release --locked
    ```
-   CI 只保留Release 一条流水线，不做提交期检查，因此本地检查是唯一门禁。
+   CI 只有 Release（发版）与 License（许可证门禁）两条流水线，不做完整提交期检查；fmt / clippy / test 仍以本地为唯一门禁。
 
 ## 发版流程
 
 ```bash
-# 0. 发版前门禁（本地是唯一门禁，CI 不做提交期检查）
+# 0. 发版前门禁（fmt/clippy/test 以本地为准；CI 另有 License 许可证门禁）
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test

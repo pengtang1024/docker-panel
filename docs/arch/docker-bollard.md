@@ -4,7 +4,7 @@
 
 ## 1. Docker 接入约定
 
-- 连接：`Docker::connect_with_local_defaults()`，自动读 `DOCKER_HOST`，默认 `/var/run/docker.sock`
+- 连接：`Docker::connect_with_local_defaults()`；bollard 的 unix 默认入口只识别 `DOCKER_HOST` 中的 `unix://` 路径（tcp / ssh 不生效），默认 `/var/run/docker.sock`
 - 错误统一转中文 `String` 上抛，UI 层展示
 - 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`

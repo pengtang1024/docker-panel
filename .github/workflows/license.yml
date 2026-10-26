@@ -1,0 +1,22 @@
+name: License
+
+# 许可证门禁：只允许宽松许可 + 本项目选择的 Slint Royalty-free 2.0 分支。
+# 规则定义在 deny.toml；引入 GPL / AGPL / LGPL / SSPL / BUSL / Commons Clause 时失败。
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+jobs:
+  licenses:
+    name: cargo-deny 许可证检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses

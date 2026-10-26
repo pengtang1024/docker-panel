@@ -1,10 +1,23 @@
 # Docker Panel
 
-极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、**纯软件渲染器**——零 GPU 依赖、零 Electron、零运行时。
+极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、**纯软件渲染器**——零 GPU 依赖、零 Electron / Node 运行时。
 
 [![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#环境要求)
+<a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" height="24"></a>
 
-文档导航：[架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+文档导航：[Wiki](https://github.com/pengtang1024/docker-panel/wiki) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+
+## 界面预览
+
+| 容器台账（内联 Compose 树） | 镜像表格列表 |
+|:---:|:---:|
+| ![容器台账](assets/screenshots/ledger-expanded.png) | ![镜像列表](assets/screenshots/images.png) |
+| **右侧抽屉（详情 / 日志 / 环境）** | **清理弹窗** |
+| ![右侧抽屉](assets/screenshots/drawer.png) | ![清理弹窗](assets/screenshots/cleanup.png) |
+
+> 截图来自 Linux + Wayland + 深色主题，使用 Slint MCP 直接抓取窗口，未做后期合成。
 
 ## 功能特性
 
@@ -13,8 +26,8 @@
 - 四个视图（容器 / 镜像 / 网络 / 卷）**全部是列表**：没有左侧栏，没有卡片网格
 - 容器视图是**密集台账**：概览带（总数 / 运行中 / 已停止 / 需关注 + CPU 占用 TOP4）→ 表头 → 30px 虚拟化台账行
 - 台账列：状态点、容器名、CPU（微条 + %）、内存（微条 + 容量）、磁盘、镜像、端口、行内操作
-- 列起点严格固定（表头与每一行逐列同 x 同宽），CPU / 内存微条按**当前视图内最大值**归一，同列一眼比高低
-- 表头可点击排序（容器名 / CPU / 内存 / 磁盘），列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口列）
+- 列起点严格固定（表头与每一行逐列同 x 同宽），CPU / 内存微条采用 **docker stats 口径**（CPU = 相对单核百分比 / 100，内存 = 用量 / 上限），同列同量纲可比
+- 表头可点击排序（容器名 / CPU / 内存 / 磁盘），排序菜单另支持按状态排序；列宽随窗口响应式收缩（窄窗自动隐去磁盘 / 端口列）
 - 「需关注」= 死亡 / 暂停 / 重启中 / 正在移除 / 异常退出（退出码 ≠ 0），行首琥珀色状态轨标记
 - 镜像 / 网络 / 卷是**表格列表**（精简列 + 表头可点排序）：镜像 = `repo:tag` · 大小 · 创建时间；网络 = 名称 · driver · 子网；卷 = 名称 · 大小 · 挂载点
 - 三个资源列表的排序**各自独立**（切视图回来保留）并持久化；排序方向在表头用 ↑/↓ 标出
@@ -32,23 +45,23 @@
 
 ### 右侧抽屉（详情 / 日志 / 环境）
 
-- 点击容器台账行 → inspect 详情（18 字段）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab
-- 点击镜像 / 网络 / 卷行 → 对应资源详情
+- 点击容器台账行 → inspect 详情（概览 / 资源 / 时间 / 网络 / 配置五组）+ 实时日志流（虚拟化列表，滚动窗口 2000 行）+ 环境变量 Tab（环境变量 / 端口映射 / 网络 / 挂载）
+- 点击镜像 / 网络 / 卷行 → 对应资源详情（单页，无 Tab）
 
 ### 操作
 
-- 台账行内按钮：启停（▶/⏹）、重启（⟳）、日志（📜）、更多（···）；「···」菜单同样可用
-- 容器多选 + 批量操作浮动栏（启动 / 停止 / 删除）
+- 台账行内按钮：启停（▶/⏹）、重启（⟳）、日志（📜）、更多（···）；「···」菜单提供日志 / 停止 / 删除
+- 容器多选 + 批量操作浮动栏（启动 / 停止 / 重启 / 删除 / 取消选择）；Shift+点击行可快速勾选 / 取消勾选
 - 顶栏：拉取镜像（实时进度弹窗）/ 清理未使用资源（已停止的容器 / 悬空镜像 / 未使用的网络 / 未使用的卷，可任意组合）
 - 操作完成立即刷新列表，不等 3s 定时周期
 
 ### 全局快捷键
 
-- Ctrl+K 聚焦搜索、Ctrl+R 刷新、Ctrl+1~4 切换视图、Esc 关闭抽屉 / 弹窗
+- Ctrl+K 聚焦搜索、`/` 聚焦搜索、Ctrl+R 刷新、Ctrl+1~4 切换视图、Esc 关闭抽屉 / 弹窗 / 退出多选
 
 ### 主题与本地化
 
-- 浅色 / 深色 / 跟随系统 三态主题，22 个语义色令牌
+- 浅色 / 深色 / 跟随系统 三态主题，完整的浅 / 深双套色板（语义色 + 状态 / 微条 / 日志等辅助色）
 - 内置 Material 3 组件库（`@material`，ScrollView / ListView）的色板由项目令牌映射而来，跟随应用主题而非系统主题
 - 界面文案中英双语，跟随系统 locale 自动选择（zh* → zh_CN）
 
@@ -64,7 +77,7 @@
 ## 环境要求
 
 - Linux / macOS / Windows（主要在 Linux 上验证）
-- 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；也支持 `DOCKER_HOST` 指定远程守护进程
+- 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（当前不读取 tcp / ssh 远程地址）
 - 构建需要 Rust stable（edition 2021）
 
 ## 安装与构建
@@ -92,8 +105,17 @@ Linux 上 Slint software renderer 只依赖系统字体，不需要 libgl1：
 cargo run
 
 # 发布构建（体积最小化 profile：opt-level=z + LTO + strip + panic=abort）
-cargo build --release
+cargo build --release --locked
 ./target/release/docker-panel
+```
+
+### 开发与验证
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo check --all-targets
 ```
 
 ## 使用说明
@@ -102,10 +124,19 @@ cargo build --release
 2. Ctrl+K 聚焦搜索框，输入关键词即时过滤；Ctrl+R 手动刷新。
 3. 容器台账行内按钮：▶/⏹ 切换状态、⟳ 重启、📜 查看日志、··· 更多操作。
 4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像 / 网络 / 卷行 → 对应资源详情。
-5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉或弹窗。
-6. 容器视图点分组带的箭头展开 / 收起 Compose 分组；镜像 / 网络 / 卷点表头按列排序。
-6. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
-7. 底部栏显示 8 项资源概览与最近操作结果。
+5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉 / 弹窗或退出多选。
+6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；镜像 / 网络 / 卷点表头按列排序。
+7. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
+8. 底部栏显示 8 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 磁盘）与最近操作结果。
+
+## 已知限制
+
+- 无 Docker Compose 导入 / 导出、无定时清理
+- 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
+- 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
+- 断流窗口的日志不补回；日志窗口最多保留 2000 行
+- 容器停止后不自动重连日志流，需要重新切到日志 Tab
+- `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
 
 ## 架构概览
 
@@ -140,15 +171,16 @@ cargo build --release
 
 ```
 docker-panel/
-├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / futures
+├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / futures
 ├── Cargo.lock
+├── deny.toml               # cargo-deny 许可证门禁（宽松许可 + Slint RF 2.0 allow-list）
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
 ├── ui/                     # Slint UI 声明（按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
-│   ├── theme.slint         # 浅/深双主题 22 语义色令牌 + 字号/间距，theme_mode 三态
+│   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
 │   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
 │   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
@@ -170,7 +202,7 @@ docker-panel/
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
-│   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 卡片「···」菜单（须在卡片区之后渲染）
+│   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染）
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）
@@ -178,6 +210,7 @@ docker-panel/
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
+│   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
 │   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
@@ -222,8 +255,14 @@ docker-panel/
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/
 │   ├── debian/control
+│   ├── debian/copyright    # DEP-5：自有 MIT + 第三方许可清单
 │   ├── docker-panel.desktop
 │   └── docker-panel.svg
+├── material-1.1.0/         # Slint Material Components（第三方，MIT / SixtyFPS GmbH）
+├── licenses/               # 第三方许可全文（Apache-2.0 / BSD / ISC / Zlib / Unicode / Slint RF）
+├── LICENSE                 # 自有代码 MIT
+├── LICENSING.md            # 许可选择记录（Slint Royalty-free 2.0）
+├── THIRD-PARTY-NOTICES.md  # 第三方组件清单与许可索引
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
 ├── CHANGELOG.md            # 更新日志
 └── README.md
@@ -241,9 +280,18 @@ docker-panel/
 | futures-util | **0.3** | 提供 `StreamExt`（`.next().await`） |
 | serde_json | **1.x** | bollard 内部序列化 |
 | anyhow | **1.x** | — |
+| arboard | **3.x** | 剪贴板；Wayland 走 data-control 协议（无需外部 wl-copy） |
 
 > 完整技术栈精确版本和版本特有 API 限制见 `AGENTS.md`。
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。
+本项目**自有代码**以 MIT 发布，全文见 [LICENSE](LICENSE)。
+
+发行物（二进制 / deb）还静态链接了第三方组件，各自保留原许可证：
+
+- **Slint 1.18.1**：Slint Royalty-free 2.0（本项目选择的许可分支，署名见顶部 “Made with Slint” 徽章）
+- **Slint Material Components 1.1.0**：MIT（SixtyFPS GmbH）
+- 其余依赖：Apache-2.0 / BSD / ISC / Zlib / Unicode-3.0 等宽松许可
+
+完整清单与许可全文见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，许可选择记录见 [LICENSING.md](LICENSING.md)。

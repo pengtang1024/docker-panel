@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker 桌面管理工具。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron、零运行时。当前版本 v0.3.4（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
+**docker-panel** 是一款极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron / Node 运行时。当前版本 v0.4.2（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
@@ -159,8 +159,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
-| `packaging/` | debian/control（版本三同步之一）+ desktop 入口 + svg 图标 |
-| 根 | Cargo.toml（依赖 & release profile）/ build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md |
+| `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
+| 根 | Cargo.toml（依赖 & release profile & `license = "MIT"`）/ **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
 
 ## 线程模型（三线程架构，已实现优雅退出）
 
@@ -200,7 +200,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（卡片数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（容器行数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
 
 ## 代码规范
 

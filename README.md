@@ -5,6 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#环境要求)
+<a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" height="24"></a>
 
 文档导航：[Wiki](https://github.com/pengtang1024/docker-panel/wiki) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
 
@@ -172,6 +173,7 @@ cargo check --all-targets
 docker-panel/
 ├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / futures
 ├── Cargo.lock
+├── deny.toml               # cargo-deny 许可证门禁（宽松许可 + Slint RF 2.0 allow-list）
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
 ├── ui/                     # Slint UI 声明（按职责拆分，app.slint 唯一组装入口）
@@ -253,8 +255,14 @@ docker-panel/
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/
 │   ├── debian/control
+│   ├── debian/copyright    # DEP-5：自有 MIT + 第三方许可清单
 │   ├── docker-panel.desktop
 │   └── docker-panel.svg
+├── material-1.1.0/         # Slint Material Components（第三方，MIT / SixtyFPS GmbH）
+├── licenses/               # 第三方许可全文（Apache-2.0 / BSD / ISC / Zlib / Unicode / Slint RF）
+├── LICENSE                 # 自有代码 MIT
+├── LICENSING.md            # 许可选择记录（Slint Royalty-free 2.0）
+├── THIRD-PARTY-NOTICES.md  # 第三方组件清单与许可索引
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
 ├── CHANGELOG.md            # 更新日志
 └── README.md
@@ -278,4 +286,12 @@ docker-panel/
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。
+本项目**自有代码**以 MIT 发布，全文见 [LICENSE](LICENSE)。
+
+发行物（二进制 / deb）还静态链接了第三方组件，各自保留原许可证：
+
+- **Slint 1.18.1**：Slint Royalty-free 2.0（本项目选择的许可分支，署名见顶部 “Made with Slint” 徽章）
+- **Slint Material Components 1.1.0**：MIT（SixtyFPS GmbH）
+- 其余依赖：Apache-2.0 / BSD / ISC / Zlib / Unicode-3.0 等宽松许可
+
+完整清单与许可全文见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，许可选择记录见 [LICENSING.md](LICENSING.md)。

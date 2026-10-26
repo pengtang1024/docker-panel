@@ -44,10 +44,14 @@ jobs:
           stage=docker-panel_"$version"_amd64
           rm -rf "$stage"
           install -d "$stage/DEBIAN" "$stage/usr/bin" \
-            "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps"
+            "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps" \
+            "$stage/usr/share/doc/docker-panel"
           install -m 0755 target/release/docker-panel "$stage/usr/bin/docker-panel"
           install -m 0644 packaging/docker-panel.desktop "$stage/usr/share/applications/docker-panel.desktop"
           install -m 0644 packaging/docker-panel.svg "$stage/usr/share/icons/hicolor/scalable/apps/docker-panel.svg"
+          install -m 0644 packaging/debian/copyright "$stage/usr/share/doc/docker-panel/copyright"
+          install -m 0644 LICENSE LICENSING.md THIRD-PARTY-NOTICES.md "$stage/usr/share/doc/docker-panel/"
+          cp -r licenses "$stage/usr/share/doc/docker-panel/licenses"
           sed "s/^Version: .*/Version: $version/" packaging/debian/control > "$stage/DEBIAN/control"
           dpkg-deb --build --root-owner-group "$stage"
           echo "deb=docker-panel_${version}_amd64.deb" >> "$GITHUB_OUTPUT"
@@ -67,7 +71,20 @@ jobs:
             echo "::error::CHANGELOG.md 里没有 [$version] 段落，Release 页面将没有更新日志"
             exit 1
           fi
+          # Slint Royalty-free 2.0 §2(b)：二进制下载页必须展示署名
+          cat >> release-notes.md <<'EOF'
+
+          ---
+
+          <a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" height="24"></a>
+
+          本项目使用 [Slint](https://slint.dev) 1.18.1，按 Slint Royalty-free 2.0 许可使用。
+          第三方组件与许可文本见 [THIRD-PARTY-NOTICES.md](https://github.com/pengtang1024/docker-panel/blob/master/THIRD-PARTY-NOTICES.md)。
+          EOF
           cat release-notes.md
+
+      - name: 打包许可全文
+        run: tar -czf licenses.tar.gz licenses
 
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v3
@@ -83,6 +100,10 @@ jobs:
             docker-panel_${{ steps.ver.outputs.version }}_amd64.deb
             target/release/docker-panel
             checksums.txt
+            LICENSE
+            LICENSING.md
+            THIRD-PARTY-NOTICES.md
+            licenses.tar.gz
 
       # 历史版本（流水线修好之前发的）页面只有一行 "**Full Changelog**: ..."，
       # 这里用 CHANGELOG.md 的段落回填。immutable release 改不了就跳过，不影响本次发布。

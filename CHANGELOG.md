@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-26
+
 ### 工程
 
 - **许可证合规：明确 MIT 只覆盖自有代码**：Slint 1.18.1 按 `LicenseRef-Slint-Royalty-free-2.0` 使用（三选一中的非 copyleft 分支），并在 README 与 GitHub Release 页面补 “Made with Slint” 署名；新增 `LICENSING.md`（许可选择记录）、`THIRD-PARTY-NOTICES.md`（组件分组与许可索引）、`licenses/`（7 份许可全文）与 `packaging/debian/copyright`（DEP-5）。deb 现在安装 `/usr/share/doc/docker-panel/{copyright,LICENSE,LICENSING.md,THIRD-PARTY-NOTICES.md,licenses/}`，Release 附件同步附带 `LICENSE` / `LICENSING.md` / `THIRD-PARTY-NOTICES.md` / `licenses.tar.gz`；`Cargo.toml` 补 `license = "MIT"`。
@@ -223,6 +225,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.4.3]: https://github.com/pengtang1024/docker-panel/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.2
 [0.4.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.1
 [0.4.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.0

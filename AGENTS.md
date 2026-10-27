@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron / Node 运行时。当前版本 v0.4.2（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
+**docker-panel** 是一款极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron / Node 运行时。当前版本 v0.5.0（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 分组带组级操作与分组合并日志 + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 

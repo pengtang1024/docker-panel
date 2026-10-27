@@ -74,8 +74,9 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
 | futures | **0.3** | — | — |
 | futures-util | **0.3** | — | 提供 `StreamExt`（`.next().await`），需显式引 |
-| serde_json | **1.x** | — | 用于 bollard 内部序列化 |
+| serde_json | **1.x** | — | 用于 bollard 内部序列化 / GitHub release JSON 解析 |
 | anyhow | **1.x** | — | — |
+| sha2 | **0.10** | — | 自动更新包 SHA-256 校验；HTTP 走系统 `curl`，**不引入 TLS crate** |
 | 渲染 | — | 纯软件渲染 | 无 Vulkan/GL/WGPU 依赖，deb 包 **不依赖 libgl1** |
 | 构建优化 | — | release profile | `opt-level="z"` + LTO + `codegen-units=1` + `panic="abort"` + strip |
 
@@ -155,8 +156,8 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（36 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar / sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
+| `ui/` | Slint 声明层（38 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar（含更新徽标）/ sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 开关 / 重启）+ update-state（更新 UI 状态 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
@@ -200,6 +201,9 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
+| **`UpdateCheckDone(bool, bool, Result<UpdateInfo, String>)`** | `update::spawn_check`（启动 / 手动） | `(manual, auto_installing, result)`；成功写入 `AppState.update_info` 并决定顶栏徽标；手动检查失败显示在更新弹窗，启动检查失败静默 |
+| **`UpdateProgress(i32, String)`** | 下载 / 安装任务 | 更新弹窗进度条与状态文案（按 1% 节流） |
+| **`UpdateDone(Result<String, String>, bool)`** | 安装任务 | 结果文案 + 是否需要重启；成功时标记 `update_restart_needed`，顶栏徽标转为琥珀色等待重启 |
 | **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s tokio interval + 首屏加载补采一轮 | 整轮采样打包成一条消息 → 写入 `AppState.stats_prev`（双采样缓冲）→ `compute_cpu_delta` → 容器行 CPU%/内存/网络列（容器行数值同帧更新，不阶梯跳动）；本地无 prev 时用 Docker 同帧的 `precpu_stats` 兜底 → **首帧即真实 CPU%** |
 
 ## 代码规范
@@ -232,6 +236,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 26. **分组带 = 组级操作入口，按钮与容器行同构**——分组带的 3 个按钮（主操作 / 日志 / 更多）与容器行**一一对应**，但动作**统一作用于组内全部成员**：主按钮按「是否全部运行中」在启动全组 / 重启全组间切换（启动只动没跑的、重启只动运行中的）；日志打开**合并日志**（每个运行中成员一条流，行首 `[容器名]` 前缀，抽屉走 `log_only` 模式隐藏详情/环境 Tab；无运行成员时只提示不开抽屉）；「更多」菜单 = 停止全部 / 重启全部 / 合并日志 / 删除全部（`CardMenu.kind = 4`）。成员口径 = `ui_rows::group_members`（**当前筛选后**的容器，与台账可见行同源）→ 筛选外的容器不会被组操作误伤。合并日志的实现约束：`follow_targets` 保存 `(id, 前缀)`、多流共享同一个 `watch` 取消信号与 `stream_epoch`、`LogStreamEnded` 只在全部流退出后清状态、`clear_log_buffer` 重建**全部**成员流；多流时**不发**重连/恢复/停止提示（单路结局代表不了整组）。`SelKind::Group` 下迟到的容器 inspect 结果必须丢弃（防止覆盖组标题/Tab 模式）。
 27. **底部状态栏的资源汇总由 consumer 独占写入**——`app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性绑定到 `FootBar`，**必须**在 `consumer::apply_ui` 里每轮 `set`（Rust 侧不写 → 恒显示 "0%" / "0MB"）。口径 = **全部容器**（与「N/N 容器」同源，不是筛选后的可见集合）：CPU / 内存只累加**运行中**容器（停止容器的 `cpu_percent` 是停止前的残留值），磁盘累加**全部**容器（`size_rw` 是累计值）——与分组带汇总（规范 #25）同口径。
 28. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
+29. **自动更新任务必须 spawn_blocking + 校验和 + 安装方式判定**——GitHub 检查 / 下载 / `pkexec` / 文件 IO 全是阻塞操作，统一放 `tokio::task::spawn_blocking`，禁止占用 tokio worker 或 UI 线程；HTTP 只走系统 `curl`（参数数组直传，禁止拼 shell）；下载后必须核对 Release `checksums.txt` 的 SHA-256，缺失或不匹配一律拒绝安装；安装前必须判定 dpkg 管理 / 目录可写 / pkexec 可用，开发构建与非 Linux 只提示不安装。检查与安装共用 `update_busy` 互斥，进度按 1% 节流投递 `Msg`。
 
 ## 构建命令
 
@@ -284,6 +289,9 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 - **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
 - **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
 - **静默容器的「已恢复连接」提示最迟 180s**：容器 180s 无输出走 Idle 保活分支，不计失败预算也不打扰用户；「已恢复」要等到 Idle 结局才提示
+- **自动更新仅支持 Linux**：deb（dpkg 安装）走 `pkexec dpkg -i`，裸二进制在安装目录可写时自替换；开发构建 / 其它平台 / 无匹配资产时只提示并打开下载页
+- **更新包无代码签名**：只依赖 HTTPS + 同一 Release 的 `checksums.txt`（SHA-256）；上游 Release 被篡改无法防御
+- **自动安装 deb 依赖 polkit 授权代理**：无桌面 polkit 的环境会安装失败，需要手动下载 deb
 
 ## 文档导航
 

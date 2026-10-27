@@ -140,6 +140,28 @@ pub struct AppState {
     pub sort_networks: ResourceSort,
     /// 卷列表排序（0=名称 1=大小 2=挂载点）
     pub sort_volumes: ResourceSort,
+
+    // —— 自动更新 ——
+    /// 启动时检查更新（默认开）
+    pub check_updates: bool,
+    /// 检查到新版本后自动下载安装（默认开）
+    pub auto_install: bool,
+    /// 上次检查时间（unix 秒），24h 节流
+    pub last_update_check: i64,
+    /// 最近一次成功检查到的 release（含本机安装计划）
+    pub update_info: Option<crate::models::update::UpdateInfo>,
+    /// 是否有比当前版本更新的 release（顶栏徽标）
+    pub update_available: bool,
+    /// 已安装更新，等待重启
+    pub update_restart_needed: bool,
+    /// 下载/安装进度 0~100
+    pub update_progress: i32,
+    /// 更新状态文案（检查中 / 下载中 / 错误）
+    pub update_status: String,
+    /// 弹窗 busy 状态（consumer 根据消息推进；与互斥用的 update_busy 分离）
+    pub update_busy_ui: bool,
+    /// 检查/安装互斥标志（防重复任务）
+    pub update_busy: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -163,6 +185,9 @@ impl AppState {
         let sort_images = cfg.sort_images;
         let sort_networks = cfg.sort_networks;
         let sort_volumes = cfg.sort_volumes;
+        let check_updates = cfg.check_updates;
+        let auto_install = cfg.auto_install;
+        let last_update_check = cfg.last_update_check;
 
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self {
@@ -208,6 +233,16 @@ impl AppState {
             sort_images,
             sort_networks,
             sort_volumes,
+            check_updates,
+            auto_install,
+            last_update_check,
+            update_info: None,
+            update_available: false,
+            update_restart_needed: false,
+            update_progress: 0,
+            update_status: String::new(),
+            update_busy_ui: false,
+            update_busy: Arc::new(AtomicBool::new(false)),
         }));
         (state, rx)
     }

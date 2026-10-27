@@ -4,7 +4,7 @@
 
 ## 1. Slint UI 模块交互
 
-36 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+38 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
 
 ### 交互总图
 
@@ -59,13 +59,13 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 356 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions |
-| `app-actions.slint` | 56 | AppActions global：UI → Rust 回调声明（含分组操作） | 无 |
-| `overlays.slint` | 121 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs |
+| `app.slint` | 365 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state |
+| `app-actions.slint` | 64 | AppActions global：UI → Rust 回调声明（含分组操作 + 自动更新） | 无 |
+| `overlays.slint` | 152 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取/清理/更新弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs / update-dialog / update-state |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
 | `models.slint` | 105 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
-| `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
+| `top-bar.slint` | 178 | TopBar（搜索框 + 5 按钮 + focus_search + 更新徽标） | theme / components-align / components-interact / update-state |
 | `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
 | `main-area.slint` | 174 | 主列表工作区：SubBar + BatchBar + ListArea（含分组操作回调冒泡） | theme / sub-bar / batch-bar / list-area / models |
 | `list-area.slint` | 165 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
@@ -85,6 +85,8 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
 | `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
+| `update-dialog.slint` | 191 | 自动更新弹窗：版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启 | theme / components-* / @material（ScrollView） / update-state |
+| `update-state.slint` | 20 | 自动更新 UI 状态 global（供 TopBar / UpdateDialog / Rust 共享） | 无 |
 | `menu-layers.slint` | 161 | 排序菜单 + 行「···」菜单（容器/镜像/网络/卷）+ 分组菜单（kind=4：停止全部 / 重启全部 / 合并日志 / 删除全部） | theme / models |
 | `components-interact.slint` | 342 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |

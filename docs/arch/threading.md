@@ -108,6 +108,7 @@ invoke_from_event_loop(move || {
   - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s。
   - CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
 - **30s 卷占用**（`bootstrap::spawn_volume_size_interval`）：`/system/df` 遍历卷目录，低频单独跑。
+- **自动更新**（`update::spawn_scheduler`）：启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs`。
 - UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
 - 这符合 Slint 线程安全模型：只有主线程可以修改 Model。
 - **主题监听可退出**：`dconf watch` 的阻塞读放在独立 reader 线程，监控线程用 `recv_timeout(200ms)` 轮询 shutdown；轮询回退路径也按 200ms 醒来检查。窗口关闭时 `theme-monitor` 能在 200ms 内 join，不会因 `reader.next()` 永久阻塞而让进程挂住。
@@ -132,6 +133,9 @@ invoke_from_event_loop(move || {
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
+| **`UpdateCheckDone(bool, bool, Result<UpdateInfo, String>)`** | 启动 10s 后 / 每 6h 轮询（24h 节流）/ 手动检查 | `(manual, auto_installing, result)`；成功写入 `AppState.update_info` 并更新顶栏徽标；启动检查失败静默，手动失败写弹窗状态 |
+| **`UpdateProgress(i32, String)`** | 下载 / 安装任务 | 弹窗进度条 + 状态文案（1% 节流，不逐 chunk 发） |
+| **`UpdateDone(Result<String, String>, bool)`** | 安装任务结束 | 成功标记 `update_restart_needed`、顶栏徽标转琥珀色；失败保留可用状态供重试 |
 
 ### 消息处理流水线
 

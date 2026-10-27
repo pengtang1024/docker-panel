@@ -28,6 +28,12 @@ pub struct AppConfig {
     pub sort_networks: i64,
     /// 卷列表排序（同上）
     pub sort_volumes: i64,
+    /// 启动时检查更新
+    pub check_updates: bool,
+    /// 检查到新版本后自动下载安装
+    pub auto_install: bool,
+    /// 上次检查时间（unix 秒）
+    pub last_update_check: i64,
 }
 
 impl Default for AppConfig {
@@ -44,6 +50,9 @@ impl Default for AppConfig {
             sort_images: 0,
             sort_networks: 0,
             sort_volumes: 0,
+            check_updates: true,
+            auto_install: true,
+            last_update_check: 0,
         }
     }
 }
@@ -109,6 +118,19 @@ impl AppConfig {
                 .and_then(|x| x.as_i64())
                 .filter(|x| (0..=10).contains(x))
                 .unwrap_or(d.sort_volumes),
+            check_updates: v
+                .get("check_updates")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(d.check_updates),
+            auto_install: v
+                .get("auto_install")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(d.auto_install),
+            last_update_check: v
+                .get("last_update_check")
+                .and_then(|x| x.as_i64())
+                .filter(|x| *x >= 0)
+                .unwrap_or(d.last_update_check),
             compose_collapsed: v
                 .get("compose_collapsed")
                 .and_then(|x| x.as_array())
@@ -138,7 +160,7 @@ impl AppConfig {
             .collect::<Vec<_>>()
             .join(", ");
         let json = format!(
-            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
+            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"check_updates\": {},\n  \"auto_install\": {},\n  \"last_update_check\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
             self.theme,
             self.view,
             json_escape(&self.filter),
@@ -149,6 +171,9 @@ impl AppConfig {
             self.sort_images,
             self.sort_networks,
             self.sort_volumes,
+            self.check_updates,
+            self.auto_install,
+            self.last_update_check,
             collapsed,
         );
         let tmp = path.with_extension("json.tmp");

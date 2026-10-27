@@ -27,6 +27,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features=false）；必须多线程 runtime 不能 current_thread；spawn 前必须 `handle().clone()`——详见 AGENTS.md「tokio 1.x 版本关键用法」 |
 | futures | **0.3** | — |
 | futures-util | **0.3** | 提供 `StreamExt`（`.next().await`），需显式引入 |
+| sha2 | **0.10** | 自动更新包 SHA-256 校验；HTTP 走系统 `curl`（不引入 TLS crate） |
 | 渲染 | — | 纯软件渲染器（`renderer-software`），**无 Vulkan/GL/WGPU 依赖**，deb 包不依赖 `libgl1` |
 | 构建优化 | — | `opt-level="z"` + LTO + `codegen-units=1` + `panic="abort"` + strip（release profile） |
 
@@ -34,7 +35,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 
 ```
 docker-panel/
-├── Cargo.toml                依赖：slint 1.18.1 / bollard 0.21 / tokio / futures
+├── Cargo.toml                依赖：slint 1.18.1 / bollard 0.21 / tokio / futures / sha2
 ├── build.rs                  slint_build::compile_with_config + with_bundled_translations("translations")
 │
 ├── src/                       Rust 层（所有 ≤ 300 行）
@@ -47,6 +48,7 @@ docker-panel/
 │   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 主题监听
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
+│   ├── models/update.rs       自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层）
 │   ├── batch.rs               BatchState 多选状态（purge_dead）
 │   │
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
@@ -58,6 +60,7 @@ docker-panel/
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update/update.rs    自动更新消息 → AppState / DrainResult（从 ui_update 拆出）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
@@ -67,6 +70,14 @@ docker-panel/
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
 │   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志；compose_collapsed 的唯一写入方）
 │   ├── callbacks_sort.rs      三个资源列表的表头排序回调（各自独立状态 + 持久化）
+│   ├── callbacks_update.rs    自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 两个配置开关
+│   │
+│   ├── update/
+│   │   ├── mod.rs             任务编排 + 启动调度（24h 节流）+ Msg 投递 + UI 视图快照
+│   │   ├── github.rs          GitHub Releases API（系统 curl + JSON 解析，阻塞）
+│   │   ├── version.rs         版本比较 / 资产选择 / checksums 解析（纯逻辑 + 单测）
+│   │   ├── install.rs         环境探测 / 安装方式判定 / deb（pkexec）与裸二进制替换
+│   │   └── install/download.rs 缓存目录 / curl 下载 / SHA-256 校验
 │   │
 │   └── docker/
 │       ├── mod.rs             connect() + with_timeout（单次调用 10s 上限）+ pub use 重导出
@@ -91,7 +102,7 @@ docker-panel/
     ├── theme.slint            浅/深双套色板（31 个颜色令牌）+ theme_mode 三态（is_dark 为 out）
     ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
     ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
-    ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 4 按钮
+    ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 主题/刷新/清理/更新/拉取按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
     ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
     ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
@@ -110,6 +121,8 @@ docker-panel/
     ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）
     ├── drawer-log-row.slint   日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
     ├── dialogs.slint          PullDialog + CleanupDialog 弹窗（继承 DialogShell）
+    ├── update-dialog.slint    自动更新弹窗：版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启
+    ├── update-state.slint     自动更新 UI 状态 global（TopBar / UpdateDialog / Rust 共享）
     ├── menu-layers.slint      浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染，否则被列表 clip 裁掉）
     └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```
@@ -127,6 +140,8 @@ main.rs
   ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render + ui_state::SharedState
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
+  ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（status_toast）
+  ├── update/        → github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；

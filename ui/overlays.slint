@@ -15,6 +15,8 @@ import { Tip, CardMenu } from "components-align.slint";
 import { TipLayer } from "components-interact.slint";
 import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
+import { UpdateDialog } from "update-dialog.slint";
+import { UpdateState } from "update-state.slint";
 
 export component Overlays inherits Rectangle {
     // —— 排序菜单 ——
@@ -39,7 +41,6 @@ export component Overlays inherits Rectangle {
     in-out property <string> cleanup_cnt_dangling: "";
     in-out property <string> cleanup_cnt_unused_net: "";
     in-out property <string> cleanup_cnt_unused_vol: "";
-
     callback sort_pick(int);
     // 卡片「···」菜单（容器 / 镜像 / 网络 / 卷）
     callback card_stop(string);
@@ -55,6 +56,13 @@ export component Overlays inherits Rectangle {
     callback pull_submit(string);
     callback cleanup_close();
     callback cleanup_submit(bool, bool, bool, bool);
+    // 更新弹窗动作（app.slint 注入 AppActions）
+    callback update_close();
+    callback update_install();
+    callback update_open_page();
+    callback update_restart();
+    callback update_set_auto_check(bool);
+    callback update_set_auto_install(bool);
 
     width: 100%;
     height: 100%;
@@ -109,6 +117,29 @@ export component Overlays inherits Rectangle {
         cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
         close => { root.cleanup_close(); }
         submit(a,b,c,d) => { root.cleanup_submit(a,b,c,d); }
+    }
+
+    UpdateDialog {
+        open <=> UpdateState.open;
+        checking <=> UpdateState.checking;
+        busy <=> UpdateState.busy;
+        available <=> UpdateState.available;
+        installable <=> UpdateState.installable;
+        restart_needed <=> UpdateState.restart_needed;
+        current <=> UpdateState.current;
+        latest <=> UpdateState.latest;
+        notes <=> UpdateState.notes;
+        status <=> UpdateState.status;
+        reason <=> UpdateState.reason;
+        progress <=> UpdateState.progress;
+        auto_check <=> UpdateState.auto_check;
+        auto_install <=> UpdateState.auto_install;
+        close => { root.update_close(); }
+        install => { root.update_install(); }
+        open_page => { root.update_open_page(); }
+        restart => { root.update_restart(); }
+        set_auto_check(v) => { root.update_set_auto_check(v); }
+        set_auto_install(v) => { root.update_set_auto_install(v); }
     }
 
     // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛

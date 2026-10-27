@@ -6,6 +6,7 @@ use super::callbacks_drawer::bind_drawer;
 pub use super::callbacks_image::bind_image_actions;
 pub use super::callbacks_netvol::bind_netvol_actions;
 use super::callbacks_sort::bind as bind_sort_actions;
+use super::callbacks_update::bind_update;
 
 use std::sync::atomic::Ordering;
 
@@ -29,6 +30,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     bind_image_actions(ui, state);
     bind_netvol_actions(ui, state);
     bind_sort_actions(ui, &actions, state);
+    bind_update(ui, &actions, state);
 }
 
 /// 启动时把持久化的配置灌回 Slint 属性

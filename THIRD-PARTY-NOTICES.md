@@ -26,7 +26,7 @@
 
 ## 4. 其他第三方组件（按许可证分组）
 
-> 下表列出直接依赖与主要传递依赖。**完整依赖图以 `Cargo.lock` 为准**（540 个锁定包，Linux 目标 338 个 normal 依赖）。
+> 下表列出直接依赖与主要传递依赖。**完整依赖图以 `Cargo.lock` 为准**（547 个锁定包，Linux 目标 345 个 normal 依赖）。
 
 | 许可证 | 组件（版本） | 全文 |
 |--------|--------------|------|
@@ -41,7 +41,7 @@
 
 | 上游表达式 | 代表组件 | 本项目选择 |
 |------------|----------|------------|
-| `MIT OR Apache-2.0` | `tokio` 1.53.3、`hyper` 1.12.0、`futures` 0.3.34、`serde` 1.0.229、`zbus` 5.19.0、`image` 0.25.10、`usvg` / `resvg` 0.48.1、`parley` 0.11.1、`swash` 0.2.10、`wayland-*` 0.31.x、`x11rb` 0.13.2 等 215 个 | MIT |
+| `MIT OR Apache-2.0` | `tokio` 1.53.3、`hyper` 1.12.0、`futures` 0.3.34、`serde` 1.0.229、`zbus` 5.19.0、`image` 0.25.10、`usvg` / `resvg` 0.48.1、`parley` 0.11.1、`swash` 0.2.10、`wayland-*` 0.31.x、`x11rb` 0.13.2、`sha2` 0.10.9、`digest` 0.10.7、`block-buffer` 0.10.4、`crypto-common` 0.1.7、`generic-array` 0.14.7、`typenum` 1.20.1、`cpufeatures` 0.2.17 等 222 个 | MIT |
 | `Apache-2.0 OR MIT` | `indexmap` 2.14.2、`pin-project` 1.1.13、`polling` 3.11.0 等 40 个 | MIT |
 | `Unlicense OR MIT` | `memchr` 2.8.3、`byteorder-lite` 0.1.0 | MIT |
 | `CC0-1.0 OR Apache-2.0` | `imgref` 1.12.3 | Apache-2.0（规避 CC0 的 OSI 认定问题） |
@@ -67,7 +67,7 @@ cargo metadata --format-version 1   # 每个包的 license / license_file 字段
 cargo tree --target x86_64-unknown-linux-gnu -e normal   # 实际参与构建的依赖树
 ```
 
-Linux 目标实测：338 个 normal 依赖，其中静态链入的 copyleft 选项组件只有 Slint 一组，已按 Royalty-free 2.0 合规；其余均为 MIT / Apache-2.0 / BSD / ISC / Zlib / Unicode 等宽松许可。
+Linux 目标实测：345 个 normal 依赖，其中静态链入的 copyleft 选项组件只有 Slint 一组，已按 Royalty-free 2.0 合规；其余均为 MIT / Apache-2.0 / BSD / ISC / Zlib / Unicode 等宽松许可。
 
 ## 6. 维护规则
 
@@ -77,4 +77,4 @@ Linux 目标实测：338 个 normal 依赖，其中静态链入的 copyleft 选�
 
 ---
 
-最后更新：2026-10-26（docker-panel 0.4.2）
+最后更新：2026-10-28（docker-panel 0.5.0 + 自动更新未发布改动）

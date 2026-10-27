@@ -12,6 +12,8 @@ use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
 use crate::ui_state::{AppState, LOG_ROWS_MAX};
 
+mod update;
+
 /// 一次批量 drain 的聚合结果。
 ///
 /// consumer 用它决定本轮要刷新哪些 UI 区域：日志洪峰时只更新日志行列表，
@@ -48,6 +50,12 @@ pub struct DrainResult {
     pub reset_pull_busy: bool,
     /// 操作完成，需要立即触发一次列表刷新
     pub refresh_now: bool,
+    /// 更新检查完成（成功/失败都置位；manual 失败才显示到弹窗）
+    pub update_check_done: bool,
+    /// 更新下载/安装进度变化
+    pub update_progress: bool,
+    /// 更新安装完成（成功或失败）
+    pub update_done: bool,
 }
 
 impl DrainResult {
@@ -76,6 +84,9 @@ impl DrainResult {
             || self.close_pull
             || self.reset_pull_busy
             || self.refresh_now
+            || self.update_check_done
+            || self.update_progress
+            || self.update_done
     }
 
     /// 把下一批结果并入累计结果（UI 刷新按时间窗口节流时会连续 drain 多批）
@@ -102,6 +113,9 @@ impl DrainResult {
         self.close_pull |= o.close_pull;
         self.reset_pull_busy |= o.reset_pull_busy;
         self.refresh_now |= o.refresh_now;
+        self.update_check_done |= o.update_check_done;
+        self.update_progress |= o.update_progress;
+        self.update_done |= o.update_done;
     }
 }
 
@@ -139,6 +153,15 @@ impl AppState {
     /// 缓冲，逐行 clone 会在洪峰下把 CPU 直接打满；列表类消息同理，去掉整表 clone。
     fn apply_msg(&mut self, msg: Msg, res: &mut DrainResult) {
         res.processed += 1;
+
+        // 自动更新消息拆到 ui_update/update.rs（保持本文件 R2 预算）
+        if matches!(
+            &msg,
+            Msg::UpdateCheckDone(..) | Msg::UpdateProgress(..) | Msg::UpdateDone(..)
+        ) {
+            self.apply_update_msg(msg, res);
+            return;
+        }
 
         match msg {
             // Stats：整轮采样一次到达，逐容器写回 containers（累加）
@@ -315,6 +338,10 @@ impl AppState {
                 });
                 res.toast = true;
                 res.refresh_now = true;
+            }
+            // 已在函数开头提前分派到 apply_update_msg
+            Msg::UpdateCheckDone(..) | Msg::UpdateProgress(..) | Msg::UpdateDone(..) => {
+                unreachable!("update messages are dispatched before the main match")
             }
         }
     }

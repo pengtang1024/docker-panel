@@ -106,6 +106,34 @@ export component CardMenuLayer inherits Dropdown {
     callback logs(string);
     callback details(string);
     callback remove(string);
+    // —— 分组（kind=4）操作：统一作用于组内全部容器 ——
+    callback group_stop(string);
+    callback group_restart(string);
+    callback group_logs(string);
+    callback group_remove(string);
+
+    // 分组：停止全部 / 重启全部 / 合并日志 / 删除全部
+    if root.kind == 4 && root.can_stop : MenuItem {
+        icon_name: "";
+        label: @tr("Stop all");
+        clicked => { root.group_stop(root.id); }
+    }
+    if root.kind == 4 : MenuItem {
+        icon_name: "restart";
+        label: @tr("Restart all");
+        clicked => { root.group_restart(root.id); }
+    }
+    if root.kind == 4 : MenuItem {
+        icon_name: "file-text";
+        label: @tr("Merged logs");
+        clicked => { root.group_logs(root.id); }
+    }
+    if root.kind == 4 : MenuItem {
+        icon_name: "trash";
+        label: @tr("Remove all");
+        danger: true;
+        clicked => { root.group_remove(root.id); }
+    }
 
     // 容器：停止 / 日志 / 删除（prototype 卡片 dropdown）
     if root.kind == 0 && root.can_stop : MenuItem {
@@ -118,13 +146,13 @@ export component CardMenuLayer inherits Dropdown {
         label: @tr("Logs");
         clicked => { root.logs(root.id); }
     }
-    // 镜像 / 网络 / 卷：详情 + 删除
-    if root.kind != 0 : MenuItem {
+    // 镜像 / 网络 / 卷：详情 + 删除（分组 kind=4 有自己的菜单项，不复用）
+    if root.kind != 0 && root.kind != 4 : MenuItem {
         icon_name: "more";
         label: @tr("Details");
         clicked => { root.details(root.id); }
     }
-    MenuItem {
+    if root.kind != 4 : MenuItem {
         icon_name: "trash";
         label: @tr("Remove");
         danger: true;

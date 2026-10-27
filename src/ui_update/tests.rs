@@ -93,15 +93,29 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     assert_eq!(s.follow_id, "c2");
 
     // #12：当前流结束同时释放 cancel sender
+    //     （stream 在发 Ended 之前已把自己的存活标志置 false）
     s.follow_id = "c3".into();
     let (cancel_tx, _cancel_rx) = tokio::sync::watch::channel(());
     s.follow_cancel = Some(cancel_tx);
-    s.follow_active = Some(std::sync::Arc::new(AtomicBool::new(true)));
+    s.follow_active = vec![std::sync::Arc::new(AtomicBool::new(false))];
     tx.send(Msg::LogStreamEnded(6)).unwrap();
     s.drain_messages(&rx, None, 10);
     assert!(s.follow_id.is_empty());
     assert!(s.follow_cancel.is_none());
-    assert!(s.follow_active.is_none());
+    assert!(s.follow_active.is_empty());
+
+    // 分组合并日志：一条流结束、另一条仍在跑 → 跟随状态必须保留
+    let ep = s.stream_epoch;
+    s.follow_id = "project:demo".into();
+    s.follow_targets = vec![("a".into(), "[a]".into()), ("b".into(), "[b]".into())];
+    s.follow_active = vec![
+        std::sync::Arc::new(AtomicBool::new(false)),
+        std::sync::Arc::new(AtomicBool::new(true)),
+    ];
+    tx.send(Msg::LogStreamEnded(ep)).unwrap();
+    s.drain_messages(&rx, None, 10);
+    assert_eq!(s.follow_id, "project:demo");
+    assert_eq!(s.follow_targets.len(), 2);
 
     // #6：无活动流时 Clear 也必须推进 buffer epoch，失效旧的日志行增量
     s.follow_id.clear();

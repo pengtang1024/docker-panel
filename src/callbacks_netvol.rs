@@ -81,6 +81,8 @@ fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
     };
     ui.set_drawer_open(true);
     ui.set_drawer_tab(0);
+    // 从分组合并日志切到网络/卷详情：恢复详情/环境 Tab
+    ui.set_drawer_log_only(false);
     if let Some(d) = data {
         crate::ui_apply::apply_drawer(ui, &d);
     }

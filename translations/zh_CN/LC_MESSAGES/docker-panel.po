@@ -543,3 +543,28 @@ msgstr "删除卷失败：{0}"
 
 msgid "Run {0}"
 msgstr "运行 {0}"
+
+# ===== 分组操作（台账内联树的分组带按钮 / 菜单）=====
+msgid "Start all"
+msgstr "启动全部"
+
+msgid "Stop all"
+msgstr "停止全部"
+
+msgid "Restart all"
+msgstr "重启全部"
+
+msgid "Remove all"
+msgstr "全部删除"
+
+msgid "Merged logs"
+msgstr "合并日志"
+
+msgid "Group actions"
+msgstr "组操作"
+
+msgid "No running containers in this group"
+msgstr "该分组没有运行中的容器"
+
+msgid "{0} containers merged"
+msgstr "已合并 {0} 个容器的日志"

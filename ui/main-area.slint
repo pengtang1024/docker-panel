@@ -82,6 +82,10 @@ export component MainArea inherits Rectangle {
     callback v_remove(string);
     /// 内联树分组展开 / 收起（分组键）
     callback compose_toggle(string);
+    /// 分组操作（分组键）：启动全组 / 重启全组 / 合并日志
+    callback compose_start(string);
+    callback compose_restart(string);
+    callback compose_logs(string);
     /// 三个资源列表的表头排序（镜像 / 网络 / 卷）
     callback sort_images_pick(int);
     callback sort_networks_pick(int);
@@ -157,6 +161,10 @@ export component MainArea inherits Rectangle {
             sort_pick(f) => { root.set_sort(f); }
             // 内联树分组展开 / 收起
             tree_toggle(k) => { root.compose_toggle(k); }
+            // 分组操作（组内全部容器）
+            g_start(k) => { root.compose_start(k); }
+            g_restart(k) => { root.compose_restart(k); }
+            g_logs(k) => { root.compose_logs(k); }
             // 三个资源列表的表头排序
             sort_images_pick(f) => { root.sort_images_pick(f); }
             sort_networks_pick(f) => { root.sort_networks_pick(f); }

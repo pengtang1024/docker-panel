@@ -17,6 +17,14 @@ export global AppActions {
     // —— 台账内联树 ——
     /// 展开 / 收起分组（分组键：project:<项目名> / svc:<项目>/<服务>）
     callback compose_toggle(string);
+    /// 分组操作：统一作用于组内全部容器
+    /// （启动 = 只启动没跑的；重启 = 重启运行中的；删除 = 全部删除）
+    callback compose_start(string);
+    callback compose_stop(string);
+    callback compose_restart(string);
+    callback compose_remove(string);
+    /// 分组合并日志（组内运行中容器的日志流合并到一个面板，行首带容器名前缀）
+    callback compose_logs(string);
     callback container_toggle(string);
     callback container_restart(string);
     callback container_remove(string);

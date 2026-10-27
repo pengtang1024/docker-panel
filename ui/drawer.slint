@@ -26,6 +26,9 @@ export component Drawer inherits Rectangle {
     in-out property <string> title: "";
     in-out property <string> sub: "";
     in-out property <bool> tabs_visible: true;
+    /// 只展示日志（分组「合并日志」）：隐藏 Tab 栏与详情 / 环境面板，
+    /// 避免切到详情时看到上一个容器的残留内容
+    in-out property <bool> log_only: false;
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
     /// 日志行列表（虚拟化：只渲染视口内的行）
@@ -80,7 +83,7 @@ export component Drawer inherits Rectangle {
         }
 
         // Tab 栏
-        if root.tabs_visible : Rectangle {
+        if root.tabs_visible && root.log_only == false : Rectangle {
             vertical-stretch: 0;
             height: 36px;
             HorizontalLayout {
@@ -97,7 +100,7 @@ export component Drawer inherits Rectangle {
         //   Flickable 的非布局子元素高度默认吃到 100% 视口高，Slint 布局引擎会把
         //   N 行等比压缩进视口 → 内容永不溢出、无法滚动（实测 67 行被压成 9.388px/行）。
         //   ListView 由运行时逐项读取 delegate.height 累加内容高，绕开该缺陷。
-        if (root.tabs_visible == false) || root.tab == 0 : detail_scroll := ListView {
+        if (root.tabs_visible == false && root.log_only == false) || (root.tab == 0 && root.log_only == false) : detail_scroll := ListView {
             width: 100%;
             vertical-scrollbar-policy: as-needed;
             horizontal-scrollbar-policy: always-off;
@@ -120,7 +123,7 @@ export component Drawer inherits Rectangle {
         }
 
         // ====== 日志 tab ======
-        if root.tabs_visible && root.tab == 1 : VerticalLayout {
+        if root.log_only || (root.tabs_visible && root.tab == 1) : VerticalLayout {
             width: 100%;
             spacing: 0px;
             Rectangle {
@@ -182,7 +185,7 @@ export component Drawer inherits Rectangle {
         }
 
         // ====== 环境 tab（ListView：行位置与内容高度由 Slint 运行时列表布局计算）======
-        if root.tabs_visible && root.tab == 2 : env_scroll := ListView {
+        if root.tabs_visible && root.tab == 2 && root.log_only == false : env_scroll := ListView {
             width: 100%;
             vertical-scrollbar-policy: as-needed;
             horizontal-scrollbar-policy: always-off;

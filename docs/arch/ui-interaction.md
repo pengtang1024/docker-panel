@@ -4,7 +4,7 @@
 
 ## 1. Slint UI 模块交互
 
-35 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+36 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
 
 ### 交互总图
 
@@ -59,20 +59,21 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 368 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / dialogs / models / app-actions |
-| `app-actions.slint` | 48 | AppActions global：UI → Rust 回调声明 | 无 |
+| `app.slint` | 356 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions |
+| `app-actions.slint` | 56 | AppActions global：UI → Rust 回调声明（含分组操作） | 无 |
+| `overlays.slint` | 121 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
-| `models.slint` | 102 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
+| `models.slint` | 105 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 158 | TopBar（搜索框 + 4 按钮 + focus_search） | theme / components-align / components-interact |
 | `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
-| `main-area.slint` | 166 | 主列表工作区：SubBar + BatchBar + ListArea | theme / sub-bar / batch-bar / list-area / models |
-| `list-area.slint` | 158 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
-| `ledger.slint` | 258 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-band / ledger-cols / models / components-* |
+| `main-area.slint` | 174 | 主列表工作区：SubBar + BatchBar + ListArea（含分组操作回调冒泡） | theme / sub-bar / batch-bar / list-area / models |
+| `list-area.slint` | 165 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
+| `ledger.slint` | 270 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-tree-row / ledger-band / ledger-cols / models / components-* |
 | `ledger-row.slint` | 218 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
 | `ledger-cols.slint` | 24 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
-| `ledger-tree-row.slint` | 176 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
+| `ledger-tree-row.slint` | 240 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
 | `image-list.slint` | 217 | 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序） | theme / components-list / components-interact / models / @material |
 | `network-list.slint` | 157 | 网络表格列表：名称 · driver · 子网（表头可点排序） | theme / components-list / models / @material |
 | `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
@@ -80,11 +81,11 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `skel.slint` | 69 | 骨架屏占位 | theme |
 | `foot-bar.slint` | 109 | 底部 8 项资源概览 | theme / components-align |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
-| `drawer.slint` | 201 | 右侧抽屉三 Tab（详情/日志/环境） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
+| `drawer.slint` | 204 | 右侧抽屉三 Tab（详情/日志/环境；`log_only` = 分组合并日志只展示日志面板） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
 | `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
-| `menu-layers.slint` | 133 | 排序菜单 + 行「···」菜单 | theme / models |
+| `menu-layers.slint` | 161 | 排序菜单 + 行「···」菜单（容器/镜像/网络/卷）+ 分组菜单（kind=4：停止全部 / 重启全部 / 合并日志 / 删除全部） | theme / models |
 | `components-interact.slint` | 342 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |
 | `components-form.slint` | 102 | 输入/复选框等表单组件 | theme |
@@ -173,7 +174,7 @@ VCenterText { text: root.data.name; width: root.name_w; horizontal-stretch: 0; o
 ### 3.4 台账内联树（Compose）：分组是分组，不是筛选器
 
 Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有左侧栏。
-踩过 / 固化下来的四条：
+踩过 / 固化下来的五条：
 
 | 坑 | 正确做法 |
 |----|----------|
@@ -181,6 +182,7 @@ Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有
 | **分组带通栏，不参与列宽计算** | 分组带是独立 delegate（`kind = 1/2`），不占用台账的列契约；否则「项目名」会被算成一列，表格列起点漂移 |
 | **分组名要与同层容器行的名称列起点对齐** | 箭头占 14px（与状态点列同槽）+ 色点 18px → 分组名落在 `44px + depth*18`，与同层容器行名称列**逐像素对齐**；层级只靠缩进表达，不靠「分组名比孩子更右」的半格错位 |
 | **分组是分组不是筛选器** | 排序字段只决定**组内**顺序，组间按组名稳定排；展开状态存「**收起**的分组键」集合（`project:<名>` / `svc:<项目>/<服务>`），不在集合里 = 展开 → 新分组默认展开 |
+| **分组带的操作按钮** | 与容器行同构的 3 个按钮（主操作 / 日志 / 更多），但动作**作用于组内全部成员**：主按钮按「是否全部运行中」在启动全组 / 重启全组间切换；日志走组内运行中成员的**合并流**（每条流带 `[容器名]` 行前缀）；「更多」菜单 = 停止全部 / 重启全部 / 合并日志 / 删除全部。成员口径 = **当前筛选后的容器**（与台账可见行一致），筛选外的容器不会被组操作误伤 |
 | **分组带要显示资源汇总** | 汇总 = **组内成员之和**（CPU / 内存只算运行中成员，磁盘算全部成员），落在与容器行**同 x** 的 CPU / 内存 / 磁盘列 → 分组带内部必须**镜像 `ledger-row.slint` 的列结构与列宽**（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`）；⚠️ 改一行必须同步改另一行。微条**统一用 docker stats 口径**（绝对占比）：CPU = 相对单核的百分比 / 100，内存 = usage/limit；**分组带的条 = 组内成员条之和** → 父子关系自洽（不用「视图内最大值归一」：那会让组带与容器行量纲不同，同列出现「组数字是成员的 2 倍、条却一样长」） |
 
 计数口径：概览带与筛选 chips 都取**可见容器集合**（实际渲染成行的那些容器），

@@ -49,6 +49,10 @@ export component ListArea inherits Rectangle {
     callback sort_pick(int);
     /// 内联树分组展开 / 收起（冒泡到本层）
     callback tree_toggle(string);
+    /// 分组操作（冒泡到本层）：启动全组 / 重启全组 / 合并日志
+    callback g_start(string);
+    callback g_restart(string);
+    callback g_logs(string);
     /// 三个资源列表的表头排序
     callback sort_images_pick(int);
     callback sort_networks_pick(int);
@@ -117,6 +121,9 @@ export component ListArea inherits Rectangle {
         }
         sort_pick(f) => { root.sort_pick(f); }
         tree_toggle(k) => { root.tree_toggle(k); }
+        g_start(k) => { root.g_start(k); }
+        g_restart(k) => { root.g_restart(k); }
+        g_logs(k) => { root.g_logs(k); }
     }
 
     // 镜像视图：表格列表

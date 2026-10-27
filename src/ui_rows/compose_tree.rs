@@ -199,7 +199,11 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
                 kind: *kind,
                 depth: *depth,
                 expanded: *expanded,
+                is_running: *n > 0 && totals.running() == *n,
                 group_n: *n as i32,
+                // 组内运行中成员数：< group_n 说明分组还没全部起来
+                // （分组带主按钮据此在「启动全组 / 重启全组」之间切换）
+                group_running: totals.running() as i32,
                 compose_color: *color,
                 // 资源汇总：复用容器行的三个字段（分组带渲染它们）
                 cpu_text: totals.cpu_text(),
@@ -224,6 +228,55 @@ pub fn build_ledger_tree(s: &AppState) -> TreeLedger {
         summary,
         visible: (visible_total, visible_running),
     }
+}
+
+/// 分组键解析结果：(项目名, 可选服务名)
+fn parse_group_key(key: &str) -> Option<(&str, Option<&str>)> {
+    if let Some(project) = key.strip_prefix("project:") {
+        return (!project.is_empty()).then_some((project, None));
+    }
+    let rest = key.strip_prefix("svc:")?;
+    let (project, service) = rest.split_once('/')?;
+    (!project.is_empty() && !service.is_empty()).then_some((project, Some(service)))
+}
+
+/// 分组键 → 展示名（抽屉标题）：`project:P` → P，`svc:P/S` → "P / S"
+pub fn group_label(key: &str) -> String {
+    match parse_group_key(key) {
+        Some((project, Some(service))) => format!("{project} / {service}"),
+        Some((project, None)) => project.to_string(),
+        None => key.to_string(),
+    }
+}
+
+/// 分组的一个成员（组操作的执行对象）
+pub struct GroupMember {
+    pub id: String,
+    pub name: String,
+    pub running: bool,
+}
+
+/// 分组键 → 组内成员（口径 = 当前**筛选后**的容器，与台账可见行一致）
+///
+/// 分组带只表达筛选结果里的成员：组操作也必须只动这批容器，
+/// 否则「筛出 2 个容器点停止全组」会顺带停掉筛选外看不见的成员。
+pub fn group_members(s: &AppState, key: &str) -> Vec<GroupMember> {
+    let Some((project, service)) = parse_group_key(key) else {
+        return Vec::new();
+    };
+    filtered_containers(s)
+        .into_iter()
+        .filter(|c| c.compose_project.as_deref() == Some(project))
+        .filter(|c| match service {
+            Some(svc) => c.compose_service.as_deref().unwrap_or("") == svc,
+            None => true,
+        })
+        .map(|c| GroupMember {
+            id: c.id.clone(),
+            name: c.name.clone(),
+            running: c.is_running(),
+        })
+        .collect()
 }
 
 #[cfg(test)]

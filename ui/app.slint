@@ -1,14 +1,12 @@
 // app.slint — 主窗口骨架
 // 布局：VerticalLayout(TopBar, SubBar, BatchBar?, GridArea, FootBar) + Drawer
 import { Theme } from "theme.slint";
-import { Tip, CardMenu } from "components-align.slint";
-import { TipLayer } from "components-interact.slint";
-import { SortMenu, CardMenuLayer } from "menu-layers.slint";
+import { CardMenu } from "components-align.slint";
 import { TopBar } from "top-bar.slint";
 import { MainArea } from "main-area.slint";
 import { FootBar } from "foot-bar.slint";
 import { Drawer } from "drawer.slint";
-import { PullDialog, CleanupDialog } from "dialogs.slint";
+import { Overlays } from "overlays.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow, DetailPair, LogRow, LedgerSummary } from "models.slint";
 import { AppActions } from "app-actions.slint";
 import { MaterialTheme } from "material-theme.slint";
@@ -117,6 +115,9 @@ export component MainWindow inherits Window {
     in-out property <string> drawer_title: "";
     in-out property <string> drawer_sub: "";
     in-out property <bool> drawer_tabs: true;
+    /// 抽屉只展示日志（分组「合并日志」模式）：隐藏 Tab 栏与详情/环境面板，
+    /// 避免点进详情看到上一个容器的残留内容
+    in-out property <bool> drawer_log_only: false;
     in-out property <[DetailPair]> detail_rows: [];
     in-out property <[DetailPair]> env_rows: [];
 
@@ -241,6 +242,9 @@ export component MainWindow inherits Window {
                 set_sort(f) => { AppActions.set_sort(f); }
                 set_sort_dir() => { AppActions.set_sort_dir(); }
                 compose_toggle(k) => { AppActions.compose_toggle(k); }
+                compose_start(k) => { CardMenu.close(); AppActions.compose_start(k); }
+                compose_restart(k) => { CardMenu.close(); AppActions.compose_restart(k); }
+                compose_logs(k) => { CardMenu.close(); AppActions.compose_logs(k); }
                 sort_images_pick(f) => { AppActions.sort_images(f); }
                 sort_networks_pick(f) => { AppActions.sort_networks(f); }
                 sort_volumes_pick(f) => { AppActions.sort_volumes(f); }
@@ -291,6 +295,7 @@ export component MainWindow inherits Window {
             title <=> root.drawer_title;
             sub <=> root.drawer_sub;
             tabs_visible <=> root.drawer_tabs;
+            log_only <=> root.drawer_log_only;
             detail_rows <=> root.detail_rows;
             env_rows <=> root.env_rows;
             close => { AppActions.drawer_close(); }
@@ -302,67 +307,50 @@ export component MainWindow inherits Window {
         }
     }
 
-    // 排序下拉菜单 + 卡片「···」菜单：必须渲染在列表区之后（同层直接子元素），
-    // 否则会被下方卡片区覆盖 / 裁掉 —— 与 prototype 的绝对定位下拉一致
-    if main-area.sort_open : SortMenu {
-        x: main-area.menu_x;
-        y: main-area.menu_y;
-        height: 170px;
-        field: root.sort_field;
-        desc: root.sort_desc;
-        pick(f) => { main-area.sort_open = false; AppActions.set_sort(f); }
-    }
-
-    if CardMenu.id != "" : CardMenuLayer {
-        x: CardMenu.mx;
-        y: CardMenu.my;
-        height: 110px;
-        id: CardMenu.id;
-        kind: CardMenu.kind;
-        can_stop: CardMenu.can_stop;
-        stop_card(id) => { AppActions.container_toggle(id); CardMenu.close(); }
-        logs(id) => { AppActions.container_logs(id); CardMenu.close(); }
-        details(id) => {
+    // 窗口级浮层（排序菜单 / 卡片菜单 / 弹窗 / 全局提示）：必须声明在内容布局之后
+    // （同层、后声明 → 在最上层），否则会被列表覆盖 / 裁掉。
+    // 布局无关的浮层收在 overlays.slint（R2：app.slint 正文 ≤300 行）。
+    Overlays {
+        sort_open <=> main-area.sort_open;
+        menu_x: main-area.menu_x;
+        menu_y: main-area.menu_y;
+        sort_field: root.sort_field;
+        sort_desc: root.sort_desc;
+        pull_open <=> root.pull_open;
+        pull_input <=> root.pull_input;
+        pull_busy <=> root.pull_busy;
+        pull_progress <=> root.pull_progress;
+        pull_status <=> root.pull_status;
+        cleanup_open <=> root.cleanup_open;
+        cleanup_stopped <=> root.cleanup_stopped;
+        cleanup_dangling <=> root.cleanup_dangling;
+        cleanup_unused_net <=> root.cleanup_unused_net;
+        cleanup_unused_vol <=> root.cleanup_unused_vol;
+        cleanup_cnt_stopped <=> root.cleanup_cnt_stopped;
+        cleanup_cnt_dangling <=> root.cleanup_cnt_dangling;
+        cleanup_cnt_unused_net <=> root.cleanup_cnt_unused_net;
+        cleanup_cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
+        sort_pick(f) => { AppActions.set_sort(f); }
+        card_stop(id) => { AppActions.container_toggle(id); }
+        card_logs(id) => { AppActions.container_logs(id); }
+        card_details(id) => {
             if (CardMenu.kind == 1) { AppActions.image_select(id); }
             else if (CardMenu.kind == 2) { AppActions.network_select(id); }
             else { AppActions.volume_select(id); }
-            CardMenu.close();
         }
-        remove(id) => {
+        card_remove(id) => {
             if (CardMenu.kind == 1) { AppActions.image_remove(id); }
             else if (CardMenu.kind == 2) { AppActions.network_remove(id); }
             else { AppActions.volume_remove(id); }
-            CardMenu.close();
         }
-    }
-
-    PullDialog {
-        open <=> root.pull_open; input <=> root.pull_input;
-        busy <=> root.pull_busy;
-        progress <=> root.pull_progress;
-        status <=> root.pull_status;
-        close => { AppActions.pull_close(); }
-        submit(v) => { AppActions.pull_submit(v); }
-    }
-    CleanupDialog {
-        open <=> root.cleanup_open; stopped <=> root.cleanup_stopped;
-        dangling <=> root.cleanup_dangling;
-        unused_net <=> root.cleanup_unused_net;
-        unused_vol <=> root.cleanup_unused_vol;
-        cnt_stopped <=> root.cleanup_cnt_stopped;
-        cnt_dangling <=> root.cleanup_cnt_dangling;
-        cnt_unused_net <=> root.cleanup_cnt_unused_net;
-        cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
-        close => { AppActions.cleanup_close(); }
-        submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
-    }
-
-    // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛
-    // flip=true 时向下弹（锚点上方不够空间，如 TopBar 顶部按钮）
-    TipLayer {
-        flip: Tip.ay - self.height - 12px < Theme.s1;
-        x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
-        y: self.flip ? Tip.ay + Tip.btn_h + 4px : Math.max(Theme.s1, Tip.ay - self.height - 12px);
+        group_stop(id) => { AppActions.compose_stop(id); }
+        group_restart(id) => { AppActions.compose_restart(id); }
+        group_logs(id) => { AppActions.compose_logs(id); }
+        group_remove(id) => { AppActions.compose_remove(id); }
+        pull_close => { AppActions.pull_close(); }
+        pull_submit(v) => { AppActions.pull_submit(v); }
+        cleanup_close => { AppActions.cleanup_close(); }
+        cleanup_submit(a,b,c,d) => { AppActions.cleanup_submit(a,b,c,d); }
     }
     }
 }

@@ -165,7 +165,7 @@ mod tests {
         s.commit_log_sync();
 
         // 换流（ensure_follow → spawn_follow）后模型内容不再可信
-        s.spawn_follow("c1", 0);
+        s.ensure_follow("c1");
         assert_eq!(s.log_sync_plan(), LogSyncPlan::Reset);
     }
 }

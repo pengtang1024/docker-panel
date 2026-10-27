@@ -68,6 +68,11 @@ export component LedgerArea inherits Rectangle {
     callback sort_pick(int);
     /// 内联树分组展开 / 收起（分组键）
     callback tree_toggle(string);
+    /// 分组操作（分组键）：启动全组 / 重启全组 / 合并日志
+    /// —— 与容器行的 3 个按钮一一对应，只是动作作用于组内全部成员
+    callback g_start(string);
+    callback g_restart(string);
+    callback g_logs(string);
 
     // 响应式列显隐：表头与行共用同一判定 → 列起点始终一致
     property <bool> show_disk: root.width >= 1000px;
@@ -250,7 +255,14 @@ export component LedgerArea inherits Rectangle {
                     image_w: root.image_w;
                     show_disk: root.show_disk;
                     show_ports: root.show_ports;
-                    toggle(k) => { root.tree_toggle(k); }
+                    menu_open: CardMenu.id == row.id;
+                    expand(k) => { root.tree_toggle(k); }
+                    g_start(k) => { root.g_start(k); }
+                    g_restart(k) => { root.g_restart(k); }
+                    g_logs(k) => { root.g_logs(k); }
+                    g_menu(id, kind, can_stop, mx, my) => {
+                        root.menu_toggle(id, kind, can_stop, mx, my);
+                    }
                 }
             }
         }

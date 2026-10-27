@@ -4,7 +4,7 @@
 //! `tokio::task::spawn_blocking` 里，禁止在 tokio worker 或 UI 线程直接调用。
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::i18n;
@@ -113,14 +113,30 @@ pub fn open_url(url: &str) -> Result<(), String> {
         .map_err(|e| i18n::trf("Failed to open browser: {0}", &[&e.to_string()]))
 }
 
-/// 启动新进程（更新完成后由主线程调用 quit_event_loop）。
-pub fn restart_current_exe() -> Result<(), String> {
+/// 定位当前可执行文件路径。
+///
+/// Linux 下安装器（dpkg / 裸二进制自替换）都是**同路径 rename** 原子替换：运行中的旧进程
+/// 读 `/proc/self/exe` 会得到 `/usr/bin/docker-panel (deleted)`（旧 inode 已从目录消失）。
+/// 直接拿去 spawn 必然失败（重启按钮无反应）。剥掉后缀启动的才是同路径下替换后的新二进制。
+fn current_exe_path() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| {
         i18n::trf(
             "Failed to locate current executable: {0}",
             &[&e.to_string()],
         )
     })?;
+    if let Some(stripped) = exe.to_string_lossy().strip_suffix(" (deleted)") {
+        let clean = PathBuf::from(stripped);
+        if clean.is_file() {
+            return Ok(clean);
+        }
+    }
+    Ok(exe)
+}
+
+/// 启动新进程（更新完成后由主线程调用 quit_event_loop）。
+pub fn restart_current_exe() -> Result<(), String> {
+    let exe = current_exe_path()?;
     Command::new(&exe)
         .spawn()
         .map(|_| ())

@@ -46,6 +46,8 @@ pub const LOG_FLUSH_INTERVAL: Duration = Duration::from_millis(60);
 /// 重连与退避策略由调用方（`follow_runtime`）负责。
 pub async fn follow_logs(
     id: &str,
+    // 行前缀（分组合并日志为 `[容器名]`；单容器为空串 → 保持原文）
+    prefix: &str,
     tx: Sender<Msg>,
     tail_lines: i64,
     epoch: u64,
@@ -134,6 +136,12 @@ pub async fn follow_logs(
                 if line.is_empty() {
                     continue;
                 }
+                // 分组合并日志：行首带来源标记，多路日志混在一起也能分清是谁说的
+                let line = if prefix.is_empty() {
+                    line
+                } else {
+                    format!("{prefix} {line}")
+                };
                 if !batch_started {
                     batch_started = true;
                     // 批次首行：拉近投递定时器，保证慢速流也能及时看到这一行

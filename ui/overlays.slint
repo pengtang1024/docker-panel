@@ -1,0 +1,121 @@
+// overlays.slint — 窗口级浮层（排序菜单 / 卡片菜单 / 弹窗 / 全局提示）
+//
+// 从 app.slint 拆出（R2：单文件正文 ≤300 行）：这些浮层与主布局无关，
+// 只是**必须渲染在列表区之后**（否则会被下方内容覆盖 / 裁掉），
+// 且全部按窗口坐标绝对定位。
+//
+// 组件本身铺满窗口（width/height 100%）：浮层的 x/y 是窗口绝对坐标，
+// TipLayer 也需要用窗口宽做边界收敛。本组件没有 TouchArea / 背景色，
+// 不会吞掉下层的事件。
+//
+// ⚠️ 命中顺序（规范 #19）：本组件声明在 content-column 之后 → 浮层在最上层。
+// ⚠️ 本文件不改任何业务状态：所有动作都通过 callback 交回 app.slint 的 AppActions。
+import { Theme } from "theme.slint";
+import { Tip, CardMenu } from "components-align.slint";
+import { TipLayer } from "components-interact.slint";
+import { SortMenu, CardMenuLayer } from "menu-layers.slint";
+import { PullDialog, CleanupDialog } from "dialogs.slint";
+
+export component Overlays inherits Rectangle {
+    // —— 排序菜单 ——
+    in-out property <bool> sort_open: false;
+    in property <length> menu_x: 0;
+    in property <length> menu_y: 0;
+    in property <int> sort_field: 0;
+    in property <bool> sort_desc: true;
+    // —— 拉取弹窗 ——
+    in-out property <bool> pull_open: false;
+    in-out property <string> pull_input: "";
+    in-out property <bool> pull_busy: false;
+    in-out property <int> pull_progress: 0;
+    in-out property <string> pull_status: "";
+    // —— 清理弹窗 ——
+    in-out property <bool> cleanup_open: false;
+    in-out property <bool> cleanup_stopped: true;
+    in-out property <bool> cleanup_dangling: true;
+    in-out property <bool> cleanup_unused_net: false;
+    in-out property <bool> cleanup_unused_vol: false;
+    in-out property <string> cleanup_cnt_stopped: "";
+    in-out property <string> cleanup_cnt_dangling: "";
+    in-out property <string> cleanup_cnt_unused_net: "";
+    in-out property <string> cleanup_cnt_unused_vol: "";
+
+    callback sort_pick(int);
+    // 卡片「···」菜单（容器 / 镜像 / 网络 / 卷）
+    callback card_stop(string);
+    callback card_logs(string);
+    callback card_details(string);
+    callback card_remove(string);
+    // 分组（kind=4）菜单
+    callback group_stop(string);
+    callback group_restart(string);
+    callback group_logs(string);
+    callback group_remove(string);
+    callback pull_close();
+    callback pull_submit(string);
+    callback cleanup_close();
+    callback cleanup_submit(bool, bool, bool, bool);
+
+    width: 100%;
+    height: 100%;
+
+    // 排序下拉菜单：锚点由 SubBar 提供
+    if root.sort_open : SortMenu {
+        x: root.menu_x;
+        y: root.menu_y;
+        height: 170px;
+        field: root.sort_field;
+        desc: root.sort_desc;
+        pick(f) => { root.sort_open = false; root.sort_pick(f); }
+    }
+
+    // 卡片 / 分组「···」菜单：锚点与目标由 CardMenu 总线携带
+    if CardMenu.id != "" : CardMenuLayer {
+        x: CardMenu.mx;
+        y: CardMenu.my;
+        // 分组菜单项更多（停止/重启/合并日志/删除），按是否有运行成员给两种高度
+        height: CardMenu.kind == 4 ? (CardMenu.can_stop ? 140px : 112px) : 110px;
+        id: CardMenu.id;
+        kind: CardMenu.kind;
+        can_stop: CardMenu.can_stop;
+        stop_card(id) => { root.card_stop(id); CardMenu.close(); }
+        logs(id) => { root.card_logs(id); CardMenu.close(); }
+        group_stop(id) => { root.group_stop(id); CardMenu.close(); }
+        group_restart(id) => { root.group_restart(id); CardMenu.close(); }
+        group_logs(id) => { root.group_logs(id); CardMenu.close(); }
+        group_remove(id) => { root.group_remove(id); CardMenu.close(); }
+        details(id) => { root.card_details(id); CardMenu.close(); }
+        remove(id) => { root.card_remove(id); CardMenu.close(); }
+    }
+
+    PullDialog {
+        open <=> root.pull_open;
+        input <=> root.pull_input;
+        busy <=> root.pull_busy;
+        progress <=> root.pull_progress;
+        status <=> root.pull_status;
+        close => { root.pull_close(); }
+        submit(v) => { root.pull_submit(v); }
+    }
+    CleanupDialog {
+        open <=> root.cleanup_open;
+        stopped <=> root.cleanup_stopped;
+        dangling <=> root.cleanup_dangling;
+        unused_net <=> root.cleanup_unused_net;
+        unused_vol <=> root.cleanup_unused_vol;
+        cnt_stopped <=> root.cleanup_cnt_stopped;
+        cnt_dangling <=> root.cleanup_cnt_dangling;
+        cnt_unused_net <=> root.cleanup_cnt_unused_net;
+        cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
+        close => { root.cleanup_close(); }
+        submit(a,b,c,d) => { root.cleanup_submit(a,b,c,d); }
+    }
+
+    // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛
+    // flip=true 时向下弹（锚点上方不够空间，如 TopBar 顶部按钮）
+    TipLayer {
+        flip: Tip.ay - self.height - 12px < Theme.s1;
+        x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
+        y: self.flip ? Tip.ay + Tip.btn_h + 4px : Math.max(Theme.s1, Tip.ay - self.height - 12px);
+    }
+}

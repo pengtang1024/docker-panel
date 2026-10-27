@@ -52,7 +52,7 @@ docker-panel/
 │   ├── ui_state.rs            AppState（Arc<Mutex<>> 可共享状态）+ 刷新去重/超时 + 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
 │   ├── ui_state/config_io.rs  AppState ↔ config.json 读写（字段搬运，越界值回落默认；从 ui_state 拆出）
-│   ├── follow_runtime.rs       日志流运行时：建流/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
+│   ├── follow_runtime.rs       日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
@@ -65,7 +65,7 @@ docker-panel/
 │   ├── callbacks_drawer.rs    抽屉 Tab 切换（切到日志 Tab 触发 ensure_follow）
 │   ├── callbacks_image.rs     镜像删除 / 选中（AppActions global）
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
-│   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起；compose_collapsed 的唯一写入方）
+│   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志；compose_collapsed 的唯一写入方）
 │   ├── callbacks_sort.rs      三个资源列表的表头排序回调（各自独立状态 + 持久化）
 │   │
 │   └── docker/
@@ -86,6 +86,7 @@ docker-panel/
 │
 └── ui/                        Slint 层（正文均 ≤ 300 行）
     ├── app.slint              MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装 + M3 色板接线
+    ├── overlays.slint         窗口级浮层：排序菜单 / 卡片与分组菜单 / 弹窗 / 全局 TipLayer（声明在内容之后 → 最上层）
     ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
     ├── theme.slint            浅/深双套色板（31 个颜色令牌）+ theme_mode 三态（is_dark 为 out）
     ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
@@ -95,7 +96,7 @@ docker-panel/
     ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
     ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
     ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
-    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏）
+    ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）
     ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
     ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
     ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）

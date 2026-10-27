@@ -26,6 +26,7 @@ use crate::models::{
 
 /// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
 pub mod config_io;
+pub mod follow_state;
 pub mod log_sync;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
 
@@ -37,6 +38,8 @@ pub enum SelKind {
     Image,
     Network,
     Volume,
+    /// 分组合并日志：抽屉只展示日志（没有单个容器的详情页）
+    Group,
 }
 
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
@@ -91,12 +94,17 @@ pub struct AppState {
     pub history_done: bool,
     /// 日志缓冲 epoch：仅用于 UI 日志行列表的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
-    /// 当前已建立日志跟随流的容器 id（空 = 无）；用于避免重复建流
+    /// 当前日志跟随流的幂等键：单容器 = 容器 id；分组合并日志 = 分组键
+    /// （空 = 无流）；用于避免重复建流
     pub follow_id: String,
+    /// 当前流的全部目标 `(容器 id, 行前缀)`：
+    /// 单容器 1 项且前缀为空；分组合并日志 = 每个运行中成员一项，前缀 `[容器名]`
+    pub follow_targets: Vec<(String, String)>,
     /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
     pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
-    /// 当前日志流存活标志（每条流独立）：旧流退出不会误标新流
-    pub follow_active: Option<Arc<AtomicBool>>,
+    /// 当前日志流每条 stream 的存活标志（每条流独立）：旧流退出不会误标新流；
+    /// 分组合并日志有多条流，全部退出才算流结束
+    pub follow_active: Vec<Arc<AtomicBool>>,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -183,8 +191,9 @@ impl AppState {
             history_done: false,
             log_epoch: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
+            follow_targets: Vec::new(),
             follow_cancel: None,
-            follow_active: None,
+            follow_active: Vec::new(),
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -277,93 +286,6 @@ impl AppState {
         });
     }
 
-    /// 切换选中资源：清空日志缓冲，取消旧流，并让队列里旧 epoch 的日志失效。
-    pub fn clear_logs(&mut self) {
-        self.logs.clear();
-        self.follow_id.clear();
-        self.history_done = false;
-        self.log_epoch.fetch_add(1, Ordering::AcqRel);
-        self.stream_epoch = self.stream_epoch.wrapping_add(1);
-        // drop sender → 旧 receiver 的 changed() 立即返回，follow 任务退出
-        self.follow_cancel = None;
-        self.follow_active = None;
-        self.reset_log_model_tracking();
-    }
-
-    /// Clear 工具条：清空缓冲后以 tail=0 重启当前流，只保留之后的新日志。
-    ///
-    /// 不能只 clear 缓冲：旧流在 mpsc 队列中已排队的行会在下一批 drain 时重新出现。
-    pub fn clear_log_buffer(&mut self) {
-        let had_logs = !self.logs.is_empty();
-        let active = !self.follow_id.is_empty();
-        self.logs.clear();
-        // 只有确实清掉了历史，或当前流仍在（Clear 会丢弃其排队行）时，才标记历史已完成。
-        // 空缓冲 + 无活动流时保留原标志，让下次 ensure_follow 仍可 tail=200 拉启动日志。
-        if had_logs || active {
-            self.history_done = true;
-        }
-        // 即使当前没有活动流（流已自然结束），也必须推进 epoch，
-        // 让已经投递但尚未执行的旧日志行 invoke 失效。
-        self.log_epoch.fetch_add(1, Ordering::AcqRel);
-        if !active {
-            self.follow_active = None;
-            self.reset_log_model_tracking();
-            return;
-        }
-        let id = self.follow_id.clone();
-        self.spawn_follow(&id, 0);
-        self.reset_log_model_tracking();
-    }
-
-    /// 确保对指定容器建立日志跟随流（幂等：同一容器只建一条，避免重复行）
-    ///
-    /// 返回 `true` 表示**新建了一条流**：调用方需要据此清掉 UI 上的旧状态提示
-    /// （新流没有「正在重连」的历史状态，旧提示会滞留误导用户）。
-    pub fn ensure_follow(&mut self, id: &str) -> bool {
-        // 防御调用方绕过 clear_logs 直接切到另一个容器：先清掉旧缓冲，避免串台
-        if !self.follow_id.is_empty() && self.follow_id != id {
-            self.clear_logs();
-        }
-        if self.follow_id == id && self.follow_is_alive() {
-            return false;
-        }
-        // 历史已加载过（含 Clear 后）只接续新行；否则首次拉最近 200 行。
-        // history_done 在收到首条日志或 Clear 时才置位，空历史/首流失败可重试。
-        let tail = crate::follow_runtime::follow_tail(self.history_done);
-        self.spawn_follow(id, tail);
-        true
-    }
-
-    /// 当前日志流是否仍在运行：每条流独立标志，旧流退出不会误标新流。
-    ///
-    /// 用于消除「Ended 消息已入队但 consumer 尚未 drain」窗口内 ensure_follow
-    /// 误判幂等、导致本次切 Tab 不建流的问题。
-    fn follow_is_alive(&self) -> bool {
-        self.follow_active
-            .as_ref()
-            .map(|a| a.load(Ordering::Acquire))
-            .unwrap_or(false)
-    }
-
-    /// 建流并递增 stream epoch；不推进 buffer epoch，续流时保留已缓冲日志与待应用文本。
-    ///
-    /// 异步运行时（退避重连、存活标志、结束通知）全部在 `follow_runtime` 模块，
-    /// 本方法只负责写入状态字段。
-    fn spawn_follow(&mut self, id: &str, tail: i64) {
-        self.follow_id = id.to_string();
-        self.stream_epoch = self.stream_epoch.wrapping_add(1);
-        let epoch = self.stream_epoch;
-        let handle = crate::follow_runtime::spawn_follow(
-            &self.rt,
-            id.to_string(),
-            tail,
-            epoch,
-            self.tx.clone(),
-        );
-        self.follow_cancel = Some(handle.cancel);
-        self.follow_active = Some(handle.active);
-    }
-
     /// 清理弹窗各类候选数量（按当前列表估算，供弹窗 .cnt 展示）
     pub fn cleanup_counts(&self) -> (usize, usize, usize, usize) {
         let stopped = self.containers.iter().filter(|c| !c.is_running()).count();
@@ -392,11 +314,17 @@ mod tests {
         let (state, _rx) = AppState::new();
         let mut s = state.lock().unwrap();
         assert!(!s.follow_is_alive());
-        s.follow_active = Some(Arc::new(AtomicBool::new(true)));
+        s.follow_active = vec![Arc::new(AtomicBool::new(true))];
         assert!(s.follow_is_alive());
-        s.follow_active = Some(Arc::new(AtomicBool::new(false)));
+        // 多路合并流：只要还有一条在跑就仍然存活
+        s.follow_active = vec![
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(true)),
+        ];
+        assert!(s.follow_is_alive());
+        s.follow_active = vec![Arc::new(AtomicBool::new(false))];
         assert!(!s.follow_is_alive());
-        s.follow_active = None;
+        s.follow_active.clear();
         assert!(!s.follow_is_alive());
     }
 }

@@ -37,10 +37,10 @@ pub const MAX_RETRY_ATTEMPTS: u32 = 8;
 
 /// 一条日志流的运行时句柄
 pub struct FollowHandle {
-    /// 取消信号：drop 即取消该流
+    /// 取消信号：drop 即取消该流（分组合并日志的 N 条流共享同一个 sender）
     pub cancel: tokio::sync::watch::Sender<()>,
-    /// 存活标志：该流退出时置 false（每流独立，旧流不影响新流）
-    pub active: Arc<AtomicBool>,
+    /// 每条 stream 的存活标志：全部退出才算流结束（每流独立，旧流不影响新流）
+    pub active: Vec<Arc<AtomicBool>>,
 }
 
 /// 流结束后的处置
@@ -100,142 +100,176 @@ pub fn classify_end(end: &LogStreamEnd, reach: ContainerReach) -> FollowAction {
     }
 }
 
-/// 启动日志流运行时。
+/// 启动日志流运行时（每个目标一条流，共享同一个取消信号）。
+///
+/// `targets` 为 `(容器 id, 行前缀)`：单容器时前缀为空、只有一条流；
+/// 分组合并日志时每个运行中成员一条流，前缀 `[容器名]`，日志面板里
+/// 每行带来源标记。
+///
+/// 状态提示（重连中 / 已恢复 / 已停止）只在**单流**时上报：多路并发下
+/// 任一路的结局都代表不了整组（一个成员停掉就会弹出「日志流已停止」→ 误导）。
 ///
 /// 探针（`probe_container`）在每次非取消的结局后执行，回答两个问题：
 /// 容器是否还在跑、Docker 是否可达。这是判定「该重连还是该结束」的**唯一**依据。
 pub fn spawn_follow(
     rt: &Runtime,
-    id: String,
+    targets: Vec<(String, String)>,
     tail: i64,
     epoch: u64,
     tx: Sender<Msg>,
 ) -> FollowHandle {
-    let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(());
-    let active = Arc::new(AtomicBool::new(true));
-    let active_task = active.clone();
-    let handle = rt.handle().clone();
+    let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
+    // 单流才提示状态（共享 epoch 下多路状态会互相覆盖）
+    let notify_status = targets.len() == 1;
+    let mut actives = Vec::with_capacity(targets.len());
 
-    handle.spawn(async move {
-        // 连续失败数：连接真正跑通（收到日志行）才归零
-        let mut attempt: u32 = 0;
-        // 本流是否已推送过日志：决定重连时是否重放历史（避免重复行）
-        let mut sent_any = false;
-        let mut retry_tail = tail;
-        // 是否已经向用户提示过「正在重连」
-        let mut notified = false;
-        // 上一次探针是否判定 Docker 不可达（用于「不可达 → 可达」跃迁提示）
-        let mut was_unreachable = false;
-
-        loop {
-            // 仅在「正在重连」状态下，本次尝试收到首行日志时提示已恢复
-            let outcome = follow_logs(
-                &id,
-                tx.clone(),
-                retry_tail,
-                epoch,
-                cancel_rx.clone(),
-                notified,
-            )
-            .await;
-            sent_any |= outcome.lines > 0;
-
-            // 收到日志 = 这条连接是通的 → 连续失败数归零
-            if outcome.lines > 0 {
-                attempt = 0;
-            }
-            if outcome.notified_recovered {
-                // follow_logs 已提示「已恢复连接」：回到正常态
-                notified = false;
-            }
-
-            // 用户取消（切容器 / Clear）：不提示，直接退出
-            if matches!(outcome.end, LogStreamEnd::Cancelled) {
-                break;
-            }
-
-            // 探针：容器是否还活着 / Docker 是否可达
-            let reach = probe_container(&id).await;
-
-            match classify_end(&outcome.end, reach) {
-                FollowAction::End => {
-                    // 结束一律提示「已停止」（取消已在上面提前返回）
-                    let _ = tx.send(Msg::LogStreamStatus(epoch, crate::i18n::t(NOTICE_STOPPED)));
-                    break;
-                }
-                FollowAction::KeepAlive { reason } => {
-                    // 空闲超时：连接已保持 LOG_IDLE_TIMEOUT 证明流通 → 视作已恢复
-                    if notified {
-                        notified = false;
-                        let _ = tx.send(Msg::LogStreamStatus(
-                            epoch,
-                            crate::i18n::t(NOTICE_RECOVERED),
-                        ));
-                    }
-                    // 连接保持过 180s，不算失败：重置预算
-                    attempt = 0;
-                    eprintln!(
-                        "[log-stream] {id} idle, silent reconnect in {IDLE_RETRY_DELAY:?}: {reason}"
-                    );
-                    // 静默重连：不打扰用户
-                    tokio::select! {
-                        _ = cancel_rx.changed() => break,
-                        _ = tokio::time::sleep(IDLE_RETRY_DELAY) => {}
-                    }
-                }
-                FollowAction::Recover { reason } => {
-                    // 探针跃迁：Docker 从不可达恢复 → 直接提示已恢复
-                    let recovered = was_unreachable && reach == ContainerReach::Running;
-                    was_unreachable = reach == ContainerReach::Unreachable;
-
-                    if recovered {
-                        notified = false;
-                        let _ = tx.send(Msg::LogStreamStatus(
-                            epoch,
-                            crate::i18n::t(NOTICE_RECOVERED),
-                        ));
-                    } else if !notified {
-                        notified = true;
-                        let _ = tx.send(Msg::LogStreamStatus(
-                            epoch,
-                            crate::i18n::t(NOTICE_INTERRUPTED),
-                        ));
-                    }
-
-                    // 连续失败预算耗尽 → 转低频保活，**不放弃跟随**
-                    let delay = if attempt >= MAX_RETRY_ATTEMPTS {
-                        KEEPALIVE_INTERVAL
-                    } else {
-                        let d = retry_delay(attempt);
-                        attempt += 1;
-                        d
-                    };
-                    // 已推送过日志则只接续新行，避免重放历史造成重复
-                    if sent_any {
-                        retry_tail = 0;
-                    }
-                    eprintln!(
-                        "[log-stream] {id} reconnecting in {delay:?}: {reason} (attempt {attempt})"
-                    );
-
-                    // 退避等待可被取消：切容器/Clear 时立即退出
-                    tokio::select! {
-                        _ = cancel_rx.changed() => break,
-                        _ = tokio::time::sleep(delay) => {}
-                    }
-                }
-            }
-        }
-
-        active_task.store(false, Ordering::Release);
-        // 流结束通知 consumer；旧 epoch 的结束消息会被忽略
-        let _ = tx.send(Msg::LogStreamEnded(epoch));
-    });
+    for (id, prefix) in targets {
+        let active = Arc::new(AtomicBool::new(true));
+        actives.push(active.clone());
+        let handle = rt.handle().clone();
+        let tx = tx.clone();
+        let cancel_rx = cancel_rx.clone();
+        handle.spawn(run_stream(
+            id,
+            prefix,
+            tail,
+            epoch,
+            tx,
+            cancel_rx,
+            notify_status,
+            active,
+        ));
+    }
 
     FollowHandle {
         cancel: cancel_tx,
-        active,
+        active: actives,
     }
+}
+
+/// 单条流的运行时主循环：建流 → 结局分类 → 探针 → 退避重连 / 保活 / 结束
+#[allow(clippy::too_many_arguments)]
+async fn run_stream(
+    id: String,
+    prefix: String,
+    tail: i64,
+    epoch: u64,
+    tx: Sender<Msg>,
+    mut cancel_rx: tokio::sync::watch::Receiver<()>,
+    notify_status: bool,
+    active: Arc<AtomicBool>,
+) {
+    // 连续失败数：连接真正跑通（收到日志行）才归零
+    let mut attempt: u32 = 0;
+    // 本流是否已推送过日志：决定重连时是否重放历史（避免重复行）
+    let mut sent_any = false;
+    let mut retry_tail = tail;
+    // 是否已经向用户提示过「正在重连」
+    let mut notified = false;
+    // 上一次探针是否判定 Docker 不可达（用于「不可达 → 可达」跃迁提示）
+    let mut was_unreachable = false;
+    // 状态提示统一经此出口：多流合并时不打扰用户（notify_status = false）
+    let tell = |text: &str| {
+        if notify_status {
+            let _ = tx.send(Msg::LogStreamStatus(epoch, text.to_string()));
+        }
+    };
+
+    loop {
+        // 仅在「正在重连」状态下，本次尝试收到首行日志时提示已恢复
+        let outcome = follow_logs(
+            &id,
+            &prefix,
+            tx.clone(),
+            retry_tail,
+            epoch,
+            cancel_rx.clone(),
+            notified,
+        )
+        .await;
+        sent_any |= outcome.lines > 0;
+
+        // 收到日志 = 这条连接是通的 → 连续失败数归零
+        if outcome.lines > 0 {
+            attempt = 0;
+        }
+        if outcome.notified_recovered {
+            // follow_logs 已提示「已恢复连接」：回到正常态
+            notified = false;
+        }
+
+        // 用户取消（切容器 / Clear）：不提示，直接退出
+        if matches!(outcome.end, LogStreamEnd::Cancelled) {
+            break;
+        }
+
+        // 探针：容器是否还活着 / Docker 是否可达
+        let reach = probe_container(&id).await;
+
+        match classify_end(&outcome.end, reach) {
+            FollowAction::End => {
+                // 结束一律提示「已停止」（取消已在上面提前返回）
+                tell(&crate::i18n::t(NOTICE_STOPPED));
+                break;
+            }
+            FollowAction::KeepAlive { reason } => {
+                // 空闲超时：连接已保持 LOG_IDLE_TIMEOUT 证明流通 → 视作已恢复
+                if notified {
+                    notified = false;
+                    tell(&crate::i18n::t(NOTICE_RECOVERED));
+                }
+                // 连接保持过 180s，不算失败：重置预算
+                attempt = 0;
+                eprintln!(
+                    "[log-stream] {id} idle, silent reconnect in {IDLE_RETRY_DELAY:?}: {reason}"
+                );
+                // 静默重连：不打扰用户
+                tokio::select! {
+                    _ = cancel_rx.changed() => break,
+                    _ = tokio::time::sleep(IDLE_RETRY_DELAY) => {}
+                }
+            }
+            FollowAction::Recover { reason } => {
+                // 探针跃迁：Docker 从不可达恢复 → 直接提示已恢复
+                let recovered = was_unreachable && reach == ContainerReach::Running;
+                was_unreachable = reach == ContainerReach::Unreachable;
+
+                if recovered {
+                    notified = false;
+                    tell(&crate::i18n::t(NOTICE_RECOVERED));
+                } else if !notified {
+                    notified = true;
+                    tell(&crate::i18n::t(NOTICE_INTERRUPTED));
+                }
+
+                // 连续失败预算耗尽 → 转低频保活，**不放弃跟随**
+                let delay = if attempt >= MAX_RETRY_ATTEMPTS {
+                    KEEPALIVE_INTERVAL
+                } else {
+                    let d = retry_delay(attempt);
+                    attempt += 1;
+                    d
+                };
+                // 已推送过日志则只接续新行，避免重放历史造成重复
+                if sent_any {
+                    retry_tail = 0;
+                }
+                eprintln!(
+                    "[log-stream] {id} reconnecting in {delay:?}: {reason} (attempt {attempt})"
+                );
+
+                // 退避等待可被取消：切容器/Clear 时立即退出
+                tokio::select! {
+                    _ = cancel_rx.changed() => break,
+                    _ = tokio::time::sleep(delay) => {}
+                }
+            }
+        }
+    }
+
+    active.store(false, Ordering::Release);
+    // 流结束通知 consumer；consumer 在**全部** stream 都退出后才释放跟随状态
+    let _ = tx.send(Msg::LogStreamEnded(epoch));
 }
 
 #[cfg(test)]

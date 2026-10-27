@@ -19,6 +19,8 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
             let Some(ui) = ui_a.upgrade() else { return };
             ui.set_drawer_open(true);
             ui.set_drawer_tab(0);
+            // 从分组合并日志切到镜像详情：恢复详情/环境 Tab
+            ui.set_drawer_log_only(false);
             // 选中对象变了：旧日志文本与状态提示都不再属于当前对象
             crate::ui_apply::clear_log_panel(&ui);
             if let Ok(mut st) = s.lock() {

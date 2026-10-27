@@ -16,6 +16,9 @@ export struct ContainerRow {
     expanded: bool,
     /// 分组带的成员数（仅 kind>=1 有意义）
     group_n: int,
+    /// 分组带里**运行中**的成员数（仅 kind>=1 有意义）：
+    /// is_running = 全部成员都在运行；group_running < group_n 说明还有成员没起来
+    group_running: int,
     is_running: bool,
     is_selected: bool,
     /// 需关注（非 0 退出 / dead / paused / restarting）→ 琥珀色状态轨

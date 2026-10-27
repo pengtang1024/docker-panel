@@ -209,6 +209,7 @@ pub fn container_row(c: &ContainerInfo, selected: bool, depth: i32) -> Container
         depth,
         expanded: false,
         group_n: 0,
+        group_running: 0,
         is_running: running,
         is_selected: selected,
         needs_attention: c.needs_attention(),

@@ -41,6 +41,9 @@
 - 计数口径 = **可见容器集合**（实际渲染成行的那些容器）：概览带与筛选 chips 同源，折叠分组后计数同步变小
 - 分组带通栏（不参与列宽计算），分组名与**同层**容器行的名称列起点严格对齐，层级只靠缩进表达
 - 分组带显示该组的**资源汇总（成员之和）**：CPU / 内存 / 磁盘落在与容器行**同 x** 的三列上（CPU / 内存只算运行中成员，磁盘算全部成员；收起时数字照旧）
+- 分组带与容器行一样有 **3 个操作按钮**（主操作 / 日志 / 更多），动作**统一作用于组内全部成员**：
+  主按钮 = 全组启动（有成员没跑）/ 全组重启（全部在跑）；日志 = 组内运行中容器的**合并日志**
+  （行首带 `[容器名]` 来源前缀，抽屉切到「只展示日志」模式）；更多 = 停止全部 / 重启全部 / 合并日志 / 删除全部
 - 收起状态持久化到配置文件，启动自动恢复；新分组默认展开
 
 ### 右侧抽屉（详情 / 日志 / 环境）
@@ -51,6 +54,7 @@
 ### 操作
 
 - 台账行内按钮：启停（▶/⏹）、重启（⟳）、日志（📜）、更多（···）；「···」菜单提供日志 / 停止 / 删除
+- 分组带同样有 3 个按钮，只是按**组**操作：一键启停 / 重启整组、查看整组合并日志、删除整组（「···」菜单同样列出组操作）
 - 容器多选 + 批量操作浮动栏（启动 / 停止 / 重启 / 删除 / 取消选择）；Shift+点击行可快速勾选 / 取消勾选
 - 顶栏：拉取镜像（实时进度弹窗）/ 清理未使用资源（已停止的容器 / 悬空镜像 / 未使用的网络 / 未使用的卷，可任意组合）
 - 操作完成立即刷新列表，不等 3s 定时周期
@@ -122,10 +126,10 @@ cargo check --all-targets
 
 1. 启动后默认显示容器台账视图，Docker 连接成功会自动加载。
 2. Ctrl+K 聚焦搜索框，输入关键词即时过滤；Ctrl+R 手动刷新。
-3. 容器台账行内按钮：▶/⏹ 切换状态、⟳ 重启、📜 查看日志、··· 更多操作。
+3. 容器台账行内按钮：▶/⏹ 切换状态、⟳ 重启、📜 查看日志、··· 更多操作；分组带上的同名按钮对组内全部容器生效（日志为整组合并流）。
 4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像 / 网络 / 卷行 → 对应资源详情。
 5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉 / 弹窗或退出多选。
-6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；镜像 / 网络 / 卷点表头按列排序。
+6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；分组带 hover 后出现启动 / 合并日志 / 组菜单；镜像 / 网络 / 卷点表头按列排序。
 7. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
 8. 底部栏显示 8 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 磁盘）与最近操作结果。
 
@@ -134,8 +138,8 @@ cargo check --all-targets
 - 无 Docker Compose 导入 / 导出、无定时清理
 - 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
 - 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
-- 断流窗口的日志不补回；日志窗口最多保留 2000 行
-- 容器停止后不自动重连日志流，需要重新切到日志 Tab
+- 断流窗口的日志不补回；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
+- 容器停止后不自动重连日志流，需要重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流
 - `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
 
 ## 架构概览
@@ -178,6 +182,7 @@ docker-panel/
 │
 ├── ui/                     # Slint UI 声明（按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
+│   ├── overlays.slint      # 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 全局 TipLayer
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
@@ -188,7 +193,7 @@ docker-panel/
 │   ├── list-area.slint     # 资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态与背景点击层）
 │   ├── ledger.slint        # 容器台账区：列宽计算 + 表头 + @material ListView 虚拟化台账行
 │   ├── ledger-row.slint    # 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
-│   ├── ledger-tree-row.slint # 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总，通栏）
+│   ├── ledger-tree-row.slint # 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）
 │   ├── ledger-band.slint   # 台账概览带：4 个计数 + CPU 占用 TOP4
 │   ├── ledger-cols.slint   # 台账列宽契约 global（表头与行共用同一组列宽）
 │   ├── image-list.slint    # 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
@@ -198,7 +203,7 @@ docker-panel/
 │   ├── skel.slint          # 骨架屏占位
 │   ├── foot-bar.slint      # 底部 8 项资源概览
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
-│   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab（四种资源共用）
+│   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab（四种资源共用；合并日志时 log_only 只展示日志）
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
@@ -215,9 +220,10 @@ docker-panel/
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
 │   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
+│   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
 │   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
 │   ├── ui_state/config_io.rs # AppState ↔ config.json 读写（字段搬运，越界值回落默认）
-│   ├── follow_runtime.rs    # 日志流运行时：建流/退避重连/探针判定/保活降级/结局分类
+│   ├── follow_runtime.rs    # 日志流运行时：建流（单流 / 分组合并多流，共享取消信号）/退避重连/探针判定/保活降级/结局分类
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
@@ -230,7 +236,7 @@ docker-panel/
 │   ├── callbacks_drawer.rs     # 抽屉 Tab 切换（日志 Tab 触发 ensure_follow）+ 跟随/复制/清空
 │   ├── callbacks_image.rs      # AppActions image_* 回调
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
-│   ├── callbacks_compose.rs    # 台账内联树回调（分组展开 / 收起，唯一写入方）
+│   ├── callbacks_compose.rs    # 台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志）
 │   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出

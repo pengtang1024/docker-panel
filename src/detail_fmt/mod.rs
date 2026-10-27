@@ -157,6 +157,8 @@ pub fn build_drawer_data(s: &AppState) -> Option<DrawerData> {
         SelKind::Image => image::build(s),
         SelKind::Network => netvol::build_network(s),
         SelKind::Volume => netvol::build_volume(s),
+        // 分组只有合并日志面板，没有详情页
+        SelKind::Group => None,
     }
 }
 

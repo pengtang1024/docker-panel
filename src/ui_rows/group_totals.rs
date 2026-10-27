@@ -52,6 +52,11 @@ impl GroupTotals {
         t
     }
 
+    /// 运行中的成员数（分组带的「全部运行中」判定依据）
+    pub fn running(&self) -> usize {
+        self.running
+    }
+
     /// CPU 微条比例（= 成员条之和，1.0 = 占满一核）
     pub fn cpu_ratio(&self) -> f64 {
         self.cpu_ratio

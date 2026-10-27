@@ -233,9 +233,13 @@ impl AppState {
                 self.volume_sizes = map;
             }
             Msg::ContainerDetail(r) => {
-                res.drawer_changed = true;
-                if let Ok(d) = r {
-                    self.detail = Some(d);
+                // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果
+                // 不能覆盖组标题 / 把抽屉切回详情模式
+                if self.sel != crate::ui_state::SelKind::Group {
+                    res.drawer_changed = true;
+                    if let Ok(d) = r {
+                        self.detail = Some(d);
+                    }
                 }
             }
             Msg::ImageDetail(r) => {
@@ -261,11 +265,14 @@ impl AppState {
                 }
             }
             Msg::LogStreamEnded(epoch) => {
-                // 流结束（Eof / Cancelled）：清空 follow_id，允许下次 ensure_follow 重新建流
-                if epoch == self.stream_epoch {
+                // 流结束（Eof / Cancelled）：清空 follow_id，允许下次 ensure_follow 重新建流。
+                // 分组合并日志有 N 条流：只有**全部**退出才算结束
+                //（单条结束不代表整组日志停止，其余成员仍在跟随）
+                if epoch == self.stream_epoch && !self.follow_is_alive() {
                     self.follow_id.clear();
+                    self.follow_targets.clear();
                     self.follow_cancel = None;
-                    self.follow_active = None;
+                    self.follow_active.clear();
                 }
             }
             Msg::LogStreamStatus(epoch, text) => {

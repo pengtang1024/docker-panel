@@ -112,6 +112,8 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     // 新容器还没产生日志时日志页会一直显示上一个容器的内容。
     let bind_inspect = |ui: &MainWindow, s: &SharedState, id: String| {
         crate::ui_apply::clear_log_panel(ui);
+        // 从分组合并日志切到单容器：恢复详情/环境 Tab
+        ui.set_drawer_log_only(false);
         if let Ok(mut st) = s.lock() {
             st.sel = SelKind::Container;
             st.sel_key = id.clone();
@@ -242,14 +244,16 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
     }
 }
 
-enum OpKind {
+/// 单容器操作类型（批量 / 分组操作共用）
+pub(crate) enum OpKind {
     Start,
     Stop,
     Restart,
     Remove,
 }
 
-fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
+/// 对单个容器派发操作（供批量操作与分组操作复用）
+pub(crate) fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
     let (rt_handle, tx) = {
         let Ok(st) = s.lock() else { return };
         (st.rt.handle().clone(), st.tx.clone())

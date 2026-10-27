@@ -250,3 +250,61 @@ fn band_without_running_members_shows_dash_for_cpu_and_mem() {
     assert_eq!(band.cpu_text, "—");
     assert_eq!(band.mem_text, "—");
 }
+
+/// 分组成员解析：项目键取全部成员，服务键只取该服务（容器 id 主键）
+#[test]
+fn group_members_resolve_project_and_service_keys() {
+    let mut a = c("proj", "web");
+    a.id = "a".into();
+    a.name = "web-1".into();
+    a.state = "running".into();
+    let mut b = c("proj", "web");
+    b.id = "b".into();
+    b.name = "web-2".into();
+    let mut d = c("proj", "db");
+    d.id = "d".into();
+    d.name = "db-1".into();
+    d.state = "running".into();
+    let mut other = c("other", "web");
+    other.id = "o".into();
+    other.name = "other-web".into();
+    other.state = "running".into();
+
+    let state = state_with(vec![a, b, d, other]);
+    let st = state.lock().unwrap();
+
+    let project = group_members(&st, "project:proj");
+    assert_eq!(
+        project.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        vec!["a", "b", "d"]
+    );
+    let service = group_members(&st, "svc:proj/web");
+    assert_eq!(
+        service.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        vec!["a", "b"]
+    );
+    // 运行状态随成员带出（组操作只动该动的那部分）
+    assert_eq!(service.iter().filter(|m| m.running).count(), 1);
+
+    // 非法键 → 空集合（不 panic、不误伤别的分组）
+    assert!(group_members(&st, "weird").is_empty());
+    assert!(group_members(&st, "project:").is_empty());
+}
+
+/// 分组带的操作按钮状态：is_running = 全部成员运行中，group_running = 运行成员数
+#[test]
+fn band_exposes_group_run_state_for_action_buttons() {
+    let mut a = rc("proj", "web", 1.0, 1, 1);
+    a.id = "a".into();
+    let mut b = c("proj", "web");
+    b.id = "b".into();
+    b.state = "exited".into();
+    let state = state_with(vec![a, b]);
+    let st = state.lock().unwrap();
+    let tree = build_ledger_tree(&st);
+    let band = &tree.rows[0];
+    assert_eq!(band.kind, KIND_PROJECT);
+    assert_eq!(band.group_n, 2);
+    assert_eq!(band.group_running, 1);
+    assert!(!band.is_running, "还有成员没跑 → 主按钮应是「启动全组」");
+}

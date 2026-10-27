@@ -17,6 +17,7 @@ mod images;
 mod ledger;
 mod netvol;
 
+pub use compose_tree::{group_label, group_members, GroupMember};
 pub use images::build_image_rows;
 pub use ledger::build_container_ledger;
 pub use netvol::{build_network_rows, build_volume_rows};

@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.6.1] - 2026-10-28
+
+### 修复
+
+- deb 桌面入口 `Exec` 改为绝对路径 `/usr/bin/docker-panel`：GNOME Shell 对已有条目 `Exec` 变更的缓存刷新并不可靠，绝对路径在缓存未刷新等异常场景下仍能定位可执行文件，避免点菜单弹「未在 $PATH 路径中找到」。
+
 ## [0.6.0] - 2026-10-28
 
 ### 新增
@@ -251,6 +257,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.6.1]: https://github.com/pengtang1024/docker-panel/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/pengtang1024/docker-panel/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/pengtang1024/docker-panel/compare/0.4.4...0.5.0
 [0.4.4]: https://github.com/pengtang1024/docker-panel/compare/0.4.3...0.4.4

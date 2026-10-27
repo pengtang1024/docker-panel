@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-27
+
 ### 新增
 
 - **Compose 分组带支持组级操作按钮**：分组带 hover 后显示与容器行同构的 3 个按钮（主操作 / 日志 / 更多），动作统一作用于组内全部容器 —— 主按钮按「是否全部运行中」在**启动全组 / 重启全组**间切换（只动需要动的成员）；「更多」菜单提供**停止全部 / 重启全部 / 合并日志 / 删除全部**。未 hover 时该位置仍显示成员数，不打断原有的扫读节奏。
@@ -240,5 +242,6 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.5.0]: https://github.com/pengtang1024/docker-panel/compare/0.4.4...0.5.0
 [0.4.4]: https://github.com/pengtang1024/docker-panel/compare/0.4.3...0.4.4
 [0.4.3]: https://github.com/pengtang1024/docker-panel/releases/tag/0.4.3

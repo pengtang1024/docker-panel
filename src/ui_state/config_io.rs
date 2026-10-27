@@ -29,6 +29,12 @@ pub struct UiConfig {
     pub sort_networks: ResourceSort,
     /// 卷列表排序
     pub sort_volumes: ResourceSort,
+    /// 启动时检查更新
+    pub check_updates: bool,
+    /// 自动下载并安装
+    pub auto_install: bool,
+    /// 上次检查时间（unix 秒）
+    pub last_update_check: i64,
 }
 
 /// 读配置
@@ -50,6 +56,9 @@ pub fn load() -> UiConfig {
             sort_images: ResourceSort::from_config(c.sort_images),
             sort_networks: ResourceSort::from_config(c.sort_networks),
             sort_volumes: ResourceSort::from_config(c.sort_volumes),
+            check_updates: c.check_updates,
+            auto_install: c.auto_install,
+            last_update_check: c.last_update_check,
         },
         None => UiConfig {
             sort_field: SortField::Group,
@@ -63,6 +72,9 @@ pub fn load() -> UiConfig {
             sort_images: ResourceSort::default(),
             sort_networks: ResourceSort::default(),
             sort_volumes: ResourceSort::default(),
+            check_updates: true,
+            auto_install: true,
+            last_update_check: 0,
         },
     }
 }
@@ -81,6 +93,9 @@ pub fn save(s: &AppState) {
         sort_images: s.sort_images.to_config(),
         sort_networks: s.sort_networks.to_config(),
         sort_volumes: s.sort_volumes.to_config(),
+        check_updates: s.check_updates,
+        auto_install: s.auto_install,
+        last_update_check: s.last_update_check,
     }
     .save();
 }

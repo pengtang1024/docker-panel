@@ -568,3 +568,208 @@ msgstr "该分组没有运行中的容器"
 
 msgid "{0} containers merged"
 msgstr "已合并 {0} 个容器的日志"
+
+# ===== 自动更新 =====
+msgid "Update available"
+msgstr "有新版本可用"
+
+msgid "Restart to apply update"
+msgstr "重启后应用更新"
+
+msgid "Check for updates"
+msgstr "检查更新"
+
+msgid "Software Update"
+msgstr "软件更新"
+
+msgid "Current {0} · Latest {1}"
+msgstr "当前 {0} · 最新 {1}"
+
+msgid "Updated to {0}"
+msgstr "已更新到 {0}"
+
+msgid "Current {0}"
+msgstr "当前 {0}"
+
+msgid "No release notes."
+msgstr "暂无更新说明。"
+
+msgid "Check for updates on startup"
+msgstr "启动时检查更新"
+
+msgid "Download and install updates automatically"
+msgstr "自动下载并安装更新"
+
+msgid "Open release page"
+msgstr "打开下载页"
+
+msgid "Restart now"
+msgstr "立即重启"
+
+msgid "Installing..."
+msgstr "正在安装…"
+
+msgid "Install update"
+msgstr "立即更新"
+
+msgid "You're up to date."
+msgstr "已是最新版本。"
+
+msgid "{0} failed"
+msgstr "{0}失败"
+
+msgid "{0} failed: {1}"
+msgstr "{0}失败：{1}"
+
+msgid "{0} failed: cannot connect"
+msgstr "{0}失败：无法连接"
+
+msgid "{0} failed: cannot resolve host"
+msgstr "{0}失败：无法解析主机名"
+
+msgid "{0} failed (curl exit code {1})"
+msgstr "{0}失败（curl 退出码 {1}）"
+
+msgid "{0} failed: server returned an HTTP error"
+msgstr "{0}失败：服务器返回 HTTP 错误"
+
+msgid "Already up to date"
+msgstr "已是最新版本"
+
+msgid "Automatic install is not supported"
+msgstr "不支持自动安装"
+
+msgid "Automatic install is not supported on this platform"
+msgstr "当前平台不支持自动安装"
+
+msgid "Check for updates first"
+msgstr "请先检查更新"
+
+msgid "Downloading update..."
+msgstr "正在下载更新…"
+
+msgid "Downloading update... {0}%"
+msgstr "正在下载更新… {0}%"
+
+msgid "Failed to create update cache: {0}"
+msgstr "创建更新缓存失败：{0}"
+
+msgid "Failed to download update: {0}"
+msgstr "下载更新失败：{0}"
+
+msgid "Failed to locate current executable: {0}"
+msgstr "无法定位当前可执行文件：{0}"
+
+msgid "Failed to locate install directory"
+msgstr "无法定位安装目录"
+
+msgid "Failed to open browser: {0}"
+msgstr "打开浏览器失败：{0}"
+
+msgid "Failed to open update file: {0}"
+msgstr "打开更新文件失败：{0}"
+
+msgid "Failed to read new binary: {0}"
+msgstr "读取新二进制失败：{0}"
+
+msgid "Failed to read update file: {0}"
+msgstr "读取更新文件失败：{0}"
+
+msgid "Failed to replace binary: {0}"
+msgstr "替换二进制失败：{0}"
+
+msgid "Failed to restart application: {0}"
+msgstr "重启应用失败：{0}"
+
+msgid "Failed to run curl: {0}"
+msgstr "运行 curl 失败：{0}"
+
+msgid "Failed to run pkexec: {0}"
+msgstr "运行 pkexec 失败：{0}"
+
+msgid "Failed to set binary permissions: {0}"
+msgstr "设置二进制权限失败：{0}"
+
+msgid "Failed to write new binary: {0}"
+msgstr "写入新二进制失败：{0}"
+
+msgid "Installing update..."
+msgstr "正在安装更新…"
+
+msgid "Malformed update response: {0}"
+msgstr "更新响应格式错误：{0}"
+
+msgid "Malformed update response: missing tag_name"
+msgstr "更新响应格式错误：缺少 tag_name"
+
+msgid "No installable asset for this release"
+msgstr "该版本没有可自动安装的资产"
+
+msgid "Package installation failed: {0}"
+msgstr "软件包安装失败：{0}"
+
+msgid "pkexec not found, please install the deb manually"
+msgstr "未找到 pkexec，请手动安装 deb 包"
+
+msgid "Preparing update..."
+msgstr "正在准备更新…"
+
+msgid "Release checksums.txt does not contain this asset"
+msgstr "校验和文件中没有该资产"
+
+msgid "Release checksums.txt is missing"
+msgstr "发布包缺少 checksums.txt"
+
+msgid "Unsupported release tag: {0}"
+msgstr "不支持的发布标签：{0}"
+
+msgid "Update checksum mismatch"
+msgstr "更新包校验和不匹配"
+
+msgid "Update request timed out"
+msgstr "更新请求超时"
+
+msgid "Update response is too large"
+msgstr "更新响应内容过大"
+
+msgid "Update task failed"
+msgstr "更新任务失败"
+
+msgid "Verifying update..."
+msgstr "正在校验更新…"
+
+msgid "Updated to {0}. Restart to apply"
+msgstr "已更新到 {0}，重启后生效"
+
+msgid "New version {0} available"
+msgstr "发现新版本 {0}"
+
+msgid "Checking for updates..."
+msgstr "正在检查更新…"
+
+msgid "An update task is already running"
+msgstr "已有更新任务正在运行"
+
+msgid "Update check"
+msgstr "检查更新"
+
+msgid "Update download"
+msgstr "下载更新"
+
+msgid "Development builds do not install updates automatically"
+msgstr "开发构建不执行自动安装"
+
+msgid "pkexec is required to install the deb package"
+msgstr "需要 pkexec 才能安装 deb 包"
+
+msgid "No deb package is available for this architecture"
+msgstr "当前架构没有可用的 deb 安装包"
+
+msgid "The release does not include a binary asset"
+msgstr "发布包缺少可执行文件"
+
+msgid "The release does not include checksums.txt"
+msgstr "发布包缺少 checksums.txt"
+
+msgid "The install directory is not writable, please use the download page"
+msgstr "安装目录不可写，请使用下载页"

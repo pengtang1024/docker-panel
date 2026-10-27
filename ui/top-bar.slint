@@ -2,6 +2,7 @@
 import { Theme } from "theme.slint";
 import { VCenterText, CenterText } from "components-align.slint";
 import { IconBtn, Dot } from "components-interact.slint";
+import { UpdateState } from "update-state.slint";
 
 export component TopBar inherits Rectangle {
     height: Theme.top_h;
@@ -16,6 +17,7 @@ export component TopBar inherits Rectangle {
     callback theme_click();
     callback refresh_click();
     callback cleanup_click();
+    callback update_click();
     callback pull_click();
     callback search(string);
     callback focus_search();
@@ -153,6 +155,24 @@ export component TopBar inherits Rectangle {
         IconBtn { icon_name: Theme.theme_mode == 1 ? "sun" : Theme.theme_mode == 2 ? "moon" : "monitor"; icon_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
         IconBtn { icon_name: "refresh"; icon_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
         IconBtn { icon_name: "trash"; icon_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
+        // 自动更新入口：有新版本 / 等待重启时右上角叠加徽标点
+        Rectangle {
+            width: 32px; height: 32px;
+            update_icon := IconBtn {
+                icon_name: "box";
+                icon_size: 16px;
+                tip: UpdateState.restart_needed ? @tr("Restart to apply update")
+                    : UpdateState.available ? @tr("Update available")
+                    : @tr("Check for updates");
+                clicked => { root.update_click(); }
+            }
+            if UpdateState.available || UpdateState.restart_needed : Dot {
+                x: 24px; y: 4px;
+                dot_size: 6px;
+                on: UpdateState.available;
+                alert: UpdateState.restart_needed;
+            }
+        }
         IconBtn { icon_name: "download"; icon_size: 13px; primary: true; tip: @tr("Pull"); clicked => { root.pull_click(); } }
     }
 }

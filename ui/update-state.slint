@@ -1,0 +1,20 @@
+// update-state.slint — 自动更新 UI 状态（Rust → 顶栏 / 更新弹窗的共享属性）
+//
+// 放在独立 global 里而不是 MainWindow 的 14 个扁平属性：app.slint 只做组装，
+// 避免属性声明与 Overlays 双向绑定把组装文件撑过 R2 的 300 行正文预算。
+export global UpdateState {
+    in-out property <bool> open: false;
+    in-out property <bool> checking: false;
+    in-out property <bool> busy: false;
+    in-out property <bool> available: false;
+    in-out property <bool> installable: false;
+    in-out property <bool> restart_needed: false;
+    in-out property <string> current: "";
+    in-out property <string> latest: "";
+    in-out property <string> notes: "";
+    in-out property <string> status: "";
+    in-out property <string> reason: "";
+    in-out property <int> progress: 0;
+    in-out property <bool> auto_check: true;
+    in-out property <bool> auto_install: true;
+}

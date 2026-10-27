@@ -1,0 +1,191 @@
+// update-dialog.slint — 自动更新弹窗（继承 DialogShell）
+//
+// 状态全部由 Rust 侧写入：checking / busy / available / progress / status …
+// 本文件只负责展示与把用户动作通过 callback 交回 overlays → AppActions。
+//
+// ⚠️ Slint 1.18 DialogShell 约束：子类写完整 Header + Body + Footer，
+//    三段都必须显式占满垂直空间（Body vertical-stretch: 1）。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { TextButton, CheckBox, ProgressBar } from "components-interact.slint";
+import { DialogShell } from "components-dialog.slint";
+import { ScrollView } from "@material";
+
+// 勾选行：CheckBox 的 checked 与父属性双向绑定，点击后回调只负责持久化。
+component ToggleRow inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> label: "";
+    callback toggled();
+
+    height: 24px;
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 8px;
+        alignment: start;
+        cross-axis-alignment: center;
+        CheckBox {
+            checked <=> root.checked;
+            toggled => { root.toggled(); }
+        }
+        VCenterText {
+            text: root.label;
+            font-size: Theme.fs_sm;
+            color: Theme.ink_2;
+        }
+    }
+}
+
+export component UpdateDialog inherits DialogShell {
+    in-out property <bool> checking: false;
+    in-out property <bool> busy: false;
+    in-out property <bool> available: false;
+    in-out property <bool> installable: false;
+    in-out property <bool> restart_needed: false;
+    in-out property <string> current: "";
+    in-out property <string> latest: "";
+    in-out property <string> notes: "";
+    in-out property <string> status: "";
+    in-out property <string> reason: "";
+    in-out property <int> progress: 0;
+    in-out property <bool> auto_check: true;
+    in-out property <bool> auto_install: true;
+
+    callback install();
+    callback open_page();
+    callback restart();
+    callback set_auto_check(bool);
+    callback set_auto_install(bool);
+
+    card_width: 560px;
+    card_height: 480px;
+
+    VerticalLayout {
+        width: 100%; height: 100%; spacing: 0px;
+
+        // ===== Header =====
+        Rectangle {
+            min-height: 60px; vertical-stretch: 0;
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 18px; padding-bottom: 14px;
+                VerticalLayout {
+                    horizontal-stretch: 1; spacing: 3px; alignment: start;
+                    VCenterText {
+                        text: @tr("Software Update");
+                        font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
+                    }
+                    VCenterText {
+                        text: root.restart_needed
+                            ? @tr("Updated to {0}", root.latest)
+                            : root.available
+                                ? @tr("Current {0} · Latest {1}", root.current, root.latest)
+                                : @tr("Current {0}", root.current);
+                        font-size: Theme.fs; color: Theme.ink_2;
+                    }
+                }
+            }
+        }
+
+        // ===== Body =====
+        Rectangle {
+            vertical-stretch: 1;
+            HorizontalLayout {
+                width: 100%; height: 100%; spacing: 0px;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 12px;
+                VerticalLayout {
+                    width: 100%; spacing: Theme.s2; alignment: start;
+
+                    // 更新说明（Markdown 按纯文本展示；超出高度可滚动）
+                    ScrollView {
+                        vertical-stretch: 1;
+                        min-height: 130px;
+                        vertical-scrollbar-policy: as-needed;
+                        horizontal-scrollbar-policy: always-off;
+                        content_width: self.visible_width;
+                        mouse_drag_pan_enabled: false;
+                        Text {
+                            width: parent.width;
+                            text: root.checking ? ""
+                                : (root.available || root.restart_needed)
+                                    ? (root.notes == "" ? @tr("No release notes.") : root.notes)
+                                    : root.status != "" ? ""
+                                    : @tr("You're up to date.");
+                            wrap: word-wrap;
+                            color: Theme.ink_2;
+                            font-size: Theme.fs_sm;
+                        }
+                    }
+
+                    ProgressBar {
+                        value: root.progress / 100.0;
+                        visible: root.busy || root.progress > 0;
+                    }
+                    VCenterText {
+                        text: root.status;
+                        font-size: Theme.fs_sm;
+                        color: Theme.ink_3;
+                        wrap: word-wrap;
+                        visible: root.status != "";
+                    }
+                    VCenterText {
+                        text: root.reason;
+                        font-size: Theme.fs_sm;
+                        color: Theme.warn;
+                        wrap: word-wrap;
+                        visible: root.reason != "" && root.installable == false
+                            && root.available;
+                    }
+
+                    ToggleRow {
+                        checked <=> root.auto_check;
+                        label: @tr("Check for updates on startup");
+                        toggled => { root.set_auto_check(root.auto_check); }
+                    }
+                    ToggleRow {
+                        checked <=> root.auto_install;
+                        label: @tr("Download and install updates automatically");
+                        toggled => { root.set_auto_install(root.auto_install); }
+                    }
+                }
+            }
+        }
+
+        // ===== Footer =====
+        Rectangle {
+            min-height: 56px; vertical-stretch: 0;
+            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 14px;
+                alignment: start;
+                cross-axis-alignment: center;
+
+                TextButton {
+                    label: @tr("Open release page");
+                    ghost: true;
+                    clicked => { root.open_page(); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                TextButton {
+                    label: @tr("Close");
+                    clicked => { root.close(); }
+                }
+                if root.restart_needed : TextButton {
+                    label: @tr("Restart now");
+                    filled: true;
+                    clicked => { root.restart(); }
+                }
+                if root.restart_needed == false && root.available && root.installable : TextButton {
+                    label: root.busy ? @tr("Installing...") : @tr("Install update");
+                    filled: true;
+                    enabled: root.installable && root.busy == false && root.checking == false;
+                    clicked => { root.install(); }
+                }
+            }
+        }
+    }
+}

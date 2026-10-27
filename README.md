@@ -73,6 +73,14 @@
 
 - 主题 / 视图 / 筛选 / 排序 / 搜索词 / 日志跟随 / 台账内联树的收起分组 / 三个资源列表各自的排序 持久化到用户配置目录，启动自动恢复
 
+### 自动更新
+
+- 启动 10s 后检查 GitHub Releases（24h 节流，可在更新弹窗关闭）；顶栏「盒子」图标发现新版本时显示徽标点
+- 更新弹窗展示当前 / 最新版本与 Release 更新说明，支持一键下载、SHA-256 校验、安装，并在完成后提示重启
+- deb 安装（`dpkg-query` 命中 `docker-panel`）走 `pkexec dpkg -i`；裸二进制安装走同目录临时文件 + `rename` 原子替换
+- 开发构建 / 非 Linux / 无匹配资产 / 安装目录不可写时只展示原因并引导到下载页，不执行半途安装
+- 「启动时检查更新」「自动下载并安装更新」两个开关持久化到 `config.json`，默认开启
+
 ### 连接状态
 
 - 顶栏 Docker 连接角标：● 已连接 / ○ 未连接
@@ -82,6 +90,7 @@
 
 - Linux / macOS / Windows（主要在 Linux 上验证）
 - 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（当前不读取 tcp / ssh 远程地址）
+- 自动更新检查需要系统 `curl`（Linux / macOS / Windows 10+ 自带）；deb 自动安装还需要 `pkexec`（polkit 授权框）
 - 构建需要 Rust stable（edition 2021）
 
 ## 安装与构建
@@ -99,6 +108,8 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 ```bash
 sudo usermod -aG docker $USER
 ```
+
+deb 安装的版本可直接在应用内更新：顶栏「盒子」图标 → 检查更新 → 立即更新，授权 `pkexec` 后会调用 `dpkg -i` 安装新包；裸二进制版本则在安装目录可写时自替换。
 
 ### 从源码构建
 
@@ -130,7 +141,7 @@ cargo check --all-targets
 4. 点击容器台账行 → 右侧抽屉显示详情 / 日志 / 环境；点击镜像 / 网络 / 卷行 → 对应资源详情。
 5. Ctrl+1~4 切换 容器 / 镜像 / 网络 / 卷 视图；Esc 关闭抽屉 / 弹窗或退出多选。
 6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；分组带 hover 后出现启动 / 合并日志 / 组菜单；镜像 / 网络 / 卷点表头按列排序。
-7. 顶栏按钮：切换主题 / 刷新 / 清理 / 拉取镜像。
+7. 顶栏按钮：切换主题 / 刷新 / 清理 / 检查更新 / 拉取镜像；发现新版本时更新图标带徽标点。
 8. 底部栏显示 8 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 磁盘）与最近操作结果。
 
 ## 已知限制
@@ -141,6 +152,9 @@ cargo check --all-targets
 - 断流窗口的日志不补回；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
 - 容器停止后不自动重连日志流，需要重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流
 - `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
+- 自动更新只支持 Linux 的 deb / 裸二进制安装；开发构建与其它平台只提示新版本并打开下载页
+- 更新包没有代码签名，只依赖 HTTPS 与同一 Release 的 `checksums.txt`（SHA-256）校验
+- 自动安装 deb 需要桌面 polkit 授权代理；无 polkit 的环境只能手动下载安装
 
 ## 架构概览
 
@@ -175,20 +189,20 @@ cargo check --all-targets
 
 ```
 docker-panel/
-├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / futures
+├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / sha2 / futures
 ├── Cargo.lock
 ├── deny.toml               # cargo-deny 许可证门禁（宽松许可 + Slint RF 2.0 allow-list）
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
 ├── ui/                     # Slint UI 声明（按职责拆分，app.slint 唯一组装入口）
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
-│   ├── overlays.slint      # 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 全局 TipLayer
+│   ├── overlays.slint      # 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 自动更新弹窗 / 全局 TipLayer
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
 │   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
-│   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/拉取按钮
+│   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/更新/拉取按钮
 │   ├── sub-bar.slint       # SubBar：状态筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
 │   ├── list-area.slint     # 资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态与背景点击层）
 │   ├── ledger.slint        # 容器台账区：列宽计算 + 表头 + @material ListView 虚拟化台账行
@@ -207,6 +221,8 @@ docker-panel/
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
+│   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启）
+│   ├── update-state.slint  # 自动更新 UI 状态 global（顶栏 / 弹窗 / Rust 共享）
 │   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染）
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
@@ -218,7 +234,8 @@ docker-panel/
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+StatsBatch/LogBatch/Networks/Volumes) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
+│   ├── models.rs           # Msg(+StatsBatch/LogBatch/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
+│   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
 │   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
@@ -229,6 +246,7 @@ docker-panel/
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）
 │   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update/update.rs # 自动更新消息 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态
 │   ├── callbacks.rs        # 回调绑定中枢 + restore_config
@@ -238,6 +256,8 @@ docker-panel/
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
 │   ├── callbacks_compose.rs    # 台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志）
 │   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
+│   ├── callbacks_update.rs     # 自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 两个配置开关
+│   ├── update/                 # 自动更新：github（curl + JSON）/ version（纯逻辑 + 单测）/ install（探测 + 安装）+ install/download（下载 + 校验）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
@@ -287,6 +307,7 @@ docker-panel/
 | serde_json | **1.x** | bollard 内部序列化 |
 | anyhow | **1.x** | — |
 | arboard | **3.x** | 剪贴板；Wayland 走 data-control 协议（无需外部 wl-copy） |
+| sha2 | **0.10** | 自动更新包的 SHA-256 校验（HTTP 走系统 curl，不引入 TLS crate） |
 
 > 完整技术栈精确版本和版本特有 API 限制见 `AGENTS.md`。
 

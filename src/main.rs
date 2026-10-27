@@ -21,6 +21,7 @@ mod callbacks_drawer;
 mod callbacks_image;
 mod callbacks_netvol;
 mod callbacks_sort;
+mod callbacks_update;
 mod config;
 mod consumer;
 mod detail_fmt;
@@ -36,6 +37,7 @@ mod ui_apply;
 mod ui_rows;
 mod ui_state;
 mod ui_update;
+mod update;
 
 use std::sync::atomic::Ordering;
 
@@ -89,6 +91,8 @@ fn main() {
     bootstrap::spawn_volume_size_interval(&state);
     // 首屏数据
     bootstrap::spawn_initial_load(&state);
+    // 自动更新：启动 10s 后检查一次，之后每 6h 轮询（24h 节流）
+    update::spawn_scheduler(&state);
 
     // 系统主题热切换监听（auto 模式下每 5s poll gsettings，值翻转才推给 UI）
     let theme_monitor = bootstrap::spawn_theme_monitor(&ui, &state);

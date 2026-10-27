@@ -133,13 +133,34 @@ pub fn checksum_for(checksums: &str, asset_name: &str) -> Option<String> {
 }
 
 /// 更新说明截断：按字符边界，避免把一个 UTF-8 字符劈成两半。
+/// 给长连续 token（URL 等）每 `max_run` 个字符插入一个零宽空格。
+///
+/// UI 的说明文案是纯文本 `wrap: word-wrap` 渲染：只会在空白处断行，
+/// `Full Changelog: https://.../compare/0.5.0...0.6.1` 这类无空白长串会把整行撑出
+/// 容器宽度，视觉上就是「排版乱」。零宽空格对阅读无感，但给换行器提供了断点。
+fn soften_long_tokens(s: &str, max_run: usize) -> String {
+    if s.chars().count() <= max_run {
+        return s.to_string();
+    }
+    let zwsp = '\u{200B}';
+    let mut out = String::with_capacity(s.len() + s.len() / max_run * 3);
+    for (i, ch) in s.chars().enumerate() {
+        if i > 0 && i % max_run == 0 && !ch.is_whitespace() {
+            out.push(zwsp);
+        }
+        out.push(ch);
+    }
+    out
+}
+
 pub fn truncate_notes(notes: &str, max_chars: usize) -> String {
     let normalized = notes.replace("\r\n", "\n").replace('\r', "\n");
     let trimmed = normalized.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_string();
+    let softened = soften_long_tokens(trimmed, 32);
+    if softened.chars().count() <= max_chars {
+        return softened;
     }
-    let mut out: String = trimmed.chars().take(max_chars).collect();
+    let mut out: String = softened.chars().take(max_chars).collect();
     out.push('…');
     out
 }
@@ -223,6 +244,25 @@ mod tests {
         assert_eq!(truncate_notes("hello\r\nworld", 100), "hello\nworld");
         assert_eq!(truncate_notes("abcdef", 3), "abc…");
         assert_eq!(truncate_notes("中文说明", 2), "中文…");
+    }
+
+    #[test]
+    fn long_tokens_get_zero_width_breaks() {
+        let out = truncate_notes(
+            "Full Changelog: https://github.com/pengtang1024/docker-panel/compare/0.5.0...0.6.1",
+            10_000,
+        );
+        // 无空白长串被切开：不再存在超过 32 字符的连续非空白 token
+        for token in out.split_whitespace() {
+            let run: usize = token
+                .split('\u{200B}')
+                .map(|p| p.chars().count())
+                .max()
+                .unwrap_or(0);
+            assert!(run <= 32, "token run too long: {token}");
+        }
+        // 正常短词不受影响
+        assert_eq!(soften_long_tokens("hello world", 32), "hello world");
     }
 
     #[test]

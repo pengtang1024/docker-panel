@@ -179,7 +179,7 @@ export component TextButton inherits Rectangle {
             text: root.label;
             font-size: Theme.fs_md;
             font-weight: 600;
-            color: area.has-hover ? Theme.ink : fg_base;
+            color: area.has-hover ? (root.filled ? Theme.card : Theme.ink) : fg_base;
         }
     }
 }

@@ -179,6 +179,11 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let rows_epoch = s.rows_epoch.load(Ordering::Acquire);
     let rows_epoch_ref = s.rows_epoch.clone();
     let rt_h = s.rt.handle().clone();
+    // 更新弹窗：检查完成 / 进度 / 安装完成时取一次快照（锁内只读，锁外灌 UI）
+    let update_view = (res.update_check_done || res.update_progress || res.update_done)
+        .then(|| crate::update::view_snapshot(&s));
+    let update_check_done = res.update_check_done;
+    let update_done = res.update_done;
 
     drop(s); // ⚠️ invoke_from_event_loop 之前必须释放锁
 
@@ -242,6 +247,21 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         }
         if res.close_pull {
             ui.set_pull_open(false);
+        }
+        if let Some(v) = update_view {
+            let us = ui.global::<UpdateState>();
+            us.set_available(v.available);
+            us.set_installable(v.installable);
+            us.set_busy(v.busy);
+            us.set_restart_needed(v.restart_needed);
+            us.set_progress(v.progress);
+            us.set_latest(SharedString::from(v.latest));
+            us.set_notes(SharedString::from(v.notes));
+            us.set_status(SharedString::from(v.status));
+            us.set_reason(SharedString::from(v.reason));
+        }
+        if update_check_done || update_done {
+            ui.global::<UpdateState>().set_checking(false);
         }
         if let Some(ref d) = drawer_data {
             crate::ui_apply::apply_drawer(&ui, d);

@@ -60,7 +60,11 @@ jobs:
         id: sum
         run: |
           version="${{ steps.ver.outputs.version }}"
+          # 自动更新会校验这两个资产：deb 与裸二进制都必须有 sha256 条目。
+          # 裸二进制必须在 target/release 目录内执行 sha256sum，否则路径会写成
+          # target/release/docker-panel，与实际资产名 docker-panel 对不上。
           sha256sum "docker-panel_${version}_amd64.deb" > checksums.txt
+          (cd target/release && sha256sum docker-panel >> "$GITHUB_WORKSPACE/checksums.txt")
           cat checksums.txt
 
       - name: 提取版本更新日志

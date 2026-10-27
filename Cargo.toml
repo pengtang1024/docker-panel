@@ -1,6 +1,6 @@
 [package]
 name = "docker-panel"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"
 license = "MIT"
@@ -27,6 +27,9 @@ tokio = { version = "1", default-features = false, features = ["rt-multi-thread"
 
 # 日志复制：Wayland 走 data-control 协议，无需外部 wl-copy 命令
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
+# 更新包完整性校验（checksums.txt）；HTTP 走系统 curl，不引入 TLS crate
+sha2 = "0.10"
 
 [build-dependencies]
 slint-build = "1.18.1"

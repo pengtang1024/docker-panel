@@ -53,4 +53,12 @@ export global AppActions {
     callback pull_close();
     callback cleanup_submit(bool, bool, bool, bool);
     callback cleanup_close();
+    // —— 自动更新 ——
+    callback update_check();
+    callback update_close();
+    callback update_install();
+    callback update_open_page();
+    callback update_restart();
+    callback update_set_auto_check(bool);
+    callback update_set_auto_install(bool);
 }

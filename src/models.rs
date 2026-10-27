@@ -15,6 +15,8 @@
 
 use std::collections::HashMap;
 
+pub mod update;
+
 /// 容器信息（表格一行的数据）
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
@@ -180,6 +182,15 @@ pub enum Msg {
     ImageLayers(Vec<(String, usize)>),
     /// 卷磁盘占用（name → 字节数；来自 `/system/df`，低频刷新）
     VolumeSizes(HashMap<String, u64>),
+    /// 更新检查结果（manual, 是否会继续自动安装, 结果）
+    ///
+    /// `manual = false` 的失败必须静默；`auto_installing = true` 时后续
+    /// 还会到达 UpdateProgress / UpdateDone，弹窗保持 busy。
+    UpdateCheckDone(bool, bool, Result<update::UpdateInfo, String>),
+    /// 更新下载 / 安装进度（0~100, 状态文案）
+    UpdateProgress(i32, String),
+    /// 更新安装完成（结果文案, 是否需要重启）
+    UpdateDone(Result<String, String>, bool),
 }
 
 /// inspect_container 结果的精简版本——只取 UI 详情面板需要的字段

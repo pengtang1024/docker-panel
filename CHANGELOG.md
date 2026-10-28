@@ -6,6 +6,14 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [Unreleased]
+
+### 性能
+
+- **共享 Docker 客户端（连接池复用）**：此前每次 API 调用都 `connect_with_local_defaults()` 新建 hyper 客户端 + 独立连接池——每 3s 刷新建 4 个、每 6s stats 每个运行中容器再建 1 个（11 容器 ≈ 每分钟 110 个），用完即弃、零复用。`Docker` 实为 `Arc<Transport>`，改为 `OnceLock` 进程级单例 + 廉价 clone，所有调用共享同一批 Unix socket 连接；列表 / stats / inspect 高频路径全部受益，`docker/mod.rs` 的旧注释反模式一并修正。
+- **`stats_prev` 快照表随容器删除回收**：此前只增不减，长期运行的宿主机上反复起停容器会无界泄漏内存；`Msg::Containers` 应用列表时按本轮存活集合 `retain` 清理。
+- **StatsBatch 应用 O(批量×容器数) → O(批量+容器数)**：每 6s 一轮 stats 逐条 `iter().find()` 定位容器行；先建一次 id→下标映射再整轮应用，几百容器时每轮省一个数量级的线性扫描。
+
 ## [0.7.0] - 2026-10-28
 
 ### 新增

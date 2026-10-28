@@ -2,6 +2,9 @@
 // 只声明回调，不含任何 UI 元素；由 app.slint 导入使用。
 export global AppActions {
     callback toggle_theme();
+    callback settings_open();
+    callback settings_close();
+    callback set_theme(int);
     callback refresh();
     callback cleanup();
     callback pull();
@@ -61,4 +64,5 @@ export global AppActions {
     callback update_restart();
     callback update_set_auto_check(bool);
     callback update_set_auto_install(bool);
+    callback update_set_auto_restart(bool);
 }

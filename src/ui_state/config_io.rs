@@ -33,6 +33,8 @@ pub struct UiConfig {
     pub check_updates: bool,
     /// 自动下载并安装
     pub auto_install: bool,
+    /// 安装成功后自动重启
+    pub auto_restart: bool,
     /// 上次检查时间（unix 秒）
     pub last_update_check: i64,
 }
@@ -58,6 +60,7 @@ pub fn load() -> UiConfig {
             sort_volumes: ResourceSort::from_config(c.sort_volumes),
             check_updates: c.check_updates,
             auto_install: c.auto_install,
+            auto_restart: c.auto_restart,
             last_update_check: c.last_update_check,
         },
         None => UiConfig {
@@ -74,6 +77,7 @@ pub fn load() -> UiConfig {
             sort_volumes: ResourceSort::default(),
             check_updates: true,
             auto_install: true,
+            auto_restart: true,
             last_update_check: 0,
         },
     }
@@ -95,6 +99,7 @@ pub fn save(s: &AppState) {
         sort_volumes: s.sort_volumes.to_config(),
         check_updates: s.check_updates,
         auto_install: s.auto_install,
+        auto_restart: s.auto_restart,
         last_update_check: s.last_update_check,
     }
     .save();

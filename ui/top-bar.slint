@@ -15,6 +15,7 @@ export component TopBar inherits Rectangle {
     in-out property <bool> docker_ok: false;
     in-out property <string> search_q: "";
     callback theme_click();
+    callback settings_click();
     callback refresh_click();
     callback cleanup_click();
     callback update_click();
@@ -153,6 +154,7 @@ export component TopBar inherits Rectangle {
         Rectangle { width: 1px; height: 20px; background: Theme.line; }
 
         IconBtn { icon_name: Theme.theme_mode == 1 ? "sun" : Theme.theme_mode == 2 ? "moon" : "monitor"; icon_size: 16px; tip: @tr("Theme"); clicked => { root.theme_click(); } }
+        settings_icon := IconBtn { icon_name: "settings"; icon_size: 16px; tip: @tr("Settings"); clicked => { root.settings_click(); } }
         IconBtn { icon_name: "refresh"; icon_size: 16px; tip: @tr("Refresh"); clicked => { root.refresh_click(); } }
         IconBtn { icon_name: "trash"; icon_size: 15px; tip: @tr("Cleanup"); clicked => { root.cleanup_click(); } }
         // 自动更新入口：有新版本 / 等待重启时右上角叠加徽标点

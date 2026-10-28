@@ -75,11 +75,16 @@
 
 ### 自动更新
 
-- 启动 10s 后检查 GitHub Releases（24h 节流，可在更新弹窗关闭）；顶栏「盒子」图标发现新版本时显示徽标点
-- 更新弹窗展示当前 / 最新版本与 Release 更新说明，支持一键下载、SHA-256 校验、安装，并在完成后提示重启
+- 启动 10s 后检查 GitHub Releases（24h 节流，可在设置页关闭）；顶栏「盒子」图标发现新版本时显示徽标点
+- 更新弹窗展示当前 / 最新版本与 Release 更新说明（Markdown/HTML 已清洗为纯文本），支持一键下载、SHA-256 校验、安装
+- 默认全自动：检测到新版本后自动下载安装，安装成功自动重启（可在设置页逐项关闭）
 - deb 安装（`dpkg-query` 命中 `docker-panel`）走 `pkexec dpkg -i`；裸二进制安装走同目录临时文件 + `rename` 原子替换
 - 开发构建 / 非 Linux / 无匹配资产 / 安装目录不可写时只展示原因并引导到下载页，不执行半途安装
-- 「启动时检查更新」「自动下载并安装更新」两个开关持久化到 `config.json`，默认开启
+- 「启动时检查更新」「自动下载并安装更新」「安装后自动重启」三个开关持久化到 `config.json`，默认开启
+
+### 设置页
+
+- 顶栏齿轮图标打开设置弹窗：外观（跟随系统 / 浅色 / 深色）+ 自动更新三个开关
 
 ### 连接状态
 
@@ -202,7 +207,7 @@ docker-panel/
 │   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
 │   ├── models.slint        # ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
-│   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/刷新/清理/更新/拉取按钮
+│   ├── top-bar.slint       # TopBar：logo + 连接状态 + 搜索框(Ctrl+K) + 主题/设置/刷新/清理/更新/拉取按钮
 │   ├── sub-bar.slint       # SubBar：状态筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
 │   ├── list-area.slint     # 资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态与背景点击层）
 │   ├── ledger.slint        # 容器台账区：列宽计算 + 表头 + @material ListView 虚拟化台账行
@@ -223,6 +228,8 @@ docker-panel/
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
 │   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启）
 │   ├── update-state.slint  # 自动更新 UI 状态 global（顶栏 / 弹窗 / Rust 共享）
+│   ├── settings-dialog.slint # 设置弹窗（外观三选 + 自动更新三个开关）
+│   ├── settings-state.slint # 设置弹窗开关 global
 │   ├── menu-layers.slint   # 浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染）
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
@@ -256,8 +263,9 @@ docker-panel/
 │   ├── callbacks_netvol.rs     # 网络/卷 select / remove 回调
 │   ├── callbacks_compose.rs    # 台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志）
 │   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
-│   ├── callbacks_update.rs     # 自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 两个配置开关
-│   ├── update/                 # 自动更新：github（curl + JSON）/ version（纯逻辑 + 单测）/ install（探测 + 安装）+ install/download（下载 + 校验）
+│   ├── callbacks_update.rs     # 自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 三个配置开关
+│   ├── callbacks_settings.rs   # 设置弹窗：开关弹窗 / 显式设置主题（0=跟随系统 1=浅色 2=深色）
+│   ├── update/                 # 自动更新：github（curl + JSON）/ version（纯逻辑 + 单测）/ markdown（Release 说明 → 纯文本）/ install（探测 + 安装）+ install/download（下载 + 校验）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove

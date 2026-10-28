@@ -1,0 +1,7 @@
+// settings-state.slint — 设置弹窗的开关状态（Rust ↔ 弹窗共享）
+//
+// 与 UpdateState 同一套做法：独立 global 而不是 MainWindow 扁平属性，
+// app.slint 只 import 不加属性（R2 正文预算）。
+export global SettingsState {
+    in-out property <bool> open: false;
+}

@@ -16,7 +16,9 @@ import { TipLayer } from "components-interact.slint";
 import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
 import { UpdateDialog } from "update-dialog.slint";
+import { SettingsDialog } from "settings-dialog.slint";
 import { UpdateState } from "update-state.slint";
+import { SettingsState } from "settings-state.slint";
 
 export component Overlays inherits Rectangle {
     // —— 排序菜单 ——
@@ -63,6 +65,10 @@ export component Overlays inherits Rectangle {
     callback update_restart();
     callback update_set_auto_check(bool);
     callback update_set_auto_install(bool);
+    callback update_set_auto_restart(bool);
+    // 设置弹窗动作（app.slint 注入 AppActions）
+    callback settings_close();
+    callback set_theme(int);
 
     width: 100%;
     height: 100%;
@@ -140,6 +146,15 @@ export component Overlays inherits Rectangle {
         restart => { root.update_restart(); }
         set_auto_check(v) => { root.update_set_auto_check(v); }
         set_auto_install(v) => { root.update_set_auto_install(v); }
+    }
+
+    SettingsDialog {
+        open <=> SettingsState.open;
+        close => { root.settings_close(); }
+        set_theme(v) => { root.set_theme(v); }
+        set_auto_check(v) => { root.update_set_auto_check(v); }
+        set_auto_install(v) => { root.update_set_auto_install(v); }
+        set_auto_restart(v) => { root.update_set_auto_restart(v); }
     }
 
     // 全局提示浮层：所有组件 hover 时写 Tip，这里统一渲染并做边界收敛

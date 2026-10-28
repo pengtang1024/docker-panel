@@ -146,6 +146,8 @@ pub struct AppState {
     pub check_updates: bool,
     /// 检查到新版本后自动下载安装（默认开）
     pub auto_install: bool,
+    /// 安装成功后自动重启应用（默认开）
+    pub auto_restart: bool,
     /// 上次检查时间（unix 秒），24h 节流
     pub last_update_check: i64,
     /// 最近一次成功检查到的 release（含本机安装计划）
@@ -187,6 +189,7 @@ impl AppState {
         let sort_volumes = cfg.sort_volumes;
         let check_updates = cfg.check_updates;
         let auto_install = cfg.auto_install;
+        let auto_restart = cfg.auto_restart;
         let last_update_check = cfg.last_update_check;
 
         let (tx, rx) = mpsc::channel();
@@ -235,6 +238,7 @@ impl AppState {
             sort_volumes,
             check_updates,
             auto_install,
+            auto_restart,
             last_update_check,
             update_info: None,
             update_available: false,

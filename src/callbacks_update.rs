@@ -12,6 +12,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         if let Ok(s) = state.lock() {
             us.set_auto_check(s.check_updates);
             us.set_auto_install(s.auto_install);
+            us.set_auto_restart(s.auto_restart);
         }
     }
 
@@ -118,6 +119,16 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_update_set_auto_install(move |checked: bool| {
             if let Ok(mut st) = s.lock() {
                 st.auto_install = checked;
+                st.persist();
+            }
+        });
+    }
+
+    {
+        let s = state.clone();
+        actions.on_update_set_auto_restart(move |checked: bool| {
+            if let Ok(mut st) = s.lock() {
+                st.auto_restart = checked;
                 st.persist();
             }
         });

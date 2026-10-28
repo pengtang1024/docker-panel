@@ -2,6 +2,8 @@
 //!
 //! 只做状态搬运，不碰 Slint：UI 灌入仍由 consumer::apply_ui 统一完成。
 
+use std::sync::mpsc::Sender;
+
 use crate::models::Msg;
 use crate::ui_state::AppState;
 
@@ -62,7 +64,16 @@ impl AppState {
                         self.update_restart_needed |= restart_needed;
                         self.update_available = false;
                         self.update_progress = 100;
-                        self.update_status = msg.clone();
+                        // 自动重启：安装成功且开关开启 → 提示后延时重启
+                        // （pkexec 授权框本身就是一次用户在场确认；开关默认开，
+                        //   想留在当前会话的可在设置里关掉）
+                        if restart_needed && self.update_restart_needed && self.auto_restart {
+                            self.update_status =
+                                crate::i18n::t("Update installed, restarting automatically...");
+                            Self::schedule_auto_restart(&self.tx, &self.rt);
+                        } else {
+                            self.update_status = msg.clone();
+                        }
                         res.status_text = Some(msg);
                         res.toast = true;
                     }
@@ -74,5 +85,32 @@ impl AppState {
             }
             _ => {}
         }
+    }
+
+    /// 3s 后启动替换后的新二进制并退出事件循环。
+    ///
+    /// 纪律：这里只 clone tx / rt handle 后 spawn，绝不把锁或 self 带进异步任务；
+    /// 重启失败通过 Msg 回灌（spawn_blocking 里跑子进程/文件 IO）。
+    fn schedule_auto_restart(tx: &Sender<Msg>, rt: &tokio::runtime::Runtime) {
+        let tx = tx.clone();
+        rt.handle().spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let result = match tokio::task::spawn_blocking(
+                crate::update::install::restart_current_exe,
+            )
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => Err(e.to_string()),
+            };
+            match result {
+                Ok(()) => {
+                    let _ = slint::quit_event_loop();
+                }
+                Err(e) => {
+                    let _ = tx.send(Msg::UpdateProgress(100, e));
+                }
+            }
+        });
     }
 }

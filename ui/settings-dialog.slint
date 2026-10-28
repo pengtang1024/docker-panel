@@ -1,0 +1,139 @@
+// settings-dialog.slint — 设置弹窗（继承 DialogShell）
+//
+// 外观（主题三选）+ 自动更新三个开关。开关值直接双向绑定 UpdateState global
+// （top-bar 也这样用，跨文件 global 是安全路径；禁的是 delegate 里 import AppActions），
+// 动作通过 callback 交回 overlays → app.slint → AppActions → Rust 持久化。
+import { Theme } from "theme.slint";
+import { VCenterText } from "components-align.slint";
+import { TextButton, CheckBox } from "components-interact.slint";
+import { DialogShell } from "components-dialog.slint";
+import { UpdateState } from "update-state.slint";
+
+// 勾选行：CheckBox 的 checked 与 UpdateState global 双向绑定，点击后回调只负责持久化。
+component ToggleRow inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> label: "";
+    callback toggled();
+
+    height: 24px;
+    HorizontalLayout {
+        width: 100%; height: 100%;
+        spacing: 8px;
+        alignment: start;
+        cross-axis-alignment: center;
+        CheckBox {
+            checked <=> root.checked;
+            toggled => { root.toggled(); }
+        }
+        VCenterText {
+            text: root.label;
+            font-size: Theme.fs_sm;
+            color: Theme.ink_2;
+        }
+    }
+}
+
+export component SettingsDialog inherits DialogShell {
+    callback set_theme(int);
+    callback set_auto_check(bool);
+    callback set_auto_install(bool);
+    callback set_auto_restart(bool);
+
+    card_width: 420px;
+    card_height: 330px;
+
+    VerticalLayout {
+        width: 100%; height: 100%; spacing: 0px;
+
+        // ===== Header =====
+        Rectangle {
+            min-height: 60px; vertical-stretch: 0;
+            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 18px; padding-bottom: 14px;
+                VCenterText {
+                    text: @tr("Settings");
+                    font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
+                }
+            }
+        }
+
+        // ===== Body =====
+        Rectangle {
+            vertical-stretch: 1;
+            VerticalLayout {
+                width: 100%; spacing: Theme.s2; alignment: start;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 12px;
+
+                VCenterText {
+                    text: @tr("Appearance");
+                    font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3;
+                }
+                HorizontalLayout {
+                    width: 100%; spacing: 8px; alignment: start;
+                    TextButton {
+                        label: @tr("Follow system");
+                        filled: Theme.theme_mode == 0;
+                        clicked => { root.set_theme(0); }
+                    }
+                    TextButton {
+                        label: @tr("Light");
+                        filled: Theme.theme_mode == 1;
+                        clicked => { root.set_theme(1); }
+                    }
+                    TextButton {
+                        label: @tr("Dark");
+                        filled: Theme.theme_mode == 2;
+                        clicked => { root.set_theme(2); }
+                    }
+                }
+
+                VCenterText {
+                    text: @tr("Updates");
+                    font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3;
+                }
+                ToggleRow {
+                    checked <=> UpdateState.auto_check;
+                    label: @tr("Check for updates on startup");
+                    toggled => { root.set_auto_check(UpdateState.auto_check); }
+                }
+                ToggleRow {
+                    checked <=> UpdateState.auto_install;
+                    label: @tr("Download and install updates automatically");
+                    toggled => { root.set_auto_install(UpdateState.auto_install); }
+                }
+                ToggleRow {
+                    checked <=> UpdateState.auto_restart;
+                    label: @tr("Restart automatically after install");
+                    toggled => { root.set_auto_restart(UpdateState.auto_restart); }
+                }
+                VCenterText {
+                    text: @tr("Updates run in the background; installing the deb asks for system authorization once.");
+                    font-size: Theme.fs_xs;
+                    color: Theme.ink_3;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        // ===== Footer =====
+        Rectangle {
+            min-height: 56px; vertical-stretch: 0;
+            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                padding-left: 20px; padding-right: 20px;
+                padding-top: 14px; padding-bottom: 14px;
+                alignment: start;
+                cross-axis-alignment: center;
+                TextButton {
+                    label: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
+}

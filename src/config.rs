@@ -32,6 +32,8 @@ pub struct AppConfig {
     pub check_updates: bool,
     /// 检查到新版本后自动下载安装
     pub auto_install: bool,
+    /// 安装成功后自动重启应用
+    pub auto_restart: bool,
     /// 上次检查时间（unix 秒）
     pub last_update_check: i64,
 }
@@ -52,6 +54,7 @@ impl Default for AppConfig {
             sort_volumes: 0,
             check_updates: true,
             auto_install: true,
+            auto_restart: true,
             last_update_check: 0,
         }
     }
@@ -126,6 +129,10 @@ impl AppConfig {
                 .get("auto_install")
                 .and_then(|x| x.as_bool())
                 .unwrap_or(d.auto_install),
+            auto_restart: v
+                .get("auto_restart")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(d.auto_restart),
             last_update_check: v
                 .get("last_update_check")
                 .and_then(|x| x.as_i64())
@@ -160,7 +167,7 @@ impl AppConfig {
             .collect::<Vec<_>>()
             .join(", ");
         let json = format!(
-            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"check_updates\": {},\n  \"auto_install\": {},\n  \"last_update_check\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
+            "{{\n  \"theme\": {},\n  \"view\": {},\n  \"filter\": \"{}\",\n  \"sort_field\": {},\n  \"sort_desc\": {},\n  \"search\": \"{}\",\n  \"log_follow\": {},\n  \"sort_images\": {},\n  \"sort_networks\": {},\n  \"sort_volumes\": {},\n  \"check_updates\": {},\n  \"auto_install\": {},\n  \"auto_restart\": {},\n  \"last_update_check\": {},\n  \"compose_collapsed\": [{}]\n}}\n",
             self.theme,
             self.view,
             json_escape(&self.filter),
@@ -173,6 +180,7 @@ impl AppConfig {
             self.sort_volumes,
             self.check_updates,
             self.auto_install,
+            self.auto_restart,
             self.last_update_check,
             collapsed,
         );

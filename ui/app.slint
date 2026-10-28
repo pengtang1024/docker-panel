@@ -10,12 +10,13 @@ import { Overlays } from "overlays.slint";
 import { ContainerRow, ImageRow, NetworkRow, VolumeRow, DetailPair, LogRow, LedgerSummary } from "models.slint";
 import { AppActions } from "app-actions.slint";
 import { UpdateState } from "update-state.slint";
+import { SettingsState } from "settings-state.slint";
 import { MaterialTheme } from "material-theme.slint";
 import { MaterialPalette, MaterialSchemes } from "@material";
 import { Palette } from "std-widgets.slint";
 // 再导出：Slint 只把「主文件导出的类型」暴露给 Rust（否则 AppActions 变成内部类型，
 // Rust 侧 ui.global::<AppActions>() 找不到符号）
-export { AppActions, UpdateState }
+export { AppActions, UpdateState, SettingsState }
 
 export component MainWindow inherits Window {
     title: "Docker Panel";
@@ -169,11 +170,12 @@ export component MainWindow inherits Window {
             } else if (e.text == Key.Escape) {
                 main-area.sort_open = false;
                 CardMenu.close();
-                if (root.drawer_open || root.pull_open || root.cleanup_open || UpdateState.open) {
+                if (root.drawer_open || root.pull_open || root.cleanup_open || UpdateState.open || SettingsState.open) {
                     root.drawer_open = false;
                     root.pull_open = false;
                     root.cleanup_open = false;
                     UpdateState.open = false;
+                    SettingsState.open = false;
                 } else if (root.batch_count > 0) {
                     // sel-mode 退出：清空多选 → 复选框随之隐藏
                     AppActions.batch_clear();
@@ -207,6 +209,7 @@ export component MainWindow inherits Window {
                 docker_ok <=> root.docker_ok;
                 search_q <=> root.search_q;
                 theme_click => { AppActions.toggle_theme(); }
+                settings_click => { AppActions.settings_open(); }
                 refresh_click => { AppActions.refresh(); }
                 cleanup_click => { AppActions.cleanup(); }
                 update_click => { AppActions.update_check(); }
@@ -360,6 +363,9 @@ export component MainWindow inherits Window {
         update_restart => { AppActions.update_restart(); }
         update_set_auto_check(v) => { AppActions.update_set_auto_check(v); }
         update_set_auto_install(v) => { AppActions.update_set_auto_install(v); }
+        update_set_auto_restart(v) => { AppActions.update_set_auto_restart(v); }
+        settings_close => { AppActions.settings_close(); }
+        set_theme(v) => { AppActions.set_theme(v); }
     }
     }
 }

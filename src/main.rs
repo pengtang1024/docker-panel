@@ -20,6 +20,7 @@ mod callbacks_container;
 mod callbacks_drawer;
 mod callbacks_image;
 mod callbacks_netvol;
+mod callbacks_settings;
 mod callbacks_sort;
 mod callbacks_update;
 mod config;

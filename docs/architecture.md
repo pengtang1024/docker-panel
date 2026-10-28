@@ -121,7 +121,8 @@ docker-panel/
     ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）
     ├── drawer-log-row.slint   日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
     ├── dialogs.slint          PullDialog + CleanupDialog 弹窗（继承 DialogShell）
-    ├── update-dialog.slint    自动更新弹窗：版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启
+    ├── update-dialog.slint    自动更新弹窗：版本对比 / 更新说明 / 进度 / 开关 / 安装与重启
+    ├── settings-dialog.slint  设置弹窗：外观三选 + 自动更新三个开关（check/install/restart）
     ├── update-state.slint     自动更新 UI 状态 global（TopBar / UpdateDialog / Rust 共享）
     ├── menu-layers.slint      浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染，否则被列表 clip 裁掉）
     └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog

@@ -773,3 +773,30 @@ msgstr "发布包缺少 checksums.txt"
 
 msgid "The install directory is not writable, please use the download page"
 msgstr "安装目录不可写，请使用下载页"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Appearance"
+msgstr "外观"
+
+msgid "Follow system"
+msgstr "跟随系统"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Updates"
+msgstr "自动更新"
+
+msgid "Restart automatically after install"
+msgstr "安装后自动重启应用"
+
+msgid "Updates run in the background; installing the deb asks for system authorization once."
+msgstr "更新在后台自动进行；安装 deb 包时需要一次系统授权。"
+
+msgid "Update installed, restarting automatically..."
+msgstr "更新已安装，即将自动重启…"

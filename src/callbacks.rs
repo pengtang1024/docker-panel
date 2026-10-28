@@ -31,6 +31,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     bind_netvol_actions(ui, state);
     bind_sort_actions(ui, &actions, state);
     bind_update(ui, &actions, state);
+    super::callbacks_settings::bind_settings(ui, &actions, state);
 }
 
 /// 启动时把持久化的配置灌回 Slint 属性

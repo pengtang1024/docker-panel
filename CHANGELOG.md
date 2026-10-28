@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.6.3] - 2026-10-28
+
+### 修复
+
+- **更新说明的排版**：Release 正文是 Markdown 并内嵌 HTML 徽标，此前直接当纯文本展示，`##`、`**`、反引号、`<a><img>` 全部裸露。新增 `update::markdown` 在写入 `UpdateInfo` 前统一转换：标题转小节、列表转圆点、加粗/行内代码/引用标记剥离、`[文本](链接)` 只留文本、图片与分隔线整行删除、changelog 版本头剥方括号、连续空行折叠。
+
 ## [0.6.2] - 2026-10-28
 
 ### 修复
@@ -265,6 +271,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.6.3]: https://github.com/pengtang1024/docker-panel/compare/0.6.2...0.6.3
 [0.6.2]: https://github.com/pengtang1024/docker-panel/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/pengtang1024/docker-panel/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/pengtang1024/docker-panel/compare/0.5.0...0.6.0

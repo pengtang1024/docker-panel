@@ -6,6 +6,7 @@
 // 列起点固定是台账的核心价值，所以表头与行必须用同一套列宽（ledger-cols.slint），
 // 且两者的内容宽度必须完全一致（表头右侧额外让出滚动条槽 8px）。
 import { Theme } from "theme.slint";
+import { Tip } from "components-align.slint";
 import { VCenterText, RightText } from "components-align.slint";
 import { CardMenu } from "components-align.slint";
 import { LedgerCols } from "ledger-cols.slint";
@@ -18,6 +19,7 @@ import { ListView } from "@material";
 // ============ 表头单元格（可点击排序的列用）============
 component HeadCell inherits Rectangle {
     in property <string> text: "";
+    in property <string> tip: "";
     in property <bool> right: false;
     in property <bool> active: false;
     in property <length> cell_w: 60px;
@@ -29,6 +31,19 @@ component HeadCell inherits Rectangle {
     area := TouchArea {
         width: 100%; height: 100%;
         clicked => { root.picked(); }
+    }
+    // hover tooltip：走 Tip 总线（与 Dot 同一套），磁盘列用它解释口径。
+    // ⚠️ changed 只能盯本组件属性：用 property 中转 has-hover
+    private property <bool> tip_hover: area.has-hover;
+    changed tip_hover => {
+        if (root.tip_hover && root.tip != "") {
+            Tip.text = root.tip;
+            Tip.ax = area.absolute-position.x + area.width / 2;
+            Tip.ay = area.absolute-position.y;
+            Tip.btn_h = area.height;
+        } else if (Tip.text == root.tip) {
+            Tip.text = "";
+        }
     }
     background: area.has-hover ? Theme.line_2 : transparent;
 
@@ -172,11 +187,13 @@ export component LedgerArea inherits Rectangle {
                     picked => { root.sort_pick(2); }
                 }
 
-                // 磁盘（可点击排序）
+                // 磁盘（可点击排序）：tooltip 解释口径——可写层（容器独占），
+                // 镜像层共享只读不计入，避免与「容器有多大」的直觉冲突
                 if root.show_disk : HeadCell {
                     text: @tr("Disk"); right: true;
                     cell_w: LedgerCols.disk_w;
                     active: root.sort_field == 3;
+                    tip: @tr("Disk = container writable layer (exclusive).\nShared read-only image layers are not counted; see the Images view.");
                     picked => { root.sort_pick(3); }
                 }
 

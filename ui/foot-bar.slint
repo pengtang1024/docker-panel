@@ -70,6 +70,8 @@ export component FootBar inherits Rectangle {
     in-out property <string> cpu_total: "0%";
     in-out property <string> mem_total: "0MB";
     in-out property <string> disk_total: "0MB";
+    /// 镜像总占用（全部镜像 size 之和；与容器「磁盘」列的可写层口径互补）
+    in-out property <string> image_total: "0MB";
 
     // ⚠️ cross-axis-alignment:center 让所有子元素（状态点/分隔线/OvItem/Text）垂直居中
     HorizontalLayout {
@@ -96,6 +98,7 @@ export component FootBar inherits Rectangle {
         OvItem { label: @tr("Volumes"); val: root.total_volumes; ic: "volume";}
         OvItem { label: @tr("CPU"); val: root.cpu_total; ic: "cpu";}
         OvItem { label: @tr("Memory"); val: root.mem_total; ic: "memory";}
+        OvItem { label: @tr("Images size"); val: root.image_total; ic: "image";}
         OvItem { label: @tr("Disk"); val: root.disk_total; ic: "disk"; show_border: false;}
 
         Rectangle { horizontal-stretch: 1; }

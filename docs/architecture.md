@@ -115,7 +115,7 @@ docker-panel/
     ├── volume-list.slint      卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
     ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
     ├── skel.slint             骨架屏占位
-    ├── foot-bar.slint         底部 8 项资源概览
+    ├── foot-bar.slint         底部 9 项资源概览（含镜像大小）
     ├── batch-bar.slint        批量操作浮动栏
     ├── drawer.slint           右侧抽屉：详情/日志/环境 三 Tab（四种资源共用，滚动容器用 @material ScrollView+ListView）
     ├── drawer-detail-row.slint 详情/环境行（kv / 代码盒 / 挂载 chip）

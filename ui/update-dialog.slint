@@ -98,8 +98,15 @@ export component UpdateDialog inherits DialogShell {
                 VerticalLayout {
                     width: 100%; spacing: Theme.s2; alignment: start;
 
-                    // 更新说明（Markdown 按纯文本展示；超出高度可滚动）
-                    ScrollView {
+                    // 更新说明（按纯文本展示；超出高度可滚动）
+                    //
+                    // ⚠️ Material ScrollView 的 Flickable 不强制约束子元素宽度：
+                    //    Text 写 width: parent.width 会被忽略，按文本自然宽度布局；
+                    //    一旦自然宽 > 视口宽（含 8px 滚动条槽），Flickable 对水平
+                    //    不滚动的内容做居中（x = (视口-内容)/2，负值）→ 首字符左半
+                    //    被视口裁掉（「已是最新版本。」的「已」只剩半截）。
+                    //    必须显式绑定 visible_width（= flickable.width）。
+                    sv := ScrollView {
                         vertical-stretch: 1;
                         min-height: 130px;
                         vertical-scrollbar-policy: as-needed;
@@ -107,7 +114,7 @@ export component UpdateDialog inherits DialogShell {
                         content_width: self.visible_width;
                         mouse_drag_pan_enabled: false;
                         Text {
-                            width: parent.width;
+                            width: sv.visible_width;
                             text: root.checking ? ""
                                 : (root.available || root.restart_needed)
                                     ? (root.notes == "" ? @tr("No release notes.") : root.notes)

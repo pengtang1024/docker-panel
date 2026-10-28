@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [Unreleased]
+
+### 修复
+
+- **更新说明首字符被裁半截**（如「已是最新版本」的「已」只剩右半）：Material ScrollView 的 Flickable 不强制约束子元素宽度，弹窗里的裸 `Text` 写 `width: parent.width` 被忽略、按文本自然宽度布局；自然宽超过视口（含 8px 滚动条槽）时，Flickable 对水平不滚动的内容做居中（负偏移），首字符左半被视口裁掉。改为显式绑定 `sv.visible_width`，与抽屉 / 列表场景（delegate 宽度被强制约束）不同，这是唯一一处裸 Text 直接做 Flickable 子元素的用法。
+
 ## [0.6.3] - 2026-10-28
 
 ### 修复

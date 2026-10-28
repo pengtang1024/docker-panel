@@ -166,6 +166,13 @@ impl AppState {
         match msg {
             // Stats：整轮采样一次到达，逐容器写回 containers（累加）
             Msg::StatsBatch(batch) => {
+                // 逐条 iter().find 是 O(批量×容器数)；先建一次 id→下标映射，
+                // 整轮 O(容器数 + 批量)（几百容器时差一个数量级）。
+                // 映射存 owned id 避免与后面的 containers 可变借用冲突。
+                let mut idx: HashMap<String, usize> = HashMap::with_capacity(self.containers.len());
+                for (i, c) in self.containers.iter().enumerate() {
+                    idx.insert(c.id.clone(), i);
+                }
                 for (id, curr) in batch {
                     // CPU% 需要差值。本地还没有 prev 时（进程刚起 / 该容器首次采样）
                     // 用 Docker 同帧返回的 pre 帧兜底 → 首轮就有真实 CPU%，
@@ -173,7 +180,8 @@ impl AppState {
                     let prev = self.stats_prev.get(&id).copied().or_else(|| curr.precpu());
                     let cpu = compute_cpu_delta(prev.as_ref(), &curr);
                     self.stats_prev.insert(id.clone(), curr);
-                    if let Some(c) = self.containers.iter_mut().find(|c| c.id == id) {
+                    if let Some(&i) = idx.get(id.as_str()) {
+                        let c = &mut self.containers[i];
                         c.cpu_percent = cpu;
                         c.mem_usage = curr.mem_usage;
                         c.mem_limit = curr.mem_limit;
@@ -209,6 +217,11 @@ impl AppState {
                                 (c.cpu_percent, c.mem_usage, c.mem_limit, c.net_rx, c.net_tx) = v;
                             }
                         }
+                        // stats_prev 只增不减会随容器删除无界增长：这里按本轮
+                        // 列表剪掉已消失容器的旧快照
+                        let alive: std::collections::HashSet<&str> =
+                            self.containers.iter().map(|c| c.id.as_str()).collect();
+                        self.stats_prev.retain(|id, _| alive.contains(id.as_str()));
                     }
                     Err(e) => {
                         res.status_text =

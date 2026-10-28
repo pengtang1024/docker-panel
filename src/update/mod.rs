@@ -18,6 +18,7 @@ use crate::ui_state::{AppState, SharedState};
 
 pub mod github;
 pub mod install;
+pub mod markdown;
 pub mod version;
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -251,7 +252,7 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
     let plan = version::plan_install(&raw.assets, &env);
     Ok(UpdateInfo {
         version,
-        notes: version::truncate_notes(&raw.notes, 8000),
+        notes: version::truncate_notes(&markdown::plain(&raw.notes), 8000),
         page_url: raw.page_url,
         assets: raw.assets,
         plan,

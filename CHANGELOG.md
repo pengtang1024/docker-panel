@@ -6,6 +6,13 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.7.2] - 2026-10-28
+
+### 新增
+
+- **镜像总占用可视化**：底栏新增「镜像大小」项（全部镜像 size 之和，实测约 6.4G 量级），与容器「磁盘」列（可写层、独占口径）互补——此前全 UI 没有任何地方能回答「镜像占了多少磁盘」。
+- **磁盘列口径 tooltip**：台账「磁盘」表头悬停显示口径说明（可写层独占、共享镜像层不计入），堵住「容器磁盘怎么这么小」的误读——该数值与 `docker ps -s` 的 SizeRw 逐字节一致，是刻意选择的不重复计数口径。
+
 ## [0.7.1] - 2026-10-28
 
 ### 性能
@@ -292,6 +299,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.2]: https://github.com/pengtang1024/docker-panel/compare/0.7.1...0.7.2
 [0.7.1]: https://github.com/pengtang1024/docker-panel/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/pengtang1024/docker-panel/compare/0.6.4...0.7.0
 [0.6.4]: https://github.com/pengtang1024/docker-panel/compare/0.6.3...0.6.4

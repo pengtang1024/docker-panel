@@ -237,6 +237,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 27. **底部状态栏的资源汇总由 consumer 独占写入**——`app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性绑定到 `FootBar`，**必须**在 `consumer::apply_ui` 里每轮 `set`（Rust 侧不写 → 恒显示 "0%" / "0MB"）。口径 = **全部容器**（与「N/N 容器」同源，不是筛选后的可见集合）：CPU / 内存只累加**运行中**容器（停止容器的 `cpu_percent` 是停止前的残留值），磁盘累加**全部**容器（`size_rw` 是累计值）——与分组带汇总（规范 #25）同口径。
 28. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
 29. **自动更新任务必须 spawn_blocking + 校验和 + 安装方式判定**——GitHub 检查 / 下载 / `pkexec` / 文件 IO 全是阻塞操作，统一放 `tokio::task::spawn_blocking`，禁止占用 tokio worker 或 UI 线程；HTTP 只走系统 `curl`（参数数组直传，禁止拼 shell）；下载后必须核对 Release `checksums.txt` 的 SHA-256，缺失或不匹配一律拒绝安装；安装前必须判定 dpkg 管理 / 目录可写 / pkexec 可用，开发构建与非 Linux 只提示不安装。检查与安装共用 `update_busy` 互斥，进度按 1% 节流投递 `Msg`。
+30. **Docker 客户端必须共享单例（OnceLock + clone），禁止调用点自建**——bollard `Docker` 是 `Arc<Transport>`（hyper 连接池），clone 极廉价且池共享；`docker::connect()` 已做成进程级单例。此前「每次调用新建」让每 3s 刷新建 4 个客户端、每 6s stats 每容器再建 1 个（11 容器 ≈ 每分钟 110 个），用完即弃、连接池零复用，每次请求都重走 Unix socket 建连。新增调用点一律 `crate::docker::connect()`；`stats_prev` 必须随容器删除回收（`Msg::Containers` 应用列表时按存活集合 retain），StatsBatch 应用先建 id→下标映射（禁止逐条 `iter().find` 的 O(批量×容器数)）。
 
 ## 构建命令
 

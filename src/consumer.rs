@@ -173,6 +173,8 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         mem_total += c.mem_usage;
     }
     let disk_total: u64 = s.containers.iter().map(|c| c.size_rw).sum();
+    // 镜像总占用（底栏「镜像大小」）：全部镜像 size 之和，与容器可写层互补
+    let image_total: i64 = s.images.iter().map(|i| i.size).sum();
     // 行模型 epoch：排序/筛选/搜索变更时回调会重建行并递增 epoch。
     // 这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
     // 落地就会让列表顺序与排序箭头打架，故应用前比对 epoch，不一致就丢弃。
@@ -232,6 +234,9 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         )));
         ui.set_disk_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
             disk_total,
+        )));
+        ui.set_image_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
+            image_total.unsigned_abs(),
         )));
         if let Some(ok) = res.docker_ok {
             ui.set_docker_ok(ok);

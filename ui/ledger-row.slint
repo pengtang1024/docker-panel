@@ -50,8 +50,11 @@ export component LedgerRow inherits Rectangle {
     private property <length> menu_my: root.absolute-position.y + 26px;
 
     height: 30px;
+    // 菜单已展开时行高亮必须**保持**：菜单是窗口级浮层，鼠标移到菜单上后
+    // 行热区与三个按钮的 hover 全部失效（row_hover 翻假）→ 若只看 row_hover，
+    // 一点开菜单行高亮就消失，用户失去「我在操作哪一行」的视觉锚点。
     background: root.data.is_selected ? Theme.row_sel
-        : (root.row_hover ? Theme.row_hover : transparent);
+        : (root.row_hover || root.menu_open ? Theme.row_hover : transparent);
 
     // 左侧状态色轨（3px，绝对定位在行左，不占列）
     Rectangle {

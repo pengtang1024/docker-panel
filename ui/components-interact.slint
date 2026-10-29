@@ -274,8 +274,10 @@ export component MenuItem inherits Rectangle {
         // danger 项用 err（亮红）做着色层，不用 err_bg：StateLayer 只叠 opacity 0.08，
         // 而 err_bg 是设计成**整块背景**的暗红（TextButton 拿它做 bg_base 才对），
         // 8% 叠在 card 上几乎无变化（实测 Δ≈+2）→ 删除项 hover 看不见。
-        // err 是着色用的亮红，8% 叠加得明显红调，双主题都成立。
-        layer_color: root.danger ? Theme.err : Theme.bg;
+        // 非 danger 项用 ink（StateLayer 的默认值）而非 bg：bg 在 dark 下比 card 更暗，
+        // 8% 叠加只 Δ≈-2 且方向反了（M3 dark hover 应提亮）；ink 在 dark 下是亮色 →
+        // 提亮可见，light 下是暗色 → 压暗可见，双主题都成立。
+        layer_color: root.danger ? Theme.err : Theme.ink;
         layer_radius: Theme.r_xs;
         clicked => { root.clicked(); }
     }

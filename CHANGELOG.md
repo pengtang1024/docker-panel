@@ -6,6 +6,13 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.7.5] - 2026-10-29
+
+### 修复
+
+- **菜单「停止 / 日志」项 hover 无高亮**：`MenuItem` 非 danger 分支把 `Theme.bg` 当着色层，但 dark 下 `#0c0c0e` 比 card `#18181b` 更暗——`StateLayer` 只叠 opacity 0.08，8% 叠加只 Δ≈-2 且方向反了（M3 dark 主题 hover 应提亮）。改用 `Theme.ink`（`StateLayer` 的默认值、正确的 M3 做法）：dark 下亮色 → 提亮可见（实测 Δ≈+17），light 下暗色 → 压暗可见，双主题都成立；danger 项仍用 `Theme.err` 泛红，两类语义清晰区分。
+- **打开菜单后容器行高亮消失**：行背景只看 `row_hover`（整行热区 + 三个按钮的 hover），而菜单是窗口级浮层——鼠标移到菜单上后行的所有 hover 立即失效，`row_hover` 翻假 → 行高亮消失，用户失去「我在操作哪一行」的视觉锚点。背景改为 `row_hover || menu_open`，菜单展开期间该行保持高亮（实测菜单开着 + hover 各项时行背景恒为 (35,35,39)）。
+
 ## [0.7.4] - 2026-10-29
 
 ### 修复
@@ -312,6 +319,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.5]: https://github.com/pengtang1024/docker-panel/compare/0.7.4...0.7.5
 [0.7.4]: https://github.com/pengtang1024/docker-panel/compare/0.7.3...0.7.4
 [0.7.3]: https://github.com/pengtang1024/docker-panel/compare/0.7.2...0.7.3
 [0.7.2]: https://github.com/pengtang1024/docker-panel/compare/0.7.1...0.7.2

@@ -6,6 +6,15 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.7.6] - 2026-10-29
+
+### 修复
+
+- **全站 hover 着色层统一到 M3 state layer（`Theme.ink`）**：`StateLayer` 只叠 opacity 0.08，而多处把**背景色**误当着色层用，导致 hover 几乎不可见——
+  - `IconBtn`（顶栏 / 批量栏 / 行内按钮）原用 `Theme.bg`（dark `#0c0c0e` 比 card `#18181b` 更暗），且另有一套整块 `background` 切换（card→bg 变暗）与 state layer 方向相反、相互抵消；实测修复前 Δ=(-13,-13,-14) 变暗、修复后 **Δ=(+17,+17,+16) 提亮**，与菜单项同向。删去那套冗余切换与 `hover_bg` 死属性。
+  - **筛选 Chip（全部 / 运行中 / 已停止）**、**ViewTab（容器 / 镜像 / 网络 / 卷）**、**TabItem / ListItem**、**Chip（端口胶囊）** 原用 `Theme.row_hover`（dark `#232327` 与背景 `line_2` `#1f1f23` 几乎同色），实测 Δ=(-1,-1,0) **完全没有 hover 反馈**；改后筛选 Chip **Δ=(+16,+16,+16)**、ViewTab **Δ=(+9,+9,+8)**。
+  - danger 项（菜单「删除」）仍用 `Theme.err` 泛红，普通项用 `Theme.ink` 提亮，两类语义清晰区分；`Switch` 因 track 层覆盖在 StateLayer 之上、hover 已由 `track_bg` 提供，无需改动。
+
 ## [0.7.5] - 2026-10-29
 
 ### 修复
@@ -319,6 +328,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.6]: https://github.com/pengtang1024/docker-panel/compare/0.7.5...0.7.6
 [0.7.5]: https://github.com/pengtang1024/docker-panel/compare/0.7.4...0.7.5
 [0.7.4]: https://github.com/pengtang1024/docker-panel/compare/0.7.3...0.7.4
 [0.7.3]: https://github.com/pengtang1024/docker-panel/compare/0.7.2...0.7.3

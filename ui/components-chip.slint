@@ -27,7 +27,9 @@ export component Chip inherits Rectangle {
     // 导致 Chip 在外层 HorizontalLayout 中被 stretch 均分（端口胶囊 290px 全宽的根因）。
     // TouchArea/StateLayer 自身已是 100%，这里只需声明实例。
     area := StateArea {
-        layer_color: Theme.row_hover;
+        // 统一到 Theme.ink：row_hover #232327 与本组件背景 line_2 #1f1f23 几乎同色，
+        // 8% 叠加实测 Δ≈-1 完全看不见
+        layer_color: Theme.ink;
         layer_radius: root.rad;
     }
 

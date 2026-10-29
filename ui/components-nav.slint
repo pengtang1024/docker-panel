@@ -24,7 +24,8 @@ export component TabItem inherits Rectangle {
 
     area := StateArea {
         width: 100%; height: 100%;
-        layer_color: Theme.row_hover;
+        // 统一到 Theme.ink：row_hover #232327 与下层背景几乎同色，8% 叠加看不见
+        layer_color: Theme.ink;
         layer_radius: 0px;
         clicked => { root.clicked(root.idx); }
     }
@@ -123,7 +124,8 @@ export component ListItem inherits Rectangle {
 
     area := StateArea {
         width: 100%; height: 100%;
-        layer_color: Theme.row_hover;
+        // 统一到 Theme.ink（与 TabItem 同）
+        layer_color: Theme.ink;
         layer_radius: 0px;
         clicked => { root.clicked(); }
     }

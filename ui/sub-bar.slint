@@ -15,7 +15,9 @@ component Chip inherits Rectangle {
     border-radius: 14px;
     background: root.active ? Theme.ink : Theme.line_2;
     area := StateArea {
-        layer_color: Theme.row_hover;
+        // 统一到 M3 state layer（Theme.ink）：原先用 row_hover，其 dark 值 #232327
+        // 与本组件背景 line_2 #1f1f23 几乎同色，8% 叠加实测 Δ≈-1 完全看不见。
+        layer_color: Theme.ink;
         layer_radius: root.border-radius;
         clicked => { root.clicked(root.key); }
     }
@@ -38,7 +40,8 @@ component ViewTab inherits Rectangle {
     border-radius: Theme.r_sm;
     background: root.active ? Theme.card : transparent;
     area := StateArea {
-        layer_color: Theme.row_hover;
+        // 统一到 Theme.ink：row_hover #232327 叠在透明背景（下层 bg #0c0c0e）上几乎无变化
+        layer_color: Theme.ink;
         layer_radius: root.border-radius;
         clicked => { root.clicked(root.idx); }
     }

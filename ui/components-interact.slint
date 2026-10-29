@@ -63,7 +63,6 @@ export component IconBtn inherits Rectangle {
 
     // primary 模式（主按钮，如拉取）：始终深灰底+亮白图标，两主题都有对比度
     property <color> base_bg: root.primary ? #1f1f23 : root.active ? Theme.pill_on_bg : Theme.card;
-    property <color> hover_bg: root.primary ? #2a2a2e : Theme.bg;
     property <color> icon_color: root.primary ? #fafafa
         : root.active ? Theme.ok
         : root.danger ? Theme.err
@@ -109,10 +108,15 @@ export component IconBtn inherits Rectangle {
     area := StateArea {
         width: 100%; height: 100%;
         area_enabled: root.enabled && root.hidden == false;
-        layer_color: Theme.bg;
+        // 统一到 M3 state layer（与 MenuItem 同一套机制）：hover 反馈由 StateLayer
+        // 的 ink 8% 着色层提供。原先另有一套整块 background 切换（card→bg 变暗），
+        // 与 state layer 方向相反且相互抵消，且 dark 下 bg 比 card 更暗、8% 叠加
+        // 在 bg 上完全无效 —— 属死代码。现删去那套切换，hover 统一为提亮
+        // （dark 下 ink 是亮色 → Δ≈+18，与菜单项一致）。
+        layer_color: Theme.ink;
         layer_radius: Theme.r_md;
         clicked => { root.clicked(); }
-        background: area.has-hover ? hover_bg : base_bg;
+        background: base_bg;
     }
 
     Path {

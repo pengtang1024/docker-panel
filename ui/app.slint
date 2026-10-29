@@ -348,7 +348,8 @@ export component MainWindow inherits Window {
             else { AppActions.volume_select(id); }
         }
         card_remove(id) => {
-            if (CardMenu.kind == 1) { AppActions.image_remove(id); }
+            if (CardMenu.kind == 0) { AppActions.container_remove(id); }
+            else if (CardMenu.kind == 1) { AppActions.image_remove(id); }
             else if (CardMenu.kind == 2) { AppActions.network_remove(id); }
             else { AppActions.volume_remove(id); }
         }

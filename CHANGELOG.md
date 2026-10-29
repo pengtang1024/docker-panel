@@ -6,6 +6,13 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.7.3] - 2026-10-29
+
+### 修复
+
+- **compose 下单容器「删除」失效（点了没反应）**：台账容器行「··· → 删除」实际调用的是 `volume_remove(容器id)`——`app.slint` 的 `card_remove` 只路由了镜像 / 网络，容器（`kind=0`）掉进 `else` 分支被当成**卷**去删，容器本体从未被移除，表现为「停止了也删不掉」。补上 `kind==0 → container_remove` 分支，单容器删除恢复 `force(true)` 语义（停止 / 运行中均可删）。分组带「删除全部」与多选批量删除走的是另一条正确链路，不受影响。
+- **台账行 hover 高亮闪烁、乱跑**：行背景只绑 `touch.has-hover`，而三个操作按钮浮层声明在行热区之上——鼠标移到按钮上会把 hover 从行热区「抢走」，行高亮掉回普通色，按钮显形条件随之翻假又翻真、快速来回抖动；且 `act_show` 漏了日志按钮的 hover，停在中间按钮上时整排按钮会消失。新增覆盖整行（含按钮区）的稳定 `row_hover`，背景与按钮显形统一取它。
+
 ## [0.7.2] - 2026-10-28
 
 ### 新增
@@ -299,6 +306,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.3]: https://github.com/pengtang1024/docker-panel/compare/0.7.2...0.7.3
 [0.7.2]: https://github.com/pengtang1024/docker-panel/compare/0.7.1...0.7.2
 [0.7.1]: https://github.com/pengtang1024/docker-panel/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/pengtang1024/docker-panel/compare/0.6.4...0.7.0

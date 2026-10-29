@@ -36,17 +36,22 @@ export component LedgerRow inherits Rectangle {
     callback menu_toggle(string, int, bool, length, length);
 
     private property <bool> shift_down: false;
+    // 行 hover：整行热区 hover 或**任一**动作按钮 hover。
+    // 按钮浮层声明在 touch 之后（在上层），鼠标移到按钮上会把 hover 从行热区
+    // 「抢走」→ 若只用 touch.has-hover，行背景会在按钮上掉回普通色、来回抖动。
+    // 故把三个按钮的 hover 并进来，得到覆盖整行（含按钮区）的稳定 hover。
+    private property <bool> row_hover: touch.has-hover
+        || main_btn.hovered || logs_btn.hovered || more_btn.hovered;
     // 动作浮层显形：行 hover、按钮自身 hover（否则按钮显形后抢走 hover 会来回抖动）
     // 或菜单已展开
-    private property <bool> act_show: touch.has-hover || root.menu_open
-        || main_btn.hovered || more_btn.hovered;
+    private property <bool> act_show: root.row_hover || root.menu_open;
     /// 菜单锚点（窗口坐标）：右对齐 more_btn 右边缘
     private property <length> menu_mx: root.absolute-position.x + root.width - 14px - 124px;
     private property <length> menu_my: root.absolute-position.y + 26px;
 
     height: 30px;
     background: root.data.is_selected ? Theme.row_sel
-        : (touch.has-hover ? Theme.row_hover : transparent);
+        : (root.row_hover ? Theme.row_hover : transparent);
 
     // 左侧状态色轨（3px，绝对定位在行左，不占列）
     Rectangle {

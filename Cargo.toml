@@ -1,6 +1,6 @@
 [package]
 name = "docker-panel"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"
 license = "MIT"

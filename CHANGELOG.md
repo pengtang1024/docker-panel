@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [Unreleased]
+
+### 修复
+
+- **菜单「删除」项 hover 无高亮**：`MenuItem` 的 danger 分支把 `Theme.err_bg` 当**着色层**用，但 `err_bg` 是设计成整块背景的暗红（`TextButton` 拿它做 `bg_base` 才对）——`StateLayer` 只叠 opacity 0.08，8% 叠在 card 上几乎无变化（实测 Δ≈+2/255），删除项 hover 完全看不见。danger 项改用 `Theme.err`（着色用亮红）做着色层，8% 叠加得明显红调（实测 Δ≈+17/+6/+5），双主题都可见且语义正确。
+
 ## [0.7.3] - 2026-10-29
 
 ### 修复

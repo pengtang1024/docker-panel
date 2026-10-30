@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.7.7] - 2026-10-30
+
+### 修复
+
+- **列表最后几行的「···」菜单被窗口裁掉、末项点不到**：卡片 / 分组菜单的锚点固定在「行底上方 4px、向下弹」，列表滚到底部时菜单底部溢出窗口——实测最后一行锚点 `y=716` + 菜单高 `110` = `826` > 窗口高 `760`，「日志 / 删除」两项整块落在窗口外，既看不见也点不到。`overlays.slint` 增加几何收敛（`card_menu_x` / `card_menu_y` / `card_menu_h`）：**下方空间不足时整块翻到锚点行上方**（菜单底贴行底，而不是滑到窗口边上盖住触发按钮），窗口极矮时再 clamp 到 `Theme.s1` 兜底；水平方向同样收敛在窗口内。下方空间充足时位置与修复前一致（实测中间行菜单仍弹在行下方 `y=416`）；修复后最后一行菜单 `y=610`（底 `720` ≤ `760`），MCP `move_pointer` 到末项「删除」可见 danger hover 高亮 = 输入区可达。
+
 ## [0.7.6] - 2026-10-29
 
 ### 修复
@@ -328,6 +334,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.7]: https://github.com/pengtang1024/docker-panel/compare/0.7.6...0.7.7
 [0.7.6]: https://github.com/pengtang1024/docker-panel/compare/0.7.5...0.7.6
 [0.7.5]: https://github.com/pengtang1024/docker-panel/compare/0.7.4...0.7.5
 [0.7.4]: https://github.com/pengtang1024/docker-panel/compare/0.7.3...0.7.4

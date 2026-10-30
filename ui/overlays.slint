@@ -73,6 +73,22 @@ export component Overlays inherits Rectangle {
     width: 100%;
     height: 100%;
 
+    // —— 卡片 / 分组「···」菜单的几何契约（与 Dropdown.dw 一致）——
+    // 分组菜单项更多（停止/重启/合并日志/删除），按是否有运行成员给两种高度
+    property <length> card_menu_w: 124px;
+    property <length> card_menu_h: CardMenu.kind == 4
+        ? (CardMenu.can_stop ? 140px : 112px)
+        : 110px;
+    // 锚点行底部（ledger-row menu_my = 行顶 + 26px / 行高 30px；tree-band + 24px / 高 28px）
+    property <length> card_menu_anchor_bottom: CardMenu.my + 4px;
+    /// 下方放不下就整体翻到锚点行上方（菜单底贴行底），再按窗口高度兜底 clamp
+    property <length> card_menu_y: CardMenu.my + root.card_menu_h + Theme.s1 <= root.height
+        ? CardMenu.my
+        : Math.max(Theme.s1, root.card_menu_anchor_bottom - root.card_menu_h);
+    /// 水平方向同样收敛在窗口内（窗口窄时锚点会把菜单推出右边界）
+    property <length> card_menu_x: Math.max(Theme.s1,
+        Math.min(root.width - root.card_menu_w - Theme.s1, CardMenu.mx));
+
     // 排序下拉菜单：锚点由 SubBar 提供
     if root.sort_open : SortMenu {
         x: root.menu_x;
@@ -84,11 +100,14 @@ export component Overlays inherits Rectangle {
     }
 
     // 卡片 / 分组「···」菜单：锚点与目标由 CardMenu 总线携带
+    //
+    // ⚠️ 边界收敛：菜单默认向锚点行下方弹，列表**最后几行**靠近窗口底部时，
+    //    菜单底部会溢出窗口 —— 溢出部分既看不见也点不到（「删除」等末项不可选）。
+    //    故 card_menu_y 在下方空间不足时翻到行上方，card_menu_x 收敛到窗口内。
     if CardMenu.id != "" : CardMenuLayer {
-        x: CardMenu.mx;
-        y: CardMenu.my;
-        // 分组菜单项更多（停止/重启/合并日志/删除），按是否有运行成员给两种高度
-        height: CardMenu.kind == 4 ? (CardMenu.can_stop ? 140px : 112px) : 110px;
+        x: root.card_menu_x;
+        y: root.card_menu_y;
+        height: root.card_menu_h;
         id: CardMenu.id;
         kind: CardMenu.kind;
         can_stop: CardMenu.can_stop;

@@ -6,7 +6,7 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
-## [Unreleased]
+## [0.7.7] - 2026-10-30
 
 ### 修复
 
@@ -334,6 +334,7 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.7.7]: https://github.com/pengtang1024/docker-panel/compare/0.7.6...0.7.7
 [0.7.6]: https://github.com/pengtang1024/docker-panel/compare/0.7.5...0.7.6
 [0.7.5]: https://github.com/pengtang1024/docker-panel/compare/0.7.4...0.7.5
 [0.7.4]: https://github.com/pengtang1024/docker-panel/compare/0.7.3...0.7.4

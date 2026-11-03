@@ -1,0 +1,57 @@
+name: Quality
+
+# 质量门禁：对应 docs/agents-rules.md §3 的 S4 最终校验。
+# release.yml 只在打 tag 时跑 `cargo build --release`，不校验格式与警告；
+# 这条门禁补上「fmt / clippy(-D warnings) / check / test 不过，不得合入 develop/master」。
+#
+# 测试不依赖 Docker 守护进程（本地实测 62 passed，0.22s）：全部是纯逻辑用例
+# （版本比较 / Markdown 清洗 / 日志同步账 / 台账行构建 / raw_http 分块解析等），
+# 唯一碰 Docker 的用例 `raw_http::tests::socket_path_follows_docker_host` 只解析
+# DOCKER_HOST 环境变量得到 socket 路径，不建立任何真实连接。
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: fmt + clippy + check + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 安装 Linux GUI 依赖
+        run: |
+          sudo apt-get update
+          # 与 release.yml 同一组依赖：software-renderer-systemfonts 的 build script
+          # 通过 pkg-config 找 fontconfig.pc，缺 libfontconfig1-dev 会直接 panic。
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev \
+            libfontconfig1-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --all -- --check
+        run: cargo fmt --all -- --check
+
+      # --all-features 会打开 slint/mcp（内置 MCP 服务器，无额外系统依赖），
+      # 与本地 `cargo clippy --all-targets --all-features -- -D warnings` 完全一致。
+      - name: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo check --all-targets
+        run: cargo check --all-targets
+
+      - name: cargo test
+        run: cargo test

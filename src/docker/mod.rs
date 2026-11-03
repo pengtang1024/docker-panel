@@ -31,6 +31,8 @@ pub(crate) mod container_detail;
 mod containers;
 mod image_details;
 mod images;
+pub(crate) mod log_batch;
+pub(crate) mod log_ts;
 pub(crate) mod log_types;
 mod logs;
 mod netvol;
@@ -38,7 +40,7 @@ pub(crate) mod raw_http;
 mod stats;
 mod system;
 
-pub use container_detail::{inspect_container, probe_container, ContainerReach};
+pub use container_detail::{inspect_container, log_driver, probe_container, ContainerReach};
 pub use containers::{
     list_containers, remove_container, restart_container, start_container, stop_container,
 };

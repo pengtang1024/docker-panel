@@ -66,6 +66,22 @@ pub async fn probe_container(id: &str) -> ContainerReach {
     }
 }
 
+/// 容器日志驱动名（`json-file` / `journald` / ...）。
+///
+/// 断流补齐依赖 `since` + timestamps 的语义，只有 `json-file` 驱动可以保证
+/// 「按时间游标续读、行首带时间戳」；探测失败或其它驱动一律退回旧行为。
+pub async fn log_driver(id: &str) -> Option<String> {
+    let docker = connect().ok()?;
+    let raw = tokio::time::timeout(CALL_TIMEOUT, docker.inspect_container(id, None))
+        .await
+        .ok()?
+        .ok()?;
+    raw.host_config
+        .and_then(|h| h.log_config)
+        .and_then(|l| l.typ)
+        .filter(|d| !d.is_empty())
+}
+
 /// inspect_container → 精简 ContainerDetail
 pub async fn inspect_container(id: &str) -> Result<ContainerDetail, String> {
     let docker = connect()?;

@@ -84,6 +84,8 @@ docker-panel/
 │       ├── containers.rs      list / start / stop / restart / remove
 │       ├── images.rs          list / pull（含进度闭包）/ remove
 │       ├── logs.rs            follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
+│       ├── log_batch.rs       行批投递：前缀拼接 / 正常段（每批解析最后一行推游标）/ 回放段投递
+│       ├── log_ts.rs          时间戳游标：RFC3339Nano 解析 / 剥前缀 / 纳秒过滤 / 回放缓冲（纯逻辑）
 │       ├── log_types.rs       日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs           fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs          list_networks + list_volumes + volume_sizes（裸 HTTP 读 Volumes 键）

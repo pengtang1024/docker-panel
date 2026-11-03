@@ -154,7 +154,7 @@ cargo check --all-targets
 - 无 Docker Compose 导入 / 导出、无定时清理
 - 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
 - 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
-- 断流窗口的日志不补回；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
+- 断流窗口的日志会补回，但单次最多 2000 行（仅 `json-file` 日志驱动；其它驱动 / 驱动探测失败仍不补回；时钟回拨时安全阀会丢弃游标退回 `tail=0`）；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
 - 容器停止后不自动重连日志流，需要重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流
 - `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
 - 自动更新只支持 Linux 的 deb / 裸二进制安装；开发构建与其它平台只提示新版本并打开下载页
@@ -271,6 +271,8 @@ docker-panel/
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度闭包）/ remove
 │       ├── logs.rs         # follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
+│       ├── log_batch.rs    # 行批投递：前缀拼接 / 正常段（每批解析最后一行推游标）/ 回放段投递
+│       ├── log_ts.rs       # 时间戳游标：RFC3339Nano 解析 / 剥前缀 / 纳秒过滤 / 回放缓冲（纯逻辑）
 │       ├── log_types.rs    # 日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs       # list_networks / list_volumes + volume_sizes（裸 HTTP 读 Volumes 键）

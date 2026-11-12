@@ -11,6 +11,7 @@
 ### 变更
 
 - **构建工具链固定**：新增 `rust-toolchain.toml`（stable 通道 + `rustfmt` / `clippy`），`Cargo.toml` 声明 `rust-version = "1.99"`；CI 的 quality / release 流水线改用 `dtolnay/rust-toolchain@master` 固定 `1.99.1`，quality 流水线新增 `CARGO_INCREMENTAL=0` 并移除 `cargo check --all-targets` 步骤（保留 fmt / clippy / test）。
+- **底栏显示真实 Docker 版本**：底栏 Docker 版本此前写死为 `v26.1`；现在启动时用独立任务查询 `/version`（不阻塞首屏列表），底栏显示守护进程实际版本；查询失败或字段缺失时显示占位符 `—`，不伪造版本号。
 
 ### 修复
 

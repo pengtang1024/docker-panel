@@ -176,6 +176,8 @@ pub enum Msg {
     Networks(Result<Vec<NetworkInfo>, String>),
     /// 卷列表
     Volumes(Result<Vec<VolumeInfo>, String>),
+    /// Docker 守护进程版本（`/version`，仅启动时查询一次）
+    DockerVersion(Result<String, String>),
     /// 镜像 inspect 结果（镜像详情面板）
     ImageDetail(Result<ImageDetail, String>),
     /// 镜像层数批量回填（id → RootFS.Layers.len()；列表 API 不返回层数）

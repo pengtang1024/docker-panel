@@ -83,6 +83,12 @@ pub fn spawn_initial_load(state: &SharedState) {
     let tx = s.tx.clone();
     let rt = s.rt.handle().clone();
     drop(s);
+    // 版本查询独立任务：慢/失败都不拖首屏列表（失败路径只显示占位符）
+    let (tx_v, rt_v) = (tx.clone(), rt.clone());
+    rt_v.spawn(async move {
+        let res = with_timeout(crate::docker::version()).await;
+        let _ = tx_v.send(Msg::DockerVersion(res));
+    });
     rt.spawn(async move {
         let _ = crate::docker::connect();
         let (c_res, i_res, n_res, v_res) = futures::join!(

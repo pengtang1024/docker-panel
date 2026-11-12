@@ -247,6 +247,9 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(text) = res.log_status {
             ui.set_log_status(SharedString::from(text));
         }
+        if let Some(v) = res.docker_version {
+            ui.set_docker_version(SharedString::from(v));
+        }
         if res.reset_pull_busy {
             ui.set_pull_busy(false);
         }

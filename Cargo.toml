@@ -1,6 +1,6 @@
 [package]
 name = "docker-panel"
-version = "0.7.7"
+version = "0.7.8"
 edition = "2021"
 rust-version = "1.99"
 description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"

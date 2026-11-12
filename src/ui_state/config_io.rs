@@ -39,6 +39,29 @@ pub struct UiConfig {
     pub last_update_check: i64,
 }
 
+/// 无配置文件（首次启动）时的内置默认：按 compose 分组排序 + 全量容器视图
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            sort_field: SortField::Group,
+            sort_desc: false,
+            filter: "all".into(),
+            view: 0,
+            theme: 0,
+            log_follow: true,
+            query: String::new(),
+            compose_collapsed: BTreeSet::new(),
+            sort_images: ResourceSort::default(),
+            sort_networks: ResourceSort::default(),
+            sort_volumes: ResourceSort::default(),
+            check_updates: true,
+            auto_install: true,
+            auto_restart: true,
+            last_update_check: 0,
+        }
+    }
+}
+
 /// 读配置
 ///
 /// 无配置文件（首次启动）→ 内置默认：按 compose 分组排序 + 全量容器视图。
@@ -63,23 +86,7 @@ pub fn load() -> UiConfig {
             auto_restart: c.auto_restart,
             last_update_check: c.last_update_check,
         },
-        None => UiConfig {
-            sort_field: SortField::Group,
-            sort_desc: false,
-            filter: "all".into(),
-            view: 0,
-            theme: 0,
-            log_follow: true,
-            query: String::new(),
-            compose_collapsed: BTreeSet::new(),
-            sort_images: ResourceSort::default(),
-            sort_networks: ResourceSort::default(),
-            sort_volumes: ResourceSort::default(),
-            check_updates: true,
-            auto_install: true,
-            auto_restart: true,
-            last_update_check: 0,
-        },
+        None => UiConfig::default(),
     }
 }
 

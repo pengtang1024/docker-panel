@@ -2,7 +2,7 @@ name: Quality
 
 # 质量门禁：对应 docs/agents-rules.md §3 的 S4 最终校验。
 # release.yml 只在打 tag 时跑 `cargo build --release`，不校验格式与警告；
-# 这条门禁补上「fmt / clippy(-D warnings) / check / test 不过，不得合入 develop/master」。
+# 这条门禁补上「fmt / clippy(-D warnings) / test 不过，不得合入 develop/master」。
 #
 # 测试不依赖 Docker 守护进程（本地实测 62 passed，0.22s）：全部是纯逻辑用例
 # （版本比较 / Markdown 清洗 / 日志同步账 / 台账行构建 / raw_http 分块解析等），
@@ -19,10 +19,11 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   quality:
-    name: fmt + clippy + check + test
+    name: fmt + clippy + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -36,8 +37,9 @@ jobs:
             libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev \
             libfontconfig1-dev pkg-config
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.99.1"
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
@@ -49,9 +51,6 @@ jobs:
       # 与本地 `cargo clippy --all-targets --all-features -- -D warnings` 完全一致。
       - name: cargo clippy --all-targets --all-features -- -D warnings
         run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: cargo check --all-targets
-        run: cargo check --all-targets
 
       - name: cargo test
         run: cargo test

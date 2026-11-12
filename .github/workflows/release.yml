@@ -30,7 +30,9 @@ jobs:
             libgl1-mesa-dev libxkbcommon-dev libx11-dev libwayland-dev \
             libfontconfig1-dev pkg-config
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99.1"
 
       - uses: Swatinem/rust-cache@v2
 

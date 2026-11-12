@@ -59,7 +59,7 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 365 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state |
+| `app.slint` | 375 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state |
 | `app-actions.slint` | 64 | AppActions global：UI → Rust 回调声明（含分组操作 + 自动更新） | 无 |
 | `overlays.slint` | 152 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取/清理/更新弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs / update-dialog / update-state |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
@@ -79,7 +79,7 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
 | `components-list.slint` | 107 | 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 | theme / components-align |
 | `skel.slint` | 69 | 骨架屏占位 | theme |
-| `foot-bar.slint` | 109 | 底部 8 项资源概览 | theme / components-align |
+| `foot-bar.slint` | 112 | 底部 9 项资源概览（Docker 版本 / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘） | theme / components-align |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
 | `drawer.slint` | 204 | 右侧抽屉三 Tab（详情/日志/环境；`log_only` = 分组合并日志只展示日志面板） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |

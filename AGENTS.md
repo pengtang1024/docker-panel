@@ -66,7 +66,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
-| Rust | stable | edition 2021 | — |
+| Rust | stable（MSRV **1.99**） | edition 2021 | `rust-toolchain.toml` 统一 stable 通道并带 `rustfmt` / `clippy`；`Cargo.toml` 的 `rust-version = "1.99"` 声明最低支持版本；CI（quality / release）用 `dtolnay/rust-toolchain@master` 固定 `1.99.1` 保证可复现 |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
 | Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。**实际只用到 ScrollView / ListView**（drawer 日志 + 详情面板）+ **MaterialPalette 色板**；**未使用 Modal / Dialog 内置组件**——项目自己的 DialogShell 是手搓 `inherits Rectangle`（坑条见 Slint 限制表）。色板经 `ui/material-theme.slint` 映射到项目设计令牌 |
@@ -157,11 +157,11 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | 目录/文件 | 职责 |
 |-----------|------|
 | `ui/` | Slint 声明层（40 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar（含更新徽标 + 设置入口）/ sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 开关 / 重启）+ update-state（更新 UI 状态 global）** / **settings-dialog（设置弹窗：外观三选 + 自动更新三开关）+ settings-state（设置弹窗开关 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新/设置弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏（含独立的守护进程版本查询）/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system（cleanup prune + `/version` 守护进程版本查询）,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
-| 根 | Cargo.toml（依赖 & release profile & `license = "MIT"`）/ **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
+| 根 | Cargo.toml（依赖 & release profile & `license = "MIT"` & `rust-version = "1.99"`）/ **rust-toolchain.toml（stable 通道 + rustfmt / clippy）** / **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
 
 ## 线程模型（三线程架构，已实现优雅退出）
 
@@ -190,6 +190,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 后台补查层数 |
 | **`Networks(Result<Vec>)`** | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | **`Volumes(Result<Vec>)`** | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
+| **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（不阻塞首屏列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到写占位符 `—`，不伪造版本号） |
 | `PullProgress(String)` | pull_image 进度闭包 | 状态文本更新 |
 | `PullDone(Result)` | pull_image 结束 | 关弹窗 + 标记 `refresh_now` |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记 `refresh_now`（apply_ui 统一 `s.refresh()`） |
@@ -257,6 +258,8 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo check --all-targets
 ```
+
+> 工具链：`rust-toolchain.toml` 统一 stable 通道（含 `rustfmt` / `clippy`）；`Cargo.toml` 的 `rust-version = "1.99"` 是最低支持版本；CI 固定 `1.99.1`（quality 流水线跑 fmt / clippy / test，release 流水线用同一版本构建）。
 
 ## target/ 清理
 

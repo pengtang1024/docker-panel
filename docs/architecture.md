@@ -20,7 +20,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 
 | 组件 | 精确版本 | Feature / 备注 |
 |------|----------|----------------|
-| Rust | stable | edition 2021 |
+| Rust | stable（MSRV **1.99**） | edition 2021；`rust-toolchain.toml` 固定 stable 通道（rustfmt / clippy），`Cargo.toml` 声明 `rust-version = "1.99"`，CI 固定 `1.99.1` |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std`；strict 模式已验证编译通过——详见 AGENTS.md「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency；`compile_with_config` + `with_bundled_translations("translations")` |
 | bollard | **0.21** | Docker Engine API 纯 async 客户端；`LogOutput` 是 struct 不是 tuple——详见 [arch/docker-bollard.md](arch/docker-bollard.md) |
@@ -36,6 +36,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 ```
 docker-panel/
 ├── Cargo.toml                依赖：slint 1.18.1 / bollard 0.21 / tokio / futures / sha2
+├── rust-toolchain.toml       stable 通道 + rustfmt / clippy（本地统一；CI 另钉 1.99.1）
 ├── build.rs                  slint_build::compile_with_config + with_bundled_translations("translations")
 │
 ├── src/                       Rust 层（所有 ≤ 300 行）
@@ -45,7 +46,7 @@ docker-panel/
 │   ├── config.rs              AppConfig 持久化（directories + 手写 JSON 原子写）
 │   │
 │   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流 + 3s 刷新 interval
-│   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 主题监听
+│   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）+ 主题监听
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── models/update.rs       自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层）
@@ -92,7 +93,7 @@ docker-panel/
 │       ├── raw_http.rs        裸 HTTP 请求（Unix socket + chunked 解码；bollard 未建模的接口）
 │       ├── image_details.rs   inspect_image → ImageDetail
 │       ├── container_detail.rs inspect_container + probe_container（存活性探针）
-│       └── system.rs          cleanup prune
+│       └── system.rs          cleanup prune + version（`/version` 守护进程版本，取不到由上层显示 `—`）
 │
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   gettext 翻译（编译期嵌入）
@@ -135,7 +136,7 @@ docker-panel/
 ```
 main.rs
   ├── consumer.rs    → ui_state + ui_update + ui_rows + detail_fmt + render + ui_apply + slint_gen
-  ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, with_timeout}
+  ├── bootstrap.rs   → docker::{fetch_stats, inspect_container, list_*, version, with_timeout}
   ├── ui_state.rs    → models.rs + docker::{inspect_container, list_*, with_timeout} + follow_runtime
   │                   └ ui_state/log_sync.rs（子模块：日志窗口裁剪 + 行模型同步账）
   ├── follow_runtime.rs → docker::{follow_logs, probe_container, retry_delay, LogError, LogStreamEnd, ContainerReach} + log_status + models::Msg

@@ -8,6 +8,7 @@
 - 错误统一转中文 `String` 上抛，UI 层展示
 - 删除容器 `force=true`；删除镜像 `force=true`，被引用时 Docker 拒绝
 - `inspect_container`：`docker::inspect_container(&id).await → ContainerDetail`
+- `version`：`docker.version().await` 取 `Version` 字段（如 `"26.1.4"`），作为底栏版本文案的数据源；字段缺失或为空串视为失败，上层显示占位符 `—`，**不伪造版本号**。仅在启动时查询一次（`bootstrap::spawn_initial_load` 内独立任务）
 - `follow_logs`：`.follow(true).tail(tail_lines)` 返回 Stream，**整批** `tx.send(Msg::LogBatch(epoch, lines))`（满 1024 行或距首行 60ms 投一批；逐行 send 在洪峰下会形成惊群）；额外接 `watch::Receiver`，换容器时 drop sender 让旧流在 `select!` 中退出；返回 `LogStreamOutcome { end, lines }`（`LogStreamEnd`：Cancelled/Eof/Idle/Error(LogError) + 已推送行数），`LogError` 保留 Docker HTTP 状态码用于判定致命错误；超过 `LOG_IDLE_TIMEOUT`（180s）无新日志判定为 Idle（连接挂死）；重连策略由 `follow_runtime` 负责；任务结束发 `Msg::LogStreamEnded(epoch)`。默认 tail=200，Clear/续流用 0
 - 可重试调用统一 `docker::with_timeout`（10s）：列表 / stats / inspect / 卷占用；`refresh_inflight` 防止 3s 刷新叠加
 - **裸 HTTP 例外**：`bollard` 的低层入口（`process*` / `build_request`）全是 `pub(crate)`，没有公开的裸请求 API → 守护进程返回、但 bollard **未建模**的接口只能自己发一条 HTTP/1.1（`docker/raw_http.rs`：Unix socket + chunked 解码 + `spawn_blocking`）。现役用例：`/system/df?type=volume` 的 `Volumes` 键（卷占用）——bollard 0.21 的 `SystemDataUsageResponse` 只建模了废弃的 `VolumeUsage` 键，而守护进程（API ≥1.25）返回的是 `Volumes` 数组 → 走 bollard 的 `df()` 拿到的是**空表**

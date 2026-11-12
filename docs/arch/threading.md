@@ -105,7 +105,7 @@ invoke_from_event_loop(move || {
   - `refresh()` 带 in-flight 去重：上一轮未完成时本轮直接跳过，避免慢 Docker 下每 3s 再叠 4 个调用。
   - 所有列表/统计/inspect 调用都经 `docker::with_timeout`（10s），防止守护进程无响应时后台任务无限挂起、耗尽 tokio 工作线程。
 - **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats。
-  - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s。
+  - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数还会独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。
   - CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
 - **30s 卷占用**（`bootstrap::spawn_volume_size_interval`）：`/system/df` 遍历卷目录，低频单独跑。
 - **自动更新**（`update::spawn_scheduler`）：启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs`。
@@ -121,6 +121,7 @@ invoke_from_event_loop(move || {
 | `Images(Result<Vec<ImageInfo>>)` | 3s interval / 手动刷新 | 替换镜像列表 + 后台补查层数 |
 | `Networks(Result<Vec<NetworkInfo>>)` | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
+| **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（与首屏四列表并行，慢/失败不拖列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到为占位符 `—`，不伪造版本号） |
 | **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，容器行数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
@@ -151,7 +152,7 @@ invoke_from_event_loop(move || {
                    ▼
          ┌──────────────────────────┐
          │ lock state               │
-         │ drain_messages ≤2048/批   │  逐条更新 containers / images / networks / volumes / detail / logs
+         │ drain_messages ≤2048/批   │  逐条更新 containers / images / networks / volumes / detail / logs / docker_version
          │ 分块裁剪 logs 到 ≤2000 行  │  （ui_update.rs，每条只做 O(1) 状态更新）
          │ drop lock                │
          └────────────┬─────────────┘

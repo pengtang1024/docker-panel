@@ -96,7 +96,7 @@
 - Linux / macOS / Windows（主要在 Linux 上验证）
 - 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（当前不读取 tcp / ssh 远程地址）
 - 自动更新检查需要系统 `curl`（Linux / macOS / Windows 10+ 自带）；deb 自动安装还需要 `pkexec`（polkit 授权框）
-- 构建需要 Rust stable（edition 2021）
+- 构建需要 Rust stable（edition 2021；MSRV 1.99，仓库内 `rust-toolchain.toml` 固定 stable 通道）
 
 ## 安装与构建
 
@@ -196,6 +196,7 @@ cargo check --all-targets
 docker-panel/
 ├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / sha2 / futures
 ├── Cargo.lock
+├── rust-toolchain.toml     # stable 通道 + rustfmt / clippy（CI 另钉 1.99.1）
 ├── deny.toml               # cargo-deny 许可证门禁（宽松许可 + Slint RF 2.0 allow-list）
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
@@ -240,8 +241,8 @@ docker-panel/
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
-│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+StatsBatch/LogBatch/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
+│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
+│   ├── models.rs           # Msg(+StatsBatch/LogBatch/DockerVersion/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
@@ -279,7 +280,7 @@ docker-panel/
 │       ├── raw_http.rs     # 裸 HTTP 请求（Unix socket + chunked 解码；bollard 未建模的接口）
 │       ├── image_details.rs # inspect_image → ImageDetail
 │       ├── container_detail.rs # inspect_container + probe_container（存活性探针）
-│       └── system.rs       # cleanup prune
+│       └── system.rs       # cleanup prune + version（/version 守护进程版本）
 │
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   # gettext 翻译（编译期嵌入）

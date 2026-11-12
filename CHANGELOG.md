@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **构建工具链固定**：新增 `rust-toolchain.toml`（stable 通道 + `rustfmt` / `clippy`），`Cargo.toml` 声明 `rust-version = "1.99"`；CI 的 quality / release 流水线改用 `dtolnay/rust-toolchain@master` 固定 `1.99.1`，quality 流水线新增 `CARGO_INCREMENTAL=0` 并移除 `cargo check --all-targets` 步骤（保留 fmt / clippy / test）。
+
 ### 修复
 
 - **日志断流窗口内的行不再丢失**：此前日志流异常中断（`Eof` / `Error` / `Idle`）后一律以 `tail=0` 从当前时刻重连，断流期间容器写入的日志永久缺失（最长可黑洞约 181s）。现在 `json-file` 驱动的跟随流一律带 `timestamps`（正常段每行只切首个空格剥前缀、每批只解析最后一行以推进游标），断裂后的重连带 `since` 秒级游标续读：Docker 按秒级 `since` 重放，客户端用纳秒级游标（`docker/log_ts.rs` 解析 RFC3339Nano）过滤重叠段，断流窗口内的行会补回且**不重复**；首次建流与 `Clear` 永不带 `since`，行首时间戳在入库前剥掉，日志面板与「复制日志」内容与修复前逐字一致。单次回放只保留最新 2000 行（与日志窗口上限对齐），仅 `json-file` 日志驱动启用（其它驱动 / 探测失败退回旧行为），并带时钟回拨安全阀（连续两次重连全被游标过滤时丢弃游标退回 `tail=0`）。

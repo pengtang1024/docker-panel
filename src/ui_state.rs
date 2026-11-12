@@ -169,13 +169,26 @@ pub struct AppState {
 impl AppState {
     /// 创建 AppState，**返回 (state, rx)**；rx 交给 consumer 线程独占
     pub fn new() -> (Arc<Mutex<Self>>, mpsc::Receiver<Msg>) {
+        // 首次启动（无配置文件）用内置默认；之后以配置文件为准
+        Self::with_config(config_io::load())
+    }
+
+    /// 测试构造：用内置默认配置，不读取真实用户的 `config.json`
+    ///
+    /// 用例不应依赖本机筛选 / 排序等偏好（例如 `"filter": "running"`），
+    /// 否则同一份用例在不同机器上结果不同。
+    #[cfg(test)]
+    pub fn new_test() -> (Arc<Mutex<Self>>, mpsc::Receiver<Msg>) {
+        Self::with_config(config_io::UiConfig::default())
+    }
+
+    /// 用显式 UI 配置构造
+    fn with_config(cfg: config_io::UiConfig) -> (Arc<Mutex<Self>>, mpsc::Receiver<Msg>) {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("tokio runtime");
 
-        // 首次启动（无配置文件）用内置默认；之后以配置文件为准
-        let cfg = config_io::load();
         let sort_field = cfg.sort_field;
         let sort_desc = cfg.sort_desc;
         let filter = cfg.filter;
@@ -350,7 +363,7 @@ mod tests {
 
     #[test]
     fn follow_alive_flag_controls_idempotence() {
-        let (state, _rx) = AppState::new();
+        let (state, _rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
         assert!(!s.follow_is_alive());
         s.follow_active = vec![Arc::new(AtomicBool::new(true))];

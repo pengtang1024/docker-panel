@@ -57,7 +57,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 ## 项目是什么
 
-**docker-panel** 是一款极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron / Node 运行时。当前版本 v0.6.0（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 分组带组级操作与分组合并日志 + **应用内自动更新（检查 / 下载 / SHA-256 校验 / 安装 / 重启）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
+**docker-panel** 是一款极简 Docker Engine 桌面管理面板。Rust 单二进制、Slint 原生 GUI、纯软件渲染器——零 GPU 依赖、零 Electron / Node 运行时。当前版本 v0.7.7（Phase 2+ 已交付：**四个视图统一列表（容器密集台账 + 台账内联 Compose 树 + 镜像/网络/卷表格列表，表头可排序）** + 分组带组级操作与分组合并日志 + **应用内自动更新（检查 / 下载 / SHA-256 校验 / 安装 / 重启）** + 右侧抽屉详情/日志/环境 + 清理/拉取弹窗 + i18n + 配置持久化 + 全局快捷键 + 虚拟化日志面板）。
 
 ## 技术栈（精确版本 + 版本关键备注）
 
@@ -66,7 +66,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 
 | 组件 | 精确版本 | Feature 开关 | 版本关键备注（按此版本 API 写） |
 |------|----------|--------------|----------------------------------|
-| Rust | stable | edition 2021 | — |
+| Rust | stable（MSRV **1.99**） | edition 2021 | `rust-toolchain.toml` 统一 stable 通道并带 `rustfmt` / `clippy`；`Cargo.toml` 的 `rust-version = "1.99"` 声明最低支持版本；CI（quality / release）用 `dtolnay/rust-toolchain@master` 固定 `1.99.1` 保证可复现 |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
 | slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
 | Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。**实际只用到 ScrollView / ListView**（drawer 日志 + 详情面板）+ **MaterialPalette 色板**；**未使用 Modal / Dialog 内置组件**——项目自己的 DialogShell 是手搓 `inherits Rectangle`（坑条见 Slint 限制表）。色板经 `ui/material-theme.slint` 映射到项目设计令牌 |
@@ -157,11 +157,11 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | 目录/文件 | 职责 |
 |-----------|------|
 | `ui/` | Slint 声明层（40 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar（含更新徽标 + 设置入口）/ sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 开关 / 重启）+ update-state（更新 UI 状态 global）** / **settings-dialog（设置弹窗：外观三选 + 自动更新三开关）+ settings-state（设置弹窗开关 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新/设置弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_types,stats,netvol,image_details,container_detail,system,raw_http（裸 HTTP：bollard 未建模的接口）} |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏（含独立的守护进程版本查询）/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system（cleanup prune + `/version` 守护进程版本查询）,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
-| 根 | Cargo.toml（依赖 & release profile & `license = "MIT"`）/ **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
+| 根 | Cargo.toml（依赖 & release profile & `license = "MIT"` & `rust-version = "1.99"`）/ **rust-toolchain.toml（stable 通道 + rustfmt / clippy）** / **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
 
 ## 线程模型（三线程架构，已实现优雅退出）
 
@@ -190,6 +190,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 后台补查层数 |
 | **`Networks(Result<Vec>)`** | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
 | **`Volumes(Result<Vec>)`** | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
+| **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（不阻塞首屏列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到写占位符 `—`，不伪造版本号） |
 | `PullProgress(String)` | pull_image 进度闭包 | 状态文本更新 |
 | `PullDone(Result)` | pull_image 结束 | 关弹窗 + 标记 `refresh_now` |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记 `refresh_now`（apply_ui 统一 `s.refresh()`） |
@@ -238,6 +239,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 28. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
 29. **自动更新任务必须 spawn_blocking + 校验和 + 安装方式判定**——GitHub 检查 / 下载 / `pkexec` / 文件 IO 全是阻塞操作，统一放 `tokio::task::spawn_blocking`，禁止占用 tokio worker 或 UI 线程；HTTP 只走系统 `curl`（参数数组直传，禁止拼 shell）；下载后必须核对 Release `checksums.txt` 的 SHA-256，缺失或不匹配一律拒绝安装；安装前必须判定 dpkg 管理 / 目录可写 / pkexec 可用，开发构建与非 Linux 只提示不安装。检查与安装共用 `update_busy` 互斥，进度按 1% 节流投递 `Msg`。
 30. **Docker 客户端必须共享单例（OnceLock + clone），禁止调用点自建**——bollard `Docker` 是 `Arc<Transport>`（hyper 连接池），clone 极廉价且池共享；`docker::connect()` 已做成进程级单例。此前「每次调用新建」让每 3s 刷新建 4 个客户端、每 6s stats 每容器再建 1 个（11 容器 ≈ 每分钟 110 个），用完即弃、连接池零复用，每次请求都重走 Unix socket 建连。新增调用点一律 `crate::docker::connect()`；`stats_prev` 必须随容器删除回收（`Msg::Containers` 应用列表时按存活集合 retain），StatsBatch 应用先建 id→下标映射（禁止逐条 `iter().find` 的 O(批量×容器数)）。
+31. **断流补齐的游标纪律——json-file 全流带时间戳、每批只解析最后一行、每流独立、首发/Clear 不用 since**——日志流因 `Eof` / `Error` / `Idle` 断裂后，重连可带 `timestamps + since` 补回断流窗口内的行（`docker/log_ts.rs` 解析 RFC3339Nano、剥前缀、纳秒过滤、回放缓冲）。口径：①**驱动探测在建流时做一次**，`json-file` → 该流**所有**连接（含首次建流、含分组合并的每一条流）一律 `timestamps(true)`，用于建立游标；非 `json-file`（journald / none / 探测失败）→ 退回旧行为（不传 timestamps、不传 since、tail 原值）。②**首次建流与 `Clear` 永远不带 `since`**（否则历史复活 / 清空失效），只有断裂后的重连路径才带 `since(游标秒)` + 纳秒级 `ts > cursor` 过滤。③**成本优化**：正常段每行只切首个空格剥前缀（**不解析**），每批投递只对最后一行做一次完整 RFC3339Nano 解析来推进游标；只有回放段才逐行解析过滤。④**游标必须每流独立**（分组合并日志的 N 条流各记各的，**禁止**放进 `AppState` 全局，否则多流互相覆盖）。⑤安全阀：连续 2 次重连收到的行全被游标过滤且 `attempt ≥ 2` → 丢弃游标退回 `tail=0`（仍带时间戳重建），只 `eprintln` 不占状态栏。⑥bollard 0.21 的 `since` 是 Unix 秒 **i32**（`LogCursor::since_secs()` 用 `clamp(0, i32::MAX as i64) as i32` 防溢出）。单次回放上限 `REPLAY_MAX = 2000`（与日志窗口上限对齐，只保留最新一段），不破坏规范 #15 的只追加/分块裁剪与 #26 的多流独立账本；剥前缀顺序固定为「切首个空格 → trim → 加 `[容器名]`」，面板与「复制日志」逐字与修复前一致。
 
 ## 构建命令
 
@@ -256,6 +258,8 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo check --all-targets
 ```
+
+> 工具链：`rust-toolchain.toml` 统一 stable 通道（含 `rustfmt` / `clippy`）；`Cargo.toml` 的 `rust-version = "1.99"` 是最低支持版本；CI 固定 `1.99.1`（quality 流水线跑 fmt / clippy / test，release 流水线用同一版本构建）。
 
 ## target/ 清理
 
@@ -286,7 +290,7 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 - **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
 - **镜像 / 网络 / 卷行不支持多选批量**（当前只有容器视图支持 CheckBox 多选）
-- **断流窗口的日志不补回**：异常断流后以 `tail=0` 从当前时刻接续，断流窗口内产生的日志会丢；要补齐需改用 timestamps + `since` 游标
+- **断流窗口的日志会补回，但单次最多 2000 行**：`json-file` 驱动的跟随流一律带 `timestamps` 建立游标，断裂后的重连带 `since(游标秒)` + 纳秒过滤，断流期间写入的日志会被补回（不再是黑洞）；单次回放只保留最新 `REPLAY_MAX = 2000` 行（与日志窗口上限对齐，更早的行即使补回也会立刻被裁剪）。边界：①**仅 `json-file` 日志驱动生效**，其它驱动 / 驱动探测失败仍按旧行为（`tail=0`，窗口内日志不补回）；②**时钟回拨安全阀**：连续 2 次重连收到的行全被游标过滤且 `attempt ≥ 2` 时丢弃游标、退回 `tail=0`（只 `eprintln`，不占状态栏）；③首次建流与 `Clear` 永不带 `since`，不存在「清空后历史复活」
 - **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
 - **容器停止后不自动重连**：探针判定容器已停止/已删除即结束流并提示「日志流已停止」，需手动切 Tab 才会重新建流
 - **静默容器的「已恢复连接」提示最迟 180s**：容器 180s 无输出走 Idle 保活分支，不计失败预算也不打扰用户；「已恢复」要等到 Idle 结局才提示

@@ -44,6 +44,8 @@ pub struct DrainResult {
     pub status_text: Option<String>,
     /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不覆盖状态栏
     pub log_status: Option<String>,
+    /// Docker 守护进程版本文案（取不到时为占位符 `—`）
+    pub docker_version: Option<String>,
     /// 本批出现过操作结果 toast（2s 后恢复 Ready）
     pub toast: bool,
     pub close_pull: bool,
@@ -80,6 +82,7 @@ impl DrainResult {
             || self.docker_ok.is_some()
             || self.status_text.is_some()
             || self.log_status.is_some()
+            || self.docker_version.is_some()
             || self.toast
             || self.close_pull
             || self.reset_pull_busy
@@ -108,6 +111,9 @@ impl DrainResult {
         }
         if o.log_status.is_some() {
             self.log_status = o.log_status;
+        }
+        if o.docker_version.is_some() {
+            self.docker_version = o.docker_version;
         }
         self.toast |= o.toast;
         self.close_pull |= o.close_pull;
@@ -257,6 +263,13 @@ impl AppState {
                 if let Ok(list) = r {
                     self.volumes = list;
                 }
+            }
+            Msg::DockerVersion(r) => {
+                // 取不到时显示占位符，绝不伪造版本号（底栏曾写死 v26.1）
+                res.docker_version = Some(match r {
+                    Ok(v) => format!("v{v}"),
+                    Err(_) => crate::detail_fmt::dash(),
+                });
             }
             Msg::ImageLayers(pairs) => {
                 res.images_changed = true;

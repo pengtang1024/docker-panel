@@ -31,6 +31,8 @@ pub(crate) mod container_detail;
 mod containers;
 mod image_details;
 mod images;
+pub(crate) mod log_batch;
+pub(crate) mod log_ts;
 pub(crate) mod log_types;
 mod logs;
 mod netvol;
@@ -38,7 +40,7 @@ pub(crate) mod raw_http;
 mod stats;
 mod system;
 
-pub use container_detail::{inspect_container, probe_container, ContainerReach};
+pub use container_detail::{inspect_container, log_driver, probe_container, ContainerReach};
 pub use containers::{
     list_containers, remove_container, restart_container, start_container, stop_container,
 };
@@ -50,7 +52,7 @@ pub use log_types::{
 pub use logs::follow_logs;
 pub use netvol::{list_networks, list_volumes, remove_network, remove_volume, volume_sizes};
 pub use stats::{compute_cpu_delta, sample_all, ContainerStatsSnapshot};
-pub use system::cleanup;
+pub use system::{cleanup, version};
 
 /// 单次 Docker API 调用上限：守护进程无响应时不能让后台任务无限挂起，
 /// 否则 3s/6s interval 会反复叠加任务，最终把 tokio 工作线程耗尽

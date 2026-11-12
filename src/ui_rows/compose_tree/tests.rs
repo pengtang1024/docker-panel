@@ -40,7 +40,7 @@ fn rcl(project: &str, service: &str, cpu: f64, mem: u64, mem_limit: u64) -> Cont
 }
 
 fn state_with(containers: Vec<ContainerInfo>) -> crate::ui_state::SharedState {
-    let (state, _rx) = crate::ui_state::AppState::new();
+    let (state, _rx) = crate::ui_state::AppState::new_test();
     {
         let mut st = state.lock().unwrap();
         st.containers = containers;

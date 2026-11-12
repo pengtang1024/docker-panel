@@ -41,12 +41,12 @@ docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching
    cargo clippy --all-targets --all-features -- -D warnings
    cargo build --release --locked
    ```
-   CI 只有 Release（发版）与 License（许可证门禁）两条流水线，不做完整提交期检查；fmt / clippy / test 仍以本地为唯一门禁。
+   CI 在 develop / master 的 `push` 与 `pull_request` 上跑 Quality（fmt / clippy `-D warnings` / test）与 License（cargo-deny）两条门禁；Release 只在打 tag 时构建发布。本地仍需先跑上面的命令。
 
 ## 发版流程
 
 ```bash
-# 0. 发版前门禁（fmt/clippy/test 以本地为准；CI 另有 License 许可证门禁）
+# 0. 发版前门禁（Quality / License 流水线已在 push/PR 上跑；本地先自检一遍）
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
@@ -129,8 +129,13 @@ hotfix 同样会触发 Release 流水线，产出补丁版本。
 
 ## 流水线
 
-仓库只保留一条工作流 [`.github/workflows/release.yml`](../.github/workflows/release.yml)，
-仅在推送 `X.Y.Z` tag 时触发：编译 → 打包 deb → 生成 sha256 → 提取版本更新日志 → 创建 GitHub Release。
+仓库有三条工作流：
+
+- [`.github/workflows/quality.yml`](../.github/workflows/quality.yml)：`push` / `pull_request` 到 develop / master 时依次跑 `cargo fmt --all -- --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`（Rust 工具链固定 `1.99.1`，`CARGO_INCREMENTAL=0`）。
+- [`.github/workflows/license.yml`](../.github/workflows/license.yml)：同触发条件，用 `cargo-deny` 按 [`deny.toml`](../deny.toml) 校验许可证。
+- [`.github/workflows/release.yml`](../.github/workflows/release.yml)：仅在推送 `X.Y.Z` tag 时触发，编译 → 打包 deb → 生成 sha256 → 提取版本更新日志 → 创建 GitHub Release。
+
+> 工具链版本：本地 `rust-toolchain.toml` 走 stable 通道（rustfmt / clippy）；CI 的 quality / release 两条流水线固定 `1.99.1`（与 `Cargo.toml` 的 `rust-version = "1.99"` 配合，保证可复现）。
 
 ### Release 页面的更新日志
 
@@ -149,7 +154,7 @@ hotfix 同样会触发 Release 流水线，产出补丁版本。
 scripts/release-notes.sh 0.3.1
 ```
 
-不在 `push` 或 `pull_request` 上跑 CI，也不启用 Dependabot 自动开 PR。
+不启用 Dependabot 自动开 PR。
 
 ### CI 的系统依赖（改工作流前必读）
 

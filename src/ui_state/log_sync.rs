@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn log_sync_plan_appends_only_new_lines() {
-        let (state, rx) = AppState::new();
+        let (state, rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
 
         // 模型还是空的：窗口里的内容全部是新增
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn log_sync_plan_resets_after_window_trim() {
-        let (state, rx) = AppState::new();
+        let (state, rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
 
         // 灌到上限：窗口停在上限行（分块裁剪的边界）
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn log_sync_plan_resets_after_clear() {
-        let (state, rx) = AppState::new();
+        let (state, rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
         feed(&mut s, &rx, 4);
         s.commit_log_sync();
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn log_sync_plan_resets_when_stream_epoch_changed() {
-        let (state, rx) = AppState::new();
+        let (state, rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
         feed(&mut s, &rx, 4);
         s.commit_log_sync();

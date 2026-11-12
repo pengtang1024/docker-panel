@@ -96,7 +96,7 @@
 - Linux / macOS / Windows（主要在 Linux 上验证）
 - 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（当前不读取 tcp / ssh 远程地址）
 - 自动更新检查需要系统 `curl`（Linux / macOS / Windows 10+ 自带）；deb 自动安装还需要 `pkexec`（polkit 授权框）
-- 构建需要 Rust stable（edition 2021）
+- 构建需要 Rust stable（edition 2021；MSRV 1.99，仓库内 `rust-toolchain.toml` 固定 stable 通道）
 
 ## 安装与构建
 
@@ -154,7 +154,7 @@ cargo check --all-targets
 - 无 Docker Compose 导入 / 导出、无定时清理
 - 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
 - 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
-- 断流窗口的日志不补回；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
+- 断流窗口的日志会补回，但单次最多 2000 行（仅 `json-file` 日志驱动；其它驱动 / 驱动探测失败仍不补回；时钟回拨时安全阀会丢弃游标退回 `tail=0`）；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
 - 容器停止后不自动重连日志流，需要重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流
 - `DOCKER_HOST` 仅识别 `unix://` 路径，不支持 tcp / ssh 远程连接
 - 自动更新只支持 Linux 的 deb / 裸二进制安装；开发构建与其它平台只提示新版本并打开下载页
@@ -196,6 +196,7 @@ cargo check --all-targets
 docker-panel/
 ├── Cargo.toml              # 依赖：slint 1.18.1 / bollard 0.21 / tokio / arboard / sha2 / futures
 ├── Cargo.lock
+├── rust-toolchain.toml     # stable 通道 + rustfmt / clippy（CI 另钉 1.99.1）
 ├── deny.toml               # cargo-deny 许可证门禁（宽松许可 + Slint RF 2.0 allow-list）
 ├── build.rs                # slint_build::compile_with_config + with_bundled_translations("translations")
 │
@@ -240,8 +241,8 @@ docker-panel/
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
-│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器
-│   ├── models.rs           # Msg(+StatsBatch/LogBatch/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
+│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
+│   ├── models.rs           # Msg(+StatsBatch/LogBatch/DockerVersion/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
 │   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
 │   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
@@ -271,13 +272,15 @@ docker-panel/
 │       ├── containers.rs   # list / start / stop / restart / remove
 │       ├── images.rs       # list / pull（含进度闭包）/ remove
 │       ├── logs.rs         # follow_logs（Stream → 行批 tx.send，含空闲超时 + 复用定时器）
+│       ├── log_batch.rs    # 行批投递：前缀拼接 / 正常段（每批解析最后一行推游标）/ 回放段投递
+│       ├── log_ts.rs       # 时间戳游标：RFC3339Nano 解析 / 剥前缀 / 纳秒过滤 / 回放缓冲（纯逻辑）
 │       ├── log_types.rs    # 日志流结束原因 / 错误分类 / 退避常量（纯类型，单测不依赖 Docker）
 │       ├── stats.rs        # fetch_stats + compute_cpu_delta（双采样 CPU%）
 │       ├── netvol.rs       # list_networks / list_volumes + volume_sizes（裸 HTTP 读 Volumes 键）
 │       ├── raw_http.rs     # 裸 HTTP 请求（Unix socket + chunked 解码；bollard 未建模的接口）
 │       ├── image_details.rs # inspect_image → ImageDetail
 │       ├── container_detail.rs # inspect_container + probe_container（存活性探针）
-│       └── system.rs       # cleanup prune
+│       └── system.rs       # cleanup prune + version（/version 守护进程版本）
 │
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   # gettext 翻译（编译期嵌入）

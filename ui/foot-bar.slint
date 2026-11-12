@@ -61,6 +61,8 @@ export component FootBar inherits Rectangle {
     Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
 
     in-out property <bool> docker_ok: false;
+    /// Docker 守护进程版本文案；空串（未取到 / 查询失败）时显示占位符，绝不伪造版本号
+    in-out property <string> docker_version: "";
     in-out property <string> status: "";
     in-out property <int> total_containers: 0;
     in-out property <int> running_containers: 0;
@@ -91,7 +93,7 @@ export component FootBar inherits Rectangle {
 
         Rectangle { width: 1px; height: 16px; background: Theme.line_2;}
 
-        OvItem { label: @tr("Docker"); val: "v26.1"; ic: "docker";}
+        OvItem { label: @tr("Docker"); val: root.docker_version == "" ? "—" : root.docker_version; ic: "docker";}
         OvItem { label: @tr("Containers"); val: root.running_containers + "/" + root.total_containers; ic: "container";}
         OvItem { label: @tr("Images"); val: root.total_images; ic: "image";}
         OvItem { label: @tr("Networks"); val: root.total_networks; ic: "network";}

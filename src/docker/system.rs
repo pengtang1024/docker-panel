@@ -25,6 +25,17 @@ use crate::i18n::trf;
 
 use super::connect;
 
+/// 守护进程版本（`/version` 的 `Version` 字段，如 `"26.1.4"`）
+///
+/// 底栏展示用：取不到就由上层显示占位符 `—`，**不允许**伪造版本号。
+pub async fn version() -> Result<String, String> {
+    let docker = connect()?;
+    let v = docker.version().await.map_err(|e| e.to_string())?;
+    v.version
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "version field missing".to_string())
+}
+
 fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = bytes as f64;

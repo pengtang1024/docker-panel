@@ -6,6 +6,8 @@
 
 use std::time::Duration;
 
+use super::log_ts::LogCursor;
+
 /// 日志流错误（保留 Docker HTTP 状态码，便于判定不可恢复错误）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogError {
@@ -65,6 +67,10 @@ pub struct LogStreamOutcome {
     pub lines: u64,
     /// 本次连接是否已提示「已恢复连接」（收到首行日志时置位）
     pub notified_recovered: bool,
+    /// 本次连接被纳秒游标过滤掉的重放行数（安全阀据此判断游标是否把流堵死）
+    pub filtered: u64,
+    /// 本次连接收到的最后一行时间戳（重连游标，跨连接续传；首次建流恒为 None）
+    pub last_cursor: Option<LogCursor>,
 }
 
 /// 日志流空闲超时：多久没有新日志就认为连接挂死（主动断流走重连路径）

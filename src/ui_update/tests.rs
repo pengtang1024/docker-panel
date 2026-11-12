@@ -5,7 +5,7 @@ use super::*;
 
 #[test]
 fn log_stream_status_sets_status_text() {
-    let (state, rx) = AppState::new();
+    let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
     let tx = s.tx.clone();
     tx.send(Msg::LogStreamStatus(0, "日志流中断".into()))
@@ -23,7 +23,7 @@ fn log_stream_status_sets_status_text() {
 
 #[test]
 fn log_status_is_passed_through_without_dedupe() {
-    let (state, rx) = AppState::new();
+    let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
     let tx = s.tx.clone();
 
@@ -61,7 +61,7 @@ fn stale_processing_is_not_a_ui_change() {
 
 #[test]
 fn stale_stream_epoch_is_dropped_after_clear() {
-    let (state, rx) = AppState::new();
+    let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
     s.logs.push("old".into());
     s.stream_epoch = 5;

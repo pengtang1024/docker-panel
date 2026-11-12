@@ -25,9 +25,10 @@ use std::sync::Arc;
 
 use tokio::runtime::Runtime;
 
+use crate::docker::log_ts::LogCursor;
 use crate::docker::{
-    follow_logs, probe_container, retry_delay, ContainerReach, LogStreamEnd, IDLE_RETRY_DELAY,
-    KEEPALIVE_INTERVAL, LOG_IDLE_TIMEOUT,
+    follow_logs, log_driver, probe_container, retry_delay, ContainerReach, LogStreamEnd,
+    IDLE_RETRY_DELAY, KEEPALIVE_INTERVAL, LOG_IDLE_TIMEOUT,
 };
 use crate::log_status::{NOTICE_INTERRUPTED, NOTICE_RECOVERED, NOTICE_STOPPED};
 use crate::models::Msg;
@@ -164,6 +165,12 @@ async fn run_stream(
     // 本流是否已推送过日志：决定重连时是否重放历史（避免重复行）
     let mut sent_any = false;
     let mut retry_tail = tail;
+    // —— 断流补齐：游标**每流独立**（分组合并时 N 条流各记各的，绝不进 AppState）——
+    let mut cursor: Option<LogCursor> = None;
+    // 连续「收到的行全被游标过滤」次数：安全阀据此丢弃游标，避免时钟回拨把流堵死
+    let mut cursor_miss_streak: u32 = 0;
+    // 是否已经建立过连接：首次建流（含 Clear 重建）永不带游标
+    let mut connected_before = false;
     // 是否已经向用户提示过「正在重连」
     let mut notified = false;
     // 上一次探针是否判定 Docker 不可达（用于「不可达 → 可达」跃迁提示）
@@ -175,7 +182,20 @@ async fn run_stream(
         }
     };
 
+    // 驱动探测只做一次（单流生命周期内复用，不引入跨流共享状态）：
+    // json-file → 整条流都开 timestamps（正常段建立游标）；其它 / 探测失败 → 旧行为。
+    let timed = match log_driver(&id).await.as_deref() {
+        Some("json-file") => true,
+        Some(_) => {
+            eprintln!("[log-stream] {id} non-json-file log driver, timestamp cursor disabled");
+            false
+        }
+        None => false,
+    };
+
     loop {
+        // 首次建流固定不带游标；只有断裂后的重连路径才带 since（游标每流独立）
+        let since = if connected_before { cursor } else { None };
         // 仅在「正在重连」状态下，本次尝试收到首行日志时提示已恢复
         let outcome = follow_logs(
             &id,
@@ -185,9 +205,30 @@ async fn run_stream(
             epoch,
             cancel_rx.clone(),
             notified,
+            timed,
+            since,
         )
         .await;
+        connected_before = true;
         sent_any |= outcome.lines > 0;
+        if let Some(c) = outcome.last_cursor {
+            cursor = Some(c);
+        }
+        // 安全阀：连续两次重连收到的行全被游标过滤（典型是时钟回拨 / 游标超前）
+        // → 丢弃游标退回 tail=0。只 eprintln，不占状态栏、不打扰用户。
+        if outcome.filtered > 0 && outcome.lines == 0 {
+            cursor_miss_streak += 1;
+        } else if outcome.lines > 0 {
+            cursor_miss_streak = 0;
+        }
+        if cursor_miss_streak >= 2 && attempt >= 2 {
+            eprintln!(
+                "[log-stream] {id} cursor filtered every replayed line, dropping cursor (fallback tail=0)"
+            );
+            // 丢弃游标：下次重连 since=None + tail=0，由新行重新建立游标（仍带时间戳）
+            cursor = None;
+            cursor_miss_streak = 0;
+        }
 
         // 收到日志 = 这条连接是通的 → 连续失败数归零
         if outcome.lines > 0 {

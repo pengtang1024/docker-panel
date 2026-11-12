@@ -73,6 +73,8 @@ export component MainWindow inherits Window {
 
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
+    /// Docker 守护进程版本（Rust 查询 /version 后写入；空串表示尚未取到，底栏显示占位符）
+    in-out property <string> docker_version: "";
     in-out property <string> status_text: @tr("Ready");
     /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不占用底部状态栏
     in-out property <string> log_status: "";
@@ -280,6 +282,7 @@ export component MainWindow inherits Window {
             FootBar {
                 height: Theme.foot_h;
                 docker_ok <=> root.docker_ok;
+                docker_version <=> root.docker_version;
                 status <=> root.status_text;
                 total_containers <=> root.total_containers;
                 running_containers <=> root.running_containers;

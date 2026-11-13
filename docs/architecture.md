@@ -45,8 +45,9 @@ docker-panel/
 │   ├── i18n.rs                locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp()（复数，对齐 @tr 的 `"sing" | "plural" % n`）+ slint_language()
 │   ├── config.rs              AppConfig 持久化（directories + 手写 JSON 原子写）
 │   │
-│   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流 + 3s 刷新 interval
-│   ├── bootstrap.rs           6s stats 采样 interval + 30s 卷占用 + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）+ 主题监听
+│   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流（列表刷新由 event_watch 事件驱动）
+│   ├── event_watch.rs         Docker `/events` 订阅：白名单过滤 + 400ms 合并 + 断流退避重连（列表即时性来源，空闲零请求）
+│   ├── bootstrap.rs           6s stats 采样 interval + 30s 磁盘占用采样（容器可写层 + 卷占用，`/system/df`） + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）+ 主题监听
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── models/update.rs       自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层）

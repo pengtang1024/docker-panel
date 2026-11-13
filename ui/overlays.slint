@@ -60,6 +60,7 @@ export component Overlays inherits Rectangle {
     callback cleanup_submit(bool, bool, bool, bool);
     // 更新弹窗动作（app.slint 注入 AppActions）
     callback update_close();
+    callback update_check();
     callback update_install();
     callback update_open_page();
     callback update_restart();
@@ -157,14 +158,11 @@ export component Overlays inherits Rectangle {
         status <=> UpdateState.status;
         reason <=> UpdateState.reason;
         progress <=> UpdateState.progress;
-        auto_check <=> UpdateState.auto_check;
-        auto_install <=> UpdateState.auto_install;
         close => { root.update_close(); }
         install => { root.update_install(); }
+        check_now => { root.update_check(); }
         open_page => { root.update_open_page(); }
         restart => { root.update_restart(); }
-        set_auto_check(v) => { root.update_set_auto_check(v); }
-        set_auto_install(v) => { root.update_set_auto_install(v); }
     }
 
     SettingsDialog {

@@ -23,13 +23,15 @@
 //! 回放段逐行解析、先缓冲再投递最新 `REPLAY_MAX` 行。时间戳前缀在这里剥掉，
 //! **日志面板与「复制日志」的内容与修复前逐字一致**。
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::models::Msg;
 
 use super::connect;
-use super::log_batch::{flush_normal, flush_replay, format_line, LOG_BATCH_MAX};
+use super::log_batch::{flush_normal, flush_replay, format_line, LogSink, Sampling, LOG_BATCH_MAX};
 use super::log_ts::{
     classify_line, is_caught_up, split_prefix, FilteredLine, LogCursor, ReplayBuffer,
 };
@@ -60,6 +62,8 @@ const REPLAY_SETTLE: Duration = Duration::from_secs(2);
 /// 重连与退避策略由调用方（`follow_runtime`）负责。
 /// `timestamps` 为真时整条流都带时间戳前缀（仅 `json-file` 驱动，调用方判定）；
 /// `since` 只在断裂后的重连路径非空；首次建流与 `Clear` 固定 `None`。
+/// `backlog` 是通道积压计账（投递时累加、consumer 应用时递减），超过阈值即抽样；
+/// `notify_status` 为真（单流）时才上报抽样提示，多流合并时不打扰用户。
 #[allow(clippy::too_many_arguments)]
 pub async fn follow_logs(
     id: &str,
@@ -72,6 +76,8 @@ pub async fn follow_logs(
     notify_recovered: bool,
     timestamps: bool,
     since: Option<LogCursor>,
+    backlog: Arc<AtomicU64>,
+    notify_status: bool,
 ) -> LogStreamOutcome {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
@@ -122,6 +128,16 @@ pub async fn follow_logs(
     let mut stream = docker.logs(id, Some(options));
     let mut lines: u64 = 0;
     let mut notified_recovered = false;
+    let mut sink = LogSink {
+        tx: &tx,
+        epoch,
+        backlog: &backlog,
+        notify_recovered,
+        notified_recovered: &mut notified_recovered,
+        lines: &mut lines,
+    };
+    // 洪峰泄压阀：积压超过阈值时按比例丢中间行（只影响显示，游标照常推进）
+    let mut sampling = Sampling::new();
     let mut cursor = since;
     let mut filtered: u64 = 0;
     // 回放缓冲：历史行先攒着，追平实时后只投递最新 REPLAY_MAX 行
@@ -149,8 +165,8 @@ pub async fn follow_logs(
         tokio::select! {
             biased;
             _ = cancel.changed() => {
-                flush_normal(&tx, epoch, &mut batch, &mut lines, notify_recovered, &mut notified_recovered, &mut cursor, &mut last_token);
-                flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
+                flush_replay(prefix, &mut sink, &mut replay);
                 return LogStreamOutcome {
                     end: LogStreamEnd::Cancelled,
                     lines,
@@ -162,7 +178,7 @@ pub async fn follow_logs(
             _ = &mut flush_sleep => {
                 if replaying {
                     // 回放迟迟没追平：先投递当前最新一段，转入正常接续
-                    flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                    flush_replay(prefix, &mut sink, &mut replay);
                     replaying = false;
                     flush_sleep.as_mut().reset(Instant::now() + Duration::from_secs(3600));
                 } else {
@@ -170,8 +186,8 @@ pub async fn follow_logs(
                 }
             }
             _ = &mut idle_sleep => {
-                flush_normal(&tx, epoch, &mut batch, &mut lines, notify_recovered, &mut notified_recovered, &mut cursor, &mut last_token);
-                flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
+                flush_replay(prefix, &mut sink, &mut replay);
                 return LogStreamOutcome {
                     end: LogStreamEnd::Idle,
                     lines,
@@ -182,8 +198,8 @@ pub async fn follow_logs(
             }
             item = stream.next() => {
                 let Some(item) = item else {
-                    flush_normal(&tx, epoch, &mut batch, &mut lines, notify_recovered, &mut notified_recovered, &mut cursor, &mut last_token);
-                    flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                    flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
+                    flush_replay(prefix, &mut sink, &mut replay);
                     return LogStreamOutcome {
                         end: LogStreamEnd::Eof,
                         lines,
@@ -195,8 +211,8 @@ pub async fn follow_logs(
                 let msg = match item {
                     Ok(m) => m,
                     Err(e) => {
-                        flush_normal(&tx, epoch, &mut batch, &mut lines, notify_recovered, &mut notified_recovered, &mut cursor, &mut last_token);
-                        flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                        flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
+                        flush_replay(prefix, &mut sink, &mut replay);
                         return LogStreamOutcome {
                             end: LogStreamEnd::Error(LogError::from_bollard(&e)),
                             lines,
@@ -254,19 +270,25 @@ pub async fn follow_logs(
                                 None => false,
                             };
                             if caught_up {
-                                flush_replay(prefix, &tx, epoch, &mut replay, &mut lines, notify_recovered, &mut notified_recovered);
+                                flush_replay(prefix, &mut sink, &mut replay);
                                 replaying = false;
                                 flush_sleep.as_mut().reset(Instant::now() + Duration::from_secs(3600));
                             }
                         } else {
-                            if !batch_started {
-                                batch_started = true;
-                                // 批次首行：拉近投递定时器，保证慢速流也能及时看到这一行
-                                flush_sleep.as_mut().reset(Instant::now() + LOG_FLUSH_INTERVAL);
-                            }
-                            batch.push(format_line(prefix, text));
-                            if batch.len() >= LOG_BATCH_MAX {
-                                do_flush = true;
+                            // 洪峰抽样：丢中间行，但上面已经更新了 last_token
+                            // → 游标仍指向本流最后一行，断流补读不会退回去重放
+                            if sampling.keep() {
+                                if !batch_started {
+                                    batch_started = true;
+                                    // 批次首行：拉近投递定时器，慢速流也能及时看到这一行
+                                    flush_sleep
+                                        .as_mut()
+                                        .reset(Instant::now() + LOG_FLUSH_INTERVAL);
+                                }
+                                batch.push(format_line(prefix, text));
+                                if batch.len() >= LOG_BATCH_MAX {
+                                    do_flush = true;
+                                }
                             }
                         }
                     }
@@ -276,21 +298,18 @@ pub async fn follow_logs(
             }
         }
         if do_flush {
-            flush_normal(
-                &tx,
-                epoch,
-                &mut batch,
-                &mut lines,
-                notify_recovered,
-                &mut notified_recovered,
-                &mut cursor,
-                &mut last_token,
-            );
+            flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
             batch_started = false;
             // 投递后把定时器推回远处，避免空批次反复触发
             flush_sleep
                 .as_mut()
                 .reset(Instant::now() + Duration::from_secs(3600));
+            // 积压反馈：UI 侧跟不上就加大抽样步长，跟上后自动回到不抽样
+            sampling.refresh(backlog.load(Ordering::Relaxed));
+            if notify_status {
+                // 抽样期间在工具条解释「丢了多少行」，退出抽样时清掉提示
+                sampling.notice(&sink);
+            }
         }
     }
 }

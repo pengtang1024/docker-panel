@@ -50,7 +50,9 @@ pub use log_types::{
     retry_delay, LogStreamEnd, IDLE_RETRY_DELAY, KEEPALIVE_INTERVAL, LOG_IDLE_TIMEOUT,
 };
 pub use logs::follow_logs;
-pub use netvol::{list_networks, list_volumes, remove_network, remove_volume, volume_sizes};
+pub use netvol::{
+    container_sizes, list_networks, list_volumes, remove_network, remove_volume, volume_sizes,
+};
 pub use stats::{compute_cpu_delta, sample_all, ContainerStatsSnapshot};
 pub use system::{cleanup, version};
 

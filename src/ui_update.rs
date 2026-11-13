@@ -10,8 +10,9 @@ use std::sync::mpsc;
 
 use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
-use crate::ui_state::{AppState, LOG_ROWS_MAX};
+use crate::ui_state::AppState;
 
+mod log;
 mod update;
 
 /// 一次批量 drain 的聚合结果。
@@ -90,6 +91,28 @@ impl DrainResult {
             || self.update_check_done
             || self.update_progress
             || self.update_done
+    }
+
+    /// 本批是否**只有**日志行变化。
+    ///
+    /// 日志行追加只影响日志视口（抽屉其余区域不变），可以用比常规 UI 更宽的
+    /// 节流窗口；任何其它 UI 变化（列表 / 抽屉 / 状态栏 / 弹窗）都必须退回
+    /// 常规 120ms，避免操作反馈变慢。
+    pub fn logs_only(&self) -> bool {
+        self.logs_changed
+            && !(self.any_list_changed()
+                || self.drawer_changed
+                || self.docker_ok.is_some()
+                || self.status_text.is_some()
+                || self.log_status.is_some()
+                || self.docker_version.is_some()
+                || self.toast
+                || self.close_pull
+                || self.reset_pull_busy
+                || self.refresh_now
+                || self.update_check_done
+                || self.update_progress
+                || self.update_done)
     }
 
     /// 把下一批结果并入累计结果（UI 刷新按时间窗口节流时会连续 drain 多批）
@@ -228,12 +251,12 @@ impl AppState {
                         let alive: std::collections::HashSet<&str> =
                             self.containers.iter().map(|c| c.id.as_str()).collect();
                         self.stats_prev.retain(|id, _| alive.contains(id.as_str()));
+                        // 列表不再带 size=1 → 磁盘列从 /system/df 缓存补回
+                        self.apply_container_sizes();
                     }
-                    Err(e) => {
-                        res.status_text =
-                            Some(crate::i18n::trf("Container refresh failed: {0}", &[&e]));
-                        res.toast = true;
-                    }
+                    // 后台 3s 刷新失败不写状态栏：每轮闪一次会让底栏数字被推挤，
+                    // 且失败已由连接红点表达；仅留 stderr 供排查。
+                    Err(e) => eprintln!("container refresh failed: {e}"),
                 }
             }
             Msg::Images(r) => {
@@ -245,11 +268,8 @@ impl AppState {
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();
                     }
-                    Err(e) => {
-                        res.status_text =
-                            Some(crate::i18n::trf("Image refresh failed: {0}", &[&e]));
-                        res.toast = true;
-                    }
+                    // 同上：连接状态已由红点表达，不刷底栏文字
+                    Err(e) => eprintln!("image refresh failed: {e}"),
                 }
             }
             Msg::Networks(r) => {
@@ -277,9 +297,21 @@ impl AppState {
                     self.image_layers.insert(id, n);
                 }
             }
+            // `/system/df` 采样在首屏（30s interval 首 tick 立即跑）常早于列表到达：
+            // 此时行模型还是空的，置变化标记只会白占一个 UI 应用窗口，把首行整体
+            // 推迟一整窗。数据本身照常写入，列表到达时 Msg::Containers / Msg::Volumes
+            // 会各自重建并调用 apply_container_sizes，不会丢。
             Msg::VolumeSizes(map) => {
-                res.volumes_changed = true;
+                res.volumes_changed |= !self.volumes.is_empty();
+                // 容器磁盘占用含挂载卷 → 卷占用变了要重算容器（卷与容器两个采样互相独立）
+                res.containers_changed |= !self.containers.is_empty();
                 self.volume_sizes = map;
+                self.apply_container_sizes();
+            }
+            Msg::ContainerSizes(map) => {
+                res.containers_changed |= !self.containers.is_empty();
+                self.container_sizes = map;
+                self.apply_container_sizes();
             }
             Msg::ContainerDetail(r) => {
                 // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果
@@ -297,40 +329,9 @@ impl AppState {
                     self.image_detail = Some(d);
                 }
             }
-            Msg::LogBatch(epoch, mut lines) => {
-                // 只接受当前流 epoch：切换容器/清空后，队列里旧流的行直接丢弃
-                if epoch == self.stream_epoch {
-                    // 洪峰下单批可达数万行：只保留最后 LOG_ROWS_MAX 行。
-                    // 中间行既显示不出来（全被新行挤出视口），保留下来还会把
-                    // 行模型撑到十万级 —— 裁剪退化成 O(n²)，洪峰下直接打满 CPU。
-                    let start = lines.len().saturating_sub(LOG_ROWS_MAX);
-                    // 整批搬进窗口（移动，不是拷贝）：洪峰下逐行拷贝会打满 CPU
-                    self.logs_total += (lines.len() - start) as u64;
-                    self.logs.extend(lines.drain(start..));
-                    self.trim_logs();
-                    // 收到首条（历史）日志后才算历史加载完成；空历史/首流失败可重试 tail=200
-                    self.history_done = true;
-                    res.logs_changed = true;
-                }
-            }
-            Msg::LogStreamEnded(epoch) => {
-                // 流结束（Eof / Cancelled）：清空 follow_id，允许下次 ensure_follow 重新建流。
-                // 分组合并日志有 N 条流：只有**全部**退出才算结束
-                //（单条结束不代表整组日志停止，其余成员仍在跟随）
-                if epoch == self.stream_epoch && !self.follow_is_alive() {
-                    self.follow_id.clear();
-                    self.follow_targets.clear();
-                    self.follow_cancel = None;
-                    self.follow_active.clear();
-                }
-            }
-            Msg::LogStreamStatus(epoch, text) => {
-                // 日志流状态提示（重连中 / 已恢复 / 已停止）：独立通道，不占用状态栏。
-                // 运行时就只在状态**变化**时发消息，这里直接透传给 UI。
-                if epoch == self.stream_epoch {
-                    res.log_status = Some(text);
-                }
-            }
+            Msg::LogBatch(epoch, lines) => self.on_log_batch(epoch, lines, res),
+            Msg::LogStreamEnded(epoch) => self.on_log_stream_ended(epoch),
+            Msg::LogStreamStatus(epoch, text) => self.on_log_stream_status(epoch, text, res),
             Msg::ActionDone(desc, r) => {
                 res.docker_ok = Some(true);
                 res.status_text = Some(match r {

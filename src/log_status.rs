@@ -1,9 +1,10 @@
 //! 日志流状态提示文案（i18n key 的**唯一定义处**）
 //!
-//! 三条提示分别对应日志流的三种结局：
+//! 提示对应日志流的三种结局 + 一种泄压状态：
 //! - `NOTICE_INTERRUPTED`：连接中断，正在退避重连
 //! - `NOTICE_RECOVERED`：连接已恢复
 //! - `NOTICE_STOPPED`：流已结束（容器停止 / 被删除 / 致命错误）
+//! - `NOTICE_SAMPLED`：洪峰抽样（UI 侧跟不上，只显示一部分行）
 //!
 //! 其余模块只引用这些常量，不再内联字面量（#28）。
 //! 提示的**清除**由 UI 侧负责：`ui_apply::clear_log_panel` / `clear_log_status`。
@@ -14,3 +15,5 @@ pub const NOTICE_INTERRUPTED: &str = "Log stream interrupted, reconnecting…";
 pub const NOTICE_RECOVERED: &str = "Log stream reconnected";
 /// 日志流已停止提示（i18n key）
 pub const NOTICE_STOPPED: &str = "Log stream stopped";
+/// 洪峰抽样提示（`{0}` = 已省略行数）
+pub const NOTICE_SAMPLED: &str = "Log flood: showing a sample, {0} lines omitted";

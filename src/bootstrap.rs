@@ -9,12 +9,12 @@ use std::time::Duration;
 use slint::ComponentHandle;
 
 use crate::docker::{
-    inspect_container, list_containers, list_images, list_networks, list_volumes, volume_sizes,
-    with_timeout,
+    container_sizes, inspect_container, list_containers, list_images, list_networks, list_volumes,
+    volume_sizes, with_timeout,
 };
 use crate::models::Msg;
 use crate::slint_gen::MainWindow;
-use crate::ui_state::{SharedState, VOLUME_SIZE_INTERVAL};
+use crate::ui_state::{SharedState, DISK_USAGE_INTERVAL};
 
 /// 6s stats 采样：对所有运行中容器并发 docker.stats()，双采样 CPU% 在 consumer 侧计算
 ///
@@ -50,24 +50,31 @@ pub fn spawn_stats_interval(state: &SharedState) {
     });
 }
 
-/// 30s 卷占用采样：`/system/df?type=volume` 需遍历卷目录，单独低频跑；
-/// 首帧立即执行一次（否则打开卷视图时体积列会空到第一个 30s 周期）
-pub fn spawn_volume_size_interval(state: &SharedState) {
+/// 30s 磁盘占用采样：`/system/df` 要遍历卷目录 + 容器可写层，单独低频跑；
+/// 首帧立即执行一次（否则卷体积列 / 台账磁盘列会空到第一个 30s 周期）
+pub fn spawn_disk_usage_interval(state: &SharedState) {
     let state_s = state.clone();
     let rt_h = {
         let Ok(s) = state_s.lock() else { return };
         s.rt.handle().clone()
     };
     rt_h.spawn(async move {
-        let mut tick = tokio::time::interval(VOLUME_SIZE_INTERVAL);
+        let mut tick = tokio::time::interval(DISK_USAGE_INTERVAL);
         loop {
             tick.tick().await;
             let tx = {
                 let Ok(s) = state_s.lock() else { continue };
                 s.tx.clone()
             };
-            if let Ok(sizes) = with_timeout(volume_sizes()).await {
+            let (vols, conts) = futures::join!(
+                with_timeout(volume_sizes()),
+                with_timeout(container_sizes())
+            );
+            if let Ok(sizes) = vols {
                 let _ = tx.send(Msg::VolumeSizes(sizes));
+            }
+            if let Ok(sizes) = conts {
+                let _ = tx.send(Msg::ContainerSizes(sizes));
             }
         }
     });

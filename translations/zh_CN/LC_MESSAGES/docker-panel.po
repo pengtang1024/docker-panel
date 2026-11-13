@@ -29,6 +29,16 @@ msgstr "已断开"
 msgid "Pull"
 msgstr "拉取"
 
+# 采样过期状态位（连续多轮拿不到 stats / 磁盘占用时显示，不弹窗）
+msgid "Live data may be stale"
+msgstr "实时数据可能已过期"
+
+msgid "Disk data may be stale"
+msgstr "磁盘数据可能已过期"
+
+msgid "Live and disk data may be stale"
+msgstr "实时与磁盘数据可能已过期"
+
 # ===== 筛选栏 =====
 msgid "All"
 msgstr "全部"

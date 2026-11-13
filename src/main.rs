@@ -39,6 +39,7 @@ mod models;
 mod render;
 mod single_instance;
 mod slint_gen;
+mod stale;
 mod theme;
 mod ui_apply;
 mod ui_rows;

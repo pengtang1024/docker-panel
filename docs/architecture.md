@@ -48,6 +48,7 @@ docker-panel/
 │   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流（列表刷新由 event_watch 事件驱动）
 │   ├── event_watch.rs         Docker `/events` 订阅：白名单过滤 + 400ms 合并 + 断流退避重连（列表即时性来源，空闲零请求）
 │   ├── bootstrap.rs           6s stats 采样 interval + 30s 磁盘占用采样（容器可写层 + 卷占用，`/system/df`） + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）+ 主题监听
+│   ├── stale.rs               采样过期判定：连续多轮无样本 → 边沿触发状态位（stats 3 轮 ≈18s / df 2 轮 ≈60s）
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── models/update.rs       自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层）

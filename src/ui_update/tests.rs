@@ -188,6 +188,49 @@ fn action_result_does_not_claim_docker_connectivity() {
 }
 
 #[test]
+fn network_or_volume_failure_marks_connectivity() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 网络/卷失败过去完全静默（红点不亮）；现在与容器/镜像一致
+    tx.send(Msg::Networks(Err("cannot connect".into())))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.docker_ok, Some(false));
+    assert!(!res.is_set(UiFlag::NetworksChanged), "失败没有新行");
+
+    tx.send(Msg::Volumes(Err("cannot connect".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.docker_ok, Some(false));
+    assert!(!res.is_set(UiFlag::VolumesChanged));
+}
+
+#[test]
+fn sample_staleness_flags_reach_ui() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 只在跃迁时由 bootstrap 发送；这里验证透传与「算一次 UI 变化」
+    tx.send(Msg::StatsStale(true)).unwrap();
+    tx.send(Msg::DiskStale(true)).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.stats_stale, Some(true));
+    assert_eq!(res.disk_stale, Some(true));
+    assert!(res.has_ui_changes());
+    assert!(
+        !res.logs_only(),
+        "过期提示必须立刻上屏，不能等日志的宽松窗口"
+    );
+
+    tx.send(Msg::StatsStale(false)).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.stats_stale, Some(false));
+    assert_eq!(res.disk_stale, None, "没有新跃迁时不重复下发");
+}
+
+#[test]
 fn stale_processing_is_not_a_ui_change() {
     let mut res = DrainResult::default();
     res.processed = 42;

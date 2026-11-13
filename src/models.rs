@@ -187,6 +187,11 @@ pub enum Msg {
     VolumeSizes(HashMap<String, u64>),
     /// 容器可写层占用（id → 字节数；来自 `/system/df?type=container`，低频刷新）
     ContainerSizes(HashMap<String, u64>),
+    /// stats 采样连续多轮无结果（true = CPU/内存数据已过期）。
+    /// 只在跃迁时发送，避免每轮都产生一条 UI 消息。
+    StatsStale(bool),
+    /// `/system/df` 连续多轮失败（true = 磁盘占用数据已过期）。只在跃迁时发送。
+    DiskStale(bool),
     /// 更新检查结果（manual, 是否会继续自动安装, 结果）
     ///
     /// `manual = false` 的失败必须静默；`auto_installing = true` 时后续

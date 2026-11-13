@@ -241,6 +241,7 @@ docker-panel/
 │   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help；未知参数照常启动 GUI
 │   ├── single_instance.rs  # 单实例锁（Unix socket 互斥 + raise IPC；陈旧锁自动清理，Drop 时释放）
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
+│   ├── stale.rs            # 采样过期判定：连续多轮无样本 → 边沿触发的状态位（stats 3 轮 / df 2 轮）
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）

@@ -222,5 +222,9 @@ drain_result! {
         log_status: String;
         /// Docker 守护进程版本文案（取不到时为占位符 `—`）
         docker_version: String;
+        /// stats 采样是否已过期（连续多轮无样本；只在跃迁时到达）
+        stats_stale: bool;
+        /// 磁盘占用采样是否已过期（`/system/df` 连续多轮失败；只在跃迁时到达）
+        disk_stale: bool;
     }
 }

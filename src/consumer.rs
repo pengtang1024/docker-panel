@@ -234,6 +234,13 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(v) = res.docker_ok {
             ui.set_docker_ok(v);
         }
+        // 采样过期提示：连续多轮取不到 stats / 磁盘占用时才亮，恢复后自动熄灭
+        if let Some(v) = res.stats_stale {
+            ui.set_stats_stale(v);
+        }
+        if let Some(v) = res.disk_stale {
+            ui.set_disk_stale(v);
+        }
         if let Some(ref text) = res.status_text {
             ui.set_status_text(SharedString::from(text.as_str()));
         }

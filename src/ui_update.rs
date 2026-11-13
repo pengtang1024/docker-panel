@@ -145,17 +145,22 @@ impl AppState {
                 }
             }
             Msg::Networks(r) => {
+                // 与容器/镜像一致：网络列表的失败同样表达连通性（不能只让容器失败才变红）
+                res.docker_ok = Some(r.is_ok());
                 if let Ok(list) = r {
                     res.mark(UiFlag::NetworksChanged);
                     self.networks = list;
                 }
             }
             Msg::Volumes(r) => {
+                res.docker_ok = Some(r.is_ok());
                 if let Ok(list) = r {
                     res.mark(UiFlag::VolumesChanged);
                     self.volumes = list;
                 }
             }
+            Msg::StatsStale(stale) => res.stats_stale = Some(stale),
+            Msg::DiskStale(stale) => res.disk_stale = Some(stale),
             Msg::DockerVersion(r) => {
                 // 取不到时显示占位符，绝不伪造版本号（底栏曾写死 v26.1）
                 res.docker_version = Some(match r {

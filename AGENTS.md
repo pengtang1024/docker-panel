@@ -6,30 +6,22 @@
 
 本项目唯一正确的名称是 **docker-panel**（品牌名 Docker Panel）。`dvkit` 是已废弃的旧名，**任何文件、注释、字符串、日志前缀、包名、二进制名、desktop 入口中禁止出现 dvkit 字样**。提交前必须 `grep -ri dvkit .` 确认零残留。
 
-## ⚠️ 硬约束：UI 验证只能通过 Slint MCP
+## ⚠️ 硬约束：UI 验证统一走 agkit 截图
 
-本项目运行在 Wayland 下，**系统截图工具（scrot/gnome-screenshot/maim）全部黑屏**，无法用于 UI 验收。查看 UI 状态必须使用 Slint 内置 MCP 服务器：
+本项目运行在 Wayland 下，scrot / gnome-screenshot / maim 全部黑屏。**UI 验收统一走 `agkit shot`**（wayland-screenshot 技能，按 app_id / 标题定位窗口，零弹窗）：
 
 ```bash
-# 1. 构建带 mcp feature 的版本
-cargo build --release --features slint/mcp
-
-# 2. 启动（SLINT_MCP_PORT 指定端口）
-SLINT_EMIT_DEBUG_INFO=1 SLINT_MCP_PORT=8080 ./target/release/docker-panel &
-
-# 3. 截图（通过 MCP HTTP 接口）
-curl -s -X POST http://127.0.0.1:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"take_screenshot","arguments":{"windowHandle":{"generation":"1","index":"1"},"imageMimeType":"image/png"}}}'
+cargo build --release
+./target/release/docker-panel &                       # 普通 release 构建即可，无需额外 feature
+agkit shot --app docker-panel -o /tmp/dp.png          # 按 xdg app_id 定位并截图
+agkit shot --list-apps                                # 查看已记录的固定区域
 ```
 
-Slint MCP 还提供 `get_element_tree` / `get_element_properties` / `click_element` 等工具，可精确检查元素几何尺寸、属性值和模拟交互。**修复 UI 问题时必须用 MCP 截图验证，不要依赖用户口述。**
+`--app` 定位不到时才退回 `--region WxH+X+Y`（坐标基准是**整个虚拟桌面**，双屏 3840x1080）。
 
-Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
-```json
-"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }
-```
+Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 属性值（如逐列核对 `absolutePosition.x` 与 `size.width`、确认某个属性是否被赋值）时，临时构建 `cargo build --release --features slint/mcp` 并用 `get_element_tree` / `get_element_properties`（Trae MCP：`"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }`）。它不再承担截图与验收，验收一律以 `agkit shot` 的出图为准。
+
+**修复 UI 问题必须附截图证据，不要依赖用户口述。**
 
 ## ⚠️ 硬约束：正文超过 300 行必须考虑拆分
 
@@ -42,7 +34,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | ID | 规则 | 维度 | 权威定义 |
 |----|------|------|----------|
 | R0 | 项目名禁止出现废弃旧名 | 红线 | 本文件顶部硬约束 |
-| R1 | UI 验证只能通过 Slint MCP | 红线 | 本文件顶部硬约束 |
+| R1 | UI 验证统一走 agkit 截图 | 红线 | 本文件顶部硬约束 |
 | R2 | 去头部/注释后正文 >300 行必须拆分 | 红线 | 本文件顶部硬约束 |
 | R3 | 架构设计优先级绝对高于代码实现 | 红线 | agents-rules.md §2.1 |
 | R4 | 复用率 ≥80%，不足触发二次校验 | 红线 | agents-rules.md §2.2 |
@@ -131,7 +123,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | **必须经本组件属性中转** | `in-out property <ColorScheme> color_scheme <=> Palette.color-scheme;` + `in-out property <MaterialSchemes> m3_schemes <=> MaterialPalette.schemes;`，再在 `init` / `changed theme_mode` / `changed system_dark` 里赋值灌色板 |
 | **赋值不会打断 `<=>` 绑定**（已查源码坐实） | `i-slint-core-1.18.1/properties.rs:1029` `Property::set` → `if !previous_binding_intercepted { remove_binding() }`；`properties/two_way_binding.rs:21` `TwoWayBinding::intercept_set` 返回 `true` 并把值同步到对端 → **赋值照常透传且绑定保留**，主题切换实时跟随 |
 | **light/dark 两个槽位填同一份映射** | `Theme.*` 本身已按 `is_dark` 解析，真正决定用哪套的是 `Palette.color-scheme`；两槽同填不冲突 |
-| **M3 ScrollBar 滑块自动隐藏，像素验收要用 MCP 悬停** | 滑块 `opacity` = 滚动中 40% / 悬停 70% / 静止 1.5s 后淡出；采样必须用 MCP `move_pointer` 悬停到滚动条上再 `take_screenshot`，否则采样全 miss |
+| **M3 ScrollBar 滑块自动隐藏，采样必须处于悬停态** | 滑块 `opacity` = 滚动中 40% / 悬停 70% / 静止 1.5s 后淡出；鼠标移开后截图必然采样不到滑块（只剩轨道）。验收时先真实悬停到滚动条上再 `agkit shot`，或调试时读 MCP 元素属性核对 `opacity` 值 |
 
 #### 1.15+ 引入的严格语法规则（**本项目已全部修完，compat-1-18 strict 模式验证通过**）
 
@@ -157,7 +149,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | 目录/文件 | 职责 |
 |-----------|------|
 | `ui/` | Slint 声明层（40 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar（含更新徽标 + 设置入口）/ sub-bar / **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：表头可点排序 + 30px 行）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 开关 / 重启）+ update-state（更新 UI 状态 global）** / **settings-dialog（设置弹窗：外观三选 + 自动更新三开关）+ settings-state（设置弹窗开关 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新/设置弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
-| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + 120ms UI 节流 + 3s 刷新）/ bootstrap（stats/卷占用/首屏（含独立的守护进程版本查询）/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，3 条 i18n key）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system（cleanup prune + `/version` 守护进程版本查询）,raw_http（裸 HTTP：bollard 未建模的接口）} |
+| `src/` | Rust 逻辑层：main（组装）/ slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + UI 节流：常规 120ms / 纯日志 250ms，窗口判定在 `consumer/throttle.rs`）/ **event_watch（Docker `/events` 事件订阅：列表即时性的唯一来源——噪声黑名单过滤 + 400ms 合并 + 断流退避重连 + 重连后补一次全量刷新；空闲时零请求）** / bootstrap（stats/磁盘占用（`/system/df`：容器可写层 + 卷）/首屏（含独立的守护进程版本查询）/主题监听）/ models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + 日志流状态字段 + `cleanup_counts` + `compose_collapsed`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，4 条 i18n key：重连中 / 已恢复 / 已停止 / 洪峰抽样）/ **update/{mod（任务编排 + 调度 + UI 快照）,github（curl + JSON）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ ui_update（DrainResult + 有上限 drain + Msg 聚合；更新消息拆到 `ui_update/update.rs`，日志消息拆到 `ui_update/log.rs`）/ ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标 + **洪峰抽样泄压阀 `Sampling`**）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system（cleanup prune + `/version` 守护进程版本查询）,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard）· agents-rules.md（规则配置层）· git-flow.md（发版规范） |
 | `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
@@ -168,7 +160,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 ```
 主线程 (ui.run() 阻塞)       consumer 线程               tokio runtime (multi-thread)
 ┌───────────────────┐      ┌────────────────────┐      ┌──────────────────┐
-│ 3s tokio interval ┼──lock▶│ recv_timeout(≤100ms)│      │ 3s refresh join!  │
+│ docker /events ───┼──lock▶│ recv_timeout(≤100ms)│      │ events → refresh   │
 │ 6s stats interval ┼──lock▶│ 分批 drain ≤2048/批 │      │ 6s stats join_all │
 │ UI 回调 ───────────┼──lock▶│ pending.merge       │      │ 30s volume df     │
 │                     │      │ 120ms 节流 apply    │      │ bollard API 调用   │
@@ -180,16 +172,16 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
      + shutdown: AtomicBool
 ```
 
-**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式下 Slint Timer 不触发，改 tokio interval）· 两阶段铁律（锁内分批 drain + 只 build 变化区域 → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）· 日志洪峰防护（单批 ≤2048、UI 最多每 120ms 应用一次、纯日志不重算列表/抽屉、日志行模型只追加不重建）· Docker 调用 10s 超时 + 3s 刷新 in-flight 去重。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
+**关键设计**：Receiver 独占不进 Mutex（死锁唯一保证）· Slint Timer 已废弃（软件渲染器 + MCP 模式下 Slint Timer 不触发，改 tokio interval）· 两阶段铁律（锁内分批 drain + 只 build 变化区域 → drop lock → 锁外 `invoke_from_event_loop`，闭包绝不碰 state）· 日志洪峰防护（单批 ≤2048、UI 常规最多每 120ms 应用一次 / 纯日志批 250ms、纯日志不重算列表/抽屉、日志行模型只追加不重建）· Docker 调用 10s 超时 + 列表刷新 in-flight 去重（刷新期间来的请求只置脏标记、本轮结束补跑）。完整推导与代码示例见 [arch/threading.md](docs/arch/threading.md)。
 
 ## 消息类型（`models::Msg`）
 
 | 变体 | 来源 | UI 行为 |
 |------|------|---------|
-| `Containers(Result<Vec>)` | 3s tokio interval / 手动刷新 | 替换容器列表（保留旧 stats） |
-| `Images(Result<Vec>)` | 3s interval | 替换镜像列表 + 后台补查层数 |
-| **`Networks(Result<Vec>)`** | 3s interval / 手动刷新 | 替换网络列表（网络视图） |
-| **`Volumes(Result<Vec>)`** | 3s interval / 手动刷新 | 替换卷列表（卷视图） |
+| `Containers(Result<Vec>)` | Docker `/events` / 手动刷新 / 操作完成 | 替换容器列表（保留旧 stats） |
+| `Images(Result<Vec>)` | Docker `/events` / 操作完成 | 替换镜像列表 + 后台补查层数 |
+| **`Networks(Result<Vec>)`** | Docker `/events` / 手动刷新 / 操作完成 | 替换网络列表（网络视图） |
+| **`Volumes(Result<Vec>)`** | Docker `/events` / 手动刷新 / 操作完成 | 替换卷列表（卷视图） |
 | **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（不阻塞首屏列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到写占位符 `—`，不伪造版本号） |
 | `PullProgress(String)` | pull_image 进度闭包 | 状态文本更新 |
 | `PullDone(Result)` | pull_image 结束 | 关弹窗 + 标记 `refresh_now` |
@@ -198,7 +190,7 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 | `ContainerDetail(Result<ContainerDetail>)` | inspect_container | 替换 `AppState.detail` → Drawer 详情 Tab |
 | **`LogBatch(u64, Vec<String>)`** | follow_logs Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（滚动窗口 ≤2000 行）→ 追加到 UI 日志行模型 |
 | `LogStreamEnded(u64)` | 日志流结束（**单个 stream**） | 仅当前 stream_epoch 且**全部** stream 都退出（`follow_active` 无存活标志）时才清空 `follow_id` / `follow_targets` / `follow_cancel` / `follow_active`；分组合并日志有 N 条流，一条结束不代表整组结束。来源：Eof / Cancelled / 致命错误（容器已删除） |
-| `LogStreamStatus(u64, String)` | follow_runtime 判定结局 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板工具栏状态位（重连中 / 已恢复 / 已停止），不占用底部状态栏。时机：「日志流中断，正在重连…」= 首次进入可恢复重连；「日志流已恢复连接」= 重连后收到首行日志 / Idle 结局 / 探针由不可达跃迁为可达（三者均要求此前提示过重连中）；「日志流已停止」= 非取消的结束 |
+| `LogStreamStatus(u64, String)` | follow_runtime 判定结局 / 洪峰抽样 | `(stream_epoch, 文本)`；仅当前流生效，写入日志面板工具栏状态位（重连中 / 已恢复 / 已停止 / 洪峰抽样），不占用底部状态栏。时机：「日志流中断，正在重连…」= 首次进入可恢复重连；「日志流已恢复连接」= 重连后收到首行日志 / Idle 结局 / 探针由不可达跃迁为可达（三者均要求此前提示过重连中）；「日志流已停止」= 非取消的结束；「日志洪峰：已按比例抽样显示，省略 N 行」= 通道积压超阈值期间每 2s 刷新一次，退出抽样时发空串清除（仅单流） |
 | `ImageDetail(Result<ImageDetail>)` | inspect_image | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -218,28 +210,31 @@ Trae MCP 配置（`~/.config/Trae CN/User/mcp.json`）需包含：
 7. **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸，实例化处硬设。
 8. **命名**：Rust 常规 snake_case / PascalCase；Slint 全局函数 snake_case，结构体 PascalCase。
 9. **错误处理**：Docker API 错误统一转为 `Result<T, String>` 上抛，UI 层展示中文文本。
-10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 卷占用）；3s 刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
+10. **可重试 Docker 调用必须走 `docker::with_timeout`**（列表 / stats / inspect / 磁盘占用）；列表刷新依赖 `refresh_inflight` 去重，禁止在 interval 里无界叠加任务。
 11. **高频 Msg 不得逐条 invoke**——统一走 `consumer` 的分批 drain + 120ms 节流；UI 只重建 `DrainResult` 标记的变化区域（容器/镜像/网络/卷各自独立标记），日志走行模型追加。
 12. **可能永久阻塞的读必须可被 shutdown 唤醒**——例如 dconf reader 放独立线程，监控线程用 `recv_timeout` 轮询；禁止在会被 join 的线程里做无超时的阻塞读。
 13. **日志流重连必须退避且永不放弃**——Docker 流异常（`LogStreamEnd::Error`）按 `retry_delay` 指数退避重连（1s→2s→4s→8s→10s 上限），禁止立即紧密重试拖垮 Docker；连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），**不得静默放弃跟随**。超过 `LOG_IDLE_TIMEOUT`（180s）无任何日志视为连接挂死，走 `KeepAlive` 分支：静默重连、**不计入失败预算**、不打扰用户。容器是否还活着一律由探针 `probe_container` 判定（`Running`/`Stopped`/`Gone`/`Unreachable`），禁止用跨流共享的 running 标志。每条流的存活标志必须独立，旧流退出不得误标新流。
-14. **日志流状态提示三态**——文案唯一定义处是 `src/log_status.rs`（禁止内联字面量）：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」。「已恢复连接」只允许三个触发点：重连后收到首行日志、Idle 结局、探针由「不可达」跃迁为「可达」；三者均要求此前提示过「正在重连」。切换资源或 Clear 必须清掉残留提示（`ui_apply::clear_log_panel` / `clear_log_status`）。
+14. **日志流状态提示（四态）**——文案唯一定义处是 `src/log_status.rs`（禁止内联字面量）：「日志流中断，正在重连…」/「日志流已恢复连接」/「日志流已停止」/「日志洪峰：已按比例抽样显示，省略 N 行」。「已恢复连接」只允许三个触发点：重连后收到首行日志、Idle 结局、探针由「不可达」跃迁为「可达」；三者均要求此前提示过「正在重连」。洪峰提示的触发条件见 #33。切换资源或 Clear 必须清掉残留提示（`ui_apply::clear_log_panel` / `clear_log_status`）。
 15. **日志行模型只追加不重建**——UI 日志行模型（`render::logs_sync`）是日志窗口（`AppState.logs`）的**镜像**，用「全局行流位置」对齐：起点相同 → `LogSyncPlan::Append`（只 `extend`，可见行不重排 → 不卡）；起点不同（窗口裁剪过前段 / 换了流）→ `LogSyncPlan::Reset`（整表替换）。**禁止**逐行丢最旧行（整表索引每行错位一次，ListView 每次都把可见行标脏重排 = 旧卡顿主因）；裁剪必须分块（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）。同步账实现见 `src/ui_state/log_sync.rs`。
 16. **状态栏 toast 必须自动恢复**——回调直接写状态栏（复制日志 / 清空日志 / 复制字段值）一律走 `ui_apply::status_toast`，2s 后恢复「就绪」；期间若被其它消息改过则不覆盖（避免旧定时器盖掉新结果）。
 17. **Wayland 必须显式设置 xdg app_id**——`main.rs` 在 `MainWindow::new()` 之后、`ui.run()` 之前调用 `slint::set_xdg_app_id("docker-panel")`（仅当 `WAYLAND_DISPLAY` 存在时）。不设置时 toplevel 没有 app_id（Wayland trace 里查不到 `xdg_toplevel.set_app_id`），GNOME Shell 无法把窗口匹配到 `docker-panel.desktop`，**面板坞（Dock）会显示成「未识别程序」、图标退化成通用占位图**。仅在 Wayland 下设置：X11 由 winit 用 argv[0] 回退生成 `WM_CLASS`（class 段 = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致），显式设置反而会让 class 段变空（Slint 固定传 `with_name(app_id, "")`）。
-18. **UI 状态单一写入方——回调写，consumer 禁回写**——用户操作过的 Slint 属性（`sort_field` / `sort_desc` / `filter` / `view`）一律由 UI 回调独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。consumer 的 3s 心跳**只刷数据、不回写这些属性**：它在锁内取快照、锁外才写 UI，期间用户改了条件时回写的就是**旧值**（排序状态与上下箭头偶发对不上、箭头滞后最多 3s）。需要防「锁内建行、锁外应用，期间条件被改」的竞态时用 `AppState::rows_epoch`：排序/筛选/搜索变更时递增，consumer 应用行模型前比对，epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
+18. **UI 状态单一写入方——回调写，consumer 禁回写**——用户操作过的 Slint 属性（`sort_field` / `sort_desc` / `filter` / `view`）一律由 UI 回调独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。consumer **只刷数据、不回写这些属性**：它在锁内取快照、锁外才写 UI，期间用户改了条件时回写的就是**旧值**（排序状态与上下箭头偶发对不上）。需要防「锁内建行、锁外应用，期间条件被改」的竞态时用 `AppState::rows_epoch`：排序/筛选/搜索变更时递增，consumer 应用行模型前比对，epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
 19. **TouchArea 命中顺序——热区声明在布局之前**——Slint 按声明顺序做命中测试，后声明的兄弟节点先拿事件。按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，会盖住布局内部自己声明的 TouchArea（死代码：点箭头只会触发外层热区）。统一写法：`StateArea` / TouchArea 在前、内容布局在后（见 `Chip` / `ViewTab` / 排序按钮）；布局里的 `Text` 无 input region，点击会穿透到下面的热区。
-20. **台账列宽必须由父级统一计算后显式下发**——Slint `HorizontalLayout` 先给每个子项「首选宽度」（`Text` = 文本自然宽度），再把剩余空间按 `horizontal-stretch` 分。弹性列（名称 / 镜像）若直接写 `horizontal-stretch: 1`，文本一长列就被撑宽 → CPU / 内存列起点**逐行漂移**，表格失去扫读价值。正确写法：`LedgerArea` 算出 `name_w` / `image_w` 后显式下发给表头与行（`width: root.name_w; horizontal-stretch: 0;`）。响应式隐列（磁盘 / 端口）也由父级统一判定，表头与行共用同一组判定。验收用 MCP `get_element_tree` 逐列比对 `absolutePosition.x` 与 `size.width`，不要靠肉眼读截图。详见 [docs/arch/ui-interaction.md](docs/arch/ui-interaction.md) §3.3。
+20. **台账列宽必须由父级统一计算后显式下发**——Slint `HorizontalLayout` 先给每个子项「首选宽度」（`Text` = 文本自然宽度），再把剩余空间按 `horizontal-stretch` 分。弹性列（名称 / 镜像）若直接写 `horizontal-stretch: 1`，文本一长列就被撑宽 → CPU / 内存列起点**逐行漂移**，表格失去扫读价值。正确写法：`LedgerArea` 算出 `name_w` / `image_w` 后显式下发给表头与行（`width: root.name_w; horizontal-stretch: 0;`）。响应式隐列（磁盘 / 端口）也由父级统一判定，表头与行共用同一组判定。调试时可读 MCP 元素树逐列比对 `absolutePosition.x` 与 `size.width`，屏幕验收仍以 `agkit shot` 出图为准。详见 [docs/arch/ui-interaction.md](docs/arch/ui-interaction.md) §3.3。
 21. **排序基线一律自然升序**——`sort_containers` 各分支的比较器都必须是「小的在前」，`sort_desc` 只负责反向。曾经 CPU / 内存 / 磁盘三列的基线写成降序，导致 `sort_desc=true`（UI 上的 ↓ 箭头）反而从小到大排，与「名称」列和箭头方向全都不一致。
 22. **compose 分组是分组，不是筛选器**——台账内联树（`ui_rows/compose_tree.rs` 产出的分组带 + 容器行）没有「范围筛选」概念：排序字段只决定**组内**顺序，组间按组名稳定排。`compose_collapsed`（**收起的**分组键集合）由 `callbacks_compose.rs` 独占写，consumer 只读；不在集合里 = 展开 → 新分组默认展开。概览带与筛选 chips 的计数一律取**可见容器集合**（实际渲染成行的那些容器），折叠分组后两个数字同步变小。
 23. **分组带的命中顺序与几何**——分组带**通栏**（独立 delegate `kind=1/2`，不参与列宽计算），内部镜像 `ledger-row.slint` 的列结构（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`），使带内数值与容器行**同 x**；展开箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 两者**不重叠**，互不抢事件（规范 #19）；分组名落在 `44px + depth*18`（箭头 16px + 色点 18px + 间隙），与**同层**容器行的名称列起点逐像素对齐，层级只靠缩进表达；无 Compose 归属的容器直接排在顶层（depth=0），不另设「独立容器」分组带。
 24. **资源列表的排序状态三个视图各自独立**——`ResourceSort { field, desc }`（列下标 + 方向）在 Rust → Slint 之间**打包成一个 int**（低 3 位=列下标，第 3 位=降序标记）；Slint 1.18 不支持 `%` 与 `&` 运算符，解包用 `Math.mod(x, 8)` / `x >= 8`。排序状态只由 `callbacks_sort.rs` 写（规范 #18），consumer 只读。表头方向箭头：左对齐列跟在标签后（不占布局宽度），右对齐列用**覆盖层**放在列左端（值仍右对齐，列起点不漂移）。
-25. **分组带的资源汇总是「成员之和」**——分组带显示该组的 CPU / 内存 / 磁盘**总和**，落在台账的 CPU / 内存 / 磁盘列上（与容器行同 x，规范 #20）。口径：CPU / 内存只累加**运行中**成员（停止的容器行上显示「—」），磁盘累加**全部**成员（可写层占用是累计值，停止后依然成立）；一个运行成员都没有时 CPU / 内存显示「—」。汇总描述的是「这个组占了多少」→ **与组是否展开无关**，收起时数字照旧。**微条口径 = docker stats 口径**（与 `docker stats` 的两个百分比同义）：CPU = **相对单核**的百分比 / 100（1.0 = 占满一核），内存 = `mem_usage / mem_limit`（1.0 = 占满配额）。**刻意不用「视图内最大值归一」**：那种相对刻度下分组带与容器行**量纲不同**（分组是成员之和，成员是个体）→ 同一列里出现「组数字是成员的 2 倍、条却一样长」（唯一分组时组条恒 100% 满格，零信息量），成员的条还被压掉一半分辨率。绝对口径下两者同量纲（都是「占上限的比例」），且**分组带的条 = 组内成员条之和** → 父子关系自洽。**最小可见补偿** `MIN_BAR_RATIO = 0.02`（≈1px/52px 轨道）只作用于**大于 0** 的比例，且**必须在成员层做**（分组带累加补偿后的成员条）→ 否则组条会比成员条之和还短，父子反向失真；概览带 TOP4 的 240px 轨道下绝对占比本就可见，**不加补偿**（保留排名区分度）。实现见 `src/ui_rows/containers.rs`（`bar_ratio` / `mem_ratio`）与 `src/ui_rows/group_totals.rs`（`GroupTotals::cpu_ratio` / `mem_ratio`）。⚠️ 改 `ui/ledger-row.slint` 的列结构时必须同步改 `ui/ledger-tree-row.slint`，否则带与行的数值列错位。
+25. **分组带的资源汇总是「成员之和」**——分组带显示该组的 CPU / 内存 / 磁盘**总和**，落在台账的 CPU / 内存 / 磁盘列上（与容器行同 x，规范 #20）。口径：CPU / 内存只累加**运行中**成员（停止的容器行上显示「—」），磁盘累加**全部**成员（可写层 + 挂载卷，都是累计值，停止后依然成立）；一个运行成员都没有时 CPU / 内存显示「—」。汇总描述的是「这个组占了多少」→ **与组是否展开无关**，收起时数字照旧。**微条口径 = docker stats 口径**（与 `docker stats` 的两个百分比同义）：CPU = **相对单核**的百分比 / 100（1.0 = 占满一核），内存 = `mem_usage / mem_limit`（1.0 = 占满配额）。**刻意不用「视图内最大值归一」**：那种相对刻度下分组带与容器行**量纲不同**（分组是成员之和，成员是个体）→ 同一列里出现「组数字是成员的 2 倍、条却一样长」（唯一分组时组条恒 100% 满格，零信息量），成员的条还被压掉一半分辨率。绝对口径下两者同量纲（都是「占上限的比例」），且**分组带的条 = 组内成员条之和** → 父子关系自洽。**最小可见补偿** `MIN_BAR_RATIO = 0.02`（≈1px/52px 轨道）只作用于**大于 0** 的比例，且**必须在成员层做**（分组带累加补偿后的成员条）→ 否则组条会比成员条之和还短，父子反向失真；概览带 TOP4 的 240px 轨道下绝对占比本就可见，**不加补偿**（保留排名区分度）。实现见 `src/ui_rows/containers.rs`（`bar_ratio` / `mem_ratio`）与 `src/ui_rows/group_totals.rs`（`GroupTotals::cpu_ratio` / `mem_ratio`）。⚠️ 改 `ui/ledger-row.slint` 的列结构时必须同步改 `ui/ledger-tree-row.slint`，否则带与行的数值列错位。
 26. **分组带 = 组级操作入口，按钮与容器行同构**——分组带的 3 个按钮（主操作 / 日志 / 更多）与容器行**一一对应**，但动作**统一作用于组内全部成员**：主按钮按「是否全部运行中」在启动全组 / 重启全组间切换（启动只动没跑的、重启只动运行中的）；日志打开**合并日志**（每个运行中成员一条流，行首 `[容器名]` 前缀，抽屉走 `log_only` 模式隐藏详情/环境 Tab；无运行成员时只提示不开抽屉）；「更多」菜单 = 停止全部 / 重启全部 / 合并日志 / 删除全部（`CardMenu.kind = 4`）。成员口径 = `ui_rows::group_members`（**当前筛选后**的容器，与台账可见行同源）→ 筛选外的容器不会被组操作误伤。合并日志的实现约束：`follow_targets` 保存 `(id, 前缀)`、多流共享同一个 `watch` 取消信号与 `stream_epoch`、`LogStreamEnded` 只在全部流退出后清状态、`clear_log_buffer` 重建**全部**成员流；多流时**不发**重连/恢复/停止提示（单路结局代表不了整组）。`SelKind::Group` 下迟到的容器 inspect 结果必须丢弃（防止覆盖组标题/Tab 模式）。
-27. **底部状态栏的资源汇总由 consumer 独占写入**——`app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性绑定到 `FootBar`，**必须**在 `consumer::apply_ui` 里每轮 `set`（Rust 侧不写 → 恒显示 "0%" / "0MB"）。口径 = **全部容器**（与「N/N 容器」同源，不是筛选后的可见集合）：CPU / 内存只累加**运行中**容器（停止容器的 `cpu_percent` 是停止前的残留值），磁盘累加**全部**容器（`size_rw` 是累计值）——与分组带汇总（规范 #25）同口径。
-28. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
+27. **底部状态栏的资源汇总由 consumer 独占写入**——`app.slint` 的 `cpu_total` / `mem_total` / `disk_total` 三个属性绑定到 `FootBar`，**必须**在 `consumer::apply_ui` 里每轮 `set`（Rust 侧不写 → 恒显示 "0%" / "0MB"）。口径 = **全部容器**（与「N/N 容器」同源，不是筛选后的可见集合）：CPU / 内存只累加**运行中**容器（停止容器的 `cpu_percent` 是停止前的残留值），磁盘累加**全部**容器（`size_rw` = 可写层 + 挂载卷，累计值，口径见规范 #28）——与分组带汇总（规范 #25）同口径。
+28. **排序键必须与该列的显示值同源**——台账「磁盘」列显示 `size_rw`（可写层占用），排序就必须用 `size_rw`。该字段**不来自列表接口**（`size=1` 要为每个容器遍历文件系统：24 容器 70ms vs 32ms，且删除中的容器会命中 dockerd `404 rw layer snapshot not found` 让整批刷新失败）→ 由 30s 一次的 `/system/df?type=container` 回填进 `AppState.container_sizes`，列表刷新后用 `AppState::apply_container_sizes` 补回（新容器等下一轮采样，期间显示 0）。**口径 = 可写层 + 挂载的具名卷**（`ContainerInfo.volumes` ↔ `AppState.volume_sizes` 求交）：只算可写层会离谱到误导——本机 common-mysql 可写层 2MB、`common-mysql-data` 卷 39GB，用户说的「占用」显然是后者。卷与容器两路采样互相独立，任一路到达都要重算（`Msg::VolumeSizes` / `Msg::ContainerSizes` / `Msg::Containers` 三处都调 `apply_container_sizes`）。⚠️ 共享卷会被每个挂载它的容器各算一遍（底部合计重复计），真出现共享卷再改成按卷去重分摊。曾经用 `block_read + block_write` 排序，而这两个字段从未被赋值（恒 0）→ 所有容器排序键相等 → 稳定排序保持原序 → **点「磁盘」表头毫无反应**（而它恰好是默认排序字段）。字段恒 0 又无写入方的，直接删掉，别留着当陷阱。
 29. **自动更新任务必须 spawn_blocking + 校验和 + 安装方式判定**——GitHub 检查 / 下载 / `pkexec` / 文件 IO 全是阻塞操作，统一放 `tokio::task::spawn_blocking`，禁止占用 tokio worker 或 UI 线程；HTTP 只走系统 `curl`（参数数组直传，禁止拼 shell）；下载后必须核对 Release `checksums.txt` 的 SHA-256，缺失或不匹配一律拒绝安装；安装前必须判定 dpkg 管理 / 目录可写 / pkexec 可用，开发构建与非 Linux 只提示不安装。检查与安装共用 `update_busy` 互斥，进度按 1% 节流投递 `Msg`。
 30. **Docker 客户端必须共享单例（OnceLock + clone），禁止调用点自建**——bollard `Docker` 是 `Arc<Transport>`（hyper 连接池），clone 极廉价且池共享；`docker::connect()` 已做成进程级单例。此前「每次调用新建」让每 3s 刷新建 4 个客户端、每 6s stats 每容器再建 1 个（11 容器 ≈ 每分钟 110 个），用完即弃、连接池零复用，每次请求都重走 Unix socket 建连。新增调用点一律 `crate::docker::connect()`；`stats_prev` 必须随容器删除回收（`Msg::Containers` 应用列表时按存活集合 retain），StatsBatch 应用先建 id→下标映射（禁止逐条 `iter().find` 的 O(批量×容器数)）。
 31. **断流补齐的游标纪律——json-file 全流带时间戳、每批只解析最后一行、每流独立、首发/Clear 不用 since**——日志流因 `Eof` / `Error` / `Idle` 断裂后，重连可带 `timestamps + since` 补回断流窗口内的行（`docker/log_ts.rs` 解析 RFC3339Nano、剥前缀、纳秒过滤、回放缓冲）。口径：①**驱动探测在建流时做一次**，`json-file` → 该流**所有**连接（含首次建流、含分组合并的每一条流）一律 `timestamps(true)`，用于建立游标；非 `json-file`（journald / none / 探测失败）→ 退回旧行为（不传 timestamps、不传 since、tail 原值）。②**首次建流与 `Clear` 永远不带 `since`**（否则历史复活 / 清空失效），只有断裂后的重连路径才带 `since(游标秒)` + 纳秒级 `ts > cursor` 过滤。③**成本优化**：正常段每行只切首个空格剥前缀（**不解析**），每批投递只对最后一行做一次完整 RFC3339Nano 解析来推进游标；只有回放段才逐行解析过滤。④**游标必须每流独立**（分组合并日志的 N 条流各记各的，**禁止**放进 `AppState` 全局，否则多流互相覆盖）。⑤安全阀：连续 2 次重连收到的行全被游标过滤且 `attempt ≥ 2` → 丢弃游标退回 `tail=0`（仍带时间戳重建），只 `eprintln` 不占状态栏。⑥bollard 0.21 的 `since` 是 Unix 秒 **i32**（`LogCursor::since_secs()` 用 `clamp(0, i32::MAX as i64) as i32` 防溢出）。单次回放上限 `REPLAY_MAX = 2000`（与日志窗口上限对齐，只保留最新一段），不破坏规范 #15 的只追加/分块裁剪与 #26 的多流独立账本；剥前缀顺序固定为「切首个空格 → trim → 加 `[容器名]`」，面板与「复制日志」逐字与修复前一致。
+32. **列表即时性靠事件，没有轮询兜底**——`event_watch::spawn` 常驻消费 Docker `/events`（只筛 container/image/network/volume），收到非噪声事件就 `s.refresh()`；400ms 合并窗口让批量启停只刷一遍，断流按 1s→30s 退避重连且永不放弃。**禁止**再加「定时兜底轮询」：3s 轮询每分钟白烧 dockerd ≈3.3s CPU，而它只会让 `/events` 的漏刷、过滤写错、代理不支持长连接这些**真 bug** 表现成「最多慢 15s」，把根因藏起来；现在断流会 `eprintln!("[events] stream error")` 直接现形。动作过滤用**黑名单**（只忽略 `health_status` / `exec_*` / `attach` / `detach`）而不是白名单——未知动作宁可多刷一次也不漏刷。`refresh()` 在 in-flight 期间只置 `refresh_dirty` → 本轮结束补跑一次（否则并发合并会吞掉事件触发的刷新）。**断流后重连必须补一次全量刷新**：断流窗口内的事件永久丢失，重连那一刻的状态才是真相。
+33. **日志洪峰必须按通道积压抽样，且不破坏游标**——通道是无界队列，UI 侧跟不上时积压会无限涨（RSS 与显示延迟双失控）。生产者（`docker/logs.rs`）每批投递 `+n`、consumer 应用时 `-n`（`AppState::log_backlog`，递减点唯一：`AppState::drain_backlog`），积压 / `LOG_BACKLOG_HIGH`（2 万行 ≈ 2s 满额消费量）= 抽样步长，封顶 `LOG_SAMPLE_MAX`（1/64）→ **反馈式**收敛，不需要知道 consumer 的确切消费能力。抽样**只影响显示**：`last_token` 在抽样判定**之前**更新，游标仍指向本流最后一行（#31 的补读不会退回去重放）；回放段不抽样（本来就有 `REPLAY_MAX` 上界）。丢行必须可解释：工具条文案走 `log_status::NOTICE_SAMPLED`（每 2s 刷新，退出抽样发空串清除，**仅单流**——多流共享 epoch 会互相覆盖），并用 `eprintln!("[logs] flood sampling …")` 留痕。⚠️ 实测（本机 X11 软件渲染，`taskset -c 22,23`，同容器规模）：7.6 万行/s 时总 CPU ≈ 0.34~0.36 核（tokio 0.30 / UI 0.04）；127 万行/s 时 ≈ 1.3~1.5 核；两种码率下**积压从未触及 2 万行阈值**（consumer 每行约 40ns，远低于读流解码约 1µs），A/B 无差异 → 该阀在本机**不触发**，仅作安全阀。已决定**不新增**「时间戳滞后实时」触发机制（会破坏「显示跟随」语义且收益未证实）；不要拿这个阀当 CPU 优化点，若真要在极端码率下限流需重新设计触发条件。
+34. **空闲不重绘由事件驱动结构保证，禁止再加逐字段比对**——列表只在 `/events` 命中白名单动作（#32）、stats 6s、卷占用 30s、首屏/更新调度/主题监听这些**真实变化源**到达时才 apply/重绘；不存在「定时心跳拿同一份数据反复 apply」的路径。实测空闲稳态（无抽屉、无日志流）总 CPU：60s 0.21%、240s 0.12%（tokio 0.06 / UI 0.05），RSS 后 180s 仅 +0.1MB（趋平，非泄漏）。已决定**不实现**「数据完全相同则跳过 apply」的逐字段比对：需要给列表模型加 `PartialEq` 且排除 stats 字段，收益≈0，反而给后续字段增删埋维护负担；真出现无谓重绘时先查变化源（事件过滤 / 定时任务），不要加比对兜底。
 
 ## 构建命令
 
@@ -251,7 +246,7 @@ cargo run
 cargo build --release
 ./target/release/docker-panel
 
-# MCP 截图验收：命令见顶部「硬约束：UI 验证只能通过 Slint MCP」（不在此重复）
+# 截图验收：agkit shot --app docker-panel（见顶部「硬约束：UI 验证统一走 agkit 截图」）
 
 # 代码检查
 cargo fmt --all -- --check

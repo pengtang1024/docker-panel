@@ -14,6 +14,10 @@
 - 第二条实例的提示文案补充「窗口前置是尽力而为，Wayland compositor 可能忽略」，避免被误解为一定会置顶；README、AGENTS.md 与 `src/single_instance.rs` 文件头同步记录能力边界（本项目只面向 Wayland，客户端没有激活自己的权限，是否置顶由 compositor 决定）及未来彻底方案（GApplication + `DBusActivatable`）。
 - 新增单测 `raise_request_reaches_listener`，锁住「第二条实例的 raise 请求确实送达主实例」这一契约（请求是否生效仍由 compositor / WM 决定）。
 
+### 修复
+
+- **dockerd 后起 / 中途重启后列表不会自愈**：`event_watch` 此前只在「曾收到过事件且流结束」时补一次全量刷新，若进程启动时 dockerd 还没起来（或连续失败后才恢复），列表会一直空着等用户手动刷新。现在建流前先用 `ping` 判定连接，`ConnState` 记录连通状态，只在「断开 → 连通」跃迁时刷新（首次连接成功、断流后重连成功、连续失败后成功三条路径各一次）；连续失败期间不重复刷新。新增 3 条单测锁住三条路径。
+
 ## [0.7.11] - 2026-11-13
 
 ### 新增

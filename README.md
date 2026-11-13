@@ -235,7 +235,8 @@ docker-panel/
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）
-│   ├── main.rs             # 组装入口：i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
+│   ├── main.rs             # 组装入口：CLI 参数（--version/-V/--help）→ i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
+│   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help；未知参数照常启动 GUI
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）

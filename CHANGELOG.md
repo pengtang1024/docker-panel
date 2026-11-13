@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [0.7.10] - 2026-11-13
+
+### 新增
+
+- **命令行参数 `--version` / `--help`**：`docker-panel --version`（短别名 `-V`）打印 `docker-panel <版本>` 后直接退出，不初始化 Slint、不连接 Docker、不设置 xdg app_id；`--help` 打印用法与可用参数。参数解析是纯函数（`src/cli.rs`，含单测），首个已知参数决定动作；不带参数或带未知参数时行为与此前完全一致（正常启动 GUI，不报错退出，避免破坏桌面入口）。
+
 ## [0.7.9] - 2026-11-13
 
 ### 变更
@@ -364,7 +370,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.10...HEAD
+[0.7.10]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...0.7.10
 [0.7.9]: https://github.com/pengtang1024/docker-panel/compare/0.7.8...0.7.9
 [0.7.8]: https://github.com/pengtang1024/docker-panel/compare/0.7.7...0.7.8
 [0.7.7]: https://github.com/pengtang1024/docker-panel/compare/0.7.6...0.7.7

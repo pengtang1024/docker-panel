@@ -24,6 +24,7 @@ mod callbacks_netvol;
 mod callbacks_settings;
 mod callbacks_sort;
 mod callbacks_update;
+mod cli;
 mod config;
 mod consumer;
 mod detail_fmt;
@@ -50,6 +51,20 @@ use crate::slint_gen::MainWindow;
 use crate::ui_state::AppState;
 
 fn main() {
+    // 命令行参数：--version / -V / --help 在此直接退出，不初始化 Slint、
+    // 不连 Docker、不设置 xdg app_id；未知参数按正常启动 GUI 处理。
+    match cli::parse_args(std::env::args().skip(1)) {
+        cli::CliAction::Version => {
+            println!("{}", cli::version_text(env!("CARGO_PKG_VERSION")));
+            return;
+        }
+        cli::CliAction::Help => {
+            print!("{}", cli::help_text());
+            return;
+        }
+        cli::CliAction::Run => {}
+    }
+
     // 按系统 locale 选择语言（zh* → 简体中文，其它语言回落英文源串）
     i18n::init();
 

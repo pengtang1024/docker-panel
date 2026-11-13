@@ -35,7 +35,7 @@ pub fn bind_settings(ui: &MainWindow, actions: &AppActions, state: &SharedState)
                 return;
             }
             ui.set_theme_mode(v);
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_settings") {
                 st.theme = v as i64;
                 st.persist();
             }

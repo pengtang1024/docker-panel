@@ -26,7 +26,10 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     actions.on_compose_toggle(move |key: SharedString| {
         let Some(ui) = ui_w.upgrade() else { return };
         let (rows, summary, visible) = {
-            let Ok(mut st) = s.lock() else { return };
+            let Ok(mut st) = s.lock() else {
+                crate::lock::poison("callbacks_compose");
+                return;
+            };
             let key = key.to_string();
             // 存的是「收起」的分组键：已在集合里 = 收起 → 移除；否则加入
             if st.compose_collapsed.contains(&key) {
@@ -116,15 +119,15 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             ui.set_drawer_title(SharedString::from(label.as_str()));
             ui.set_drawer_sub(SharedString::from(merged.as_str()));
 
-            let new_stream = match s.lock() {
-                Ok(mut st) => {
+            let new_stream = match crate::lock::acquire(&s, "callbacks_compose") {
+                Some(mut st) => {
                     st.sel = SelKind::Group;
                     st.sel_key = key.clone();
                     // 切到分组日志：旧缓冲与旧流都属于别的对象，全部作废
                     st.clear_logs();
                     st.ensure_group_follow(&key, targets)
                 }
-                Err(_) => false,
+                None => false,
             };
             if new_stream {
                 crate::ui_apply::clear_log_status(&ui);
@@ -135,8 +138,8 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
 
 /// 锁内取分组成员（口径 = 当前筛选后的容器）
 fn group_members_locked(s: &SharedState, key: &str) -> Vec<GroupMember> {
-    match s.lock() {
-        Ok(st) => group_members(&st, key),
-        Err(_) => Vec::new(),
+    match crate::lock::acquire(s, "callbacks_compose::group_members") {
+        Some(st) => group_members(&st, key),
+        None => Vec::new(),
     }
 }

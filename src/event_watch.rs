@@ -27,7 +27,10 @@ const RETRY_MAX: Duration = Duration::from_secs(30);
 /// 起一个常驻任务消费 `/events`。Docker 不可用时也在后台重试，不阻塞启动。
 pub fn spawn(state: &SharedState) {
     let rt = {
-        let Ok(s) = state.lock() else { return };
+        let Ok(s) = state.lock() else {
+            crate::lock::poison("event_watch");
+            return;
+        };
         s.rt.handle().clone()
     };
     let state_t = state.clone();
@@ -42,7 +45,7 @@ pub fn spawn(state: &SharedState) {
                 // 这条流断掉的瞬间起我们就是瞎的：重连前补一次全量刷新，把断流窗口对齐。
                 // 同时把退避归零（能收到事件的连接不该继承上一轮的惩罚）。
                 attempt = 0;
-                if let Ok(mut s) = state_t.lock() {
+                if let Some(mut s) = crate::lock::acquire(&state_t, "event_watch") {
                     s.refresh();
                 }
             }
@@ -82,7 +85,7 @@ async fn watch(state: &SharedState) -> bool {
             continue;
         }
         last = Some(Instant::now());
-        if let Ok(mut s) = state.lock() {
+        if let Some(mut s) = crate::lock::acquire(state, "event_watch") {
             s.refresh();
         }
     }
@@ -116,7 +119,10 @@ fn shutdown(state: &SharedState) -> bool {
     state
         .lock()
         .map(|s| s.shutdown.load(Ordering::Relaxed))
-        .unwrap_or(true)
+        .unwrap_or_else(|_| {
+            crate::lock::poison("event_watch::shutdown");
+            true
+        })
 }
 
 /// 1s, 2s, 4s, 8s, 16s, 30s（封顶）

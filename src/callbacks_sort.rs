@@ -25,14 +25,17 @@ fn bind_images(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     actions.on_sort_images(move |f: i32| {
         let Some(ui) = ui_w.upgrade() else { return };
         let packed = {
-            let Ok(mut st) = s.lock() else { return };
+            let Ok(mut st) = s.lock() else {
+                crate::lock::poison("callbacks_sort");
+                return;
+            };
             st.sort_images.pick(f.clamp(0, 2) as u8);
             st.rows_dirty();
             st.persist();
             st.sort_images.to_ui()
         };
         ui.set_sort_images(packed);
-        if let Ok(st) = s.lock() {
+        if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }
     });
@@ -45,14 +48,17 @@ fn bind_networks(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     actions.on_sort_networks(move |f: i32| {
         let Some(ui) = ui_w.upgrade() else { return };
         let packed = {
-            let Ok(mut st) = s.lock() else { return };
+            let Ok(mut st) = s.lock() else {
+                crate::lock::poison("callbacks_sort");
+                return;
+            };
             st.sort_networks.pick(f.clamp(0, 2) as u8);
             st.rows_dirty();
             st.persist();
             st.sort_networks.to_ui()
         };
         ui.set_sort_networks(packed);
-        if let Ok(st) = s.lock() {
+        if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }
     });
@@ -65,14 +71,17 @@ fn bind_volumes(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     actions.on_sort_volumes(move |f: i32| {
         let Some(ui) = ui_w.upgrade() else { return };
         let packed = {
-            let Ok(mut st) = s.lock() else { return };
+            let Ok(mut st) = s.lock() else {
+                crate::lock::poison("callbacks_sort");
+                return;
+            };
             st.sort_volumes.pick(f.clamp(0, 2) as u8);
             st.rows_dirty();
             st.persist();
             st.sort_volumes.to_ui()
         };
         ui.set_sort_volumes(packed);
-        if let Ok(st) = s.lock() {
+        if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }
     });

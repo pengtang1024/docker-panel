@@ -9,7 +9,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let us = ui.global::<UpdateState>();
         us.set_current(SharedString::from(crate::update::CURRENT_VERSION));
-        if let Ok(s) = state.lock() {
+        if let Some(s) = crate::lock::acquire(state, "callbacks_update") {
             us.set_auto_check(s.check_updates);
             us.set_auto_install(s.auto_install);
             us.set_auto_restart(s.auto_restart);
@@ -78,7 +78,10 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_update_open_page(move || {
             let Some(ui) = ui_q.upgrade() else { return };
             let url = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_update");
+                    return;
+                };
                 st.update_info
                     .as_ref()
                     .map(|i| i.page_url.clone())
@@ -107,7 +110,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let s = state.clone();
         actions.on_update_set_auto_check(move |checked: bool| {
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_update") {
                 st.check_updates = checked;
                 st.persist();
             }
@@ -117,7 +120,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let s = state.clone();
         actions.on_update_set_auto_install(move |checked: bool| {
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_update") {
                 st.auto_install = checked;
                 st.persist();
             }
@@ -127,7 +130,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let s = state.clone();
         actions.on_update_set_auto_restart(move |checked: bool| {
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_update") {
                 st.auto_restart = checked;
                 st.persist();
             }

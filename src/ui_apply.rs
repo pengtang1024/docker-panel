@@ -43,7 +43,7 @@ pub fn apply_container_ledger(
 }
 
 /// UI 线程内按当前 AppState 立即重建四个资源列表（搜索/筛选/排序回调的即时反馈）。
-/// 网络/卷不在 3s 定时刷新范围内，不主动重建则过滤永不生效。
+/// 网络/卷不一定与容器同批刷新，不主动重建则过滤永不生效。
 pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
     // 台账行与概览带同批产出：概览带数字口径 = 当前**可见**的容器集合
     let (rows, summary, visible) = crate::ui_rows::build_container_ledger(s);
@@ -80,7 +80,10 @@ pub fn clear_log_status(ui: &MainWindow) {
 pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
     ui.set_status_text(SharedString::from(text));
     let rt = {
-        let Ok(s) = state.lock() else { return };
+        let Ok(s) = state.lock() else {
+            crate::lock::poison("ui_apply");
+            return;
+        };
         s.rt.handle().clone()
     };
     let ui_w = ui.as_weak();

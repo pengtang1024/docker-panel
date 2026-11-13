@@ -53,7 +53,10 @@ pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> Joi
             let mut first = first;
             loop {
                 let res = {
-                    let Ok(mut s) = state.lock() else { return };
+                    let Ok(mut s) = state.lock() else {
+                        crate::lock::poison("consumer::run");
+                        return;
+                    };
                     s.drain_messages(&rx, first.take(), MAX_DRAIN_BATCH)
                 };
                 pending.merge(res);
@@ -80,7 +83,10 @@ pub fn spawn(state: SharedState, rx: Receiver<Msg>, ui: Weak<MainWindow>) -> Joi
 /// 把累计状态一次性灌给 UI（锁内只 build，锁外 invoke）
 fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut DrainResult) {
     let res = std::mem::take(pending);
-    let Ok(mut s) = state.lock() else { return };
+    let Ok(mut s) = state.lock() else {
+        crate::lock::poison("consumer::apply_ui");
+        return;
+    };
 
     // 操作完成立即刷新（只 spawn，不做 IO）
     if res.refresh_now {

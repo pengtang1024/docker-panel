@@ -33,6 +33,7 @@ mod event_watch;
 mod follow_runtime;
 mod format;
 mod i18n;
+mod lock;
 mod log_status;
 mod models;
 mod render;
@@ -122,7 +123,7 @@ fn main() {
     let _ = ui.run();
 
     // 优雅退出：shutdown flag → consumer / theme-monitor 轮询发现后 break → join
-    if let Ok(s) = state.lock() {
+    if let Some(s) = crate::lock::acquire(&state, "main::shutdown") {
         s.shutdown.store(true, Ordering::Relaxed);
         s.persist(); // 退出落盘（搜索词等高频变更项只在此处保存）
     }

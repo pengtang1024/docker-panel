@@ -23,7 +23,10 @@ use crate::ui_state::{SharedState, DISK_USAGE_INTERVAL};
 pub fn spawn_stats_interval(state: &SharedState) {
     let state_s = state.clone();
     let rt_h = {
-        let Ok(s) = state_s.lock() else { return };
+        let Ok(s) = state_s.lock() else {
+            crate::lock::poison("bootstrap");
+            return;
+        };
         s.rt.handle().clone()
     };
     rt_h.spawn(async move {
@@ -31,7 +34,10 @@ pub fn spawn_stats_interval(state: &SharedState) {
         loop {
             tick.tick().await;
             let (tx, ids): (_, Vec<String>) = {
-                let Ok(s) = state_s.lock() else { continue };
+                let Ok(s) = state_s.lock() else {
+                    crate::lock::poison("bootstrap");
+                    continue;
+                };
                 (
                     s.tx.clone(),
                     s.containers
@@ -55,7 +61,10 @@ pub fn spawn_stats_interval(state: &SharedState) {
 pub fn spawn_disk_usage_interval(state: &SharedState) {
     let state_s = state.clone();
     let rt_h = {
-        let Ok(s) = state_s.lock() else { return };
+        let Ok(s) = state_s.lock() else {
+            crate::lock::poison("bootstrap");
+            return;
+        };
         s.rt.handle().clone()
     };
     rt_h.spawn(async move {
@@ -63,7 +72,10 @@ pub fn spawn_disk_usage_interval(state: &SharedState) {
         loop {
             tick.tick().await;
             let tx = {
-                let Ok(s) = state_s.lock() else { continue };
+                let Ok(s) = state_s.lock() else {
+                    crate::lock::poison("bootstrap");
+                    continue;
+                };
                 s.tx.clone()
             };
             let (vols, conts) = futures::join!(
@@ -86,7 +98,10 @@ pub fn spawn_disk_usage_interval(state: &SharedState) {
 /// 「6s interval + 首次双采样」共 12s 才有值（用户看到的是开机后近一分钟数据不准）。
 /// 非流式 stats 自带 pre 帧 → 这一轮就能算出真实 CPU%。
 pub fn spawn_initial_load(state: &SharedState) {
-    let Ok(s) = state.lock() else { return };
+    let Ok(s) = state.lock() else {
+        crate::lock::poison("bootstrap::spawn_initial_load");
+        return;
+    };
     let tx = s.tx.clone();
     let rt = s.rt.handle().clone();
     drop(s);
@@ -210,10 +225,11 @@ pub fn spawn_theme_monitor(ui: &MainWindow, state: &SharedState) -> std::thread:
                         }
                     });
                 loop {
-                    let (shutdown, skip) = state_s
-                        .lock()
-                        .map(|g| check_state(&g))
-                        .unwrap_or((false, true));
+                    let (shutdown, skip) =
+                        state_s.lock().map(|g| check_state(&g)).unwrap_or_else(|_| {
+                            crate::lock::poison("bootstrap::theme_monitor");
+                            (false, true)
+                        });
                     if shutdown {
                         let _ = child.kill();
                         let _ = child.wait();
@@ -303,10 +319,10 @@ fn poll_loop<F1, F2>(
         std::thread::sleep(Duration::from_millis(200));
         since_check += Duration::from_millis(200);
 
-        let (shutdown, skip) = state_s
-            .lock()
-            .map(|g| check_state(&g))
-            .unwrap_or((false, true));
+        let (shutdown, skip) = state_s.lock().map(|g| check_state(&g)).unwrap_or_else(|_| {
+            crate::lock::poison("bootstrap::theme_monitor");
+            (false, true)
+        });
         if shutdown {
             return;
         }

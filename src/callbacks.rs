@@ -35,6 +35,7 @@ pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
 /// 启动时把持久化的配置灌回 Slint 属性
 fn restore_config(ui: &MainWindow, state: &SharedState) {
     let Ok(s) = state.lock() else {
+        crate::lock::poison("callbacks::restore_config");
         return;
     };
     ui.set_theme_mode(s.theme as i32);
@@ -68,7 +69,7 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     {
         let s = state.clone();
         actions.on_refresh(move || {
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks") {
                 st.refresh();
             }
         });
@@ -80,14 +81,17 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             let Some(ui) = ui_q.upgrade() else { return };
             {
                 let q = text.to_string();
-                let Ok(mut st) = s.lock() else { return };
+                let Ok(mut st) = s.lock() else {
+                    crate::lock::poison("callbacks");
+                    return;
+                };
                 st.container_query = q.clone();
                 st.image_query = q;
                 st.rows_dirty();
                 st.persist();
             }
             // 网络/卷无定时刷新，必须立即重建，否则过滤看不到效果
-            if let Ok(st) = s.lock() {
+            if let Some(st) = crate::lock::acquire(&s, "callbacks") {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }
         });
@@ -107,7 +111,7 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_cleanup(move || {
             let Some(ui) = ui_c.upgrade() else { return };
             // 打开前按当前列表回填各类候选数量（弹窗 .cnt 展示）
-            if let Ok(st) = s.lock() {
+            if let Some(st) = crate::lock::acquire(&s, "callbacks") {
                 let (a, b, c, d) = st.cleanup_counts();
                 ui.set_cleanup_cnt_stopped(SharedString::from(a.to_string().as_str()));
                 ui.set_cleanup_cnt_dangling(SharedString::from(b.to_string().as_str()));
@@ -128,7 +132,7 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 ui.get_theme_mode() + 1
             };
             ui.set_theme_mode(next);
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks") {
                 st.theme = next as i64;
                 st.persist();
             }
@@ -145,7 +149,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             if let Some(ui) = ui_f.upgrade() {
                 ui.set_view(v);
             }
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks") {
                 st.view = v as i64;
                 st.persist();
             }
@@ -159,12 +163,15 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             ui.set_filter(f.clone());
             {
                 let key = f.to_string();
-                let Ok(mut st) = s.lock() else { return };
+                let Ok(mut st) = s.lock() else {
+                    crate::lock::poison("callbacks");
+                    return;
+                };
                 st.filter = key;
                 st.rows_dirty();
                 st.persist();
             }
-            if let Ok(st) = s.lock() {
+            if let Some(st) = crate::lock::acquire(&s, "callbacks") {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }
         });
@@ -177,7 +184,10 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             let Some(ui) = ui_f.upgrade() else { return };
             let (field_idx, desc) = {
                 let new_field = SortField::from_ui_index(f as i64);
-                let Ok(mut st) = s.lock() else { return };
+                let Ok(mut st) = s.lock() else {
+                    crate::lock::poison("callbacks");
+                    return;
+                };
                 // 切换到新字段默认降序；同字段重复点击则翻转方向
                 st.sort_desc = st.sort_field != new_field || !st.sort_desc;
                 st.sort_field = new_field;
@@ -189,7 +199,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             // 旧快照，回写会把箭头打回旧方向 —— 排序状态与上下箭头偶发不一致的根因
             ui.set_sort_field(field_idx);
             ui.set_sort_desc(desc);
-            if let Ok(st) = s.lock() {
+            if let Some(st) = crate::lock::acquire(&s, "callbacks") {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }
         });
@@ -200,7 +210,10 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_set_sort_dir(move || {
             let Some(ui) = ui_f.upgrade() else { return };
             let desc = {
-                let Ok(mut st) = s.lock() else { return };
+                let Ok(mut st) = s.lock() else {
+                    crate::lock::poison("callbacks");
+                    return;
+                };
                 st.sort_desc = !st.sort_desc;
                 st.rows_dirty();
                 st.persist();
@@ -208,7 +221,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             };
             // 同上：方向箭头只由回调写，consumer 不再回写快照值
             ui.set_sort_desc(desc);
-            if let Ok(st) = s.lock() {
+            if let Some(st) = crate::lock::acquire(&s, "callbacks") {
                 crate::ui_apply::refresh_lists_now(&ui, &st);
             }
         });
@@ -237,7 +250,10 @@ fn bind_pull_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedState)
             }
             ui.set_pull_busy(true);
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             rt_handle.spawn(async move {
@@ -274,7 +290,10 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
                     return;
                 }
                 let (rt_handle, tx) = {
-                    let Ok(st) = s.lock() else { return };
+                    let Ok(st) = s.lock() else {
+                        crate::lock::poison("callbacks");
+                        return;
+                    };
                     (st.rt.handle().clone(), st.tx.clone())
                 };
                 rt_handle.spawn(async move {

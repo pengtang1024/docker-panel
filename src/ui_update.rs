@@ -297,15 +297,19 @@ impl AppState {
                     self.image_layers.insert(id, n);
                 }
             }
+            // `/system/df` 采样在首屏（30s interval 首 tick 立即跑）常早于列表到达：
+            // 此时行模型还是空的，置变化标记只会白占一个 UI 应用窗口，把首行整体
+            // 推迟一整窗。数据本身照常写入，列表到达时 Msg::Containers / Msg::Volumes
+            // 会各自重建并调用 apply_container_sizes，不会丢。
             Msg::VolumeSizes(map) => {
-                res.volumes_changed = true;
+                res.volumes_changed |= !self.volumes.is_empty();
                 // 容器磁盘占用含挂载卷 → 卷占用变了要重算容器（卷与容器两个采样互相独立）
-                res.containers_changed = true;
+                res.containers_changed |= !self.containers.is_empty();
                 self.volume_sizes = map;
                 self.apply_container_sizes();
             }
             Msg::ContainerSizes(map) => {
-                res.containers_changed = true;
+                res.containers_changed |= !self.containers.is_empty();
                 self.container_sizes = map;
                 self.apply_container_sizes();
             }

@@ -6,8 +6,6 @@
 //!
 //! 三个视图的排序**互相独立**（各存各的），切视图回来保留。
 
-use std::sync::atomic::Ordering;
-
 use slint::{ComponentHandle, Weak};
 
 use crate::slint_gen::{AppActions, MainWindow};
@@ -29,7 +27,7 @@ fn bind_images(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let packed = {
             let Ok(mut st) = s.lock() else { return };
             st.sort_images.pick(f.clamp(0, 2) as u8);
-            st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+            st.rows_dirty();
             st.persist();
             st.sort_images.to_ui()
         };
@@ -49,7 +47,7 @@ fn bind_networks(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let packed = {
             let Ok(mut st) = s.lock() else { return };
             st.sort_networks.pick(f.clamp(0, 2) as u8);
-            st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+            st.rows_dirty();
             st.persist();
             st.sort_networks.to_ui()
         };
@@ -69,7 +67,7 @@ fn bind_volumes(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let packed = {
             let Ok(mut st) = s.lock() else { return };
             st.sort_volumes.pick(f.clamp(0, 2) as u8);
-            st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+            st.rows_dirty();
             st.persist();
             st.sort_volumes.to_ui()
         };

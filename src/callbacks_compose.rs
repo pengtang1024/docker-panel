@@ -10,8 +10,6 @@
 //! 组操作（规范 #25 延伸）：分组带上的 3 个按钮与容器行同构，只是动作
 //! **统一作用于组内全部成员**（成员口径 = 当前筛选后的容器，与台账可见行一致）。
 
-use std::sync::atomic::Ordering;
-
 use slint::{ComponentHandle, SharedString, Weak};
 
 use super::callbacks_container::{spawn_container_op, OpKind};
@@ -37,7 +35,7 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 st.compose_collapsed.insert(key);
             }
             // 行模型作废：consumer 手里那批行是旧展开状态建的
-            st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+            st.rows_dirty();
             st.persist();
             crate::ui_rows::build_container_ledger(&st)
         };

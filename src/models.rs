@@ -295,6 +295,13 @@ pub struct ResourceSort {
 }
 
 impl ResourceSort {
+    /// 打包编码：低 3 位 = 列下标（掩码 `0b111`）
+    pub const SORT_FIELD_MASK: i64 = 0b111;
+    /// 打包编码：第 3 位 = 降序标记
+    pub const SORT_DESC_BIT: i64 = 0b1000;
+    /// 合法列下标上界（三个视图都是 0..=2）
+    pub const SORT_FIELD_MAX: u8 = 2;
+
     /// 点表头：换列用新列（同方向规则与容器台账一致：默认降序），
     /// 同列重复点击则翻转方向。
     pub fn pick(&mut self, field: u8) {
@@ -303,27 +310,42 @@ impl ResourceSort {
     }
 
     /// 打包成 UI 传值（低 3 位=列下标，第 3 位=降序标记）
+    ///
+    /// 解码在 Slint 侧 `ui/list-area.slint` 的 `SortCodec`：
+    /// `Math.mod(v, 8)` 等价于 `SORT_FIELD_MASK`，`v >= 8` 等价于 `SORT_DESC_BIT`。
+    /// 改编码必须两边同步。
     pub fn to_ui(self) -> i32 {
-        self.field as i32 + if self.desc { 8 } else { 0 }
+        self.field as i32
+            + if self.desc {
+                Self::SORT_DESC_BIT as i32
+            } else {
+                0
+            }
     }
 
-    /// 打包进配置文件（同 to_ui 的编码）
+    /// 打包进配置文件（同 to_ui 的编码，见 `config::AppConfig::save`）
     pub fn to_config(self) -> i64 {
         self.to_ui() as i64
     }
 
-    /// 配置值 → 排序状态（越界回落默认：按名称升序）
+    /// 配置值 → 排序状态（列下标越界 / 负数一律回落默认：0 列升序）
     pub fn from_config(v: i64) -> Self {
-        let field = v & 7;
-        if field > 2 {
+        if v < 0 {
+            return Self::default();
+        }
+        let field = (v & Self::SORT_FIELD_MASK) as u8;
+        if field > Self::SORT_FIELD_MAX {
             return Self::default();
         }
         Self {
-            field: field as u8,
-            desc: v & 8 != 0,
+            field,
+            desc: v & Self::SORT_DESC_BIT != 0,
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 /// 容器列表排序字段——点击表头切换
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

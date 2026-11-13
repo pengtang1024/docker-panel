@@ -13,6 +13,19 @@ import { NetworkList } from "network-list.slint";
 import { VolumeList } from "volume-list.slint";
 import { SkelGrid } from "skel.slint";
 
+// 资源列表排序打包值的解码（**唯一定义处**，三个列表共用）。
+// 与 Rust 侧 src/models.rs 的 ResourceSort::SORT_FIELD_MASK / SORT_DESC_BIT 一一对应：
+//   低 3 位 = 列下标，第 3 位 = 降序标记。
+// Slint 1.18 不支持 `%` 与 `&`，所以用 Math.mod / 比较大小解码。
+global SortCodec {
+    public pure function field_of(v: int) -> int {
+        return Math.mod(v, 8);
+    }
+    public pure function desc_of(v: int) -> bool {
+        return v >= 8;
+    }
+}
+
 export component ListArea inherits Rectangle {
     in-out property <int> view: 0;
     in-out property <bool> sel_mode: false;
@@ -25,7 +38,8 @@ export component ListArea inherits Rectangle {
     in-out property <LedgerSummary> ledger_summary;
     /// 当前排序列（0=名称 1=CPU 2=内存 3=磁盘），台账表头高亮用
     in-out property <int> sort_field: 0;
-    // —— 三个资源列表各自的排序（打包值：低 3 位=列下标，第 3 位=降序标记）——
+    // —— 三个资源列表各自的排序（打包值：低 3 位=列下标，第 3 位=降序标记；
+    //    解码统一走上方 SortCodec，编码见 src/models.rs 的 ResourceSort）——
     in-out property <int> sort_images: 0;
     in-out property <int> sort_networks: 0;
     in-out property <int> sort_volumes: 0;
@@ -131,8 +145,8 @@ export component ListArea inherits Rectangle {
         width: 100%;
         height: 100%;
         rows <=> root.images;
-        sort_field: Math.mod(root.sort_images, 8);
-        sort_desc: root.sort_images >= 8;
+        sort_field: SortCodec.field_of(root.sort_images);
+        sort_desc: SortCodec.desc_of(root.sort_images);
         sort_pick(f) => { root.sort_images_pick(f); }
         select(id) => { root.i_select(id); }
         run(id) => { root.i_run(id); }
@@ -146,8 +160,8 @@ export component ListArea inherits Rectangle {
         width: 100%;
         height: 100%;
         rows <=> root.networks;
-        sort_field: Math.mod(root.sort_networks, 8);
-        sort_desc: root.sort_networks >= 8;
+        sort_field: SortCodec.field_of(root.sort_networks);
+        sort_desc: SortCodec.desc_of(root.sort_networks);
         sort_pick(f) => { root.sort_networks_pick(f); }
         select(id) => { root.n_select(id); }
     }
@@ -157,8 +171,8 @@ export component ListArea inherits Rectangle {
         width: 100%;
         height: 100%;
         rows <=> root.volumes;
-        sort_field: Math.mod(root.sort_volumes, 8);
-        sort_desc: root.sort_volumes >= 8;
+        sort_field: SortCodec.field_of(root.sort_volumes);
+        sort_desc: SortCodec.desc_of(root.sort_volumes);
         sort_pick(f) => { root.sort_volumes_pick(f); }
         select(id) => { root.v_select(id); }
     }

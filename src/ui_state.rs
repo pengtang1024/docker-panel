@@ -302,6 +302,15 @@ impl AppState {
         }
     }
 
+    /// 排序 / 筛选 / 搜索条件变更：递增行模型 epoch。
+    ///
+    /// **唯一入口**——所有会改变行集合或顺序的回调都必须走这里。consumer
+    /// 锁内建行、锁外上屏，应用前比对 epoch；忘了递增就会让旧条件的行覆盖
+    /// 新条件的行（表现为列表顺序与排序箭头不一致）。
+    pub fn rows_dirty(&mut self) {
+        self.rows_epoch.fetch_add(1, Ordering::AcqRel);
+    }
+
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。
     ///
     /// 上一次刷新未完成时只置脏标记：Docker 慢/无响应时不能每 tick 再叠

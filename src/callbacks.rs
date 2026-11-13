@@ -8,8 +8,6 @@ pub use super::callbacks_netvol::bind_netvol_actions;
 use super::callbacks_sort::bind as bind_sort_actions;
 use super::callbacks_update::bind_update;
 
-use std::sync::atomic::Ordering;
-
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
@@ -85,7 +83,7 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 let Ok(mut st) = s.lock() else { return };
                 st.container_query = q.clone();
                 st.image_query = q;
-                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+                st.rows_dirty();
                 st.persist();
             }
             // 网络/卷无定时刷新，必须立即重建，否则过滤看不到效果
@@ -163,7 +161,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 let key = f.to_string();
                 let Ok(mut st) = s.lock() else { return };
                 st.filter = key;
-                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+                st.rows_dirty();
                 st.persist();
             }
             if let Ok(st) = s.lock() {
@@ -183,7 +181,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 // 切换到新字段默认降序；同字段重复点击则翻转方向
                 st.sort_desc = st.sort_field != new_field || !st.sort_desc;
                 st.sort_field = new_field;
-                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+                st.rows_dirty();
                 st.persist();
                 (st.sort_field.to_ui_index() as i32, st.sort_desc)
             };
@@ -204,7 +202,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             let desc = {
                 let Ok(mut st) = s.lock() else { return };
                 st.sort_desc = !st.sort_desc;
-                st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+                st.rows_dirty();
                 st.persist();
                 st.sort_desc
             };

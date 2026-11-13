@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 第二条实例的提示文案补充「窗口前置是尽力而为，Wayland compositor 可能忽略」，避免被误解为一定会置顶；README、AGENTS.md 与 `src/single_instance.rs` 文件头同步记录能力边界（本项目只面向 Wayland，客户端没有激活自己的权限，是否置顶由 compositor 决定）及未来彻底方案（GApplication + `DBusActivatable`）。
+- 新增单测 `raise_request_reaches_listener`，锁住「第二条实例的 raise 请求确实送达主实例」这一契约（请求是否生效仍由 compositor / WM 决定）。
+
 ## [0.7.11] - 2026-11-13
 
 ### 新增

@@ -9,10 +9,31 @@
 //!   3. 进程被 SIGKILL / panic=abort 后残留的 socket 文件 `connect` 会失败
 //!      （ECONNREFUSED），据此判陈旧并自动清理 —— 不存在需要人工删除的残留锁。
 //!
-//! 窗口前置的能力边界：Wayland 下客户端没有激活（raise）自己的权限，是否置顶由
-//! compositor 决定；这里只做 `show()` + 取消最小化 + `request_redraw()`（X11 下
-//! 通常有效，Wayland 下尽力而为）。刻意不引入 xdotool / D-Bus 这类依赖图形会话的
-//! 外部手段 —— 它们在无会话 / 不同合成器下只会带来新的失败模式。
+//! # 窗口前置的能力边界（**只能是尽力而为**）
+//!
+//! 本项目只面向 Wayland。raise 的实现只有 `show()` + `set_minimized(false)` + `request_redraw()`，
+//! 客户端没有激活自己的权限，**是否置顶由 compositor 决定**；不要指望它一定生效。
+//!
+//! Wayland 下三条合法路径逐一核对后都不成立：
+//!   1. `xdg_activation_v1` 要求 token 先由**持有焦点的客户端/获得用户手势的启动器**
+//!      用 `get_activation_token` 创建，再转交给目标客户端；从终端启动的第二个进程
+//!      环境里没有 `XDG_ACTIVATION_TOKEN`（本机实测为空），拿不到 token。
+//!   2. 即便拿到 token，对已有 surface 调 `activate(token, surface)` 需要
+//!      wl_display / wl_surface / xdg_activation 代理，Slint 1.18 不暴露这些原始对象；
+//!      用 raw-window-handle + unsafe 重连 wl_display 属于"塞重型/脆弱依赖"。
+//!   3. 桌面文件没有 `DBusActivatable`，应用也不是 GApplication，
+//!      `org.freedesktop.Application.Activate` 无从实现；即便补上 D-Bus，
+//!      底层仍落到 GTK 的 `present()` —— 本机 GTK4 探针实测：窗口失焦后调用
+//!      `present()`（内部即 xdg_activation）不会让它重新变成 active。
+//!
+//! 已核对过的 winit 0.30.13 行为（也是不引入它的理由）：Wayland 下 `focus_window()`
+//! 是空函数、`set_minimized()` 被忽略（无法 unminimize），Slint 的后端也只在最小化
+//! 状态**变化**时才下发 `set_minimized` —— 所以这里的 raise 通常只等于一次
+//! `show()` + 重绘。
+//!
+//! 未来若要彻底解决：把应用改成 `DBusActivatable` 的 GApplication（gio 运行时
+//! 属重型依赖，且仍受合成器策略约束）。当前刻意不引入 xdotool / zbus /
+//! 原生 wayland-client 等外部手段 —— 它们在无会话 / 不同合成器下只会带来新的失败模式。
 
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -171,6 +192,32 @@ mod tests {
             matches!(second, Acquire::AlreadyRunning),
             "第二个实例必须被判定为已运行"
         );
+        drop(first);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn raise_request_reaches_listener() {
+        let path = temp_path("raise");
+        let mut first = match acquire_in(&path).expect("first") {
+            Acquire::Primary(g) => g,
+            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        first.spawn_raise_listener(move || {
+            let _ = tx.send(());
+        });
+
+        let second = acquire_in(&path).expect("second");
+        assert!(
+            matches!(second, Acquire::AlreadyRunning),
+            "第二个实例必须被判定为已运行"
+        );
+        // 前置请求是否生效由 compositor 决定，但「请求确实送达主实例」必须成立
+        rx.recv_timeout(std::time::Duration::from_secs(2))
+            .expect("主实例的 raise 监听线程应收到请求");
+
+        drop(second);
         drop(first);
         cleanup(&path);
     }

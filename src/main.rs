@@ -77,7 +77,8 @@ fn main() {
         Ok(single_instance::Acquire::AlreadyRunning) => {
             eprintln!(
                 "docker-panel: already running, not starting a second window \
-                 (single-instance lock held by the existing process)"
+                 (single-instance lock held by the existing process; the window raise \
+                 is best-effort and a Wayland compositor may ignore it)"
             );
             std::process::exit(1);
         }
@@ -142,8 +143,9 @@ fn main() {
     callbacks::bind_callbacks(&ui, &state);
 
     // 第二条实例通过锁文件旁的 socket 发来 raise 请求时，尽力把窗口带回前台。
-    // Wayland 下客户端无激活权（compositor 决定是否置顶），只能做
-    // show + 取消最小化 + 重绘；X11 下通常能真正提到最前。
+    // 这里只做 show + 取消最小化 + 重绘：是否真的置顶由 compositor / WM 决定。
+    // Wayland 下客户端没有激活自己的权限（协议层限制见 single_instance.rs 文件头），
+    // 通常只会变成一次重绘；X11 下能否夺焦同样取决于 WM 的焦点策略。
     if let Some(g) = guard.as_mut() {
         let weak = ui.as_weak();
         g.spawn_raise_listener(move || {

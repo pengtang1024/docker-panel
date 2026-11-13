@@ -12,6 +12,7 @@ use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
 use crate::ui_state::AppState;
 
+mod df;
 mod log;
 mod update;
 
@@ -225,10 +226,11 @@ impl AppState {
                 }
             }
             Msg::Containers(r) => {
-                res.containers_changed = true;
+                // 连通性只由列表结果表达；失败不置行变化标记（列表没变）
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
+                        res.containers_changed = true;
                         // ⚠️ 保留旧容器 stats，避免 3s 列表刷新冲掉 6s stats 写入
                         let mut old: HashMap<String, (f64, u64, u64, u64, u64)> = self
                             .containers
@@ -260,10 +262,10 @@ impl AppState {
                 }
             }
             Msg::Images(r) => {
-                res.images_changed = true;
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
+                        res.images_changed = true;
                         self.images = list;
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();
@@ -273,14 +275,14 @@ impl AppState {
                 }
             }
             Msg::Networks(r) => {
-                res.networks_changed = true;
                 if let Ok(list) = r {
+                    res.networks_changed = true;
                     self.networks = list;
                 }
             }
             Msg::Volumes(r) => {
-                res.volumes_changed = true;
                 if let Ok(list) = r {
+                    res.volumes_changed = true;
                     self.volumes = list;
                 }
             }
@@ -301,18 +303,8 @@ impl AppState {
             // 此时行模型还是空的，置变化标记只会白占一个 UI 应用窗口，把首行整体
             // 推迟一整窗。数据本身照常写入，列表到达时 Msg::Containers / Msg::Volumes
             // 会各自重建并调用 apply_container_sizes，不会丢。
-            Msg::VolumeSizes(map) => {
-                res.volumes_changed |= !self.volumes.is_empty();
-                // 容器磁盘占用含挂载卷 → 卷占用变了要重算容器（卷与容器两个采样互相独立）
-                res.containers_changed |= !self.containers.is_empty();
-                self.volume_sizes = map;
-                self.apply_container_sizes();
-            }
-            Msg::ContainerSizes(map) => {
-                res.containers_changed |= !self.containers.is_empty();
-                self.container_sizes = map;
-                self.apply_container_sizes();
-            }
+            Msg::VolumeSizes(map) => self.apply_volume_sizes_msg(map, res),
+            Msg::ContainerSizes(map) => self.apply_container_sizes_msg(map, res),
             Msg::ContainerDetail(r) => {
                 // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果
                 // 不能覆盖组标题 / 把抽屉切回详情模式

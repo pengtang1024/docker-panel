@@ -166,7 +166,7 @@ export component Drawer inherits Rectangle {
                     width: 100%; height: 100%;
                     vertical-scrollbar-policy: as-needed;
                     horizontal-scrollbar-policy: always-off;
-                    // 锁死横向 viewport：日志按 char-wrap 折行显示，不允许横向拖拽
+                    // 锁死横向 viewport：日志固定单行（超长省略），不允许横向拖拽
                     content_width: self.visible_width;
                     mouse_drag_pan_enabled: false;
                     // 自动跟随：新增日志行 → 内容变高 → 贴底

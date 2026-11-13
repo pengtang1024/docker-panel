@@ -228,6 +228,9 @@ msgstr "日志流已恢复连接"
 msgid "Log stream stopped"
 msgstr "日志流已停止"
 
+msgid "Log flood: showing a sample, {0} lines omitted"
+msgstr "日志洪峰：已按比例抽样显示，省略 {0} 行"
+
 msgid "Loaded {0} containers"
 msgstr "已加载 {0} 个容器"
 

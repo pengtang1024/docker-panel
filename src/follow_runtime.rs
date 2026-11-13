@@ -19,7 +19,7 @@
 //! 3. 「已恢复连接」有且只有三个触发点：重连后收到首行日志 / 空闲超时结局
 //!    （连接已保持 180s 证明流通）/ 探针从「不可达」跃迁到「可达」。
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
@@ -118,6 +118,7 @@ pub fn spawn_follow(
     tail: i64,
     epoch: u64,
     tx: Sender<Msg>,
+    backlog: Arc<AtomicU64>,
 ) -> FollowHandle {
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(());
     // 单流才提示状态（共享 epoch 下多路状态会互相覆盖）
@@ -139,6 +140,7 @@ pub fn spawn_follow(
             cancel_rx,
             notify_status,
             active,
+            backlog.clone(),
         ));
     }
 
@@ -159,6 +161,7 @@ async fn run_stream(
     mut cancel_rx: tokio::sync::watch::Receiver<()>,
     notify_status: bool,
     active: Arc<AtomicBool>,
+    backlog: Arc<AtomicU64>,
 ) {
     // 连续失败数：连接真正跑通（收到日志行）才归零
     let mut attempt: u32 = 0;
@@ -207,6 +210,8 @@ async fn run_stream(
             notified,
             timed,
             since,
+            backlog.clone(),
+            notify_status,
         )
         .await;
         connected_before = true;

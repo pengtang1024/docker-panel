@@ -94,6 +94,11 @@ pub struct AppState {
     pub history_done: bool,
     /// 日志缓冲 epoch：仅用于 UI 日志行列表的过期判断；Clear/切容器时递增
     pub log_epoch: Arc<AtomicU64>,
+    /// 已投递到通道、但还没被 consumer 应用的行数。
+    ///
+    /// 生产者（`docker::logs`）据此感知「UI 侧跟不上了」：超过阈值就按积压比例
+    /// 抽样显示，避免 10 万行/秒量级把通道撑成无界队列（RSS 涨、延迟无上限）。
+    pub log_backlog: Arc<AtomicU64>,
     /// 当前日志跟随流的幂等键：单容器 = 容器 id；分组合并日志 = 分组键
     /// （空 = 无流）；用于避免重复建流
     pub follow_id: String,
@@ -231,6 +236,7 @@ impl AppState {
             stream_epoch: 0,
             history_done: false,
             log_epoch: Arc::new(AtomicU64::new(0)),
+            log_backlog: Arc::new(AtomicU64::new(0)),
             follow_id: String::new(),
             follow_targets: Vec::new(),
             follow_cancel: None,
@@ -267,6 +273,13 @@ impl AppState {
     /// 把当前 UI 状态写入配置文件（低频回调/退出时调用；小文件原子写）
     pub fn persist(&self) {
         config_io::save(self);
+    }
+
+    /// 应用一批日志后归还积压计账（consumer 侧唯一递减点）
+    ///
+    /// 生产者按这个数字判断「UI 是否跟不上」，所以无论这批是否属于当前流都要归还。
+    pub fn drain_backlog(&self, lines: u64) {
+        self.log_backlog.fetch_sub(lines, Ordering::Relaxed);
     }
 
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。

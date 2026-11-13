@@ -113,6 +113,7 @@ impl AppState {
             tail,
             epoch,
             self.tx.clone(),
+            self.log_backlog.clone(),
         );
         self.follow_targets = targets;
         self.follow_cancel = Some(handle.cancel);

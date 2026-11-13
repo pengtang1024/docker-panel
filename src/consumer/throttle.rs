@@ -44,6 +44,7 @@ pub(super) fn poll_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui_update::UiFlag;
 
     #[test]
     fn idle_uses_recv_timeout() {
@@ -95,10 +96,8 @@ mod tests {
 
     #[test]
     fn logs_only_uses_wide_window() {
-        let mut d = DrainResult {
-            logs_changed: true,
-            ..Default::default()
-        };
+        let mut d = DrainResult::default();
+        d.mark(UiFlag::LogsChanged);
         assert_eq!(apply_interval(&d), LOG_UI_MIN_INTERVAL);
         // 任何其它 UI 变化都退回常规窗口
         d.docker_ok = Some(true);
@@ -107,10 +106,8 @@ mod tests {
         d.status_text = Some("x".into());
         assert_eq!(apply_interval(&d), UI_MIN_INTERVAL);
         // 没有日志变化（例如只有列表）也走常规窗口
-        let d2 = DrainResult {
-            containers_changed: true,
-            ..Default::default()
-        };
+        let mut d2 = DrainResult::default();
+        d2.mark(UiFlag::ContainersChanged);
         assert_eq!(apply_interval(&d2), UI_MIN_INTERVAL);
     }
 }

@@ -10,6 +10,7 @@
 
 ### 变更
 
+- **`DrainResult` 改为位掩码 + 声明宏单一声明源**：`src/ui_update/drain.rs` 的声明宏同时生成 `UiFlag`（每字段一位）、`DrainResult`、`has_ui_changes` / `logs_only` / `merge` 与 4 条一致性测试（每个标志位都被两份判定覆盖、位不重复、Option 载荷计入 UI 变化、merge 保留标志与载荷）。新增 UI 标志只需在宏里加一行，三份手写清单从此不可能漏改；读取方改用 `is_set(UiFlag::X)`，编译器会挡住拼错的标志名。
 - 第二条实例的提示文案补充「窗口前置是尽力而为，Wayland compositor 可能忽略」，避免被误解为一定会置顶；README、AGENTS.md 与 `src/single_instance.rs` 文件头同步记录能力边界（本项目只面向 Wayland，客户端没有激活自己的权限，是否置顶由 compositor 决定）及未来彻底方案（GApplication + `DBusActivatable`）。
 - 新增单测 `raise_request_reaches_listener`，锁住「第二条实例的 raise 请求确实送达主实例」这一契约（请求是否生效仍由 compositor / WM 决定）。
 

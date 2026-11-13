@@ -257,7 +257,10 @@ docker-panel/
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）
-│   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update.rs        # 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update/drain.rs  # DrainResult：UiFlag 位掩码 + 声明宏生成三份清单与一致性测试
+│   ├── ui_update/df.rs     # /system/df 结果 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
+│   ├── ui_update/log.rs    # 日志批 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_update/update.rs # 自动更新消息 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态

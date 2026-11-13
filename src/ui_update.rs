@@ -251,12 +251,12 @@ impl AppState {
                         let alive: std::collections::HashSet<&str> =
                             self.containers.iter().map(|c| c.id.as_str()).collect();
                         self.stats_prev.retain(|id, _| alive.contains(id.as_str()));
+                        // 列表不再带 size=1 → 磁盘列从 /system/df 缓存补回
+                        self.apply_container_sizes();
                     }
-                    Err(e) => {
-                        res.status_text =
-                            Some(crate::i18n::trf("Container refresh failed: {0}", &[&e]));
-                        res.toast = true;
-                    }
+                    // 后台 3s 刷新失败不写状态栏：每轮闪一次会让底栏数字被推挤，
+                    // 且失败已由连接红点表达；仅留 stderr 供排查。
+                    Err(e) => eprintln!("container refresh failed: {e}"),
                 }
             }
             Msg::Images(r) => {
@@ -268,11 +268,8 @@ impl AppState {
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();
                     }
-                    Err(e) => {
-                        res.status_text =
-                            Some(crate::i18n::trf("Image refresh failed: {0}", &[&e]));
-                        res.toast = true;
-                    }
+                    // 同上：连接状态已由红点表达，不刷底栏文字
+                    Err(e) => eprintln!("image refresh failed: {e}"),
                 }
             }
             Msg::Networks(r) => {
@@ -302,7 +299,15 @@ impl AppState {
             }
             Msg::VolumeSizes(map) => {
                 res.volumes_changed = true;
+                // 容器磁盘占用含挂载卷 → 卷占用变了要重算容器（卷与容器两个采样互相独立）
+                res.containers_changed = true;
                 self.volume_sizes = map;
+                self.apply_container_sizes();
+            }
+            Msg::ContainerSizes(map) => {
+                res.containers_changed = true;
+                self.container_sizes = map;
+                self.apply_container_sizes();
             }
             Msg::ContainerDetail(r) => {
                 // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果

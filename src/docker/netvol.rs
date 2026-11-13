@@ -102,6 +102,33 @@ pub async fn volume_sizes() -> Result<HashMap<String, u64>, String> {
     Ok(out)
 }
 
+/// `/system/df?type=container` → 每个容器的可写层占用（id → 字节）
+///
+/// 列表 API 不再带 `size=1`（遍历文件系统 + 删除中容器会 404），磁盘列由这里低频回填。
+/// 同样走裸 HTTP：bollard 的 `SystemDataUsageResponse` 没建模 `Containers` 键。
+pub async fn container_sizes() -> Result<HashMap<String, u64>, String> {
+    let body = raw_http::get("/system/df?type=container").await?;
+    let resp: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|e| crate::i18n::trf("Failed to read container sizes: {0}", &[&e.to_string()]))?;
+    let mut out = HashMap::new();
+    for item in resp
+        .get("Containers")
+        .and_then(|c| c.as_array())
+        .cloned()
+        .unwrap_or_default()
+    {
+        let id = item.get("Id").and_then(|v| v.as_str());
+        let size = item.get("SizeRw").and_then(|v| v.as_i64());
+        // SizeRw = -1 表示不可用（容器正在删除 / 非 local 存储驱动）
+        if let (Some(id), Some(size)) = (id, size) {
+            if size >= 0 {
+                out.insert(id.to_string(), size as u64);
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// 匿名卷启发式：Docker 自动生成的卷名为 64 位小写十六进制
 fn is_anonymous(name: &str) -> bool {
     name.len() == 64

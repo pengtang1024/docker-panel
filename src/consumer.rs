@@ -20,7 +20,7 @@ use slint::{invoke_from_event_loop, SharedString, Weak};
 
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::{LogSyncPlan, SharedState, REFRESH_INTERVAL};
+use crate::ui_state::{LogSyncPlan, SharedState};
 use crate::ui_update::DrainResult;
 
 mod throttle;
@@ -281,23 +281,4 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         }
     })
     .ok();
-}
-
-/// 3s 列表刷新 interval（容器/镜像/网络/卷统一由 s.refresh() 并发刷新）
-pub fn spawn_refresh_interval(state: &SharedState) {
-    let state_t = state.clone();
-    let rt_h = {
-        let Ok(s) = state.lock() else { return };
-        s.rt.handle().clone()
-    };
-    rt_h.spawn(async move {
-        let mut tick = tokio::time::interval(REFRESH_INTERVAL);
-        tick.tick().await; // 跳过首次立即触发：首屏列表由 spawn_initial_load 负责
-        loop {
-            tick.tick().await;
-            if let Ok(mut s) = state_t.lock() {
-                s.refresh();
-            }
-        }
-    });
 }

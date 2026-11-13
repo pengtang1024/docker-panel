@@ -36,13 +36,12 @@ fn format_ports(ports: Option<&Vec<bollard::models::PortSummary>>) -> String {
 /// 拉取容器列表
 ///
 /// - `all=true` 时包含已停止容器
-/// - `size=true` 让 Docker 返回 SizeRw / SizeRootFs（略慢，遍历文件系统）
+/// - **不带 `size`**：`size=1` 要为每个容器遍历文件系统（24 容器实测 70ms vs 32ms），
+///   而且容器正在删除时会命中 dockerd `404 rw layer snapshot not found` 导致整批失败。
+///   磁盘列改由 30s 的 `/system/df?type=container` 回填（`AppState::apply_container_sizes`）
 pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
     let docker = connect()?;
-    let options = ListContainersOptionsBuilder::new()
-        .all(all)
-        .size(true)
-        .build();
+    let options = ListContainersOptionsBuilder::new().all(all).build();
     let list = docker
         .list_containers(Some(options))
         .await
@@ -60,11 +59,13 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 .and_then(|ns| ns.networks)
                 .map(|m| m.into_keys().collect())
                 .unwrap_or_default();
-            let size_rw = c.size_rw.and_then(|v| u64::try_from(v).ok()).unwrap_or(0);
-            let size_root_fs = c
-                .size_root_fs
-                .and_then(|v| u64::try_from(v).ok())
-                .unwrap_or(0);
+            // 具名卷（含匿名卷）：bind mount 没有 Name，不参与磁盘占用统计
+            let volumes: Vec<String> = c
+                .mounts
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|m| m.name)
+                .collect();
             ContainerInfo {
                 id: c.id.unwrap_or_default(),
                 name: c
@@ -82,13 +83,13 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 cpu_percent: 0.0,
                 mem_usage: 0,
                 mem_limit: 0,
-                size_rw,
-                size_root_fs,
+                size_rw: 0,
                 net_rx: 0,
                 net_tx: 0,
                 compose_project,
                 compose_service,
                 networks,
+                volumes,
             }
         })
         .collect())

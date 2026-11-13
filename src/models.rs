@@ -43,10 +43,9 @@ pub struct ContainerInfo {
     pub mem_usage: u64,
     /// 内存上限（字节）
     pub mem_limit: u64,
-    /// 容器可写层占用（字节，来自 `list_containers` sizeRw）
+    /// 容器可写层占用（字节）：来自低频 `/system/df?type=container`，
+    /// 列表接口不带 `size=1`（要遍历文件系统，且删除中的容器会 404）
     pub size_rw: u64,
-    /// 容器根文件系统总大小（字节，含镜像只读层，来自 sizeRootFs）
-    pub size_root_fs: u64,
     /// 网络接收（字节）
     pub net_rx: u64,
     /// 网络发送（字节）
@@ -57,6 +56,8 @@ pub struct ContainerInfo {
     pub compose_service: Option<String>,
     /// 容器连接的网络名列表（从 ContainerSummary.NetworkSettings.Networks 提取）
     pub networks: Vec<String>,
+    /// 挂载的具名卷（`Mounts[].Name`）——磁盘占用要把卷的占用算进来
+    pub volumes: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -184,6 +185,8 @@ pub enum Msg {
     ImageLayers(Vec<(String, usize)>),
     /// 卷磁盘占用（name → 字节数；来自 `/system/df`，低频刷新）
     VolumeSizes(HashMap<String, u64>),
+    /// 容器可写层占用（id → 字节数；来自 `/system/df?type=container`，低频刷新）
+    ContainerSizes(HashMap<String, u64>),
     /// 更新检查结果（manual, 是否会继续自动安装, 结果）
     ///
     /// `manual = false` 的失败必须静默；`auto_installing = true` 时后续

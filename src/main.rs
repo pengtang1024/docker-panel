@@ -9,8 +9,9 @@
 //!                                            │ tx.send(Msg)
 //! ┌──────────────┐  recv_timeout（锁外阻塞）  ┌▼──────────────────┐
 //! │ consumer 线程│◀─────────────────────────│  tokio runtime     │
-//! └──────────────┘                          │  3s 刷新 / 6s 统计  │
-//!   详见 consumer.rs / bootstrap.rs          └───────────────────┘
+//! └──────────────┘                          │  events → refresh  │
+//!   详见 consumer.rs / event_watch.rs         │  6s stats / 30s df │
+//!                                           └───────────────────┘
 
 mod batch;
 mod bootstrap;
@@ -27,6 +28,7 @@ mod config;
 mod consumer;
 mod detail_fmt;
 mod docker;
+mod event_watch;
 mod follow_runtime;
 mod i18n;
 mod log_status;
@@ -86,10 +88,11 @@ fn main() {
 
     // consumer 线程：Msg 泵 → UI 更新
     let consumer_handle = consumer::spawn(state.clone(), rx, ui.as_weak());
-    // 后台定时任务：3s 列表刷新、6s stats 采样
-    consumer::spawn_refresh_interval(&state);
+    // 事件驱动：Docker 资源变化即时刷新（空闲零请求）
+    event_watch::spawn(&state);
+    // 后台定时任务：6s stats 采样、30s 卷占用（列表本身由事件驱动刷新）
     bootstrap::spawn_stats_interval(&state);
-    bootstrap::spawn_volume_size_interval(&state);
+    bootstrap::spawn_disk_usage_interval(&state);
     // 首屏数据
     bootstrap::spawn_initial_load(&state);
     // 自动更新：启动 10s 后检查一次，之后每 6h 轮询（24h 节流）

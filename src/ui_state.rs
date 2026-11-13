@@ -42,9 +42,9 @@ pub enum SelKind {
     Group,
 }
 
-pub const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
-/// 卷磁盘占用刷新周期（`/system/df` 会遍历卷目录统计，不能跟着 3s 列表刷新跑）
-pub const VOLUME_SIZE_INTERVAL: Duration = Duration::from_secs(30);
+/// 磁盘占用采样周期：`/system/df` 要遍历卷目录 / 容器可写层（I/O 成本高），
+/// 只做低频采样，绝不跟着列表刷新跑
+pub const DISK_USAGE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// 后台可共享状态
 /// 注意：mpsc::Receiver<Msg> 不在这里 — 它由 consumer 线程独占
@@ -57,8 +57,10 @@ pub struct AppState {
     pub networks: Vec<NetworkInfo>,
     pub volumes: Vec<VolumeInfo>,
 
-    /// 3s 刷新是否已有任务在跑：Docker 慢时避免每 3s 叠加一批新任务
+    /// 列表刷新是否已有任务在跑：Docker 慢时避免叠加新任务
     pub refresh_inflight: Arc<AtomicBool>,
+    /// 刷新期间又来的请求（事件触发 / 手动刷新）：本轮结束立刻补跑一次
+    pub refresh_dirty: Arc<AtomicBool>,
     pub container_query: String,
     pub image_query: String,
 
@@ -75,6 +77,8 @@ pub struct AppState {
     pub image_layers: HashMap<String, usize>,
     /// 卷磁盘占用缓存（name → 字节）：来自低频 `/system/df`
     pub volume_sizes: HashMap<String, u64>,
+    /// 容器可写层占用缓存（id → 字节）：来自低频 `/system/df?type=container`
+    pub container_sizes: HashMap<String, u64>,
 
     // —— Phase 3 日志面板（滚动窗口，最多 LOG_ROWS_MAX 行）——
     pub logs: Vec<String>,
@@ -219,6 +223,7 @@ impl AppState {
             networks: Vec::new(),
             volumes: Vec::new(),
             refresh_inflight: Arc::new(AtomicBool::new(false)),
+            refresh_dirty: Arc::new(AtomicBool::new(false)),
             container_query: query.clone(),
             image_query: query,
             detail: None,
@@ -227,6 +232,7 @@ impl AppState {
             sel_key: String::new(),
             image_layers: HashMap::new(),
             volume_sizes: HashMap::new(),
+            container_sizes: HashMap::new(),
             logs: Vec::new(),
             logs_cap: LOG_ROWS_MAX,
             logs_total: 0,
@@ -282,27 +288,51 @@ impl AppState {
         self.log_backlog.fetch_sub(lines, Ordering::Relaxed);
     }
 
+    /// 用 `/system/df` 的缓存回填容器「磁盘占用」= 可写层 + 挂载卷大小
+    ///
+    /// 列表接口不带 `size=1` → `ContainerInfo.size_rw` 每次刷新都是 0，必须从缓存补回
+    /// （缓存里没有的容器 = 0：新容器要等下一轮 30s 采样）。
+    /// 只算可写层会离谱：mysql 可写层 2MB、数据卷 39GB，用户看的显然是后者。
+    /// shortcut: 多容器共享同一个卷时每容器各算一遍（底部合计重复计），
+    /// 真出现共享卷再改成按卷去重分摊
+    pub fn apply_container_sizes(&mut self) {
+        let sizes = &self.container_sizes;
+        let volumes = &self.volume_sizes;
+        for c in &mut self.containers {
+            let mounted: u64 = c.volumes.iter().filter_map(|v| volumes.get(v)).sum();
+            c.size_rw = sizes.get(&c.id).copied().unwrap_or(0) + mounted;
+        }
+    }
+
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。
     ///
-    /// 上一次刷新未完成时直接跳过：Docker 慢/无响应时，3s interval 不能
-    /// 每 tick 再叠 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）。
+    /// 上一次刷新未完成时只置脏标记：Docker 慢/无响应时不能每 tick 再叠
+    /// 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）；脏标记让
+    /// 事件触发的刷新不丢——本轮结束后立刻补跑一次。
     pub fn refresh(&mut self) {
         if self.refresh_inflight.swap(true, Ordering::AcqRel) {
+            self.refresh_dirty.store(true, Ordering::Release);
             return;
         }
         let tx = self.tx.clone();
         let inflight = self.refresh_inflight.clone();
+        let dirty = self.refresh_dirty.clone();
         self.rt.spawn(async move {
-            let (c_res, i_res, n_res, v_res) = futures::join!(
-                crate::docker::with_timeout(list_containers(true)),
-                crate::docker::with_timeout(list_images()),
-                crate::docker::with_timeout(list_networks()),
-                crate::docker::with_timeout(list_volumes()),
-            );
-            let _ = tx.send(Msg::Containers(c_res));
-            let _ = tx.send(Msg::Images(i_res));
-            let _ = tx.send(Msg::Networks(n_res));
-            let _ = tx.send(Msg::Volumes(v_res));
+            loop {
+                let (c_res, i_res, n_res, v_res) = futures::join!(
+                    crate::docker::with_timeout(list_containers(true)),
+                    crate::docker::with_timeout(list_images()),
+                    crate::docker::with_timeout(list_networks()),
+                    crate::docker::with_timeout(list_volumes()),
+                );
+                let _ = tx.send(Msg::Containers(c_res));
+                let _ = tx.send(Msg::Images(i_res));
+                let _ = tx.send(Msg::Networks(n_res));
+                let _ = tx.send(Msg::Volumes(v_res));
+                if !dirty.swap(false, Ordering::AcqRel) {
+                    break;
+                }
+            }
             inflight.store(false, Ordering::Release);
         });
     }
@@ -373,6 +403,30 @@ pub type SharedState = Arc<Mutex<AppState>>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn container_sizes_come_from_df_cache() {
+        let (state, _rx) = AppState::new_test();
+        let mut s = state.lock().unwrap();
+        s.containers = vec![
+            crate::models::ContainerInfo {
+                id: "a".to_string(),
+                ..Default::default()
+            },
+            crate::models::ContainerInfo {
+                id: "b".to_string(),
+                ..Default::default()
+            },
+        ];
+        s.container_sizes.insert("a".to_string(), 4096);
+        s.volume_sizes.insert("data".to_string(), 39_000);
+        s.containers[0].volumes = vec!["data".to_string()];
+        s.apply_container_sizes();
+        // 可写层 + 挂载卷
+        assert_eq!(s.containers[0].size_rw, 4096 + 39_000);
+        // 没采到的容器归零，不残留上一轮数字
+        assert_eq!(s.containers[1].size_rw, 0);
+    }
 
     #[test]
     fn follow_alive_flag_controls_idempotence() {

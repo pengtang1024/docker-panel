@@ -15,10 +15,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
-use crate::docker::{
-    inspect_container, list_containers, list_images, list_networks, list_volumes,
-    ContainerStatsSnapshot,
-};
+use crate::docker::{inspect_container, ContainerStatsSnapshot};
 use crate::models::{
     ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, ResourceSort, SortField,
     VolumeInfo,
@@ -28,6 +25,7 @@ use crate::models::{
 pub mod config_io;
 pub mod follow_state;
 pub mod log_sync;
+pub mod refresh;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
 
 /// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
@@ -310,31 +308,12 @@ impl AppState {
     /// 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）；脏标记让
     /// 事件触发的刷新不丢——本轮结束后立刻补跑一次。
     pub fn refresh(&mut self) {
-        if self.refresh_inflight.swap(true, Ordering::AcqRel) {
-            self.refresh_dirty.store(true, Ordering::Release);
-            return;
-        }
-        let tx = self.tx.clone();
-        let inflight = self.refresh_inflight.clone();
-        let dirty = self.refresh_dirty.clone();
-        self.rt.spawn(async move {
-            loop {
-                let (c_res, i_res, n_res, v_res) = futures::join!(
-                    crate::docker::with_timeout(list_containers(true)),
-                    crate::docker::with_timeout(list_images()),
-                    crate::docker::with_timeout(list_networks()),
-                    crate::docker::with_timeout(list_volumes()),
-                );
-                let _ = tx.send(Msg::Containers(c_res));
-                let _ = tx.send(Msg::Images(i_res));
-                let _ = tx.send(Msg::Networks(n_res));
-                let _ = tx.send(Msg::Volumes(v_res));
-                if !dirty.swap(false, Ordering::AcqRel) {
-                    break;
-                }
-            }
-            inflight.store(false, Ordering::Release);
-        });
+        refresh::spawn(
+            &self.rt,
+            self.tx.clone(),
+            self.refresh_inflight.clone(),
+            self.refresh_dirty.clone(),
+        );
     }
 
     /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）

@@ -81,14 +81,20 @@ pub fn view_snapshot(s: &AppState) -> UpdateView {
 pub fn spawn_scheduler(state: &SharedState) {
     let state_t = state.clone();
     let rt = {
-        let Ok(s) = state_t.lock() else { return };
+        let Ok(s) = state_t.lock() else {
+            crate::lock::poison("update::spawn_scheduler");
+            return;
+        };
         s.rt.handle().clone()
     };
     rt.spawn(async move {
         tokio::time::sleep(Duration::from_secs(STARTUP_DELAY_SECS)).await;
         loop {
             let due = {
-                let Ok(s) = state_t.lock() else { return };
+                let Ok(s) = state_t.lock() else {
+                    crate::lock::poison("update::spawn_scheduler");
+                    return;
+                };
                 s.check_updates
                     && !s.update_restart_needed
                     && now_secs() - s.last_update_check >= CHECK_INTERVAL_SECS
@@ -104,7 +110,10 @@ pub fn spawn_scheduler(state: &SharedState) {
 /// 启动一次检查；已有任务在跑时返回 false。
 pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
     let (rt, tx, auto_install) = {
-        let Ok(s) = state.lock() else { return false };
+        let Ok(s) = state.lock() else {
+            crate::lock::poison("update");
+            return false;
+        };
         if s.update_busy.swap(true, Ordering::AcqRel) {
             return false;
         }
@@ -134,7 +143,10 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
             let auto_now = state_for_check
                 .lock()
                 .map(|s| s.auto_install)
-                .unwrap_or(auto_install);
+                .unwrap_or_else(|_| {
+                    crate::lock::poison("update::check");
+                    auto_install
+                });
             let auto = auto_now && !manual && newer && info.plan.installable();
             let _ = tx_task.send(Msg::UpdateCheckDone(manual, auto, Ok(info.clone())));
             if auto {
@@ -150,7 +162,7 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
                 Err(crate::i18n::t("Update task failed")),
             ));
         }
-        if let Ok(s) = state_t.lock() {
+        if let Some(s) = crate::lock::acquire(&state_t, "update") {
             s.update_busy.store(false, Ordering::Release);
         }
     });
@@ -160,12 +172,18 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
 /// 用户点击「立即更新」：用已缓存的检查结果执行下载安装。
 pub fn spawn_install(state: &SharedState) -> bool {
     let info = {
-        let Ok(s) = state.lock() else { return false };
+        let Ok(s) = state.lock() else {
+            crate::lock::poison("update");
+            return false;
+        };
         s.update_info.clone()
     };
     let Some(info) = info else {
         let tx = {
-            let Ok(s) = state.lock() else { return false };
+            let Ok(s) = state.lock() else {
+                crate::lock::poison("update");
+                return false;
+            };
             s.tx.clone()
         };
         let _ = tx.send(Msg::UpdateDone(
@@ -176,7 +194,10 @@ pub fn spawn_install(state: &SharedState) -> bool {
     };
 
     let (rt, tx) = {
-        let Ok(s) = state.lock() else { return false };
+        let Ok(s) = state.lock() else {
+            crate::lock::poison("update");
+            return false;
+        };
         if s.update_busy.swap(true, Ordering::AcqRel) {
             return false;
         }
@@ -184,7 +205,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
     };
 
     if !version::is_newer(&info.version, CURRENT_VERSION) || !info.plan.installable() {
-        if let Ok(s) = state.lock() {
+        if let Some(s) = crate::lock::acquire(state, "update::spawn_install") {
             s.update_busy.store(false, Ordering::Release);
         }
         let reason = info
@@ -209,7 +230,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
                 false,
             ));
         }
-        if let Ok(s) = state_t.lock() {
+        if let Some(s) = crate::lock::acquire(&state_t, "update") {
             s.update_busy.store(false, Ordering::Release);
         }
     });

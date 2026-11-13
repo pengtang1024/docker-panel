@@ -10,8 +10,6 @@
 //! 组操作（规范 #25 延伸）：分组带上的 3 个按钮与容器行同构，只是动作
 //! **统一作用于组内全部成员**（成员口径 = 当前筛选后的容器，与台账可见行一致）。
 
-use std::sync::atomic::Ordering;
-
 use slint::{ComponentHandle, SharedString, Weak};
 
 use super::callbacks_container::{spawn_container_op, OpKind};
@@ -28,7 +26,10 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     actions.on_compose_toggle(move |key: SharedString| {
         let Some(ui) = ui_w.upgrade() else { return };
         let (rows, summary, visible) = {
-            let Ok(mut st) = s.lock() else { return };
+            let Ok(mut st) = s.lock() else {
+                crate::lock::poison("callbacks_compose");
+                return;
+            };
             let key = key.to_string();
             // 存的是「收起」的分组键：已在集合里 = 收起 → 移除；否则加入
             if st.compose_collapsed.contains(&key) {
@@ -37,14 +38,11 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 st.compose_collapsed.insert(key);
             }
             // 行模型作废：consumer 手里那批行是旧展开状态建的
-            st.rows_epoch.fetch_add(1, Ordering::AcqRel);
+            st.rows_dirty();
             st.persist();
             crate::ui_rows::build_container_ledger(&st)
         };
-        ui.set_container_rows(crate::render::containers(rows));
-        ui.set_ledger_summary(summary);
-        ui.set_chip_total(visible.0 as i32);
-        ui.set_chip_running(visible.1 as i32);
+        crate::ui_apply::apply_container_ledger(&ui, rows, summary, visible);
     });
 
     // —— 组操作：启动 / 停止 / 重启 / 删除（统一作用于组内全部成员）——
@@ -121,15 +119,15 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             ui.set_drawer_title(SharedString::from(label.as_str()));
             ui.set_drawer_sub(SharedString::from(merged.as_str()));
 
-            let new_stream = match s.lock() {
-                Ok(mut st) => {
+            let new_stream = match crate::lock::acquire(&s, "callbacks_compose") {
+                Some(mut st) => {
                     st.sel = SelKind::Group;
                     st.sel_key = key.clone();
                     // 切到分组日志：旧缓冲与旧流都属于别的对象，全部作废
                     st.clear_logs();
                     st.ensure_group_follow(&key, targets)
                 }
-                Err(_) => false,
+                None => false,
             };
             if new_stream {
                 crate::ui_apply::clear_log_status(&ui);
@@ -140,8 +138,8 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
 
 /// 锁内取分组成员（口径 = 当前筛选后的容器）
 fn group_members_locked(s: &SharedState, key: &str) -> Vec<GroupMember> {
-    match s.lock() {
-        Ok(st) => group_members(&st, key),
-        Err(_) => Vec::new(),
+    match crate::lock::acquire(s, "callbacks_compose::group_members") {
+        Some(st) => group_members(&st, key),
+        None => Vec::new(),
     }
 }

@@ -15,10 +15,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 use crate::batch::BatchState;
-use crate::docker::{
-    inspect_container, list_containers, list_images, list_networks, list_volumes,
-    ContainerStatsSnapshot,
-};
+use crate::docker::{inspect_container, ContainerStatsSnapshot};
 use crate::models::{
     ContainerDetail, ContainerInfo, ImageInfo, Msg, NetworkInfo, ResourceSort, SortField,
     VolumeInfo,
@@ -28,6 +25,7 @@ use crate::models::{
 pub mod config_io;
 pub mod follow_state;
 pub mod log_sync;
+pub mod refresh;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
 
 /// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
@@ -304,37 +302,27 @@ impl AppState {
         }
     }
 
+    /// 排序 / 筛选 / 搜索条件变更：递增行模型 epoch。
+    ///
+    /// **唯一入口**——所有会改变行集合或顺序的回调都必须走这里。consumer
+    /// 锁内建行、锁外上屏，应用前比对 epoch；忘了递增就会让旧条件的行覆盖
+    /// 新条件的行（表现为列表顺序与排序箭头不一致）。
+    pub fn rows_dirty(&mut self) {
+        self.rows_epoch.fetch_add(1, Ordering::AcqRel);
+    }
+
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。
     ///
     /// 上一次刷新未完成时只置脏标记：Docker 慢/无响应时不能每 tick 再叠
     /// 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）；脏标记让
     /// 事件触发的刷新不丢——本轮结束后立刻补跑一次。
     pub fn refresh(&mut self) {
-        if self.refresh_inflight.swap(true, Ordering::AcqRel) {
-            self.refresh_dirty.store(true, Ordering::Release);
-            return;
-        }
-        let tx = self.tx.clone();
-        let inflight = self.refresh_inflight.clone();
-        let dirty = self.refresh_dirty.clone();
-        self.rt.spawn(async move {
-            loop {
-                let (c_res, i_res, n_res, v_res) = futures::join!(
-                    crate::docker::with_timeout(list_containers(true)),
-                    crate::docker::with_timeout(list_images()),
-                    crate::docker::with_timeout(list_networks()),
-                    crate::docker::with_timeout(list_volumes()),
-                );
-                let _ = tx.send(Msg::Containers(c_res));
-                let _ = tx.send(Msg::Images(i_res));
-                let _ = tx.send(Msg::Networks(n_res));
-                let _ = tx.send(Msg::Volumes(v_res));
-                if !dirty.swap(false, Ordering::AcqRel) {
-                    break;
-                }
-            }
-            inflight.store(false, Ordering::Release);
-        });
+        refresh::spawn(
+            &self.rt,
+            self.tx.clone(),
+            self.refresh_inflight.clone(),
+            self.refresh_dirty.clone(),
+        );
     }
 
     /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）

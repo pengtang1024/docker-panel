@@ -38,7 +38,7 @@ pub(crate) fn build_network(s: &AppState) -> Option<DrawerData> {
 pub(crate) fn build_volume(s: &AppState) -> Option<DrawerData> {
     let v = s.volumes.iter().find(|v| v.name == s.sel_key)?;
     let size = match s.volume_sizes.get(&v.name) {
-        Some(bytes) => super::format_bytes(*bytes),
+        Some(bytes) => crate::format::format_bytes(*bytes),
         None => super::dash(),
     };
     Some(DrawerData {

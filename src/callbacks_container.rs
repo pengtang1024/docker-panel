@@ -20,7 +20,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             ui.set_status_text(SharedString::from(t("Toggling container...").as_str()));
 
             let is_running = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 st.containers
                     .iter()
                     .find(|c| c.id == id)
@@ -28,7 +31,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                     .unwrap_or(false)
             };
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             if is_running {
@@ -65,7 +71,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_restart(move |row_id: SharedString| {
             let id = row_id.to_string();
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             rt_handle.spawn(async move {
@@ -90,7 +99,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_remove(move |row_id: SharedString| {
             let id = row_id.to_string();
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             rt_handle.spawn(async move {
@@ -114,7 +126,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         crate::ui_apply::clear_log_panel(ui);
         // 从分组合并日志切到单容器：恢复详情/环境 Tab
         ui.set_drawer_log_only(false);
-        if let Ok(mut st) = s.lock() {
+        if let Some(mut st) = crate::lock::acquire(s, "callbacks_container") {
             st.sel = SelKind::Container;
             st.sel_key = id.clone();
             st.request_detail(id);
@@ -145,9 +157,9 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
             ui.set_drawer_open(true);
             ui.set_drawer_tab(1);
             bind_inspect(&ui, &s, id.clone());
-            let new_stream = match s.lock() {
-                Ok(mut st) => st.ensure_follow(&id),
-                Err(_) => false,
+            let new_stream = match crate::lock::acquire(&s, "callbacks_container") {
+                Some(mut st) => st.ensure_follow(&id),
+                None => false,
             };
             // 新建的流没有「正在重连」之类的历史状态，清掉残留提示
             if new_stream {
@@ -162,7 +174,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_container_toggle_select(move |row_id: SharedString| {
             let Some(ui) = ui_c.upgrade() else { return };
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_container") {
                 st.batch.toggle(row_id.to_string());
                 let n = st.batch.selected_ids.len() as i32;
                 drop(st);
@@ -176,7 +188,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let ui_b = ui.as_weak();
         let s = state.clone();
         actions.on_batch_clear(move || {
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_container") {
                 st.batch.clear();
                 drop(st);
                 if let Some(ui) = ui_b.upgrade() {
@@ -192,7 +204,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_batch_start(move || {
             let ids = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 st.batch.ids_sorted()
             };
             for id in ids {
@@ -206,7 +221,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_batch_stop(move || {
             let ids = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 st.batch.ids_sorted()
             };
             for id in ids {
@@ -220,7 +238,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_batch_restart(move || {
             let ids = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 st.batch.ids_sorted()
             };
             for id in ids {
@@ -234,7 +255,10 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_batch_remove(move || {
             let ids = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_container");
+                    return;
+                };
                 st.batch.ids_sorted()
             };
             for id in ids {
@@ -255,7 +279,10 @@ pub(crate) enum OpKind {
 /// 对单个容器派发操作（供批量操作与分组操作复用）
 pub(crate) fn spawn_container_op(s: &SharedState, id: &str, op: OpKind) {
     let (rt_handle, tx) = {
-        let Ok(st) = s.lock() else { return };
+        let Ok(st) = s.lock() else {
+            crate::lock::poison("callbacks_container");
+            return;
+        };
         (st.rt.handle().clone(), st.tx.clone())
     };
     let id = id.to_string();

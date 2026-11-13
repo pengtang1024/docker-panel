@@ -37,22 +37,6 @@ pub struct DrawerData {
     pub env: Vec<DetailPair>,
 }
 
-/// 把字节数格式化为 "12.3 MB" 形式
-pub fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut v = bytes as f64;
-    let mut i = 0;
-    while v >= 1024.0 && i < UNITS.len() - 1 {
-        v /= 1024.0;
-        i += 1;
-    }
-    if i == 0 {
-        format!("{bytes} {}", UNITS[i])
-    } else {
-        format!("{v:.1} {}", UNITS[i])
-    }
-}
-
 /// 卡片紧凑字节格式（prototype .stat b 风格：8M / 512K / 1.2G，无空格）
 pub fn format_bytes_compact(bytes: u64) -> String {
     if bytes < 1024 {

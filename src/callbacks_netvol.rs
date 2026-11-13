@@ -41,7 +41,10 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_network_remove(move |row_id: SharedString| {
             let id = row_id.to_string();
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_netvol");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             rt_handle.spawn(async move {
@@ -57,7 +60,10 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_volume_remove(move |row_name: SharedString| {
             let name = row_name.to_string();
             let (rt_handle, tx) = {
-                let Ok(st) = s.lock() else { return };
+                let Ok(st) = s.lock() else {
+                    crate::lock::poison("callbacks_netvol");
+                    return;
+                };
                 (st.rt.handle().clone(), st.tx.clone())
             };
             rt_handle.spawn(async move {
@@ -73,7 +79,10 @@ fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
     // 选中对象变了：旧日志文本与状态提示都不再属于当前对象
     crate::ui_apply::clear_log_panel(ui);
     let data = {
-        let Ok(mut st) = s.lock() else { return };
+        let Ok(mut st) = s.lock() else {
+            crate::lock::poison("callbacks_netvol");
+            return;
+        };
         st.sel = kind;
         st.sel_key = key;
         st.clear_logs();

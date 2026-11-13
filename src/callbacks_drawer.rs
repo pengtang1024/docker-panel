@@ -23,7 +23,10 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             // （卡片 ⋯→日志 已走 container_logs；此处覆盖用户手动点 Tab 的路径）
             if t == 1 {
                 let new_stream = {
-                    let Ok(mut st) = s.lock() else { return };
+                    let Ok(mut st) = s.lock() else {
+                        crate::lock::poison("callbacks_drawer");
+                        return;
+                    };
                     if st.sel == SelKind::Container && !st.sel_key.is_empty() {
                         let id = st.sel_key.clone();
                         st.ensure_follow(&id)
@@ -45,7 +48,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             let Some(ui) = ui_d.upgrade() else { return };
             let next = !ui.get_log_follow();
             ui.set_log_follow(next);
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_drawer") {
                 st.log_follow = next;
                 st.persist();
             }
@@ -56,9 +59,9 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let s = state.clone();
         actions.on_log_copy(move || {
             let Some(ui) = ui_d.upgrade() else { return };
-            let text = match s.lock() {
-                Ok(st) => st.logs.join("\n"),
-                Err(_) => return,
+            let text = match crate::lock::acquire(&s, "callbacks_drawer::log_copy") {
+                Some(st) => st.logs.join("\n"),
+                None => return,
             };
             if text.is_empty() {
                 crate::ui_apply::status_toast(&ui, &s, &crate::i18n::t("Log is empty"));
@@ -77,7 +80,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         let s = state.clone();
         actions.on_log_clear(move || {
             let Some(ui) = ui_d.upgrade() else { return };
-            if let Ok(mut st) = s.lock() {
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_drawer") {
                 st.clear_log_buffer();
             }
             crate::ui_apply::clear_log_panel(&ui);

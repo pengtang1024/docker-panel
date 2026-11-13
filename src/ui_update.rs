@@ -12,6 +12,7 @@ use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
 use crate::ui_state::AppState;
 
+mod df;
 mod log;
 mod update;
 
@@ -40,6 +41,9 @@ pub struct DrainResult {
     /// 日志行列表变化
     pub logs_changed: bool,
     /// Containers/Images 的最新结果（None = 本批没有列表结果）
+    ///
+    /// 连通性**只**由列表刷新结果决定：操作类消息（启停/拉取/清理）无论成败
+    /// 都不置位，否则失败场景会被 `Some(true)` 掩盖，红点显示不出来。
     pub docker_ok: Option<bool>,
     /// 需要写入 status_text 的文本（toast / pull 进度）
     pub status_text: Option<String>,
@@ -225,10 +229,11 @@ impl AppState {
                 }
             }
             Msg::Containers(r) => {
-                res.containers_changed = true;
+                // 连通性只由列表结果表达；失败不置行变化标记（列表没变）
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
+                        res.containers_changed = true;
                         // ⚠️ 保留旧容器 stats，避免 3s 列表刷新冲掉 6s stats 写入
                         let mut old: HashMap<String, (f64, u64, u64, u64, u64)> = self
                             .containers
@@ -260,10 +265,10 @@ impl AppState {
                 }
             }
             Msg::Images(r) => {
-                res.images_changed = true;
                 res.docker_ok = Some(r.is_ok());
                 match r {
                     Ok(list) => {
+                        res.images_changed = true;
                         self.images = list;
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();
@@ -273,14 +278,14 @@ impl AppState {
                 }
             }
             Msg::Networks(r) => {
-                res.networks_changed = true;
                 if let Ok(list) = r {
+                    res.networks_changed = true;
                     self.networks = list;
                 }
             }
             Msg::Volumes(r) => {
-                res.volumes_changed = true;
                 if let Ok(list) = r {
+                    res.volumes_changed = true;
                     self.volumes = list;
                 }
             }
@@ -301,18 +306,8 @@ impl AppState {
             // 此时行模型还是空的，置变化标记只会白占一个 UI 应用窗口，把首行整体
             // 推迟一整窗。数据本身照常写入，列表到达时 Msg::Containers / Msg::Volumes
             // 会各自重建并调用 apply_container_sizes，不会丢。
-            Msg::VolumeSizes(map) => {
-                res.volumes_changed |= !self.volumes.is_empty();
-                // 容器磁盘占用含挂载卷 → 卷占用变了要重算容器（卷与容器两个采样互相独立）
-                res.containers_changed |= !self.containers.is_empty();
-                self.volume_sizes = map;
-                self.apply_container_sizes();
-            }
-            Msg::ContainerSizes(map) => {
-                res.containers_changed |= !self.containers.is_empty();
-                self.container_sizes = map;
-                self.apply_container_sizes();
-            }
+            Msg::VolumeSizes(map) => self.apply_volume_sizes_msg(map, res),
+            Msg::ContainerSizes(map) => self.apply_container_sizes_msg(map, res),
             Msg::ContainerDetail(r) => {
                 // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果
                 // 不能覆盖组标题 / 把抽屉切回详情模式
@@ -333,20 +328,22 @@ impl AppState {
             Msg::LogStreamEnded(epoch) => self.on_log_stream_ended(epoch),
             Msg::LogStreamStatus(epoch, text) => self.on_log_stream_status(epoch, text, res),
             Msg::ActionDone(desc, r) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(match r {
                     Ok(_) => crate::i18n::t(&desc),
                     Err(e) => format!("{}: {e}", crate::i18n::t(&desc)),
                 });
                 res.toast = true;
-                res.refresh_now = true;
+                // 不再 refresh_now：容器/镜像/网络/卷的增删启停都会发 /events
+                // （实测 create/start/stop/die/destroy、network/volume 的
+                // create/destroy、image 的 tag/untag/pull 都有），event_watch
+                // 已有 400ms 合并窗，同一次操作只触发一轮刷新。此前这里再加
+                // 一次立即刷新，每次操作要多付 4 个 list 调用（8 → 4 个请求）。
+                // 操作失败不会有事件，但失败意味着列表没变，也不需要刷。
             }
             Msg::PullProgress(p) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(p);
             }
             Msg::PullDone(r) => {
-                res.docker_ok = Some(true);
                 let ok = r.is_ok();
                 res.status_text = Some(match r {
                     Ok(succ) => succ,
@@ -355,15 +352,17 @@ impl AppState {
                 res.toast = true;
                 res.reset_pull_busy = true;
                 res.close_pull = ok;
-                res.refresh_now = true;
+                // 同上：`image/pull` 事件已实测存在，交给 event_watch 刷新
             }
             Msg::CleanupDone(r) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(match r {
                     Ok(succ) => succ,
                     Err(e) => crate::i18n::trf("Cleanup failed: {0}", &[&e]),
                 });
                 res.toast = true;
+                // prune 的事件支持按守护进程版本而异（本机 29.x 有
+                // container/prune，旧版本没有）→ 保留立即刷新兜底。
+                // 清理是低频的用户显式操作，多一轮刷新可接受。
                 res.refresh_now = true;
             }
             // 已在函数开头提前分派到 apply_update_msg

@@ -21,6 +21,7 @@ use std::collections::HashMap;
 
 use bollard::query_parameters::{PruneImagesOptionsBuilder, PruneVolumesOptionsBuilder};
 
+use crate::format::format_bytes;
 use crate::i18n::trf;
 
 use super::connect;
@@ -34,21 +35,6 @@ pub async fn version() -> Result<String, String> {
     v.version
         .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| "version field missing".to_string())
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut v = bytes as f64;
-    let mut i = 0;
-    while v >= 1024.0 && i < UNITS.len() - 1 {
-        v /= 1024.0;
-        i += 1;
-    }
-    if i == 0 {
-        format!("{bytes} {}", UNITS[i])
-    } else {
-        format!("{v:.1} {}", UNITS[i])
-    }
 }
 
 /// 清理：已停止容器 / 悬空镜像 / 未使用网络 / 未使用卷（可组合勾选）

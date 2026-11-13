@@ -41,6 +41,9 @@ pub struct DrainResult {
     /// 日志行列表变化
     pub logs_changed: bool,
     /// Containers/Images 的最新结果（None = 本批没有列表结果）
+    ///
+    /// 连通性**只**由列表刷新结果决定：操作类消息（启停/拉取/清理）无论成败
+    /// 都不置位，否则失败场景会被 `Some(true)` 掩盖，红点显示不出来。
     pub docker_ok: Option<bool>,
     /// 需要写入 status_text 的文本（toast / pull 进度）
     pub status_text: Option<String>,
@@ -325,20 +328,22 @@ impl AppState {
             Msg::LogStreamEnded(epoch) => self.on_log_stream_ended(epoch),
             Msg::LogStreamStatus(epoch, text) => self.on_log_stream_status(epoch, text, res),
             Msg::ActionDone(desc, r) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(match r {
                     Ok(_) => crate::i18n::t(&desc),
                     Err(e) => format!("{}: {e}", crate::i18n::t(&desc)),
                 });
                 res.toast = true;
-                res.refresh_now = true;
+                // 不再 refresh_now：容器/镜像/网络/卷的增删启停都会发 /events
+                // （实测 create/start/stop/die/destroy、network/volume 的
+                // create/destroy、image 的 tag/untag/pull 都有），event_watch
+                // 已有 400ms 合并窗，同一次操作只触发一轮刷新。此前这里再加
+                // 一次立即刷新，每次操作要多付 4 个 list 调用（8 → 4 个请求）。
+                // 操作失败不会有事件，但失败意味着列表没变，也不需要刷。
             }
             Msg::PullProgress(p) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(p);
             }
             Msg::PullDone(r) => {
-                res.docker_ok = Some(true);
                 let ok = r.is_ok();
                 res.status_text = Some(match r {
                     Ok(succ) => succ,
@@ -347,15 +352,17 @@ impl AppState {
                 res.toast = true;
                 res.reset_pull_busy = true;
                 res.close_pull = ok;
-                res.refresh_now = true;
+                // 同上：`image/pull` 事件已实测存在，交给 event_watch 刷新
             }
             Msg::CleanupDone(r) => {
-                res.docker_ok = Some(true);
                 res.status_text = Some(match r {
                     Ok(succ) => succ,
                     Err(e) => crate::i18n::trf("Cleanup failed: {0}", &[&e]),
                 });
                 res.toast = true;
+                // prune 的事件支持按守护进程版本而异（本机 29.x 有
+                // container/prune，旧版本没有）→ 保留立即刷新兜底。
+                // 清理是低频的用户显式操作，多一轮刷新可接受。
                 res.refresh_now = true;
             }
             // 已在函数开头提前分派到 apply_update_msg

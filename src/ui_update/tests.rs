@@ -107,6 +107,25 @@ fn df_without_containers_is_not_a_ui_change() {
 }
 
 #[test]
+fn operation_refresh_relies_on_events_except_cleanup() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 容器/镜像/网络/卷操作都会发 /events（事件侧统一刷一轮），不再自己刷
+    tx.send(Msg::ActionDone("ok".into(), Ok("ok".into())))
+        .unwrap();
+    tx.send(Msg::PullDone(Ok("pulled".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(!res.refresh_now, "操作与拉取交给 /events，不额外全量刷新");
+
+    // prune 的事件支持按版本而异 → 保留立即刷新兜底
+    tx.send(Msg::CleanupDone(Ok("cleaned".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(res.refresh_now, "清理必须立即刷新，不能依赖 prune 事件");
+}
+
+#[test]
 fn list_refresh_errors_do_not_mark_rows_changed() {
     let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
@@ -132,6 +151,31 @@ fn list_refresh_errors_do_not_mark_rows_changed() {
     tx.send(Msg::Networks(Ok(Vec::new()))).unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert!(res.containers_changed && res.networks_changed);
+}
+
+#[test]
+fn action_result_does_not_claim_docker_connectivity() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    tx.send(Msg::ActionDone("Container stopped".into(), Ok("ok".into())))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(
+        res.docker_ok.is_none(),
+        "操作成功不代表连通性，连通性只由列表刷新结果决定"
+    );
+
+    // 操作失败 + 列表刷新失败：红点必须能显示（不再被操作消息置真掩盖）
+    tx.send(Msg::ActionDone(
+        "Failed to stop".into(),
+        Err("cannot connect".into()),
+    ))
+    .unwrap();
+    tx.send(Msg::Images(Err("cannot connect".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.docker_ok, Some(false));
 }
 
 #[test]

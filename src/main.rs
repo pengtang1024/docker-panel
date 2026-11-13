@@ -31,6 +31,7 @@ mod detail_fmt;
 mod docker;
 mod event_watch;
 mod follow_runtime;
+mod format;
 mod i18n;
 mod log_status;
 mod models;

@@ -189,11 +189,8 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         // （回调已用新条件重建并应用），丢弃以免顺序与箭头不一致
         if rows_epoch_ref.load(Ordering::Acquire) == rows_epoch {
             if let Some((rows, summary, visible)) = container_ledger {
-                ui.set_container_rows(crate::render::containers(rows));
-                ui.set_ledger_summary(summary);
-                // 筛选栏芯片计数：可见容器集合的分布（与台账行数同口径）
-                ui.set_chip_total(visible.0 as i32);
-                ui.set_chip_running(visible.1 as i32);
+                // 台账上屏统一走 ui_apply（与回调路径同一编排点）
+                crate::ui_apply::apply_container_ledger(&ui, rows, summary, visible);
             }
             if let Some(rows) = image_rows {
                 ui.set_image_rows(crate::render::images(rows));

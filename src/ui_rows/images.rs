@@ -2,7 +2,7 @@
 
 use slint::SharedString;
 
-use crate::detail_fmt::{dash, format_bytes, hit_any, rel_time};
+use crate::detail_fmt::{dash, hit_any, rel_time};
 use crate::models::{ImageInfo, ResourceSort};
 use crate::slint_gen::ImageRow;
 use crate::ui_state::AppState;
@@ -29,7 +29,7 @@ pub fn build_image_rows(s: &AppState) -> Vec<ImageRow> {
                 id: SharedString::from(img.key()),
                 short_id: SharedString::from(img.short_id()),
                 name: SharedString::from(img.name.clone()),
-                size: SharedString::from(format_bytes(img.size.max(0) as u64)),
+                size: SharedString::from(crate::format::format_bytes(img.size.max(0) as u64)),
                 layers: SharedString::from(layers),
                 created: SharedString::from(rel_time(img.created)),
                 containers: img.containers as i32,

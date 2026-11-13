@@ -39,10 +39,7 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             st.persist();
             crate::ui_rows::build_container_ledger(&st)
         };
-        ui.set_container_rows(crate::render::containers(rows));
-        ui.set_ledger_summary(summary);
-        ui.set_chip_total(visible.0 as i32);
-        ui.set_chip_running(visible.1 as i32);
+        crate::ui_apply::apply_container_ledger(&ui, rows, summary, visible);
     });
 
     // —— 组操作：启动 / 停止 / 重启 / 删除（统一作用于组内全部成员）——

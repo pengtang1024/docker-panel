@@ -2,7 +2,7 @@
 
 use slint::SharedString;
 
-use crate::detail_fmt::{dash, format_bytes, hit_any, network_counts};
+use crate::detail_fmt::{dash, hit_any, network_counts};
 use crate::models::{NetworkInfo, ResourceSort, VolumeInfo};
 use crate::slint_gen::{NetworkRow, VolumeRow};
 use crate::ui_state::AppState;
@@ -64,7 +64,7 @@ pub fn build_volume_rows(s: &AppState) -> Vec<VolumeRow> {
     list.into_iter()
         .map(|v| {
             let size = match s.volume_sizes.get(&v.name) {
-                Some(bytes) => format_bytes(*bytes),
+                Some(bytes) => crate::format::format_bytes(*bytes),
                 None => dash(),
             };
             VolumeRow {

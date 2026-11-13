@@ -34,7 +34,7 @@ fn detail_rows(d: &ContainerDetail, c: Option<&ContainerInfo>) -> Vec<DetailPair
         kv("ID", or_dash(&d.id), true),
         kv(
             &t("Disk"),
-            c.map(|c| super::format_bytes(c.size_rw))
+            c.map(|c| crate::format::format_bytes(c.size_rw))
                 .filter(|s| s != "0 B")
                 .unwrap_or_else(dash),
             true,
@@ -47,7 +47,11 @@ fn detail_rows(d: &ContainerDetail, c: Option<&ContainerInfo>) -> Vec<DetailPair
         _ => dash(),
     };
     let mem = match c {
-        Some(c) if running => format!("{} · {}", super::format_bytes(c.mem_usage), mem_limit(c)),
+        Some(c) if running => format!(
+            "{} · {}",
+            crate::format::format_bytes(c.mem_usage),
+            mem_limit(c)
+        ),
         _ => dash(),
     };
     rows.push(kv("CPU", cpu, false));
@@ -124,7 +128,7 @@ fn mem_limit(c: &ContainerInfo) -> String {
     if c.mem_limit == 0 {
         t("unlimited")
     } else {
-        super::format_bytes(c.mem_limit)
+        crate::format::format_bytes(c.mem_limit)
     }
 }
 

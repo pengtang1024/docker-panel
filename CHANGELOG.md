@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **单实例保障**：同一用户只允许一个 GUI 实例。互斥对象是 `$XDG_RUNTIME_DIR/docker-panel-<user>.sock`（`XDG_RUNTIME_DIR` 缺失/为空时回退 `/tmp`，仍带用户名后缀避免多用户互撞）；第二条实例提示 `already running` 后以非 0 退出，不再初始化 Slint、不连 Docker，并通过同一 socket 通知已有实例尝试前置窗口（`show` + 取消最小化 + 重绘；Wayland 下客户端没有激活自己的权限，**是否置顶由 compositor 决定**，X11 下通常有效）。进程异常退出（SIGKILL / `panic=abort`）留下的陈旧 socket 在下次启动时 `connect` 失败即判定残留、自动清理重绑，无需人工删锁。`--version` / `-V` / `--help` 在拿锁之前处理，实例运行时照常可用；锁路径异常（如运行目录不可写）不阻断启动，仅提示后继续。
+
 ## [0.7.10] - 2026-11-13
 
 ### 新增

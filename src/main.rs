@@ -37,6 +37,7 @@ mod lock;
 mod log_status;
 mod models;
 mod render;
+mod single_instance;
 mod slint_gen;
 mod theme;
 mod ui_apply;
@@ -66,6 +67,26 @@ fn main() {
         }
         cli::CliAction::Run => {}
     }
+
+    // 单实例：同一用户只允许一个 GUI 实例。
+    // 时机铁律：--version / --help 必须在上面的 cli 分支里就返回，
+    // 不能被单实例挡住（看版本号不该要求先关掉正在跑的窗口）。
+    // 拿不到锁就不再初始化 Slint / 不连 Docker，提示后以非 0 退出码结束。
+    let mut guard = match single_instance::acquire() {
+        Ok(single_instance::Acquire::Primary(g)) => Some(g),
+        Ok(single_instance::Acquire::AlreadyRunning) => {
+            eprintln!(
+                "docker-panel: already running, not starting a second window \
+                 (single-instance lock held by the existing process)"
+            );
+            std::process::exit(1);
+        }
+        Err(e) => {
+            // 锁不可用不阻断启动：运行目录异常时宁可多开一个窗口，也不能打不开面板
+            eprintln!("docker-panel: single-instance lock unavailable ({e}), continuing");
+            None
+        }
+    };
 
     // 按系统 locale 选择语言（zh* → 简体中文，其它语言回落英文源串）
     i18n::init();
@@ -119,6 +140,23 @@ fn main() {
     let theme_monitor = bootstrap::spawn_theme_monitor(&ui, &state);
 
     callbacks::bind_callbacks(&ui, &state);
+
+    // 第二条实例通过锁文件旁的 socket 发来 raise 请求时，尽力把窗口带回前台。
+    // Wayland 下客户端无激活权（compositor 决定是否置顶），只能做
+    // show + 取消最小化 + 重绘；X11 下通常能真正提到最前。
+    if let Some(g) = guard.as_mut() {
+        let weak = ui.as_weak();
+        g.spawn_raise_listener(move || {
+            let weak = weak.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = weak.upgrade() {
+                    let _ = ui.show();
+                    ui.window().set_minimized(false);
+                    ui.window().request_redraw();
+                }
+            });
+        });
+    }
 
     let _ = ui.run();
 

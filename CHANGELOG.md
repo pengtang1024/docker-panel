@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-11-13
+
 ### 变更
 
 - **日志面板 UI 刷新节流放宽到 250ms**：只有日志行变化的批次用 250ms 窗口（跟随滞后上限 ~250ms），列表 / 抽屉 / 状态栏 / 弹窗等任何其它 UI 变化仍走 120ms，操作反馈不变慢。
@@ -362,7 +364,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.8...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...HEAD
+[0.7.9]: https://github.com/pengtang1024/docker-panel/compare/0.7.8...0.7.9
 [0.7.8]: https://github.com/pengtang1024/docker-panel/compare/0.7.7...0.7.8
 [0.7.7]: https://github.com/pengtang1024/docker-panel/compare/0.7.6...0.7.7
 [0.7.6]: https://github.com/pengtang1024/docker-panel/compare/0.7.5...0.7.6

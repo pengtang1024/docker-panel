@@ -7,33 +7,9 @@
 //    三段都必须显式占满垂直空间（Body vertical-stretch: 1）。
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
-import { TextButton, CheckBox, ProgressBar } from "components-interact.slint";
+import { TextButton, ProgressBar } from "components-interact.slint";
 import { DialogShell } from "components-dialog.slint";
 import { ScrollView } from "@material";
-
-// 勾选行：CheckBox 的 checked 与父属性双向绑定，点击后回调只负责持久化。
-component ToggleRow inherits Rectangle {
-    in-out property <bool> checked: false;
-    in property <string> label: "";
-    callback toggled();
-
-    height: 24px;
-    HorizontalLayout {
-        width: 100%; height: 100%;
-        spacing: 8px;
-        alignment: start;
-        cross-axis-alignment: center;
-        CheckBox {
-            checked <=> root.checked;
-            toggled => { root.toggled(); }
-        }
-        VCenterText {
-            text: root.label;
-            font-size: Theme.fs_sm;
-            color: Theme.ink_2;
-        }
-    }
-}
 
 export component UpdateDialog inherits DialogShell {
     in-out property <bool> checking: false;
@@ -47,17 +23,14 @@ export component UpdateDialog inherits DialogShell {
     in-out property <string> status: "";
     in-out property <string> reason: "";
     in-out property <int> progress: 0;
-    in-out property <bool> auto_check: true;
-    in-out property <bool> auto_install: true;
 
+    callback check_now();
     callback install();
     callback open_page();
     callback restart();
-    callback set_auto_check(bool);
-    callback set_auto_install(bool);
 
     card_width: 560px;
-    card_height: 480px;
+    card_height: 420px;
 
     VerticalLayout {
         width: 100%; height: 100%; spacing: 0px;
@@ -144,17 +117,6 @@ export component UpdateDialog inherits DialogShell {
                         wrap: word-wrap;
                         visible: root.reason != "" && root.installable == false
                             && root.available;
-                    }
-
-                    ToggleRow {
-                        checked <=> root.auto_check;
-                        label: @tr("Check for updates on startup");
-                        toggled => { root.set_auto_check(root.auto_check); }
-                    }
-                    ToggleRow {
-                        checked <=> root.auto_install;
-                        label: @tr("Download and install updates automatically");
-                        toggled => { root.set_auto_install(root.auto_install); }
                     }
                 }
             }

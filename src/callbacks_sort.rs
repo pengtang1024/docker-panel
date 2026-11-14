@@ -9,7 +9,7 @@
 use slint::{ComponentHandle, Weak};
 
 use crate::slint_gen::{AppActions, MainWindow};
-use crate::ui_state::SharedState;
+use crate::ui_state::{SharedState, ROWS_IMAGES, ROWS_NETWORKS, ROWS_VOLUMES};
 
 /// 绑定三个资源列表的排序回调
 pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
@@ -30,7 +30,7 @@ fn bind_images(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_images.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_IMAGES);
             st.persist();
             st.sort_images.to_ui()
         };
@@ -53,7 +53,7 @@ fn bind_networks(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_networks.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_NETWORKS);
             st.persist();
             st.sort_networks.to_ui()
         };
@@ -76,7 +76,7 @@ fn bind_volumes(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_volumes.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_VOLUMES);
             st.persist();
             st.sort_volumes.to_ui()
         };

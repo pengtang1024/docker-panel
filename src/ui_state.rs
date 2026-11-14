@@ -7,7 +7,7 @@
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
 use std::collections::{BTreeSet, HashMap};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -28,10 +28,13 @@ pub mod follow_state;
 pub mod log;
 pub mod log_sync;
 pub mod refresh;
+/// 行模型代际账（per-list epoch，见 ui_state/rows_epoch.rs）
+pub mod rows_epoch;
 /// 自动更新状态（检查结果 / 进度 / busy）
 pub mod update;
 pub use log::LogState;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
+pub use rows_epoch::{RowsEpoch, ROWS_CONTAINERS, ROWS_IMAGES, ROWS_NETWORKS, ROWS_VOLUMES};
 pub use update::UpdateState;
 
 /// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
@@ -107,13 +110,13 @@ pub struct AppState {
 
     pub sort_field: SortField,
     pub sort_desc: bool,
-    /// 行模型 epoch：排序/筛选/搜索等改变行内容的操作递增。
+    /// 行模型代际（per-list）：排序/筛选/搜索等改变行内容的操作按列表递增。
     ///
-    /// consumer 在锁内快照行模型、锁外才写 UI；这期间用户若改了排序条件，
-    /// 那批行就是按旧条件建的，落地后列表顺序会与排序箭头打架。
-    /// 回调改条件时会重建行并递增 epoch，consumer 应用前比对 epoch，
-    /// 不一致就丢弃这批旧行（与日志行模型的 log_epoch 同一套做法）。
-    pub rows_epoch: Arc<AtomicU64>,
+    /// consumer 在锁内建行、锁外才写 UI；这期间用户若改了条件，那批行就是按
+    /// 旧条件建的，落地后列表顺序会与排序箭头打架。回调改条件时会重建行并
+    /// 递增对应列表的代际，consumer 应用前比对，不一致就丢弃这批旧行。
+    /// 搜索同时影响容器与镜像，但网络 / 卷不受影响（见 ui_state/rows_epoch.rs）。
+    pub rows_epoch: Arc<RowsEpoch>,
     pub filter: String,
     /// 当前视图 0=容器 1=镜像 2=网络 3=卷（真值在 UI，回写 state 仅为持久化）
     pub view: i64,
@@ -213,7 +216,7 @@ impl AppState {
             shutdown: AtomicBool::new(false),
             sort_field,
             sort_desc,
-            rows_epoch: Arc::new(AtomicU64::new(0)),
+            rows_epoch: Arc::new(RowsEpoch::default()),
             filter,
             view,
             theme,
@@ -262,13 +265,13 @@ impl AppState {
         }
     }
 
-    /// 排序 / 筛选 / 搜索条件变更：递增行模型 epoch。
+    /// 排序 / 筛选 / 搜索条件变更：按列表作废行模型代际。
     ///
     /// **唯一入口**——所有会改变行集合或顺序的回调都必须走这里。consumer
-    /// 锁内建行、锁外上屏，应用前比对 epoch；忘了递增就会让旧条件的行覆盖
-    /// 新条件的行（表现为列表顺序与排序箭头不一致）。
-    pub fn rows_dirty(&mut self) {
-        self.rows_epoch.fetch_add(1, Ordering::AcqRel);
+    /// 锁内建行、锁外上屏，应用前比对该列表的 epoch；忘了递增就会让旧条件的
+    /// 行覆盖新条件的行（表现为列表顺序与排序箭头不一致）。
+    pub fn rows_dirty(&mut self, mask: u8) {
+        self.rows_epoch.mark(mask);
     }
 
     /// 触发四类资源列表刷新（锁内安全：只 spawn，不做 IO）。

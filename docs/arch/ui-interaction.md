@@ -36,7 +36,7 @@ models.slint struct               Rust consumer 构造
 │ VolumeRow    { ... }     │      │   // thread_local 差量同步   │
 │ DetailPair   { ... }     │      │ ui_apply::apply_drawer(&ui) │
 └──────────────────────────┘      └─────────────────────────────┘
-日志也是 Model：AppState.logs → LogSyncPlan(Append/Reset) → render::logs_sync → Drawer 虚拟化 ListView
+日志也是 Model：AppState.log.logs → LogSyncPlan(Append/Reset) → render::logs_sync → Drawer 虚拟化 ListView
 ```
 
 `include_modules!()` 在 `slint_gen.rs` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入。
@@ -141,7 +141,7 @@ consumer 的 3s 心跳**不得**回写这些属性：它在锁内取快照、锁
 
 consumer 只负责「按 Msg 增量刷新数据」，不负责「回写用户操作过的状态」。
 需要防的另一种竞态（锁内建行、锁外应用，期间条件被改）用
-`AppState::rows_epoch` 判定：epoch 变了就丢弃这批旧行（回调已用新条件重建过）。
+`AppState::rows_epoch`（per-list 位掩码）判定：该列表代际变了就丢弃这批旧行（回调已用新条件重建过）。
 
 ### 3.3 密集表格：弹性列的宽度不能交给 Slint 布局分配
 

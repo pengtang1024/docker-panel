@@ -20,7 +20,9 @@ use slint::{invoke_from_event_loop, SharedString, Weak};
 
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::{LogSyncPlan, SharedState};
+use crate::ui_state::{
+    LogSyncPlan, SharedState, ROWS_CONTAINERS, ROWS_IMAGES, ROWS_NETWORKS, ROWS_VOLUMES,
+};
 use crate::ui_update::{DrainResult, UiFlag};
 
 mod throttle;
@@ -172,10 +174,11 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let disk_total: u64 = s.containers.iter().map(|c| c.size_rw).sum();
     // 镜像总占用（底栏「镜像大小」）：全部镜像 size 之和，与容器可写层互补
     let image_total: i64 = s.images.iter().map(|i| i.size).sum();
-    // 行模型 epoch：排序/筛选/搜索变更时回调会重建行并递增 epoch。
-    // 这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
-    // 落地就会让列表顺序与排序箭头打架，故应用前比对 epoch，不一致就丢弃。
-    let rows_epoch = s.rows_epoch.load(Ordering::Acquire);
+    // 行模型代际（per-list）：排序/筛选/搜索变更时回调会重建行并递增对应列表
+    // 的代际。这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
+    // 落地就会让列表顺序与排序箭头打架，故应用前逐列表比对，不一致就丢弃。
+    // 搜索只作废容器 + 镜像；网络 / 卷的合法批次继续上屏。
+    let rows_snapshot = s.rows_epoch.snapshot();
     let rows_epoch_ref = s.rows_epoch.clone();
     let rt_h = s.rt.handle().clone();
     // 更新弹窗：检查完成 / 进度 / 安装完成时取一次快照（锁内只读，锁外灌 UI）
@@ -192,19 +195,25 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         let Some(ui) = ui_w.upgrade() else { return };
         ui.set_loading(false);
         // 走 render::*（thread_local 缓存模型就地同步），只 set 变化的列表
-        // epoch 变了 = 排序/筛选/搜索条件已被回调改过，这批行是旧条件建的
-        // （回调已用新条件重建并应用），丢弃以免顺序与箭头不一致
-        if rows_epoch_ref.load(Ordering::Acquire) == rows_epoch {
+        // 每个列表独立判定代际：变了 = 条件已被回调改过（回调已用新条件重建并
+        // 应用），丢弃这批旧行以免顺序与箭头不一致
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_CONTAINERS) {
             if let Some((rows, summary, visible)) = container_ledger {
                 // 台账上屏统一走 ui_apply（与回调路径同一编排点）
                 crate::ui_apply::apply_container_ledger(&ui, rows, summary, visible);
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_IMAGES) {
             if let Some(rows) = image_rows {
                 ui.set_image_rows(crate::render::images(rows));
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_NETWORKS) {
             if let Some(rows) = network_rows {
                 ui.set_network_rows(crate::render::networks(rows));
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_VOLUMES) {
             if let Some(rows) = volume_rows {
                 ui.set_volume_rows(crate::render::volumes(rows));
             }

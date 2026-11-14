@@ -118,10 +118,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     // 日志行同步：模型是窗口的镜像 —— 能追加就追加（已有行索引不变，
     // 可见行不必重排，是日志流不卡的关键）；窗口裁剪过前段才整体重建。
     let log_sync = if res.is_set(UiFlag::LogsChanged) {
-        let epoch = s.log_epoch.load(Ordering::Acquire);
+        let epoch = s.log.log_epoch.load(Ordering::Acquire);
         let action = match s.log_sync_plan() {
             LogSyncPlan::Append { from } => {
-                let rows: Vec<LogRow> = s.logs[from..]
+                let rows: Vec<LogRow> = s.log.logs[from..]
                     .iter()
                     .map(|l| LogRow {
                         text: SharedString::from(l.as_str()),
@@ -131,6 +131,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             }
             LogSyncPlan::Reset => {
                 let rows: Vec<LogRow> = s
+                    .log
                     .logs
                     .iter()
                     .map(|l| LogRow {
@@ -141,7 +142,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             }
         };
         s.commit_log_sync();
-        Some((action, s.log_epoch.clone(), epoch))
+        Some((action, s.log.log_epoch.clone(), epoch))
     } else {
         None
     };

@@ -42,40 +42,40 @@ impl AppState {
     /// 与 UI 日志行模型（`render::logs_sync`）用同一套上限与裁剪规则，
     /// 保证「复制日志」的内容与日志面板一致。
     pub fn trim_logs(&mut self) {
-        if self.logs.len() > self.logs_cap {
-            let excess = self.logs.len() - LOG_ROWS_KEEP;
-            self.logs.drain(0..excess);
+        if self.log.logs.len() > self.log.logs_cap {
+            let excess = self.log.logs.len() - LOG_ROWS_KEEP;
+            self.log.logs.drain(0..excess);
         }
     }
 
     /// 计算 UI 日志行模型相对日志窗口的同步方案。
     pub fn log_sync_plan(&self) -> LogSyncPlan {
         // 模型属于另一条流（Clear / 切容器）：内容不可信，整体重建
-        if self.model_epoch != self.stream_epoch {
+        if self.log.model_epoch != self.log.stream_epoch {
             return LogSyncPlan::Reset;
         }
-        let window_start = self.logs_total - self.logs.len() as u64;
-        let model_start = self.model_total - self.model_rows as u64;
+        let window_start = self.log.logs_total - self.log.logs.len() as u64;
+        let model_start = self.log.model_total - self.log.model_rows as u64;
         if model_start != window_start {
             return LogSyncPlan::Reset;
         }
         LogSyncPlan::Append {
-            from: self.model_total.saturating_sub(window_start) as usize,
+            from: self.log.model_total.saturating_sub(window_start) as usize,
         }
     }
 
     /// 记录一次同步结果（行模型已与日志窗口对齐）
     pub fn commit_log_sync(&mut self) {
-        self.model_total = self.logs_total;
-        self.model_rows = self.logs.len();
-        self.model_epoch = self.stream_epoch;
+        self.log.model_total = self.log.logs_total;
+        self.log.model_rows = self.log.logs.len();
+        self.log.model_epoch = self.log.stream_epoch;
     }
 
     /// 清空行模型的同步账：模型已随面板清空，从当前位置重新开始对齐
     pub(super) fn reset_log_model_tracking(&mut self) {
-        self.model_total = self.logs_total;
-        self.model_rows = 0;
-        self.model_epoch = self.stream_epoch;
+        self.log.model_total = self.log.logs_total;
+        self.log.model_rows = 0;
+        self.log.model_epoch = self.log.stream_epoch;
     }
 }
 
@@ -89,7 +89,7 @@ mod tests {
     /// 灌入一批日志行（走 Msg 通道，epoch 与当前流一致）
     fn feed(s: &mut AppState, rx: &mpsc::Receiver<Msg>, n: usize) {
         let tx = s.tx.clone();
-        let epoch = s.stream_epoch;
+        let epoch = s.log.stream_epoch;
         let lines: Vec<String> = (0..n).map(|i| format!("line-{i}")).collect();
         tx.send(Msg::LogBatch(epoch, lines)).unwrap();
         s.drain_messages(rx, None, 10);
@@ -109,8 +109,8 @@ mod tests {
         feed(&mut s, &rx, 2);
         assert_eq!(s.log_sync_plan(), LogSyncPlan::Append { from: 3 });
         s.commit_log_sync();
-        assert_eq!(s.logs.len(), 5);
-        assert_eq!(s.model_rows, 5);
+        assert_eq!(s.log.logs.len(), 5);
+        assert_eq!(s.log.model_rows, 5);
     }
 
     #[test]
@@ -120,12 +120,12 @@ mod tests {
 
         // 灌到上限：窗口停在上限行（分块裁剪的边界）
         feed(&mut s, &rx, LOG_ROWS_MAX + 1);
-        assert_eq!(s.logs.len(), LOG_ROWS_MAX);
+        assert_eq!(s.log.logs.len(), LOG_ROWS_MAX);
         s.commit_log_sync();
 
         // 再来一行 → 窗口裁掉最旧的一段，起点前移 → 模型无法增量对齐
         feed(&mut s, &rx, 1);
-        assert_eq!(s.logs.len(), LOG_ROWS_KEEP, "窗口分块裁剪到保留行数");
+        assert_eq!(s.log.logs.len(), LOG_ROWS_KEEP, "窗口分块裁剪到保留行数");
         assert_eq!(s.log_sync_plan(), LogSyncPlan::Reset);
 
         // 重建之后又回到追加路径
@@ -148,8 +148,8 @@ mod tests {
 
         // Clear：缓冲与模型同时清空，从当前位置重新对齐
         s.clear_log_buffer();
-        assert_eq!(s.logs.len(), 0);
-        assert_eq!(s.model_rows, 0);
+        assert_eq!(s.log.logs.len(), 0);
+        assert_eq!(s.log.model_rows, 0);
         assert_eq!(
             s.log_sync_plan(),
             LogSyncPlan::Append { from: 0 },

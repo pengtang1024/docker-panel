@@ -60,7 +60,7 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
         actions.on_log_copy(move || {
             let Some(ui) = ui_d.upgrade() else { return };
             let text = match crate::lock::acquire(&s, "callbacks_drawer::log_copy") {
-                Some(st) => st.logs.join("\n"),
+                Some(st) => st.log.logs.join("\n"),
                 None => return,
             };
             if text.is_empty() {

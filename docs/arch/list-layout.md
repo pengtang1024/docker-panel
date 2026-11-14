@@ -163,7 +163,7 @@
 
 - **成员口径 = 当前筛选后的容器**（`ui_rows::group_members`，与台账可见行同源）：
   搜索 / 状态筛选筛掉成员后，组操作只作用于看得见的那批，不会误伤筛选外的容器。
-- **合并日志是「多流共享一个 epoch」**：`AppState.follow_targets` 保存 `(容器 id, 行前缀)`，
+- **合并日志是「多流共享一个 epoch」**：`AppState.log.follow_targets` 保存 `(容器 id, 行前缀)`，
   `follow_runtime::spawn_follow` 为每个目标起一条流，共用同一个 `watch` 取消信号与
   `stream_epoch`；`LogStreamEnded` 只在**全部**流都退出后才清空跟随状态（`follow_active`
   是每条流的独立存活标志）。多流时不发「重连中 / 已恢复 / 已停止」状态提示——

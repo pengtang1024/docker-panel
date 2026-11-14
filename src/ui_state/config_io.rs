@@ -103,10 +103,10 @@ fn app_config_from_state(s: &AppState) -> AppConfig {
         sort_images: s.sort_images.to_config(),
         sort_networks: s.sort_networks.to_config(),
         sort_volumes: s.sort_volumes.to_config(),
-        check_updates: s.check_updates,
-        auto_install: s.auto_install,
-        auto_restart: s.auto_restart,
-        last_update_check: s.last_update_check,
+        check_updates: s.update.check_updates,
+        auto_install: s.update.auto_install,
+        auto_restart: s.update.auto_restart,
+        last_update_check: s.update.last_update_check,
     }
 }
 
@@ -157,10 +157,10 @@ mod tests {
             field: 0,
             desc: true,
         };
-        s.check_updates = false;
-        s.auto_install = false;
-        s.auto_restart = false;
-        s.last_update_check = 42;
+        s.update.check_updates = false;
+        s.update.auto_install = false;
+        s.update.auto_restart = false;
+        s.update.last_update_check = 42;
 
         let cfg = app_config_from_state(&s);
         assert_eq!(cfg.theme, 2);
@@ -183,10 +183,10 @@ mod tests {
         assert_eq!(back.sort_images, s.sort_images);
         assert_eq!(back.sort_networks, s.sort_networks);
         assert_eq!(back.sort_volumes, s.sort_volumes);
-        assert_eq!(back.check_updates, s.check_updates);
-        assert_eq!(back.auto_install, s.auto_install);
-        assert_eq!(back.auto_restart, s.auto_restart);
-        assert_eq!(back.last_update_check, s.last_update_check);
+        assert_eq!(back.check_updates, s.update.check_updates);
+        assert_eq!(back.auto_install, s.update.auto_install);
+        assert_eq!(back.auto_restart, s.update.auto_restart);
+        assert_eq!(back.last_update_check, s.update.last_update_check);
     }
 
     /// 资源列表排序的打包编码在配置 ↔ UI 之间走同一套约定

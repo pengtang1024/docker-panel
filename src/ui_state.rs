@@ -24,9 +24,15 @@ use crate::models::{
 /// 日志窗口裁剪 + UI 日志行模型同步账（独立模块，见 ui_state/log_sync.rs）
 pub mod config_io;
 pub mod follow_state;
+/// 日志面板状态（滚动窗口 + 跟随流账本）
+pub mod log;
 pub mod log_sync;
 pub mod refresh;
+/// 自动更新状态（检查结果 / 进度 / busy）
+pub mod update;
+pub use log::LogState;
 pub use log_sync::{LogSyncPlan, LOG_ROWS_MAX};
+pub use update::UpdateState;
 
 /// 抽屉当前展示的资源类型（决定详情区渲染哪份数据）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -92,40 +98,8 @@ pub struct AppState {
     /// 容器可写层占用缓存（id → 字节）：来自低频 `/system/df?type=container`
     pub container_sizes: HashMap<String, u64>,
 
-    // —— Phase 3 日志面板（滚动窗口，最多 LOG_ROWS_MAX 行）——
-    pub logs: Vec<String>,
-    pub logs_cap: usize,
-    /// 日志流累计进窗口的行数：给窗口在全局行流中定位（窗口 = 末尾 logs.len() 行）
-    pub logs_total: u64,
-    /// UI 日志行模型已同步到的累计行数
-    pub model_total: u64,
-    /// UI 日志行模型当前行数
-    pub model_rows: usize,
-    /// 上次同步时的流 epoch：epoch 变了说明模型已被清空，行数跟踪作废
-    pub model_epoch: u64,
-    /// 当前日志流 epoch：用于 Msg::LogLine / LogStreamEnded 的流代际过滤
-    pub stream_epoch: u64,
-    /// 当前选中会话是否已加载过历史日志：收到首条日志或用户 Clear 后置 true；
-    /// 重新选中容器（clear_logs）重置。空历史/首流失败可再次以 tail=200 重试。
-    pub history_done: bool,
-    /// 日志缓冲 epoch：仅用于 UI 日志行列表的过期判断；Clear/切容器时递增
-    pub log_epoch: Arc<AtomicU64>,
-    /// 已投递到通道、但还没被 consumer 应用的行数。
-    ///
-    /// 生产者（`docker::logs`）据此感知「UI 侧跟不上了」：超过阈值就按积压比例
-    /// 抽样显示，避免 10 万行/秒量级把通道撑成无界队列（RSS 涨、延迟无上限）。
-    pub log_backlog: Arc<AtomicU64>,
-    /// 当前日志跟随流的幂等键：单容器 = 容器 id；分组合并日志 = 分组键
-    /// （空 = 无流）；用于避免重复建流
-    pub follow_id: String,
-    /// 当前流的全部目标 `(容器 id, 行前缀)`：
-    /// 单容器 1 项且前缀为空；分组合并日志 = 每个运行中成员一项，前缀 `[容器名]`
-    pub follow_targets: Vec<(String, String)>,
-    /// 日志跟随流取消信号：换容器/清空时 drop sender，旧流 select 到关闭后退出
-    pub follow_cancel: Option<tokio::sync::watch::Sender<()>>,
-    /// 当前日志流每条 stream 的存活标志（每条流独立）：旧流退出不会误标新流；
-    /// 分组合并日志有多条流，全部退出才算流结束
-    pub follow_active: Vec<Arc<AtomicBool>>,
+    // —— Phase 3 日志面板（滚动窗口 + 跟随流账本，见 ui_state/log.rs）——
+    pub log: LogState,
     pub stats_prev: HashMap<String, ContainerStatsSnapshot>,
 
     // —— 优雅退出 —— consumer 线程定期检查这个 flag
@@ -162,29 +136,8 @@ pub struct AppState {
     /// 卷列表排序（0=名称 1=大小 2=挂载点）
     pub sort_volumes: ResourceSort,
 
-    // —— 自动更新 ——
-    /// 启动时检查更新（默认开）
-    pub check_updates: bool,
-    /// 检查到新版本后自动下载安装（默认开）
-    pub auto_install: bool,
-    /// 安装成功后自动重启应用（默认开）
-    pub auto_restart: bool,
-    /// 上次检查时间（unix 秒），24h 节流
-    pub last_update_check: i64,
-    /// 最近一次成功检查到的 release（含本机安装计划）
-    pub update_info: Option<crate::models::update::UpdateInfo>,
-    /// 是否有比当前版本更新的 release（顶栏徽标）
-    pub update_available: bool,
-    /// 已安装更新，等待重启
-    pub update_restart_needed: bool,
-    /// 下载/安装进度 0~100
-    pub update_progress: i32,
-    /// 更新状态文案（检查中 / 下载中 / 错误）
-    pub update_status: String,
-    /// 弹窗 busy 状态（consumer 根据消息推进；与互斥用的 update_busy 分离）
-    pub update_busy_ui: bool,
-    /// 检查/安装互斥标志（防重复任务）
-    pub update_busy: Arc<AtomicBool>,
+    // —— 自动更新（字段见 ui_state/update.rs）——
+    pub update: UpdateState,
 }
 
 impl AppState {
@@ -255,20 +208,7 @@ impl AppState {
             image_layers: HashMap::new(),
             volume_sizes: HashMap::new(),
             container_sizes: HashMap::new(),
-            logs: Vec::new(),
-            logs_cap: LOG_ROWS_MAX,
-            logs_total: 0,
-            model_total: 0,
-            model_rows: 0,
-            model_epoch: 0,
-            stream_epoch: 0,
-            history_done: false,
-            log_epoch: Arc::new(AtomicU64::new(0)),
-            log_backlog: Arc::new(AtomicU64::new(0)),
-            follow_id: String::new(),
-            follow_targets: Vec::new(),
-            follow_cancel: None,
-            follow_active: Vec::new(),
+            log: LogState::default(),
             stats_prev: HashMap::new(),
             shutdown: AtomicBool::new(false),
             sort_field,
@@ -283,17 +223,13 @@ impl AppState {
             sort_images,
             sort_networks,
             sort_volumes,
-            check_updates,
-            auto_install,
-            auto_restart,
-            last_update_check,
-            update_info: None,
-            update_available: false,
-            update_restart_needed: false,
-            update_progress: 0,
-            update_status: String::new(),
-            update_busy_ui: false,
-            update_busy: Arc::new(AtomicBool::new(false)),
+            update: UpdateState {
+                check_updates,
+                auto_install,
+                auto_restart,
+                last_update_check,
+                ..UpdateState::default()
+            },
         }));
         (state, rx)
     }
@@ -307,7 +243,7 @@ impl AppState {
     ///
     /// 生产者按这个数字判断「UI 是否跟不上」，所以无论这批是否属于当前流都要归还。
     pub fn drain_backlog(&self, lines: u64) {
-        self.log_backlog.fetch_sub(lines, Ordering::Relaxed);
+        self.log.log_backlog.fetch_sub(lines, Ordering::Relaxed);
     }
 
     /// 用 `/system/df` 的缓存回填容器「磁盘占用」= 可写层 + 挂载卷大小
@@ -445,17 +381,17 @@ mod tests {
         let (state, _rx) = AppState::new_test();
         let mut s = state.lock().unwrap();
         assert!(!s.follow_is_alive());
-        s.follow_active = vec![Arc::new(AtomicBool::new(true))];
+        s.log.follow_active = vec![Arc::new(AtomicBool::new(true))];
         assert!(s.follow_is_alive());
         // 多路合并流：只要还有一条在跑就仍然存活
-        s.follow_active = vec![
+        s.log.follow_active = vec![
             Arc::new(AtomicBool::new(false)),
             Arc::new(AtomicBool::new(true)),
         ];
         assert!(s.follow_is_alive());
-        s.follow_active = vec![Arc::new(AtomicBool::new(false))];
+        s.log.follow_active = vec![Arc::new(AtomicBool::new(false))];
         assert!(!s.follow_is_alive());
-        s.follow_active.clear();
+        s.log.follow_active.clear();
         assert!(!s.follow_is_alive());
     }
 }

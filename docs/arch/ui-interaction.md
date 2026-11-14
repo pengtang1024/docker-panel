@@ -82,10 +82,10 @@ sort_desc / search_q）仍留在根属性，保持规范 #18 的单一写入方�
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
 | `ledger-cols.slint` | 24 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
 | `ledger-tree-row.slint` | 240 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
-| `image-list.slint` | 217 | 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序） | theme / components-list / components-interact / models / @material |
-| `network-list.slint` | 157 | 网络表格列表：名称 · driver · 子网（表头可点排序） | theme / components-list / models / @material |
-| `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
-| `components-list.slint` | 107 | 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 | theme / components-align |
+| `image-list.slint` | 160 | 镜像表格列表（`inherits TableShell`）：repo:tag · 大小 · 创建时间 + 行内 play/more | theme / components-list / components-interact / models / @material |
+| `network-list.slint` | 104 | 网络表格列表（`inherits TableShell`）：名称 · driver · 子网 | theme / components-list / models / @material |
+| `volume-list.slint` | 96 | 卷表格列表（`inherits TableShell`）：名称 · 大小 · 挂载点 | theme / components-list / models / @material |
+| `components-list.slint` | 187 | 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳（3 列可排序表头 + `name_w` 统一下发 + 行列表插槽） | theme / components-align |
 | `skel.slint` | 69 | 骨架屏占位 | theme |
 | `foot-bar.slint` | 102 | 底部 9 项资源概览（Docker 版本 / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘） | theme / components-align / ui-state |
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* / ui-state |

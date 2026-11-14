@@ -116,10 +116,10 @@ docker-panel/
     ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）
     ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
     ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
-    ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
-    ├── network-list.slint     网络表格列表：名称 · driver · 子网（表头可点排序）
-    ├── volume-list.slint      卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
-    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
+    ├── image-list.slint       镜像表格列表（inherits TableShell）：repo:tag · 大小 · 创建时间 + 行内 play/more
+    ├── network-list.slint     网络表格列表（inherits TableShell）：名称 · driver · 子网
+    ├── volume-list.slint      卷表格列表（inherits TableShell）：名称 · 大小 · 挂载点
+    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳
     ├── skel.slint             骨架屏占位
     ├── foot-bar.slint         底部 9 项资源概览（含镜像大小）
     ├── batch-bar.slint        批量操作浮动栏

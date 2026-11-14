@@ -246,7 +246,7 @@
 | `ui/image-list.slint` | 镜像列表（表头可排序 + 行 delegate） |
 | `ui/network-list.slint` | 网络列表（同上） |
 | `ui/volume-list.slint` | 卷列表（同上） |
-| `ui/components-list.slint` | 列表共用基件：`ListCols` 列宽契约 + `ListHeadCell` 表头单元格 |
+| `ui/components-list.slint` | 列表共用基件：`ListCols` 列宽契约 + `ListHeadCell` 表头单元格 + `TableShell` 表格外壳（三个资源列表 `inherits TableShell`） |
 | `src/callbacks_sort.rs` | 三个资源列表的表头排序回调（各自独立状态 + 持久化） |
 | `src/ui_rows/group_totals.rs` | 分组资源汇总（组内成员之和：CPU / 内存 / 磁盘） |
 

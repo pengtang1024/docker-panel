@@ -206,6 +206,7 @@ docker-panel/
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── overlays.slint      # 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 自动更新弹窗 / 全局 TipLayer
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
+│   ├── ui-state.slint      # 显示态 global：连接/采样状态 + 计数汇总 + 行模型 + 资源排序（Rust 单写入方）
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）

@@ -6,7 +6,7 @@
 import { Theme } from "theme.slint";
 import { CardMenu } from "components-align.slint";
 import { EmptyState } from "components-empty.slint";
-import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LedgerSummary } from "models.slint";
+import { UiState } from "ui-state.slint";
 import { LedgerArea } from "ledger.slint";
 import { ImageList } from "image-list.slint";
 import { NetworkList } from "network-list.slint";
@@ -27,22 +27,10 @@ global SortCodec {
 }
 
 export component ListArea inherits Rectangle {
+    // 行模型 / 加载态 / 排序打包值 / 概览带全部读 UiState；视图与排序列由 MainArea 转发
     in-out property <int> view: 0;
-    in-out property <bool> sel_mode: false;
-    in-out property <bool> loading: false;
-    in-out property <[ContainerRow]> containers: [];
-    in-out property <[ImageRow]> images: [];
-    in-out property <[NetworkRow]> networks: [];
-    in-out property <[VolumeRow]> volumes: [];
-    /// 台账概览带（容器视图用）
-    in-out property <LedgerSummary> ledger_summary;
     /// 当前排序列（0=名称 1=CPU 2=内存 3=磁盘），台账表头高亮用
     in-out property <int> sort_field: 0;
-    // —— 三个资源列表各自的排序（打包值：低 3 位=列下标，第 3 位=降序标记；
-    //    解码统一走上方 SortCodec，编码见 src/models.rs 的 ResourceSort）——
-    in-out property <int> sort_images: 0;
-    in-out property <int> sort_networks: 0;
-    in-out property <int> sort_volumes: 0;
 
     callback c_select(string);
     callback c_toggle(string);
@@ -73,10 +61,10 @@ export component ListArea inherits Rectangle {
     callback sort_volumes_pick(int);
 
     /// 当前视图的行数（空态判定）
-    property <int> n: root.view == 0 ? root.containers.length
-        : root.view == 1 ? root.images.length
-        : root.view == 2 ? root.networks.length
-        : root.volumes.length;
+    property <int> n: root.view == 0 ? UiState.container_rows.length
+        : root.view == 1 ? UiState.image_rows.length
+        : root.view == 2 ? UiState.network_rows.length
+        : UiState.volume_rows.length;
 
     // 单实例菜单总线：点自己收起、点别的卡片改写锚点（id 必须最后写，
     // 否则 id 先变会让菜单带着旧锚点先渲染一帧）
@@ -101,9 +89,9 @@ export component ListArea inherits Rectangle {
     }
 
     // loading 骨架屏（首次数据拉取期间）
-    if root.loading : SkelGrid { width: 100%; height: 100%; }
+    if UiState.loading : SkelGrid { width: 100%; height: 100%; }
     // 空状态（prototype .empty：无数据 / 无匹配）
-    if root.loading == false && root.n == 0 : EmptyState {
+    if UiState.loading == false && root.n == 0 : EmptyState {
         width: 100%;
         height: 100%;
         icon_name: "";
@@ -117,12 +105,12 @@ export component ListArea inherits Rectangle {
     }
 
     // 容器视图：密集台账（方向 A）
-    if root.loading == false && root.view == 0 && root.n > 0 : LedgerArea {
+    if UiState.loading == false && root.view == 0 && root.n > 0 : LedgerArea {
         width: 100%;
         height: 100%;
-        sel_mode <=> root.sel_mode;
-        containers <=> root.containers;
-        summary <=> root.ledger_summary;
+        sel_mode: UiState.sel_mode;
+        containers: UiState.container_rows;
+        summary: UiState.ledger_summary;
         sort_field <=> root.sort_field;
         c_select(id) => { root.c_select(id); }
         c_toggle(id) => { root.c_toggle(id); }
@@ -141,12 +129,12 @@ export component ListArea inherits Rectangle {
     }
 
     // 镜像视图：表格列表
-    if root.loading == false && root.view == 1 && root.n > 0 : ImageList {
+    if UiState.loading == false && root.view == 1 && root.n > 0 : ImageList {
         width: 100%;
         height: 100%;
-        rows <=> root.images;
-        sort_field: SortCodec.field_of(root.sort_images);
-        sort_desc: SortCodec.desc_of(root.sort_images);
+        rows: UiState.image_rows;
+        sort_field: SortCodec.field_of(UiState.sort_images);
+        sort_desc: SortCodec.desc_of(UiState.sort_images);
         sort_pick(f) => { root.sort_images_pick(f); }
         select(id) => { root.i_select(id); }
         run(id) => { root.i_run(id); }
@@ -156,23 +144,23 @@ export component ListArea inherits Rectangle {
     }
 
     // 网络视图：表格列表
-    if root.loading == false && root.view == 2 && root.n > 0 : NetworkList {
+    if UiState.loading == false && root.view == 2 && root.n > 0 : NetworkList {
         width: 100%;
         height: 100%;
-        rows <=> root.networks;
-        sort_field: SortCodec.field_of(root.sort_networks);
-        sort_desc: SortCodec.desc_of(root.sort_networks);
+        rows: UiState.network_rows;
+        sort_field: SortCodec.field_of(UiState.sort_networks);
+        sort_desc: SortCodec.desc_of(UiState.sort_networks);
         sort_pick(f) => { root.sort_networks_pick(f); }
         select(id) => { root.n_select(id); }
     }
 
     // 卷视图：表格列表
-    if root.loading == false && root.view == 3 && root.n > 0 : VolumeList {
+    if UiState.loading == false && root.view == 3 && root.n > 0 : VolumeList {
         width: 100%;
         height: 100%;
-        rows <=> root.volumes;
-        sort_field: SortCodec.field_of(root.sort_volumes);
-        sort_desc: SortCodec.desc_of(root.sort_volumes);
+        rows: UiState.volume_rows;
+        sort_field: SortCodec.field_of(UiState.sort_volumes);
+        sort_desc: SortCodec.desc_of(UiState.sort_volumes);
         sort_pick(f) => { root.sort_volumes_pick(f); }
         select(id) => { root.v_select(id); }
     }

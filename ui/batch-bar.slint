@@ -2,12 +2,12 @@
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
+import { UiState } from "ui-state.slint";
 
 export component BatchBar inherits Rectangle {
     height: Theme.batch_h;
     background: Theme.pill_on_bg;
 
-    in-out property <int> count: 0;
     callback start();
     callback stop();
     callback restart();
@@ -22,7 +22,7 @@ export component BatchBar inherits Rectangle {
         padding-right: Theme.s5;
 
         VCenterText {
-            text: @tr("{0} selected", root.count);
+            text: @tr("{0} selected", UiState.batch_count);
             font-size: Theme.fs;
             font-weight: 700;
             color: Theme.ink;

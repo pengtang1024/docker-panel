@@ -130,6 +130,7 @@ docker-panel/
     ├── update-dialog.slint    自动更新弹窗：版本对比 / 更新说明 / 进度 / 开关 / 安装与重启
     ├── settings-dialog.slint  设置弹窗：外观三选 + 自动更新三个开关（check/install/restart）
     ├── update-state.slint     自动更新 UI 状态 global（TopBar / UpdateDialog / Rust 共享）
+    ├── ui-state.slint         显示态 global（TopBar / FootBar / MainArea / ListArea 与 Rust 共享）
     ├── menu-layers.slint      浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染，否则被列表 clip 裁掉）
     └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```

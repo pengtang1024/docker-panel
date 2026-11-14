@@ -33,7 +33,8 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_image_run(move |row_id: SharedString| {
             let name = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from(trf("Run {0}", &[&name]).as_str()));
+            ui.global::<UiState>()
+                .set_status_text(SharedString::from(trf("Run {0}", &[&name]).as_str()));
         });
     }
 

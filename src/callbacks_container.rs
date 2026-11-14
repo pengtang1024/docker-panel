@@ -17,7 +17,8 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_toggle(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_status_text(SharedString::from(t("Toggling container...").as_str()));
+            ui.global::<UiState>()
+                .set_status_text(SharedString::from(t("Toggling container...").as_str()));
 
             let is_running = {
                 let Ok(st) = s.lock() else {
@@ -172,7 +173,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 st.batch.toggle(row_id.to_string());
                 let n = st.batch.selected_ids.len() as i32;
                 drop(st);
-                ui.set_batch_count(n);
+                ui.global::<UiState>().set_batch_count(n);
             }
         });
     }
@@ -186,8 +187,8 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
                 st.batch.clear();
                 drop(st);
                 if let Some(ui) = ui_b.upgrade() {
-                    ui.set_batch_count(0);
-                    ui.set_sel_mode(false);
+                    ui.global::<UiState>().set_batch_count(0);
+                    ui.global::<UiState>().set_sel_mode(false);
                 }
             }
         });

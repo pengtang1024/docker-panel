@@ -43,9 +43,12 @@ fn restore_config(ui: &MainWindow, state: &SharedState) {
     ui.set_filter(SharedString::from(s.filter.as_str()));
     ui.set_sort_field(s.sort_field.to_ui_index() as i32);
     // 三个资源列表的排序（打包值：低 3 位=列下标，第 3 位=降序标记）
-    ui.set_sort_images(s.sort_images.to_ui());
-    ui.set_sort_networks(s.sort_networks.to_ui());
-    ui.set_sort_volumes(s.sort_volumes.to_ui());
+    ui.global::<UiState>()
+        .set_sort_images(s.sort_images.to_ui());
+    ui.global::<UiState>()
+        .set_sort_networks(s.sort_networks.to_ui());
+    ui.global::<UiState>()
+        .set_sort_volumes(s.sort_volumes.to_ui());
     ui.set_sort_desc(s.sort_desc);
     ui.set_search_q(SharedString::from(s.container_query.as_str()));
     ui.set_log_follow(s.log_follow);
@@ -244,9 +247,10 @@ fn bind_pull_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedState)
             let Some(ui) = ui_p.upgrade() else { return };
             let text = spec.to_string();
             if text.trim().is_empty() {
-                ui.set_status_text(SharedString::from(crate::i18n::t(
-                    "Please enter an image name",
-                )));
+                ui.global::<UiState>()
+                    .set_status_text(SharedString::from(crate::i18n::t(
+                        "Please enter an image name",
+                    )));
                 return;
             }
             ui.set_pull_busy(true);
@@ -285,9 +289,10 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
                 let Some(ui) = ui_c.upgrade() else { return };
                 ui.set_cleanup_open(false);
                 if !stopped && !dangling && !unused_net && !unused_vol {
-                    ui.set_status_text(SharedString::from(crate::i18n::t(
-                        "Select at least one item",
-                    )));
+                    ui.global::<UiState>()
+                        .set_status_text(SharedString::from(crate::i18n::t(
+                            "Select at least one item",
+                        )));
                     return;
                 }
                 let (rt_handle, tx) = {

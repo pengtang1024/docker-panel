@@ -4,7 +4,8 @@
 
 ## 1. Slint UI 模块交互
 
-38 个 `.slint` 文件——app.slint 是唯一组装入口，子文件间**不互相 import**。
+41 个 `.slint` 文件——app.slint 是唯一组装入口。子文件间**不互相 import 组件**，
+只允许 import 跨文件 global（`app-actions` / `update-state` / `ui-state` / `ledger-cols`）。
 
 ### 交互总图
 
@@ -46,9 +47,16 @@ models.slint struct               Rust consumer 构造
 列表与行组件不 import AppActions global——只声明 `callback toggle(string)` 等。
 app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
-#### ③ top-bar / sub-bar ↔ app.slint：`<=>` 双向绑定
+#### ③ top-bar / sub-bar ↔ app.slint：`<=>` 双向绑定（仅用户操作态）
 
-`search_q <=> root.search_q` / `docker_ok <=> root.docker_ok` / `view <=> root.view`
+`search_q <=> root.search_q` / `view <=> root.view`
+
+#### ③b 显示态走 `ui-state.slint` global（不经根属性转发）
+
+连接 / 采样状态位、计数与汇总、行模型、资源列表排序都由 Rust 单写入方写 `UiState`，
+TopBar / SubBar / BatchBar / ListArea / FootBar 直接读 global（`UiState.chip_total` 等），
+省掉 app.slint → MainArea → 子组件三层 `<=>` 转发。用户操作态（view / filter / sort_field /
+sort_desc / search_q）仍留在根属性，保持规范 #18 的单一写入方语义。
 
 #### ④ Drawer：条件渲染 + 自绘 Tab
 
@@ -59,16 +67,16 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
-| `app.slint` | 375 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state |
+| `app.slint` | 316 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state / ui-state |
 | `app-actions.slint` | 64 | AppActions global：UI → Rust 回调声明（含分组操作 + 自动更新） | 无 |
 | `overlays.slint` | 152 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取/清理/更新弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs / update-dialog / update-state |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
 | `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
 | `models.slint` | 105 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
-| `top-bar.slint` | 178 | TopBar（搜索框 + 5 按钮 + focus_search + 更新徽标） | theme / components-align / components-interact / update-state |
-| `sub-bar.slint` | 197 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models |
-| `main-area.slint` | 174 | 主列表工作区：SubBar + BatchBar + ListArea（含分组操作回调冒泡） | theme / sub-bar / batch-bar / list-area / models |
-| `list-area.slint` | 165 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* |
+| `top-bar.slint` | 196 | TopBar（搜索框 + 5 按钮 + focus_search + 更新徽标） | theme / components-align / components-interact / update-state / ui-state |
+| `sub-bar.slint` | 194 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models / ui-state |
+| `main-area.slint` | 125 | 主列表工作区：SubBar + BatchBar + ListArea（含分组操作回调冒泡） | theme / sub-bar / batch-bar / list-area / ui-state |
+| `list-area.slint` | 167 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* / ui-state |
 | `ledger.slint` | 270 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-tree-row / ledger-band / ledger-cols / models / components-* |
 | `ledger-row.slint` | 218 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
@@ -79,14 +87,15 @@ app.slint / list-area.slint 组装处注入实现转发到 AppActions。
 | `volume-list.slint` | 149 | 卷表格列表：名称 · 大小 · 挂载点（表头可点排序） | theme / components-list / models / @material |
 | `components-list.slint` | 107 | 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 | theme / components-align |
 | `skel.slint` | 69 | 骨架屏占位 | theme |
-| `foot-bar.slint` | 112 | 底部 9 项资源概览（Docker 版本 / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘） | theme / components-align |
-| `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* |
+| `foot-bar.slint` | 102 | 底部 9 项资源概览（Docker 版本 / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘） | theme / components-align / ui-state |
+| `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* / ui-state |
 | `drawer.slint` | 204 | 右侧抽屉三 Tab（详情/日志/环境；`log_only` = 分组合并日志只展示日志面板） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
 | `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
 | `update-dialog.slint` | 191 | 自动更新弹窗：版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启 | theme / components-* / @material（ScrollView） / update-state |
 | `update-state.slint` | 20 | 自动更新 UI 状态 global（供 TopBar / UpdateDialog / Rust 共享） | 无 |
+| `ui-state.slint` | 58 | 显示态 global（连接/采样状态 + 计数汇总 + 行模型 + 资源列表排序，Rust 单写入方） | models |
 | `menu-layers.slint` | 161 | 排序菜单 + 行「···」菜单（容器/镜像/网络/卷）+ 分组菜单（kind=4：停止全部 / 重启全部 / 合并日志 / 删除全部） | theme / models |
 | `components-interact.slint` | 342 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
 | `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |

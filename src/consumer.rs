@@ -193,7 +193,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let ui_w_for_toast = ui_w.clone();
     invoke_from_event_loop(move || {
         let Some(ui) = ui_w.upgrade() else { return };
-        ui.set_loading(false);
+        ui.global::<UiState>().set_loading(false);
         // 走 render::*（thread_local 缓存模型就地同步），只 set 变化的列表
         // 每个列表独立判定代际：变了 = 条件已被回调改过（回调已用新条件重建并
         // 应用），丢弃这批旧行以免顺序与箭头不一致
@@ -205,17 +205,20 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         }
         if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_IMAGES) {
             if let Some(rows) = image_rows {
-                ui.set_image_rows(crate::render::images(rows));
+                ui.global::<UiState>()
+                    .set_image_rows(crate::render::images(rows));
             }
         }
         if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_NETWORKS) {
             if let Some(rows) = network_rows {
-                ui.set_network_rows(crate::render::networks(rows));
+                ui.global::<UiState>()
+                    .set_network_rows(crate::render::networks(rows));
             }
         }
         if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_VOLUMES) {
             if let Some(rows) = volume_rows {
-                ui.set_volume_rows(crate::render::volumes(rows));
+                ui.global::<UiState>()
+                    .set_volume_rows(crate::render::volumes(rows));
             }
         }
         if let Some((action, epoch_ref, epoch)) = log_sync {
@@ -224,41 +227,47 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                 ui.set_log_rows(crate::render::logs_sync(action));
             }
         }
-        ui.set_batch_count(batch_count as i32);
-        ui.set_total_containers(containers_len as i32);
-        ui.set_running_containers(running_count as i32);
-        ui.set_total_images(images_len as i32);
-        ui.set_total_networks(networks_len as i32);
-        ui.set_total_volumes(volumes_len as i32);
+        ui.global::<UiState>().set_batch_count(batch_count as i32);
+        ui.global::<UiState>()
+            .set_total_containers(containers_len as i32);
+        ui.global::<UiState>()
+            .set_running_containers(running_count as i32);
+        ui.global::<UiState>().set_total_images(images_len as i32);
+        ui.global::<UiState>()
+            .set_total_networks(networks_len as i32);
+        ui.global::<UiState>().set_total_volumes(volumes_len as i32);
         // 底部状态栏资源汇总（此前这三个属性从未被写入 → 恒显示 0% / 0MB）
-        ui.set_cpu_total(SharedString::from(format!("{cpu_total:.1}%")));
-        ui.set_mem_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            mem_total,
-        )));
-        ui.set_disk_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            disk_total,
-        )));
-        ui.set_image_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            image_total.unsigned_abs(),
-        )));
+        ui.global::<UiState>()
+            .set_cpu_total(SharedString::from(format!("{cpu_total:.1}%")));
+        ui.global::<UiState>().set_mem_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(mem_total),
+        ));
+        ui.global::<UiState>().set_disk_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(disk_total),
+        ));
+        ui.global::<UiState>().set_image_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(image_total.unsigned_abs()),
+        ));
         if let Some(v) = res.docker_ok {
-            ui.set_docker_ok(v);
+            ui.global::<UiState>().set_docker_ok(v);
         }
         // 采样过期提示：连续多轮取不到 stats / 磁盘占用时才亮，恢复后自动熄灭
         if let Some(v) = res.stats_stale {
-            ui.set_stats_stale(v);
+            ui.global::<UiState>().set_stats_stale(v);
         }
         if let Some(v) = res.disk_stale {
-            ui.set_disk_stale(v);
+            ui.global::<UiState>().set_disk_stale(v);
         }
         if let Some(ref text) = res.status_text {
-            ui.set_status_text(SharedString::from(text.as_str()));
+            ui.global::<UiState>()
+                .set_status_text(SharedString::from(text.as_str()));
         }
         if let Some(ref text) = res.log_status {
             ui.set_log_status(SharedString::from(text.as_str()));
         }
         if let Some(ref v) = res.docker_version {
-            ui.set_docker_version(SharedString::from(v.as_str()));
+            ui.global::<UiState>()
+                .set_docker_version(SharedString::from(v.as_str()));
         }
         if res.is_set(UiFlag::ResetPullBusy) {
             ui.set_pull_busy(false);
@@ -294,7 +303,8 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                     let Some(ui) = ui_weak_t.upgrade() else {
                         return;
                     };
-                    ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+                    ui.global::<UiState>()
+                        .set_status_text(SharedString::from(crate::i18n::t("Ready")));
                 })
                 .ok();
             });

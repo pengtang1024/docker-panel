@@ -55,6 +55,16 @@ pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
     ui.set_volume_rows(crate::render::volumes(crate::ui_rows::build_volume_rows(s)));
 }
 
+/// 抽屉打开协议（UI 部分）：打开抽屉并复位 Tab / 合并日志模式。
+///
+/// 「选中资源 → 打开抽屉」的回调统一走这里：三个属性漏写任一项，
+/// 抽屉就会带着上一个对象的 Tab 或 log_only 模式显示。
+pub fn open_drawer(ui: &MainWindow, tab: i32, log_only: bool) {
+    ui.set_drawer_open(true);
+    ui.set_drawer_tab(tab);
+    ui.set_drawer_log_only(log_only);
+}
+
 /// 清空整个日志面板（日志行 + 状态提示）。
 ///
 /// 切换选中资源（容器 / 镜像 / 网络 / 卷）或按 Clear 时调用：

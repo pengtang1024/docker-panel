@@ -136,7 +136,7 @@ pub(crate) fn chip(k: &str, v: String) -> DetailPair {
 
 /// 按当前选中类型生成抽屉内容
 pub fn build_drawer_data(s: &AppState) -> Option<DrawerData> {
-    match s.sel {
+    match s.sel.kind {
         SelKind::Container => container::build(s),
         SelKind::Image => image::build(s),
         SelKind::Network => netvol::build_network(s),

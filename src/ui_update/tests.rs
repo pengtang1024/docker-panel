@@ -52,8 +52,7 @@ fn log_status_is_passed_through_without_dedupe() {
 fn df_rebuilds_drawer_for_selected_stopped_container() {
     let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
-    s.sel = SelKind::Container;
-    s.sel_key = "c1".into();
+    s.select(SelKind::Container, "c1");
     s.containers = vec![ContainerInfo {
         id: "c1".into(),
         state: "exited".into(),
@@ -94,7 +93,7 @@ fn df_without_containers_is_not_a_ui_change() {
     assert_eq!(s.container_sizes.get("c1"), Some(&1));
 
     // 有容器列表但抽屉不是容器详情（如分组合并日志）时不标记抽屉
-    s.sel = SelKind::Group;
+    s.select(SelKind::Group, "g1");
     s.containers = vec![ContainerInfo {
         id: "c1".into(),
         ..Default::default()

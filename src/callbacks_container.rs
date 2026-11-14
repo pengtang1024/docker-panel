@@ -119,18 +119,14 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         });
     }
 
-    // 容器 inspect（锁内）：写 sel/sel_key，详情 Msg 到达后抽屉按容器渲染。
+    // 容器 inspect（锁内）：写选中项，详情 Msg 到达后抽屉按容器渲染。
     // 同时清空 UI 上的旧日志文本与状态提示：clear_logs 不发 Msg，若只清 state，
     // 新容器还没产生日志时日志页会一直显示上一个容器的内容。
     let bind_inspect = |ui: &MainWindow, s: &SharedState, id: String| {
         crate::ui_apply::clear_log_panel(ui);
-        // 从分组合并日志切到单容器：恢复详情/环境 Tab
-        ui.set_drawer_log_only(false);
         if let Some(mut st) = crate::lock::acquire(s, "callbacks_container") {
-            st.sel = SelKind::Container;
-            st.sel_key = id.clone();
+            st.select(SelKind::Container, id.clone());
             st.request_detail(id);
-            st.clear_logs();
         }
     };
 
@@ -141,8 +137,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_select(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_drawer_open(true);
-            ui.set_drawer_tab(0);
+            crate::ui_apply::open_drawer(&ui, 0, false);
             bind_inspect(&ui, &s, id);
         });
     }
@@ -154,8 +149,7 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         actions.on_container_logs(move |row_id: SharedString| {
             let id = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.set_drawer_open(true);
-            ui.set_drawer_tab(1);
+            crate::ui_apply::open_drawer(&ui, 1, false);
             bind_inspect(&ui, &s, id.clone());
             let new_stream = match crate::lock::acquire(&s, "callbacks_container") {
                 Some(mut st) => st.ensure_follow(&id),

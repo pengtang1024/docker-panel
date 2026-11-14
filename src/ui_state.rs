@@ -40,6 +40,21 @@ pub enum SelKind {
     Group,
 }
 
+/// 抽屉当前选中的资源（类型 + 主键必须同生同灭）
+///
+/// 容器 id / 镜像 key / 网络 id / 卷名 / 分组键；`key` 为空 = 尚未选中。
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Selection {
+    pub kind: SelKind,
+    pub key: String,
+}
+
+impl Selection {
+    pub fn is_empty(&self) -> bool {
+        self.key.is_empty()
+    }
+}
+
 /// 磁盘占用采样周期：`/system/df` 要遍历卷目录 / 容器可写层（I/O 成本高），
 /// 只做低频采样，绝不跟着列表刷新跑
 pub const DISK_USAGE_INTERVAL: Duration = Duration::from_secs(30);
@@ -66,9 +81,8 @@ pub struct AppState {
     pub detail: Option<ContainerDetail>,
     // —— 镜像详情面板 ——
     pub image_detail: Option<crate::models::ImageDetail>,
-    /// 抽屉当前选中的资源类型与主键（容器 id / 镜像 key / 网络 id / 卷名）
-    pub sel: SelKind,
-    pub sel_key: String,
+    /// 抽屉当前选中的资源（类型 + 主键）；只用 `select()` 写入
+    pub sel: Selection,
 
     /// 镜像层数缓存（id → RootFS.Layers.len()）：列表 API 不返回层数，
     /// 首次拿到镜像列表后逐个 inspect 回填，此后仅对新增镜像补查
@@ -189,6 +203,17 @@ impl AppState {
         Self::with_config(config_io::UiConfig::default())
     }
 
+    /// 切换抽屉选中对象：写选中项 + 清空日志缓冲（旧对象的日志与流不属于新对象）。
+    ///
+    /// 这两件事必须绑在一起，调用点禁止分别写 `sel` / `clear_logs`。
+    pub fn select(&mut self, kind: SelKind, key: impl Into<String>) {
+        self.sel = Selection {
+            kind,
+            key: key.into(),
+        };
+        self.clear_logs();
+    }
+
     /// 用显式 UI 配置构造
     fn with_config(cfg: config_io::UiConfig) -> (Arc<Mutex<Self>>, mpsc::Receiver<Msg>) {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -226,8 +251,7 @@ impl AppState {
             image_query: query,
             detail: None,
             image_detail: None,
-            sel: SelKind::Container,
-            sel_key: String::new(),
+            sel: Selection::default(),
             image_layers: HashMap::new(),
             volume_sizes: HashMap::new(),
             container_sizes: HashMap::new(),

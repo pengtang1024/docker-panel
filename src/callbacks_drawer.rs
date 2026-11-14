@@ -27,8 +27,8 @@ pub fn bind_drawer(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                         crate::lock::poison("callbacks_drawer");
                         return;
                     };
-                    if st.sel == SelKind::Container && !st.sel_key.is_empty() {
-                        let id = st.sel_key.clone();
+                    if st.sel.kind == SelKind::Container && !st.sel.is_empty() {
+                        let id = st.sel.key.clone();
                         st.ensure_follow(&id)
                     } else {
                         false

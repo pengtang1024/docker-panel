@@ -91,7 +91,7 @@ impl AppState {
                 }
                 res.mark(UiFlag::ContainersChanged);
                 // 抽屉详情含容器 CPU/内存，选中的是容器时也要重建
-                if self.sel == crate::ui_state::SelKind::Container {
+                if self.sel.kind == crate::ui_state::SelKind::Container {
                     res.mark(UiFlag::DrawerChanged);
                 }
             }
@@ -183,7 +183,7 @@ impl AppState {
             Msg::ContainerDetail(r) => {
                 // 分组日志模式下抽屉不是容器详情：迟到的旧 inspect 结果
                 // 不能覆盖组标题 / 把抽屉切回详情模式
-                if self.sel != crate::ui_state::SelKind::Group {
+                if self.sel.kind != crate::ui_state::SelKind::Group {
                     res.mark(UiFlag::DrawerChanged);
                     if let Ok(d) = r {
                         self.detail = Some(d);

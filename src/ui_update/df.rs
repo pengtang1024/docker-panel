@@ -17,7 +17,7 @@ fn mark_df_changes(state: &AppState, res: &mut DrainResult) {
         return;
     }
     res.mark(UiFlag::ContainersChanged);
-    if state.sel == SelKind::Container {
+    if state.sel.kind == SelKind::Container {
         res.mark(UiFlag::DrawerChanged);
     }
 }

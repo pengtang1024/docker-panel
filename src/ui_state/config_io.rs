@@ -62,13 +62,13 @@ impl Default for UiConfig {
     }
 }
 
-/// 读配置
-///
-/// 无配置文件（首次启动）→ 内置默认：按 compose 分组排序 + 全量容器视图。
-/// 有配置文件 → 以文件为准（字段级回落由 `AppConfig::load` 负责）。
-pub fn load() -> UiConfig {
-    match AppConfig::load() {
-        Some(c) => UiConfig {
+impl UiConfig {
+    /// 配置文件 → UI 状态（纯映射，不做 IO）
+    ///
+    /// 字段级回落（越界值 / 类型不符）由 `AppConfig::load` 负责，
+    /// 这里的输入已经是「可信的配置值」，只做编码转换。
+    pub fn from_app_config(c: &AppConfig) -> Self {
+        Self {
             sort_field: SortField::from_config_index(c.sort_field),
             sort_desc: c.sort_desc,
             filter: c.filter.clone(),
@@ -85,13 +85,12 @@ pub fn load() -> UiConfig {
             auto_install: c.auto_install,
             auto_restart: c.auto_restart,
             last_update_check: c.last_update_check,
-        },
-        None => UiConfig::default(),
+        }
     }
 }
 
-/// 把当前 UI 状态写入配置文件（低频回调 / 退出时调用；小文件原子写）
-pub fn save(s: &AppState) {
+/// UI 状态 → 待写入的配置（纯映射，不做 IO）
+fn app_config_from_state(s: &AppState) -> AppConfig {
     AppConfig {
         theme: s.theme,
         view: s.view,
@@ -109,5 +108,118 @@ pub fn save(s: &AppState) {
         auto_restart: s.auto_restart,
         last_update_check: s.last_update_check,
     }
-    .save();
+}
+
+/// 读配置
+///
+/// 无配置文件（首次启动）→ 内置默认：按 compose 分组排序 + 全量容器视图。
+/// 有配置文件 → 以文件为准（字段级回落由 `AppConfig::load` 负责）。
+pub fn load() -> UiConfig {
+    match AppConfig::load() {
+        Some(c) => UiConfig::from_app_config(&c),
+        None => UiConfig::default(),
+    }
+}
+
+/// 把当前 UI 状态写入配置文件（低频回调 / 退出时调用；小文件原子写）
+pub fn save(s: &AppState) {
+    app_config_from_state(s).save();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ResourceSort;
+    use crate::ui_state::AppState;
+
+    /// 配置 → UI 状态 → 配置 的往返必须逐字段一致（编码转换不丢字段）
+    #[test]
+    fn config_maps_through_ui_state_without_loss() {
+        let (state, _rx) = AppState::new_test();
+        let mut s = state.lock().unwrap();
+        s.theme = 2;
+        s.view = 3;
+        s.filter = "running".into();
+        s.sort_field = SortField::Disk;
+        s.sort_desc = false;
+        s.container_query = "nginx".into();
+        s.log_follow = false;
+        s.compose_collapsed.insert("project:web".into());
+        s.sort_images = ResourceSort {
+            field: 1,
+            desc: true,
+        };
+        s.sort_networks = ResourceSort {
+            field: 2,
+            desc: false,
+        };
+        s.sort_volumes = ResourceSort {
+            field: 0,
+            desc: true,
+        };
+        s.check_updates = false;
+        s.auto_install = false;
+        s.auto_restart = false;
+        s.last_update_check = 42;
+
+        let cfg = app_config_from_state(&s);
+        assert_eq!(cfg.theme, 2);
+        assert_eq!(cfg.view, 3);
+        assert_eq!(cfg.filter, "running");
+        assert_eq!(cfg.sort_field, SortField::Disk.to_config_index());
+        assert_eq!(cfg.search, "nginx");
+        assert!(cfg.compose_collapsed.contains(&"project:web".to_string()));
+        assert_eq!(cfg.sort_images, s.sort_images.to_config());
+
+        let back = UiConfig::from_app_config(&cfg);
+        assert_eq!(back.theme, s.theme);
+        assert_eq!(back.view, s.view);
+        assert_eq!(back.filter, s.filter);
+        assert_eq!(back.sort_field, s.sort_field);
+        assert_eq!(back.sort_desc, s.sort_desc);
+        assert_eq!(back.query, s.container_query);
+        assert_eq!(back.log_follow, s.log_follow);
+        assert_eq!(back.compose_collapsed, s.compose_collapsed);
+        assert_eq!(back.sort_images, s.sort_images);
+        assert_eq!(back.sort_networks, s.sort_networks);
+        assert_eq!(back.sort_volumes, s.sort_volumes);
+        assert_eq!(back.check_updates, s.check_updates);
+        assert_eq!(back.auto_install, s.auto_install);
+        assert_eq!(back.auto_restart, s.auto_restart);
+        assert_eq!(back.last_update_check, s.last_update_check);
+    }
+
+    /// 资源列表排序的打包编码在配置 ↔ UI 之间走同一套约定
+    #[test]
+    fn resource_sort_uses_packed_encoding() {
+        let cfg = AppConfig {
+            sort_images: 9,
+            sort_networks: 10,
+            sort_volumes: 0,
+            ..AppConfig::default()
+        };
+        let ui = UiConfig::from_app_config(&cfg);
+        assert_eq!(
+            ui.sort_images,
+            ResourceSort {
+                field: 1,
+                desc: true
+            }
+        );
+        assert_eq!(
+            ui.sort_networks,
+            ResourceSort {
+                field: 2,
+                desc: true
+            }
+        );
+        assert_eq!(
+            ui.sort_volumes,
+            ResourceSort {
+                field: 0,
+                desc: false
+            }
+        );
+        assert_eq!(ui.sort_images.to_config(), 9);
+    }
 }

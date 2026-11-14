@@ -109,3 +109,129 @@ fn display_name(name: &str, anonymous: bool) -> String {
     let head: String = name.chars().take(ANON_KEEP).collect();
     format!("{head}…")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn network(name: &str, driver: &str, subnet: &str) -> NetworkInfo {
+        NetworkInfo {
+            id: format!("id-{name}"),
+            short_id: name.to_string(),
+            name: name.to_string(),
+            driver: driver.to_string(),
+            scope: "local".to_string(),
+            subnet: subnet.to_string(),
+            gateway: String::new(),
+            builtin: false,
+        }
+    }
+
+    fn volume(name: &str, mountpoint: &str, anonymous: bool) -> VolumeInfo {
+        VolumeInfo {
+            name: name.to_string(),
+            driver: "local".to_string(),
+            mountpoint: mountpoint.to_string(),
+            created: String::new(),
+            anonymous,
+        }
+    }
+
+    fn net_names(sorted: &[&NetworkInfo]) -> Vec<String> {
+        sorted.iter().map(|n| n.name.clone()).collect()
+    }
+
+    /// 网络列：名称忽略大小写，driver / 子网按字符串升序，desc 只负责反向
+    #[test]
+    fn network_sort_follows_column_and_direction() {
+        let list = [
+            network("mid", "bridge", "172.18.0.0/16"),
+            network("Alpha", "host", "172.17.0.0/16"),
+            network("zeta", "overlay", "10.0.0.0/8"),
+        ];
+
+        let mut refs: Vec<&NetworkInfo> = list.iter().collect();
+        sort_networks(
+            &mut refs,
+            ResourceSort {
+                field: 0,
+                desc: false,
+            },
+        );
+        assert_eq!(net_names(&refs), vec!["Alpha", "mid", "zeta"]);
+
+        let mut refs: Vec<&NetworkInfo> = list.iter().collect();
+        sort_networks(
+            &mut refs,
+            ResourceSort {
+                field: 1,
+                desc: false,
+            },
+        );
+        assert_eq!(net_names(&refs), vec!["mid", "Alpha", "zeta"]);
+
+        let mut refs: Vec<&NetworkInfo> = list.iter().collect();
+        sort_networks(
+            &mut refs,
+            ResourceSort {
+                field: 2,
+                desc: true,
+            },
+        );
+        assert_eq!(net_names(&refs), vec!["mid", "Alpha", "zeta"]);
+    }
+
+    fn vol_names(sorted: &[&VolumeInfo]) -> Vec<String> {
+        sorted.iter().map(|v| v.name.clone()).collect()
+    }
+
+    /// 卷大小取 `/system/df` 缓存；未采样的卷按 0 参与排序
+    #[test]
+    fn volume_sort_uses_cached_sizes() {
+        let (state, _rx) = AppState::new_test();
+        let mut s = state.lock().unwrap();
+        s.volume_sizes.insert("big".into(), 900);
+        s.volume_sizes.insert("mid".into(), 500);
+        // small 未采样 → 0
+
+        let list = [
+            volume("mid", "/var/lib/docker/volumes/mid", false),
+            volume("big", "/var/lib/docker/volumes/big", false),
+            volume("small", "/var/lib/docker/volumes/small", false),
+        ];
+        let mut refs: Vec<&VolumeInfo> = list.iter().collect();
+        sort_volumes(
+            &mut refs,
+            ResourceSort {
+                field: 1,
+                desc: false,
+            },
+            &s,
+        );
+        assert_eq!(vol_names(&refs), vec!["small", "mid", "big"]);
+
+        let mut refs: Vec<&VolumeInfo> = list.iter().collect();
+        sort_volumes(
+            &mut refs,
+            ResourceSort {
+                field: 2,
+                desc: false,
+            },
+            &s,
+        );
+        assert_eq!(
+            vol_names(&refs),
+            vec!["big", "mid", "small"],
+            "挂载点字符串升序"
+        );
+    }
+
+    /// 匿名卷展示名截断到 12 字符 + 省略号；具名卷原样返回
+    #[test]
+    fn anonymous_volume_name_is_truncated() {
+        let long = "0123456789abcdef0123456789abcdef";
+        assert_eq!(display_name(long, true), "0123456789ab…");
+        assert_eq!(display_name("my-data", false), "my-data");
+        assert_eq!(display_name("my-data", true), "my-data…");
+    }
+}

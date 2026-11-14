@@ -60,3 +60,93 @@ fn sort_images(list: &mut [&ImageInfo], sort: ResourceSort) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image(name: &str, size: i64, created: i64) -> ImageInfo {
+        ImageInfo {
+            id: format!("id-{name}"),
+            name: name.to_string(),
+            tag: "latest".to_string(),
+            tags: vec!["latest".to_string()],
+            size,
+            created,
+            containers: 0,
+            dangling: false,
+        }
+    }
+
+    fn names(sorted: &[&ImageInfo]) -> Vec<String> {
+        sorted.iter().map(|i| i.name.clone()).collect()
+    }
+
+    /// 基线一律自然升序，desc 只负责反向（规范 #21 的同口径延伸到资源列表）
+    #[test]
+    fn size_sort_is_ascending_then_reversed() {
+        let list = [
+            image("mid", 500, 0),
+            image("big", 900, 0),
+            image("small", 100, 0),
+        ];
+        let mut refs: Vec<&ImageInfo> = list.iter().collect();
+        sort_images(
+            &mut refs,
+            ResourceSort {
+                field: 1,
+                desc: false,
+            },
+        );
+        assert_eq!(names(&refs), vec!["small", "mid", "big"]);
+
+        let mut refs: Vec<&ImageInfo> = list.iter().collect();
+        sort_images(
+            &mut refs,
+            ResourceSort {
+                field: 1,
+                desc: true,
+            },
+        );
+        assert_eq!(names(&refs), vec!["big", "mid", "small"]);
+    }
+
+    #[test]
+    fn created_sort_is_ascending_then_reversed() {
+        let list = [image("b", 0, 200), image("c", 0, 300), image("a", 0, 100)];
+        let mut refs: Vec<&ImageInfo> = list.iter().collect();
+        sort_images(
+            &mut refs,
+            ResourceSort {
+                field: 2,
+                desc: false,
+            },
+        );
+        assert_eq!(names(&refs), vec!["a", "b", "c"]);
+
+        let mut refs: Vec<&ImageInfo> = list.iter().collect();
+        sort_images(
+            &mut refs,
+            ResourceSort {
+                field: 2,
+                desc: true,
+            },
+        );
+        assert_eq!(names(&refs), vec!["c", "b", "a"]);
+    }
+
+    /// 名称列忽略大小写（与台账名称列一致）
+    #[test]
+    fn name_sort_is_case_insensitive() {
+        let list = [image("Bravo", 0, 0), image("alpha", 0, 0)];
+        let mut refs: Vec<&ImageInfo> = list.iter().collect();
+        sort_images(
+            &mut refs,
+            ResourceSort {
+                field: 0,
+                desc: false,
+            },
+        );
+        assert_eq!(names(&refs), vec!["alpha", "Bravo"]);
+    }
+}

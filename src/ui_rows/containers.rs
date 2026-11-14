@@ -269,4 +269,33 @@ mod tests {
             vec!["big", "mid", "small"]
         );
     }
+
+    /// 微条：0 → 不画；大于 0 的比例给最小可见补偿；超出上限截到 1.0
+    #[test]
+    fn bar_ratio_keeps_zero_and_clamps() {
+        assert_eq!(bar_ratio(0.0), 0.0);
+        assert_eq!(bar_ratio(0.001), MIN_BAR_RATIO);
+        assert_eq!(bar_ratio(0.5), 0.5);
+        assert_eq!(bar_ratio(1.5), 1.0);
+        // 补偿只作用于大于 0 的比例，负值按 0 处理
+        assert_eq!(bar_ratio(-0.2), 0.0);
+    }
+
+    /// 内存条口径 = usage / limit；limit 缺失（停止容器）→ 0
+    #[test]
+    fn mem_ratio_uses_limit() {
+        let zero = ContainerInfo {
+            mem_usage: 512,
+            mem_limit: 0,
+            ..Default::default()
+        };
+        assert_eq!(mem_ratio(&zero), 0.0);
+
+        let half = ContainerInfo {
+            mem_usage: 512,
+            mem_limit: 1024,
+            ..Default::default()
+        };
+        assert_eq!(mem_ratio(&half), 0.5);
+    }
 }

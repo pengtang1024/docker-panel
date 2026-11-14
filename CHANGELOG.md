@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.12] - 2026-11-14
+
 ### 新增
 
 - **数据过期可见化**：stats（6s）与 `/system/df`（30s）连续多轮拿不到样本时，顶栏连接状态旁显示琥珀色小圆点与「实时数据可能已过期」/「磁盘数据可能已过期」/「实时与磁盘数据可能已过期」提示（i18n 三态文案），恢复后自动消失。阈值经过刻意选择（stats 连续 3 轮 ≈18s、磁盘连续 2 轮 ≈60s），单次失败不会闪烁，也不用弹窗打断操作；只在「正常 → 过期」「过期 → 正常」跃迁时上报，不重复触发 UI 应用。
@@ -391,7 +393,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...HEAD
+[0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12
 [0.7.11]: https://github.com/pengtang1024/docker-panel/compare/0.7.10...0.7.11
 [0.7.10]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...0.7.10
 [0.7.9]: https://github.com/pengtang1024/docker-panel/compare/0.7.8...0.7.9

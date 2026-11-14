@@ -7,13 +7,13 @@ use std::sync::mpsc::Sender;
 use crate::models::Msg;
 use crate::ui_state::AppState;
 
-use super::DrainResult;
+use super::{DrainResult, UiFlag};
 
 impl AppState {
     pub(super) fn apply_update_msg(&mut self, msg: Msg, res: &mut DrainResult) {
         match msg {
             Msg::UpdateCheckDone(manual, auto_installing, r) => {
-                res.update_check_done = true;
+                res.mark(UiFlag::UpdateCheckDone);
                 self.update_progress = 0;
                 self.update_busy_ui = auto_installing;
                 match r {
@@ -39,7 +39,7 @@ impl AppState {
                                 "New version {0} available",
                                 &[&info.version],
                             ));
-                            res.toast = true;
+                            res.mark(UiFlag::Toast);
                         }
                     }
                     Err(e) => {
@@ -54,10 +54,10 @@ impl AppState {
                 self.update_progress = percent.clamp(0, 100);
                 self.update_status = text;
                 self.update_busy_ui = true;
-                res.update_progress = true;
+                res.mark(UiFlag::UpdateProgress);
             }
             Msg::UpdateDone(r, restart_needed) => {
-                res.update_done = true;
+                res.mark(UiFlag::UpdateDone);
                 self.update_busy_ui = false;
                 match r {
                     Ok(msg) => {
@@ -75,7 +75,7 @@ impl AppState {
                             self.update_status = msg.clone();
                         }
                         res.status_text = Some(msg);
-                        res.toast = true;
+                        res.mark(UiFlag::Toast);
                     }
                     Err(e) => {
                         self.update_progress = 0;

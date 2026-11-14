@@ -13,6 +13,9 @@ export component TopBar inherits Rectangle {
     }
 
     in-out property <bool> docker_ok: false;
+    // 采样过期：连续多轮拿不到 stats / 磁盘占用时点亮（边沿触发，单次抖动不会闪）
+    in-out property <bool> stats_stale: false;
+    in-out property <bool> disk_stale: false;
     in-out property <string> search_q: "";
     callback theme_click();
     callback settings_click();
@@ -60,6 +63,21 @@ export component TopBar inherits Rectangle {
             horizontal-stretch: 0;
             text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: 11px; font-weight: 600; color: Theme.ink_3;
+        }
+
+        // 采样过期提示（状态位，不是弹窗）：连续多轮没取到数据才出现，恢复后自动消失
+        if root.stats_stale || root.disk_stale : Rectangle {
+            horizontal-stretch: 0;
+            width: 5px; height: 5px;
+            border-radius: 2.5px;
+            background: Theme.warn;
+        }
+        if root.stats_stale || root.disk_stale : VCenterText {
+            horizontal-stretch: 0;
+            text: (root.stats_stale && root.disk_stale) ? @tr("Live and disk data may be stale")
+                : root.stats_stale ? @tr("Live data may be stale")
+                : @tr("Disk data may be stale");
+            font-size: 11px; font-weight: 600; color: Theme.warn;
         }
 
         Rectangle { horizontal-stretch: 1; }

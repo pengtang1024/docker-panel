@@ -6,7 +6,7 @@
 
 use crate::ui_state::{AppState, LOG_ROWS_MAX};
 
-use super::DrainResult;
+use super::{DrainResult, UiFlag};
 
 impl AppState {
     /// 一批日志行落地：先归还积压计账，再按流 epoch 过滤
@@ -32,7 +32,7 @@ impl AppState {
         self.trim_logs();
         // 收到首条（历史）日志后才算历史加载完成；空历史/首流失败可重试 tail=200
         self.history_done = true;
-        res.logs_changed = true;
+        res.mark(UiFlag::LogsChanged);
     }
 
     /// 一条流结束：分组合并日志有 N 条流，只有**全部**退出才算整体结束

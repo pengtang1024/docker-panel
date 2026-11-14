@@ -73,6 +73,9 @@ export component MainWindow inherits Window {
 
     // —— 全局状态 ——
     in-out property <bool> docker_ok: false;
+    /// 采样过期状态位（连续多轮拿不到 stats / 磁盘占用）：顶栏提示，不弹窗
+    in-out property <bool> stats_stale: false;
+    in-out property <bool> disk_stale: false;
     /// Docker 守护进程版本（Rust 查询 /version 后写入；空串表示尚未取到，底栏显示占位符）
     in-out property <string> docker_version: "";
     in-out property <string> status_text: @tr("Ready");
@@ -211,6 +214,8 @@ export component MainWindow inherits Window {
             top-bar := TopBar {
                 height: Theme.top_h;
                 docker_ok <=> root.docker_ok;
+                stats_stale <=> root.stats_stale;
+                disk_stale <=> root.disk_stale;
                 search_q <=> root.search_q;
                 theme_click => { AppActions.toggle_theme(); }
                 settings_click => { AppActions.settings_open(); }

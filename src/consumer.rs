@@ -21,7 +21,7 @@ use slint::{invoke_from_event_loop, SharedString, Weak};
 use crate::models::Msg;
 use crate::slint_gen::*;
 use crate::ui_state::{LogSyncPlan, SharedState};
-use crate::ui_update::DrainResult;
+use crate::ui_update::{DrainResult, UiFlag};
 
 mod throttle;
 use throttle::{apply_interval, poll_timeout, UI_MIN_INTERVAL};
@@ -89,7 +89,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     };
 
     // 操作完成立即刷新（只 spawn，不做 IO）
-    if res.refresh_now {
+    if res.is_set(UiFlag::RefreshNow) {
         s.refresh();
     }
 
@@ -97,27 +97,27 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     // 列表之间也分开标记（一条 stats 只重建容器行，不连带重建镜像/网络/卷）
     // 容器台账：行 + 概览带同批产出（概览带的数字必须与行一致）
     let container_ledger = res
-        .containers_changed
+        .is_set(UiFlag::ContainersChanged)
         .then(|| crate::ui_rows::build_container_ledger(&s));
     let image_rows = res
-        .images_changed
+        .is_set(UiFlag::ImagesChanged)
         .then(|| crate::ui_rows::build_image_rows(&s));
     let network_rows = res
-        .networks_changed
+        .is_set(UiFlag::NetworksChanged)
         .then(|| crate::ui_rows::build_network_rows(&s));
     let volume_rows = res
-        .volumes_changed
+        .is_set(UiFlag::VolumesChanged)
         .then(|| crate::ui_rows::build_volume_rows(&s));
     // 抽屉详情含 CPU/内存/磁盘（来自列表 stats），容器 stats 变化时也要重建，
     // 但纯日志消息不触发（drawer_changed / 各列表标记都为 false）
-    let drawer_data = if res.drawer_changed {
+    let drawer_data = if res.is_set(UiFlag::DrawerChanged) {
         crate::detail_fmt::build_drawer_data(&s)
     } else {
         None
     };
     // 日志行同步：模型是窗口的镜像 —— 能追加就追加（已有行索引不变，
     // 可见行不必重排，是日志流不卡的关键）；窗口裁剪过前段才整体重建。
-    let log_sync = if res.logs_changed {
+    let log_sync = if res.is_set(UiFlag::LogsChanged) {
         let epoch = s.log_epoch.load(Ordering::Acquire);
         let action = match s.log_sync_plan() {
             LogSyncPlan::Append { from } => {
@@ -146,7 +146,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         None
     };
 
-    let batch_count = if res.containers_changed {
+    let batch_count = if res.is_set(UiFlag::ContainersChanged) {
         let live: Vec<String> = s.containers.iter().map(|c| c.id.clone()).collect();
         s.batch.purge_dead(live)
     } else {
@@ -178,10 +178,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let rows_epoch_ref = s.rows_epoch.clone();
     let rt_h = s.rt.handle().clone();
     // 更新弹窗：检查完成 / 进度 / 安装完成时取一次快照（锁内只读，锁外灌 UI）
-    let update_view = (res.update_check_done || res.update_progress || res.update_done)
+    let update_check_done = res.is_set(UiFlag::UpdateCheckDone);
+    let update_done = res.is_set(UiFlag::UpdateDone);
+    let update_view = (update_check_done || res.is_set(UiFlag::UpdateProgress) || update_done)
         .then(|| crate::update::view_snapshot(&s));
-    let update_check_done = res.update_check_done;
-    let update_done = res.update_done;
 
     drop(s); // ⚠️ invoke_from_event_loop 之前必须释放锁
 
@@ -231,22 +231,29 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         ui.set_image_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
             image_total.unsigned_abs(),
         )));
-        if let Some(ok) = res.docker_ok {
-            ui.set_docker_ok(ok);
+        if let Some(v) = res.docker_ok {
+            ui.set_docker_ok(v);
         }
-        if let Some(text) = res.status_text {
-            ui.set_status_text(SharedString::from(text));
+        // 采样过期提示：连续多轮取不到 stats / 磁盘占用时才亮，恢复后自动熄灭
+        if let Some(v) = res.stats_stale {
+            ui.set_stats_stale(v);
         }
-        if let Some(text) = res.log_status {
-            ui.set_log_status(SharedString::from(text));
+        if let Some(v) = res.disk_stale {
+            ui.set_disk_stale(v);
         }
-        if let Some(v) = res.docker_version {
-            ui.set_docker_version(SharedString::from(v));
+        if let Some(ref text) = res.status_text {
+            ui.set_status_text(SharedString::from(text.as_str()));
         }
-        if res.reset_pull_busy {
+        if let Some(ref text) = res.log_status {
+            ui.set_log_status(SharedString::from(text.as_str()));
+        }
+        if let Some(ref v) = res.docker_version {
+            ui.set_docker_version(SharedString::from(v.as_str()));
+        }
+        if res.is_set(UiFlag::ResetPullBusy) {
             ui.set_pull_busy(false);
         }
-        if res.close_pull {
+        if res.is_set(UiFlag::ClosePull) {
             ui.set_pull_open(false);
         }
         if let Some(v) = update_view {
@@ -268,7 +275,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             crate::ui_apply::apply_drawer(&ui, d);
         }
         // Toast auto-restore：操作结果 2s 后恢复 "Ready"
-        if res.toast {
+        if res.is_set(UiFlag::Toast) {
             let rt_t = rt_h;
             let ui_weak_t = ui_w_for_toast;
             rt_t.spawn(async move {

@@ -148,12 +148,13 @@ cargo check --all-targets
 6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；分组带 hover 后出现启动 / 合并日志 / 组菜单；镜像 / 网络 / 卷点表头按列排序。
 7. 顶栏按钮：切换主题 / 刷新 / 清理 / 检查更新 / 拉取镜像；发现新版本时更新图标带徽标点。
 8. 底部栏显示 9 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘）与最近操作结果；「镜像大小」是全部镜像占用之和，与容器「磁盘」列（可写层、独占）互补。
-9. 同一用户只允许一个实例：再次启动会提示已有实例运行并以非 0 退出，同时通知已有窗口尝试前置（Wayland 下是否置顶由 compositor 决定）；`--version` / `-V` / `--help` 在拿锁之前处理，实例运行时照常可用。
+9. 同一用户只允许一个实例：再次启动会提示已有实例运行并以非 0 退出，同时向已有实例发前置请求（`show` + 取消最小化 + 重绘）——**这只能是尽力而为**，是否置顶由 compositor / WM 决定；**GNOME Wayland 下合成器基本都会拒绝后台进程的激活请求，窗口不会自动到前台**（需从面板坞 / 任务栏切换）。`--version` / `-V` / `--help` 在拿锁之前处理，实例运行时照常可用。
 
 ## 已知限制
 
 - 无 Docker Compose 导入 / 导出、无定时清理
 - 镜像 / 网络 / 卷不支持多选批量；网络 / 卷当前没有行内删除入口
+- **单实例的前置请求只是尽力而为**：第二个实例只会提示并退出，同时给已有实例发一次前置请求（`show` + `set_minimized(false)` + `request_redraw()`），是否真的到前台由 compositor / WM 决定。GNOME Wayland 没有合法的窗口激活途径（终端启动的第二个进程拿不到 `XDG_ACTIVATION_TOKEN`；winit 在 Wayland 下 `focus_window()` 是空函数、`set_minimized()` 被忽略；`request_user_attention` 与 GTK `present()` 实测均无效；桌面文件无 `DBusActivatable`），**窗口不会自动到前台**；X11 下能否夺焦同样取决于 WM 的焦点策略。协议层细节与未来方案见 `src/single_instance.rs` 文件头
 - 镜像行的 ▶（Run）按钮只回显提示，尚未接入真正的 `docker run`
 - 断流窗口的日志会补回，但单次最多 2000 行（仅 `json-file` 日志驱动；其它驱动 / 驱动探测失败仍不补回；时钟回拨时安全阀会丢弃游标退回 `tail=0`）；日志窗口最多保留 2000 行（合并日志的多个成员共享这一个窗口）
 - 容器停止后不自动重连日志流，需要重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流
@@ -240,6 +241,7 @@ docker-panel/
 │   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help；未知参数照常启动 GUI
 │   ├── single_instance.rs  # 单实例锁（Unix socket 互斥 + raise IPC；陈旧锁自动清理，Drop 时释放）
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
+│   ├── stale.rs            # 采样过期判定：连续多轮无样本 → 边沿触发的状态位（stats 3 轮 / df 2 轮）
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
@@ -256,7 +258,10 @@ docker-panel/
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）
-│   ├── ui_update.rs        # DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update.rs        # 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update/drain.rs  # DrainResult：UiFlag 位掩码 + 声明宏生成三份清单与一致性测试
+│   ├── ui_update/df.rs     # /system/df 结果 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
+│   ├── ui_update/log.rs    # 日志批 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_update/update.rs # 自动更新消息 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
 │   ├── batch.rs            # BatchState 多选状态

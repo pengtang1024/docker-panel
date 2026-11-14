@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use crate::ui_state::{AppState, SelKind};
-use crate::ui_update::DrainResult;
+use crate::ui_update::{DrainResult, UiFlag};
 
 /// 两路 df 采样共用的变化标记（口径与 `apply_container_sizes` 一致）：
 /// 没有容器列表时不标记——首屏 df 常早于列表到达，置标记只会白占一个 UI 窗口。
@@ -16,9 +16,9 @@ fn mark_df_changes(state: &AppState, res: &mut DrainResult) {
     if state.containers.is_empty() {
         return;
     }
-    res.containers_changed = true;
+    res.mark(UiFlag::ContainersChanged);
     if state.sel == SelKind::Container {
-        res.drawer_changed = true;
+        res.mark(UiFlag::DrawerChanged);
     }
 }
 
@@ -29,7 +29,9 @@ impl AppState {
         map: HashMap<String, u64>,
         res: &mut DrainResult,
     ) {
-        res.volumes_changed |= !self.volumes.is_empty();
+        if !self.volumes.is_empty() {
+            res.mark(UiFlag::VolumesChanged);
+        }
         mark_df_changes(self, res);
         self.volume_sizes = map;
         self.apply_container_sizes();

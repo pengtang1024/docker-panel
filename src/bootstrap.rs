@@ -14,6 +14,7 @@ use crate::docker::{
 };
 use crate::models::Msg;
 use crate::slint_gen::MainWindow;
+use crate::stale::{StaleTracker, DISK_STALE_ROUNDS, STATS_STALE_ROUNDS};
 use crate::ui_state::{SharedState, DISK_USAGE_INTERVAL};
 
 /// 6s stats 采样：对所有运行中容器并发 docker.stats()，双采样 CPU% 在 consumer 侧计算
@@ -31,6 +32,7 @@ pub fn spawn_stats_interval(state: &SharedState) {
     };
     rt_h.spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(6));
+        let mut stale = StaleTracker::new(STATS_STALE_ROUNDS);
         loop {
             tick.tick().await;
             let (tx, ids): (_, Vec<String>) = {
@@ -49,8 +51,13 @@ pub fn spawn_stats_interval(state: &SharedState) {
             };
             // 整轮采样打包成一条消息：逐容器单发会让卡片数值分批阶梯跳动
             let batch = crate::docker::sample_all(&ids).await;
-            if !batch.is_empty() {
+            let got_sample = !batch.is_empty();
+            if got_sample {
                 let _ = tx.send(Msg::StatsBatch(batch));
+            }
+            // 没有运行中容器时本来就不该有样本 → 不算失败，顺带清掉过期提示
+            if let Some(now_stale) = stale.observe(got_sample || ids.is_empty()) {
+                let _ = tx.send(Msg::StatsStale(now_stale));
             }
         }
     });
@@ -69,6 +76,7 @@ pub fn spawn_disk_usage_interval(state: &SharedState) {
     };
     rt_h.spawn(async move {
         let mut tick = tokio::time::interval(DISK_USAGE_INTERVAL);
+        let mut stale = StaleTracker::new(DISK_STALE_ROUNDS);
         loop {
             tick.tick().await;
             let tx = {
@@ -82,11 +90,15 @@ pub fn spawn_disk_usage_interval(state: &SharedState) {
                 with_timeout(volume_sizes()),
                 with_timeout(container_sizes())
             );
+            let got_sample = vols.is_ok() && conts.is_ok();
             if let Ok(sizes) = vols {
                 let _ = tx.send(Msg::VolumeSizes(sizes));
             }
             if let Ok(sizes) = conts {
                 let _ = tx.send(Msg::ContainerSizes(sizes));
+            }
+            if let Some(now_stale) = stale.observe(got_sample) {
+                let _ = tx.send(Msg::DiskStale(now_stale));
             }
         }
     });

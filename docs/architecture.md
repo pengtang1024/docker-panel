@@ -48,6 +48,7 @@ docker-panel/
 │   ├── consumer.rs            consumer 线程：动态 recv_timeout(≤100ms) + 分批 drain（≤2048）+ 120ms UI 节流（列表刷新由 event_watch 事件驱动）
 │   ├── event_watch.rs         Docker `/events` 订阅：白名单过滤 + 400ms 合并 + 断流退避重连（列表即时性来源，空闲零请求）
 │   ├── bootstrap.rs           6s stats 采样 interval + 30s 磁盘占用采样（容器可写层 + 卷占用，`/system/df`） + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）+ 主题监听
+│   ├── stale.rs               采样过期判定：连续多轮无样本 → 边沿触发状态位（stats 3 轮 ≈18s / df 2 轮 ≈60s）
 │   │
 │   ├── models.rs              纯数据结构：Msg / ContainerInfo / ImageInfo / ContainerDetail / NetworkInfo / VolumeInfo / ImageDetail / ResourceSort
 │   ├── models/update.rs       自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层）
@@ -62,6 +63,7 @@ docker-panel/
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
+│   ├── ui_update/drain.rs     DrainResult：UiFlag 位掩码 + 声明宏生成 has_ui_changes / logs_only / merge
 │   ├── ui_update/update.rs    自动更新消息 → AppState / DrainResult（从 ui_update 拆出）
 │   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
 │   │

@@ -64,9 +64,9 @@ fn df_rebuilds_drawer_for_selected_stopped_container() {
     tx.send(Msg::ContainerSizes(HashMap::from([("c1".into(), 4096)])))
         .unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(res.containers_changed);
+    assert!(res.is_set(UiFlag::ContainersChanged));
     assert!(
-        res.drawer_changed,
+        res.is_set(UiFlag::DrawerChanged),
         "已停止容器没有 stats 推送，df 到达必须重建抽屉磁盘行"
     );
     assert_eq!(s.containers[0].size_rw, 4096);
@@ -76,7 +76,7 @@ fn df_rebuilds_drawer_for_selected_stopped_container() {
     tx.send(Msg::VolumeSizes(HashMap::from([("data".into(), 39_000)])))
         .unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(res.drawer_changed);
+    assert!(res.is_set(UiFlag::DrawerChanged));
     assert_eq!(s.containers[0].size_rw, 4096 + 39_000);
 }
 
@@ -102,8 +102,8 @@ fn df_without_containers_is_not_a_ui_change() {
     tx.send(Msg::ContainerSizes(HashMap::from([("c1".into(), 2)])))
         .unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(res.containers_changed);
-    assert!(!res.drawer_changed);
+    assert!(res.is_set(UiFlag::ContainersChanged));
+    assert!(!res.is_set(UiFlag::DrawerChanged));
 }
 
 #[test]
@@ -117,12 +117,18 @@ fn operation_refresh_relies_on_events_except_cleanup() {
         .unwrap();
     tx.send(Msg::PullDone(Ok("pulled".into()))).unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(!res.refresh_now, "操作与拉取交给 /events，不额外全量刷新");
+    assert!(
+        !res.is_set(UiFlag::RefreshNow),
+        "操作与拉取交给 /events，不额外全量刷新"
+    );
 
     // prune 的事件支持按版本而异 → 保留立即刷新兜底
     tx.send(Msg::CleanupDone(Ok("cleaned".into()))).unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(res.refresh_now, "清理必须立即刷新，不能依赖 prune 事件");
+    assert!(
+        res.is_set(UiFlag::RefreshNow),
+        "清理必须立即刷新，不能依赖 prune 事件"
+    );
 }
 
 #[test]
@@ -141,7 +147,10 @@ fn list_refresh_errors_do_not_mark_rows_changed() {
     }
     let res = s.drain_messages(&rx, None, 10);
     assert!(
-        !res.any_list_changed(),
+        !res.is_set(UiFlag::ContainersChanged)
+            && !res.is_set(UiFlag::ImagesChanged)
+            && !res.is_set(UiFlag::NetworksChanged)
+            && !res.is_set(UiFlag::VolumesChanged),
         "列表刷新失败没有新行，不应触发四个列表的无谓重建"
     );
     assert_eq!(res.docker_ok, Some(false), "连通性仍由列表结果表达");
@@ -150,7 +159,7 @@ fn list_refresh_errors_do_not_mark_rows_changed() {
     tx.send(Msg::Containers(Ok(Vec::new()))).unwrap();
     tx.send(Msg::Networks(Ok(Vec::new()))).unwrap();
     let res = s.drain_messages(&rx, None, 10);
-    assert!(res.containers_changed && res.networks_changed);
+    assert!(res.is_set(UiFlag::ContainersChanged) && res.is_set(UiFlag::NetworksChanged));
 }
 
 #[test]
@@ -179,15 +188,56 @@ fn action_result_does_not_claim_docker_connectivity() {
 }
 
 #[test]
-fn stale_processing_is_not_a_ui_change() {
-    let mut res = DrainResult {
-        processed: 42,
-        ..Default::default()
-    };
-    assert!(!res.has_ui_changes());
-    res.logs_changed = true;
+fn network_or_volume_failure_marks_connectivity() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 网络/卷失败过去完全静默（红点不亮）；现在与容器/镜像一致
+    tx.send(Msg::Networks(Err("cannot connect".into())))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.docker_ok, Some(false));
+    assert!(!res.is_set(UiFlag::NetworksChanged), "失败没有新行");
+
+    tx.send(Msg::Volumes(Err("cannot connect".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.docker_ok, Some(false));
+    assert!(!res.is_set(UiFlag::VolumesChanged));
+}
+
+#[test]
+fn sample_staleness_flags_reach_ui() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 只在跃迁时由 bootstrap 发送；这里验证透传与「算一次 UI 变化」
+    tx.send(Msg::StatsStale(true)).unwrap();
+    tx.send(Msg::DiskStale(true)).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.stats_stale, Some(true));
+    assert_eq!(res.disk_stale, Some(true));
     assert!(res.has_ui_changes());
-    res.logs_changed = false;
+    assert!(
+        !res.logs_only(),
+        "过期提示必须立刻上屏，不能等日志的宽松窗口"
+    );
+
+    tx.send(Msg::StatsStale(false)).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.stats_stale, Some(false));
+    assert_eq!(res.disk_stale, None, "没有新跃迁时不重复下发");
+}
+
+#[test]
+fn stale_processing_is_not_a_ui_change() {
+    let mut res = DrainResult::default();
+    res.processed = 42;
+    assert!(!res.has_ui_changes());
+    res.mark(UiFlag::LogsChanged);
+    assert!(res.has_ui_changes());
+    res = DrainResult::default();
     res.status_text = Some("x".into());
     assert!(res.has_ui_changes());
 }
@@ -207,12 +257,12 @@ fn stale_stream_epoch_is_dropped_after_clear() {
     tx.send(Msg::LogBatch(5, vec!["stale".into()])).unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert!(s.logs.is_empty(), "旧 epoch 日志必须被丢弃");
-    assert!(!res.logs_changed);
+    assert!(!res.is_set(UiFlag::LogsChanged));
 
     tx.send(Msg::LogBatch(6, vec!["fresh".into()])).unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert_eq!(s.logs, vec!["fresh".to_string()]);
-    assert!(res.logs_changed);
+    assert!(res.is_set(UiFlag::LogsChanged));
     assert!(s.history_done, "收到首条日志后才算历史完成");
 
     // #4：当前流的结束消息清空 follow_id；旧 epoch 的结束消息不影响新流

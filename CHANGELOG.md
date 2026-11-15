@@ -8,9 +8,17 @@
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-11-15
+
 ### 新增
 
 - **jsDelivr 第二级备源真正可用**：`release.yml` 在「发布 GitHub Release」成功之后新增一步，把本次生成的 `version.json` 提交到 `master`。该步骤只在 Release 与全部资产上传完成后才运行，因此提交到 `master` 的清单一定指向已存在的 Release；只 `git add -- version.json` 一个文件，提交信息带 `[skip ci]`，每次基于最新 `master` 覆盖式重建（push 被并发提交拒绝时最多重试 3 次），清单内容始终以本次发布产物为准。此前 `@master/version.json` 恒 404、第二级回退形同虚设。`master` 因此每次发版会比 `develop` 多一条 CI 提交，下一次 `release finish` 随 tag 回灌自动收敛，版本三同步与 `check-version.sh` 不受影响。
+
+### 变更
+
+- **文档与注释统一为「事件驱动刷新」口径**：列表刷新早已改为 Docker `/events` 驱动（400ms 合并窗口 + 断流退避重连），但架构文档、规则层与源码注释里仍残留多处「3s 刷新 / 3s 心跳」的旧描述。本版把这些表述统一改为「事件触发的刷新」，避免后续维护者按过时文档推断出并不存在的定时轮询；同时把 `event_watch` 的动作过滤在两份文档里统一写成「噪声黑名单」（与实现一致，此前一处仍写白名单）。
+- **README 平台范围收敛为 Linux**：徽章与「环境要求」明确当前唯一验证与支持的平台是 Linux——源码理论上可交叉编译到 macOS / Windows，但两平台未验证，且自动更新与 deb 安装本身就只做 Linux。文档导航同时补上 Gitee Wiki 入口，截图来源说明改为 `agkit shot --app docker-panel`（与项目验收口径一致）。
+- **Wiki 同步规范扩为双站点镜像**：`docs/agents-rules.md` 的 Wiki 更新流程从「GitHub Wiki 单站点」改为「GitHub Wiki + Gitee Wiki 两份镜像，任何变更同批推送」，并记录 Gitee Wiki 的惰性创建方式、链接语法约束（用标准 Markdown 相对链接，禁用 Gollum 的 `[[Page|Label]]`）与图片地址约束（用 jsDelivr GH CDN，不用国内常不可达的 `raw.githubusercontent.com`）。
 
 ## [0.7.13] - 2026-11-15
 
@@ -407,7 +415,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...HEAD
+[0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14
 [0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13
 [0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12
 [0.7.11]: https://github.com/pengtang1024/docker-panel/compare/0.7.10...0.7.11

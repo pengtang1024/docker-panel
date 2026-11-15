@@ -57,7 +57,7 @@ pub use stats::{compute_cpu_delta, sample_all, ContainerStatsSnapshot};
 pub use system::{cleanup, version};
 
 /// 单次 Docker API 调用上限：守护进程无响应时不能让后台任务无限挂起，
-/// 否则 3s/6s interval 会反复叠加任务，最终把 tokio 工作线程耗尽
+/// 否则各采样/刷新 interval 会反复叠加任务，最终把 tokio 工作线程耗尽
 ///（表现为列表/日志停止更新，看起来像"卡死"）。
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 

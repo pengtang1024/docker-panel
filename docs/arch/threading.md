@@ -97,21 +97,15 @@ invoke_from_event_loop(move || {
 - **行模型过期判定（`rows_epoch`，per-list 位掩码）**：行是在锁内按**当时**的排序/筛选/搜索条件建的，锁外才写 UI；期间用户改了条件，这批行落地就会让列表顺序与排序箭头打架。排序/筛选/搜索变更时回调按受影响列表递增 `AppState::rows_epoch`（搜索 = 容器 + 镜像；排序 = 对应列表），consumer 在锁内快照、锁外逐列表比对，该列表代际变了才丢弃这批旧行（回调已用新条件重建并应用过）。
 - **consumer 不回写用户操作过的状态**：`sort_field` / `sort_desc` / `filter` / `view` 等由 UI 回调独占写入（回调在 UI 线程同步改 state → `ui.set_xxx` → 重建列表）。consumer 只刷数据：它锁内取的是快照、锁外才写 UI，回写就会把用户刚改的状态打回旧值（甚至偶发对不上）。详见 [ui-interaction.md §3.2](ui-interaction.md)。
 
-### 定时刷新走 tokio interval（不是 Slint Timer）
+### 定时任务走 tokio interval（不是 Slint Timer）
 
 软件渲染器 + MCP 模式下 Slint Timer 不触发（连 debug eprintln 都没有），定时任务全部改为 tokio interval：
 
-- **事件驱动**（`event_watch::spawn`）：常驻消费 `/events`（`type` 过滤 container/image/network/volume），只认改变列表可见状态的动作（`start`/`die`/`pull`/`create` 等白名单；`health_status`、`exec_*`、`attach` 一律忽略）→ 锁内 `s.refresh()`。400ms 合并窗口让突发启停只刷一遍；断流按 1s→30s 指数退避重连，永不放弃。空闲时零请求。
-- **列表刷新只有事件这一个来源**（`event_watch::spawn`）：常驻消费 `/events`，收到非噪声事件锁内 `s.refresh()`（并发刷新容器/镜像/网络/卷，结果走 `tx.send(Msg::*)`）→ 400ms 合并窗口让突发启停只刷一遍；断流按 1s→30s 指数退避重连，重连后**补一次全量刷新**补齐断流窗口。**没有定时兜底轮询**：曾用 3s（`size=1` 容器列表 ≈70ms + 镜像列表 ≈96ms，每分钟吃掉 dockerd ≈3.3s），15s 兜底也一起删掉了——兜底只会把「事件漏刷 / 过滤写错 / 代理不支持长连接」这类 bug 藏成「最多慢 N 秒」，而不是暴露出来。
-  - `refresh()` 带 in-flight 去重：上一轮未完成时只置 `refresh_dirty`，本轮结束立刻补跑一次（不丢事件触发的刷新），也不会在慢 Docker 下叠 4 个调用。
-  - 所有列表/统计/inspect 调用都经 `docker::with_timeout`（10s），防止守护进程无响应时后台任务无限挂起、耗尽 tokio 工作线程。
-- **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats。
-  - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数还会独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。
-  - CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
+- **列表刷新只有事件这一个来源**（`event_watch::spawn` 常驻订阅 Docker `/events`）：`type` 过滤 container/image/network/volume，动作过滤用**噪声黑名单**（只忽略 `health_status` / `exec_*` / `attach` / `detach`，未知动作宁可多刷一次也不漏刷），收到非噪声事件就锁内 `s.refresh()`（并发刷新容器/镜像/网络/卷，结果走 `tx.send(Msg::*)`）→ 400ms 合并窗口让突发启停只刷一遍；断流按 1s→30s 指数退避重连、永不放弃，重连后**补一次全量刷新**补齐断流窗口（连接建立那一刻的状态才是真相）；空闲时零请求。**没有定时兜底轮询**：曾用 3s（`size=1` 容器列表 ≈70ms + 镜像列表 ≈96ms，每分钟吃掉 dockerd ≈3.3s），15s 兜底也一起删掉了——兜底只会把「事件漏刷 / 过滤写错 / 代理不支持长连接」这类 bug 藏成「最多慢 N 秒」，而不是暴露出来。`refresh()` 带 in-flight 去重（上一轮未完成只置 `refresh_dirty`、本轮结束补跑一次，不丢事件触发的刷新，也不会在慢 Docker 下叠 4 个调用）；所有列表/统计/inspect 调用都经 `docker::with_timeout`（10s），防止守护进程无响应时后台任务无限挂起、耗尽 tokio 工作线程。
+- **6s stats 采样**（`bootstrap::spawn_stats_interval`）：join_all 拉所有 running 容器 stats。**首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数还会独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
 - **30s 磁盘占用**（`bootstrap::spawn_disk_usage_interval`）：`/system/df?type=volume` 与 `?type=container` 并行采样，低频单独跑。容器可写层占用只从这里来（列表接口不带 `size=1`：遍历文件系统 + 删除中的容器会 404），列表刷新后用 `AppState::apply_container_sizes` 从缓存补回。
 - **自动更新**（`update::spawn_scheduler`）：启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs`。
-- UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
-- 这符合 Slint 线程安全模型：只有主线程可以修改 Model。
+- UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI（符合 Slint 线程安全模型：只有主线程可以修改 Model）。
 - **主题监听可退出**：`dconf watch` 的阻塞读放在独立 reader 线程，监控线程用 `recv_timeout(200ms)` 轮询 shutdown；轮询回退路径也按 200ms 醒来检查。窗口关闭时 `theme-monitor` 能在 200ms 内 join，不会因 `reader.next()` 永久阻塞而让进程挂住。
 
 ## 2. 消息流（Msg 变体一览）

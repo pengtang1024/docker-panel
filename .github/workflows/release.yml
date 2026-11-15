@@ -150,6 +150,41 @@ jobs:
             THIRD-PARTY-NOTICES.md
             licenses.tar.gz
 
+      # 第二级备源（jsDelivr `@master/version.json`）要求仓库里真的有这份文件。
+      # 顺序保证：只有上一步「发布 GitHub Release」成功（资产已全部上传）才会走到这里，
+      # 因此提交到 master 的清单一定指向已存在的 Release 与资产（见 docs/arch/update-manifest.md §3）。
+      # 只提交 version.json：构建产物都是未跟踪文件，这里只点名它；
+      # [skip ci] 让 push 到 master 不再触发 Quality / License（Release 只由 tag 触发）。
+      - name: 提交更新清单到 master（jsDelivr 备源）
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 先留一份发布产物：reset 到 master 时同名文件可能被旧版本覆盖
+          cp version.json "$RUNNER_TEMP/version.json.release"
+          for attempt in 1 2 3; do
+            # 每次从远端最新 master 起步；若期间别人推了新提交，下一次循环直接以最新 master
+            # 为基线重建提交，清单内容始终以本次 release 产物为准（覆盖式，不做合并）。
+            git fetch --depth=1 origin master
+            git reset --hard FETCH_HEAD
+            cp "$RUNNER_TEMP/version.json.release" version.json
+            git add -- version.json
+            if git diff --cached --quiet; then
+              echo "master 上的 version.json 已是 ${version}，无需提交"
+              exit 0
+            fi
+            git commit -m "chore(update): 同步 ${version} 更新清单到 master [skip ci]"
+            if git push origin HEAD:master; then
+              echo "已将 version.json 提交到 master（jsDelivr 最长 12h 缓存后生效）"
+              exit 0
+            fi
+            echo "::warning::master 在本地提交后又有新提交，第 ${attempt} 次重试"
+            sleep 5
+          done
+          echo "::error::连续 3 次未能把 version.json 提交到 master"
+          exit 1
+
       # 历史版本（流水线修好之前发的）页面只有一行 "**Full Changelog**: ..."，
       # 这里用 CHANGELOG.md 的段落回填。immutable release 改不了就跳过，不影响本次发布。
       - name: 回填历史 Release 更新日志

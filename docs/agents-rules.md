@@ -106,6 +106,8 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | 规则 / 红线变更 | 本文件对应章节 + AGENTS.md 规则地图同步 |
 | 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
 
+> 表中所有 `Wiki` 均指 **GitHub Wiki 与 Gitee Wiki 两份**，同一变更必须两处都改（见 §6.2 / §6.3），避免镜像漂移。
+
 ### 6.2 文档清单与职责
 
 **主仓库内（随主仓库 commit）**：
@@ -121,15 +123,22 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |
 | `packaging/debian/control` | 版本号（与 Cargo.toml 同步） | ✅ 发版三同步之一 |
 
-**GitHub Wiki（独立 git 仓库）**：
+**Wiki（两份独立 git 仓库，内容须保持一致）**：
+
+| 站点 | 仓库地址 | 推送目标 |
+|------|----------|----------|
+| GitHub Wiki | `https://github.com/pengtang1024/docker-panel.wiki.git` | `origin HEAD:master` |
+| Gitee Wiki | `https://gitee.com/pengtang1024/docker-panel.wiki.git` | `origin HEAD:master` |
 
 ```bash
-# 更新流程（一次性）
-cd /tmp && git clone git@github.com:pengtang1024/docker-panel.wiki.git
-# 修改 .md 文件
+# 更新流程（两份各自一次性 clone → 改 .md → push，内容用同一份）
+cd /tmp && git clone https://github.com/pengtang1024/docker-panel.wiki.git gh-wiki
+cd /tmp && git clone https://gitee.com/pengtang1024/docker-panel.wiki.git gitee-wiki
+# 把同一批 .md 文件拷进两个工作树，分别：
 git add -A && git commit -m "docs(wiki): xxx" && git push origin HEAD:master
-rm -rf /tmp/docker-panel-wiki
 ```
+
+> Gitee Wiki 未初始化时，v5 API `POST /wikis` 会返回 405、直接 push `.wiki.git` 返回 404；需用带会话 cookie + csrf + access_token 的网页会话 POST 触发惰性创建，创建成功后 `git ls-remote` 才会出现 `Initial wiki`，再按上表 clone。
 
 | Wiki 页面 | 对应 in-tree 文档 | 更新时机 |
 |-----------|------------------|----------|
@@ -138,9 +147,14 @@ rm -rf /tmp/docker-panel-wiki
 | Usage.md | README 使用说明 + 源码 UI 变化 | 用户可见交互变更 |
 | Architecture.md | docs/architecture.md + AGENTS.md 架构章节 | 架构变更（**必须与 in-tree 内容同步**） |
 | FAQ.md | —（独立维护） | 发现新常见问题 / 废弃旧问题 |
+| _Sidebar.md | —（导航） | 页面增删时同步 |
+
+> **Wiki 内链接统一用标准 Markdown 相对链接** `[Label](Page)`（如 `[架构设计](Architecture)`）：GitHub Gollum 与 Gitee CommonMark 都渲染成 `<a>`。**禁止**用 `[[Page|Label]]`（Gollum MediaWiki 语法）——Gitee 的 CommonMark 解析器会把它原样输出成纯文本，变成坏链（实测 `POST /api/v5/markdown` 返回未转义的 `[[Architecture|架构设计]]`）。`_Sidebar.md` 是 GitHub Gollum 约定，Gitee 会当作普通页面列入原生树形导航，导航本身仍可用。
+> **图片统一用国内可达的 jsDelivr GH CDN 绝对地址** `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@develop/assets/screenshots/<name>.png`，不要写死 `raw.githubusercontent.com` 外链（国内常不可达）；Wiki 仓库自身不放二进制图片，避免两份镜像各自维护一份资产。
 
 ### 6.3 双份同步原则
 
 - **AGENTS.md ↔ architecture.md**：线程模型 / 消息流两处都有，架构变更时**两边必须同步更新**。AGENTS 放 ASCII 图 + 速查表（AI 读），architecture.md 放完整深度版（人读）。
 - **in-tree ↔ Wiki**：Architecture 页与 `docs/architecture.md`、Install 页与 README 安装章节、Usage 页与 README 使用章节，**同一变更必须两处都改**，避免双源漂移。
+- **GitHub Wiki ↔ Gitee Wiki**：两份 Wiki 是**同一份内容的两个镜像**，任何 Wiki 变更必须**同一批改动同时推送到两个仓库**，禁止只更新一侧；推送后分别 `git ls-remote` 核对 HEAD 一致。README 文档导航需同时给出两个 Wiki 入口。
 - 提交前快速校验：`grep -ri dvkit .`（零残留）+ 核对 README 项目结构树 + 核对各文件行数（R2 口径）。

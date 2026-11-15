@@ -101,7 +101,7 @@ impl AppState {
                 match r {
                     Ok(list) => {
                         res.mark(UiFlag::ContainersChanged);
-                        // ⚠️ 保留旧容器 stats，避免 3s 列表刷新冲掉 6s stats 写入
+                        // ⚠️ 保留旧容器 stats，避免列表刷新冲掉 6s stats 写入
                         let mut old: HashMap<String, (f64, u64, u64, u64, u64)> = self
                             .containers
                             .iter()
@@ -126,7 +126,7 @@ impl AppState {
                         // 列表不再带 size=1 → 磁盘列从 /system/df 缓存补回
                         self.apply_container_sizes();
                     }
-                    // 后台 3s 刷新失败不写状态栏：每轮闪一次会让底栏数字被推挤，
+                    // 列表刷新失败不写状态栏：每轮闪一次会让底栏数字被推挤，
                     // 且失败已由连接红点表达；仅留 stderr 供排查。
                     Err(e) => eprintln!("container refresh failed: {e}"),
                 }

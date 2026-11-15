@@ -90,7 +90,10 @@ export component LedgerArea inherits Rectangle {
     callback g_logs(string);
 
     // 响应式列显隐：表头与行共用同一判定 → 列起点始终一致
-    property <bool> show_disk: root.width >= 1000px;
+    // 磁盘列阈值取 860（而非 1000）：1280 默认窗口开抽屉时列表只剩 880（1280 - drawer_w 400），
+    // 原本会把磁盘列整列隐掉 → 既看不到数值、也点不到表头排序（详情面板用一次就触发）。
+    // 880 列表下：名称 / 镜像各 (844-380-84)/2 = 190px，仍可读。
+    property <bool> show_disk: root.width >= 860px;
     property <bool> show_ports: root.width >= 1150px;
 
     // —— 列宽契约（由本层统一算好后下发给表头与行）——

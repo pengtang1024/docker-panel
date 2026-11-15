@@ -90,6 +90,52 @@ docs: 同步事件驱动刷新表述与 Wiki 双站点，README 平台范围收�
 
 `type` 取 `feat` / `fix` / `perf` / `refactor` / `chore` / `docs` / `ci`；`scope` 是受影响的模块（`update` / `ui` / `rows` / `release` / `i18n` 等），可省略。
 
+## 第一次贡献：完整走一遍
+
+以「修一处文档错字」为例，从零到发起 PR 的完整命令序列（分支名换成你自己的）：
+
+```bash
+# 1. 先在托管站 fork（GitHub 或 Gitee 任选一站，两站代码等价）
+git clone https://github.com/<你的用户名>/docker-panel.git
+cd docker-panel
+
+# 2. 把官方仓库加为 upstream，之后随时同步
+git remote add upstream https://github.com/pengtang1024/docker-panel.git
+
+# 3. 从最新 develop 切分支（不要从 master 切）
+git fetch upstream
+git switch -c fix/my-first-patch upstream/develop
+
+# 4. 改代码 / 改文档
+
+# 5. 本地过门禁，四项全绿再提交
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo build --release
+
+# 6. 提交（精确指定文件，不要 git add .）
+git add README.md docs/configuration.md
+git commit -m "docs: 修正自动重启机制描述与行号引用"
+
+# 7. 推送并发起 PR，目标分支选 develop
+git push -u origin fix/my-first-patch
+```
+
+发 PR 时请勾完模板里的检查清单，描述里写清**改了什么 / 为什么要改 / 怎么验证**。CI 会自动跑 `quality.yml`（fmt + clippy + test）与 `license.yml`（`cargo-deny` 校验许可证）。**涉及 UI 的改动必须附 `agkit shot` 截图**，否则无法验收。
+
+新手最常卡住的五处：
+
+| 卡点 | 说明 |
+|------|------|
+| PR 目标分支选错 | 一律选 `develop`。向 `master` 的 PR 会被拒——`master` 上每次提交都对应一个发布 tag |
+| 从 `master` 切分支 | 会把发布提交的历史带进功能分支，合回 `develop` 时产生无谓的 merge 提交。一律从 `upstream/develop` 切 |
+| 提交信息写成「修改文档」 | CI 不校验格式，但评审核对时必须符合 `type(scope): 中文描述` |
+| 忘了同步文档 | 照「文档同步义务」那张表过一遍；改了源码结构却不动 README 结构树，会被要求补 |
+| 分支落后于 `develop` | 推送前 `git fetch upstream`，再 `git merge upstream/develop`（或在你**尚未**推送的个人分支上 `git rebase upstream/develop`） |
+
+Gitee 侧与 GitHub 的唯一差异是 fork 与 PR 都在 gitee.com 上完成，命令完全相同（把 clone 地址换成 `https://gitee.com/<你的用户名>/docker-panel.git`）。两站**不互相同步 PR**，选一站提一次即可，不需要两边都提。
+
 ## PR 前检查清单
 
 - [ ] `cargo fmt --all -- --check` 通过

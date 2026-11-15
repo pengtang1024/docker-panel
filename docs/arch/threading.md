@@ -131,7 +131,7 @@ invoke_from_event_loop(move || {
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
 | **`UpdateCheckDone(bool, bool, Result<UpdateInfo, String>)`** | 启动 10s 后 / 每 6h 轮询（24h 节流）/ 手动检查 | `(manual, auto_installing, result)`；成功写入 `AppState.update.update_info` 并更新顶栏徽标；启动检查失败静默，手动失败写弹窗状态 |
 | **`UpdateProgress(i32, String)`** | 下载 / 安装任务 | 弹窗进度条 + 状态文案（1% 节流，不逐 chunk 发） |
-| **`UpdateDone(Result<String, String>, bool)`** | 安装任务结束 | 成功标记 `update_restart_needed`、顶栏徽标转琥珀色；**`auto_restart` 开启时 3s 后自动启动新二进制并退出事件循环**（spawn_blocking 跑子进程，失败经 `UpdateProgress` 回灌）；失败保留可用状态供重试 |
+| **`UpdateDone(Result<String, String>, bool)`** | 安装任务结束 | 成功标记 `update_restart_needed`、顶栏徽标转琥珀色；**`auto_restart` 开启时置 `restart_on_exit`、3s 后仅退出事件循环**（`schedule_auto_restart`，`src/ui_update/update.rs:100-102`）——真正拉起新二进制在 `main` 的退出流程里：先 `single_instance::release_then` 释放锁，再 `update::install::restart_detached` 起 launcher（`sleep 2; exec <exe>`）。**顺序不能反**：先拉起后退出会让新进程撞上旧锁、判 `AlreadyRunning` 退出，旧进程随后也退出 → 应用消失；失败保留可用状态供重试 |
 
 ### 消息处理流水线
 

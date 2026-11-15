@@ -128,9 +128,11 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 | 节流 | 两次启动检查间隔 **24h**，`last_update_check`（unix 秒）记录上次时间 |
 | 常驻轮询 | 每 **6h** 醒来判断是否满节流窗口，未到期不发请求 |
 | 自动安装 | `auto_install` 开启时，检查到新版本即下载 + SHA-256 校验 + 安装 |
-| 自动重启 | `auto_restart` 开启且安装成功后，**3s 倒计时**启动新版本并退出 |
+| 自动重启 | `auto_restart` 开启且安装成功后，**3s 倒计时**（让「正在自动重启…」文案上屏）→ 退出事件循环 → **退出流程先释放单实例锁，再由独立短命 launcher 延时 2s `exec` 新二进制** |
 
-三个开关默认开启，可在设置页（顶栏齿轮）或更新弹窗逐项关闭，关闭后持久化到 `config.json` 对应字段：`check_updates` / `auto_install` / `auto_restart`。调度常量见 `src/update/mod.rs:29-34`，3s 重启见 `src/ui_update/update.rs:93`。校验边界与三级回退见 [更新清单与 CDN 分发](arch/update-manifest.md)，失败处理见 [故障排查](troubleshooting.md)。
+> 重启的顺序是硬要求：**先释放锁、后拉起新进程**。反过来（0.7.12–0.7.14 的写法）新进程启动时会连上旧 listener、判为「已在运行」后退出，旧进程随后也退出 —— 应用直接消失，用户必须手动再开一次。现在顺序由代码结构保证：`src/ui_update/update.rs:100-102` 只负责 3s 后 `quit_event_loop()`，拉起动作放在 `src/main.rs:166-186` 的退出流程里，经 `single_instance::release_then`（`src/single_instance.rs:94-97`，先 `drop(guard)` 再调用回调）执行 `update::install::restart_detached`（`src/update/install.rs:152-158`，`sh -c 'sleep N; exec <exe>'`，路径作为位置参数传入、不做字符串拼接）。launcher 只 `sleep` 一次不重试：锁被其它实例长期持有时新进程立刻退出，不会堆积进程。手动「重启应用」按钮走同一条路径。
+
+三个开关默认开启，可在设置页（顶栏齿轮）或更新弹窗逐项关闭，关闭后持久化到 `config.json` 对应字段：`check_updates` / `auto_install` / `auto_restart`。调度常量见 `src/update/mod.rs:29-34`（`CHECK_INTERVAL_SECS` / `SCHEDULER_TICK_SECS` / `STARTUP_DELAY_SECS`）、3s 倒计时见 `src/ui_update/update.rs:11` 与 `:100-102`、launcher 延时见 `src/update/install.rs:143`。校验边界与三级回退见 [更新清单与 CDN 分发](arch/update-manifest.md)，失败处理见 [故障排查](troubleshooting.md)。
 
 ## 相关文档
 

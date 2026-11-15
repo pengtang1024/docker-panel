@@ -36,7 +36,7 @@
 
 ## 2. 清单字段与可信度
 
-`version.json`（放 Release 资产里；可选再提交 `master` 供 jsDelivr 读取）：
+`version.json`（放 Release 资产里；发布成功后由 CI 自动提交到 `master` 供 jsDelivr 读取，见 §3）：
 
 | 字段 | 类型 | 来源 | 可信度 | 用途 |
 |------|------|------|--------|------|
@@ -69,14 +69,39 @@
 3. **生成 `checksums.txt`**（deb + `target/release/docker-panel` 两条，现有 step 不动）
 4. **生成 `version.json`**：`version` 取 `steps.ver.outputs.version`，`sha256` 用 `awk` **从第 3 步的 `checksums.txt` 抽取**，`size` 用 `stat -c%s` 读产物，禁止在清单 step 里重新算一份独立来源；生成后 `python3 -m json.tool` 自检，坏了直接让 job 失败
 5. `softprops/action-gh-release` 上传：现有 `files:` 追加 `version.json`（与 `checksums.txt` 同一批）
-6. （可选，**仅在第 5 步成功之后**）把 `version.json` 提交到 `master`
+6. **提交 `version.json` 到 `master`**（已实现，见下）
 
 顺序约束的理由：
 
 - 4 在 3 之后：清单里的 `sha256` 必须与首发的校验文件逐字一致，两份来源分头计算迟早漂移。
 - 5 在 4 之后：清单不能先于资产出现在任何可访问位置，否则存在「清单指向不存在的资产」窗口。
-- 6 在 5 之后：jsDelivr 的 `@master` 端点最长 12h 才刷新，提前提交只会让窗口更长。
+- 6 在 5 之后：**这是「清单指向的 Release 一定已存在」的来源**——`action-gh-release` 步骤成功即代表
+  Release 与全部资产已上传完毕，此时才允许清单进入 jsDelivr 读取的 `master`；提前提交会让备源指向
+  不存在的 Release（客户端会下载 404）。jsDelivr 的 `@master` 端点另有最长 12h 缓存，这一步不改变主源时效。
 - 不做「清单先行、资产后补」：客户端失败会退化成「下载 404」，比「发现不了新版本」更难解释。
+
+### 6. 清单提交到 master（jsDelivr 备源，已实现）
+
+`release.yml` 的「提交更新清单到 master（jsDelivr 备源）」步骤，关键行为：
+
+| 项 | 约定 |
+|----|------|
+| 触发条件 | 只在 Release 流水线（push `X.Y.Z` tag）中、**「发布 GitHub Release」步骤成功后**执行；发布失败则整步不运行 |
+| 目标分支 | 固定 `master`（jsDelivr 端点读 `@master/version.json`，与 `develop` 无关） |
+| 提交内容 | 只 `git add -- version.json` 一个文件；deb / 二进制 / checksums 等构建产物都是未跟踪文件，不入库 |
+| 获取最新基线 | `git fetch --depth=1 origin master` → `git reset --hard FETCH_HEAD`（checkout 是 tag 的浅克隆，必须显式 fetch） |
+| 并发保护 | 每次循环都重新 fetch 最新 `master`，再把发布产物覆盖回 `version.json` 后提交；push 非快进被拒时最多重试 3 次，**覆盖式重建、不做合并** → 冲突场景下清单内容始终以本次 release 产物为准 |
+| 防自我循环 | 提交信息带 `[skip ci]`；且 `GITHUB_TOKEN` 推送的提交本身不会再触发新的 workflow，Release 也只由 tag 触发 |
+| 权限 | job 级 `permissions: contents: write`（已有）；`master` 实测无分支保护 / 无 ruleset（`Branch not protected`） |
+| 文件已一致时 | `git diff --cached --quiet` 直接成功退出，不产生空提交 |
+
+**分叉影响（git flow）**：`master` 每发一版会比 `develop` 多一条 CI 清单提交。下一次
+`git flow release finish` 时，release 分支合入 `master` 是普通三方合并——`master` 侧有 `version.json`、
+release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产生冲突**；随后 finish 把 tag 回灌 `develop`
+（本项目历史为 `Merge tag 'X.Y.Z' into develop`），这条 CI 提交随 tag 进入 `develop`，分叉自动收敛。
+因此不需要手工把 `master` 合回 `develop`；版本三同步与 `scripts/check-version.sh` 都不检查 `version.json`。
+若某次流水线推送失败（权限 / 并发 / 网络），`master` 会停留在上一版清单，jsDelivr 备源保持陈旧（主源不受影响），
+下一次发版或手工补提交即可。
 
 ## 4. 客户端改动点（文件级）
 
@@ -90,7 +115,7 @@
 | `src/update/install.rs` | **校验路径不变**，仅在 `checksum_for` 之后追加清单一致性断言 | `checksums.txt` 仍是唯一校验源；清单不一致 → 拒绝安装 |
 | `src/ui_update/update.rs` / `src/callbacks_update.rs` | **不改** | 「无更新才写 `last_update_check`」的语义对清单路径同样成立 |
 | `translations/zh_CN/LC_MESSAGES/docker-panel.po` | 新增 1 条 | 「更新清单与校验文件不一致，已拒绝安装」；清单不可用只走 `eprintln`，不进 UI |
-| `.github/workflows/release.yml` | 新增「生成更新清单」step + `files:` 追加 | 见 §3 |
+| `.github/workflows/release.yml` | 新增「生成更新清单」step + `files:` 追加 + 发布后「提交更新清单到 master」step | 见 §3 |
 
 清单解析失败是**诊断信息**（`eprintln` 带来源 URL），不新增用户可见文案：
 三级全失败时用户看到的仍是第 3 级（API）的错误，与实施前一致。
@@ -100,8 +125,8 @@
 | 级 | 来源 | 优点 | 缺点 | 实测 |
 |----|------|------|------|------|
 | 1 | `https://github.com/pengtang1024/docker-panel/releases/latest/download/version.json` | 发布即生效、零 API 配额 | 依赖 GitHub 可达；不存在时也要先走一次 302→404 | 首跳 302、`GET -L` 需一次重定向 |
-| 2 | `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json` | 国内可达性好、零配额 | 最长 12h 陈旧（`s-maxage=43200`） | 16/16 成功，0.52–0.58s |
-| 3 | `https://api.github.com/repos/pengtang1024/docker-panel/releases/latest` | 现役路径，信息最全（含 notes / assets / size） | 60/h 未认证配额，同出口 IP 共享 | 3/3，0.53–0.84s；`remaining 26` |
+| 2 | `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json` | 国内可达性好、零配额；文件由发布流水线在 Release 成功后提交到 `master`（§3） | 最长 12h 陈旧（`s-maxage=43200`）；依赖 CI 提交步骤成功 | 0.7.13 发布时仍 404（当版无提交步骤）；同端点取 `Cargo.toml` 为 200，证明 URL 形态有效 |
+| 3 | `https://api.github.com/repos/pengtang1024/docker-panel/releases/latest` | 现役路径，信息最全（含 notes / assets / size） | 60/h 未认证配额，同出口 IP 共享 | 3/3，0.53–0.84s；配额耗尽时 403 `remaining 0`（0.7.13 发布实测） |
 
 编排规则：**上一级「可解析且结构合法」即停**，不再往下要。只有「请求失败 / 404 / JSON 非法 / `schema` 不认识 / `channel ≠ stable` / `version_code` 与 `version` 不符」才进下一级。
 清单可解析但「版本不新」→ 直接判「已是最新」，**不回落 API**（避免每次启动两次请求；最长接受 12h 发现延迟，而现有节流本来就是 24h）。
@@ -171,16 +196,20 @@
 | 老版本客户端不认识清单 | 无 | 老客户端本来只走 API；新客户端对 404/非法结构一律回落 |
 | `install.rs` 被顺手「优化」成只信清单 | 安全边界被拆掉 | `install.rs` 里已显式注释「期望值仍只来自 checksums.txt」，`manifest.rs` 与本文双向互指 |
 | 本机出口 IP 配额耗尽（实测 `remaining 0`，API 返回 403） | 旧客户端（只有第 3 级）更新检查直接失败 | 新客户端前两级零配额；首个带 `version.json` 的 Release 发布后主路径不再依赖 API |
+| `master` 多一条 CI 清单提交 | `develop` 与 `master` 每次发版后短暂分叉 | 下次 `release finish` 随 tag 回灌 `develop` 自动收敛，合并时无人工改动故不冲突（§3） |
+| CI 提交步骤失败 / 被并发推送拒绝 | `master` 清单停留在上一版，jsDelivr 备源陈旧 | 步骤内 fetch 最新 `master` + 覆盖式重建 + 重试 3 次；主源与 API 兜底不受影响，下次发版自动补上 |
 
-## 11. 待实测 / 留白
+## 11. 已实测与待补测
 
-以下内容**当前无证据**，首次带 `version.json` 的正式发布后须补测：
+0.7.13 正式发布已实测（2026-11-15）：
 
-- `version.json` 的真实端到端（仓库里还没有该文件）：本轮只用**本地构造的清单文件**验证了解析 / 派生 / 回退顺序 / 拒绝安装
-  （CI 那个 step 的脚本用假产物实跑出的 `version.json`，已用真实 `parse_manifest` 解析通过，派生出 3 条资产 URL），
-  并用同一 curl 参数（`-fsSL --connect-timeout 10 --max-time 20 --max-filesize 2097152`）从 `file://` 读通了同一份 JSON。
-- `releases/latest/download/version.json` 的**正常命中**路径耗时（当前 404，实测 1.11s 才拿到 404）。
-- jsDelivr 在**不同运营商 / 省份**的成功率（本轮是本机单出口 16 次，不代表全国）；`@master/version.json` 当前 404，
-  同端点取 `Cargo.toml` 为 200（0.68s），证明 URL 形态有效、只差文件。
+- 主源 `releases/latest/download/version.json` → 200（541 字节），`version` / `notes_url` / 资产名与 tag、Release 资产一致，两个资产的 `sha256` 与 `checksums.txt` **逐字节相同**，本地实下载的 `sha256sum` / 字节数同样吻合。
+- 应用自身 `parse_manifest` 解析真实清单并派生 3 条资产 URL，HEAD 全部 200；`discover::fetch_release()` 在 API `remaining 0` / 403 时仍由清单命中（`from_manifest=true`），证明主路径不依赖 API。
+- jsDelivr `@master/version.json` 与 `@0.7.13/version.json` 均为 404——该版流水线尚无提交步骤，符合预期。
+
+以下内容**当前无证据**，后续版本补测：
+
+- 加入「提交清单到 master」步骤后，jsDelivr `@master/version.json` 的实际生效时间与 12h 缓存内陈旧表现（首次生效需下一次 Release 或手工补提交）。
+- jsDelivr 在**不同运营商 / 省份**的成功率（本机单出口样本，不代表全国）。
 - `If-None-Match` 304 只测了一次，未验证分支端点刷新后的 ETag 变更行为。
 - `mandatory` 的 UI 交互与「拒绝升级」路径（本期不做，故无设计）。

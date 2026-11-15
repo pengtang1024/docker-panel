@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **jsDelivr 第二级备源真正可用**：`release.yml` 在「发布 GitHub Release」成功之后新增一步，把本次生成的 `version.json` 提交到 `master`。该步骤只在 Release 与全部资产上传完成后才运行，因此提交到 `master` 的清单一定指向已存在的 Release；只 `git add -- version.json` 一个文件，提交信息带 `[skip ci]`，每次基于最新 `master` 覆盖式重建（push 被并发提交拒绝时最多重试 3 次），清单内容始终以本次发布产物为准。此前 `@master/version.json` 恒 404、第二级回退形同虚设。`master` 因此每次发版会比 `develop` 多一条 CI 提交，下一次 `release finish` 随 tag 回灌自动收敛，版本三同步与 `check-version.sh` 不受影响。
+
 ## [0.7.13] - 2026-11-15
 
 ### 新增

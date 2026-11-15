@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "docker-panel"
-version = "0.7.12"
+version = "0.7.13"
 dependencies = [
  "anyhow",
  "arboard",

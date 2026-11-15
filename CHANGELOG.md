@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-11-15
+
 ### 新增
 
 - **更新发现改为「静态清单 + 三级回退」**：检查顺序为 `releases/latest/download/version.json` → jsDelivr `@master/version.json` → `api.github.com/.../releases/latest`，任一级可解析即停，静默换级。清单只当「不可信的版本号广播」——资产 URL 由版本号派生（`releases/download/{version}/{name}`），下载完整性仍只认 Release 的 `checksums.txt`；清单里的 `name` / `size` / `sha256` 只做一致性断言，与 `checksums.txt` 不一致即拒绝安装。清单命中且确实有新版本时，额外 best-effort 拉一次 API 补更新说明（失败不影响安装）。版本号未变时仍然只发一次请求。CI 在 `release.yml` 生成并随资产上传 `version.json`（在 `checksums.txt` 之后，sha256 从 `checksums.txt` 抽取）。单测覆盖：合法 / 缺字段 / schema 不匹配 / `version_code` 不符 / sha256 不一致 / 版本回退 / tag 无 `v` 前缀历史兼容 / 三级回退顺序 / 拒绝安装。
@@ -401,7 +403,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...HEAD
+[0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13
 [0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12
 [0.7.11]: https://github.com/pengtang1024/docker-panel/compare/0.7.10...0.7.11
 [0.7.10]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...0.7.10

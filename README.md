@@ -4,10 +4,10 @@
 
 [![Release](https://img.shields.io/github/v/release/pengtang1024/docker-panel?label=Release)](https://github.com/pengtang1024/docker-panel/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](#环境要求)
+[![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#环境要求)
 <a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" height="24"></a>
 
-文档导航：[Wiki](https://github.com/pengtang1024/docker-panel/wiki) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+文档导航：[Wiki (GitHub)](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki (Gitee)](https://gitee.com/pengtang1024/docker-panel/wikis) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
 
 ## 界面预览
 
@@ -17,7 +17,7 @@
 | **右侧抽屉（详情 / 日志 / 环境）** | **清理弹窗** |
 | ![右侧抽屉](assets/screenshots/drawer.png) | ![清理弹窗](assets/screenshots/cleanup.png) |
 
-> 截图来自 Linux + Wayland + 深色主题，使用 Slint MCP 直接抓取窗口，未做后期合成。
+> 截图来自 Linux + Wayland + 深色主题，由 `agkit shot --app docker-panel` 按 xdg app_id 定位窗口截取（AGENTS.md R1），未做后期合成。
 
 ## 功能特性
 
@@ -57,7 +57,7 @@
 - 分组带同样有 3 个按钮，只是按**组**操作：一键启停 / 重启整组、查看整组合并日志、删除整组（「···」菜单同样列出组操作）
 - 容器多选 + 批量操作浮动栏（启动 / 停止 / 重启 / 删除 / 取消选择）；Shift+点击行可快速勾选 / 取消勾选
 - 顶栏：拉取镜像（实时进度弹窗）/ 清理未使用资源（已停止的容器 / 悬空镜像 / 未使用的网络 / 未使用的卷，可任意组合）
-- 操作完成立即刷新列表，不等 3s 定时周期
+- 操作完成后由 Docker `/events` 事件统一刷一轮列表（400ms 合并窗口），操作消息不再自带刷新
 
 ### 全局快捷键
 
@@ -93,9 +93,9 @@
 
 ## 环境要求
 
-- Linux / macOS / Windows（主要在 Linux 上验证）
+- Linux（当前唯一验证与支持的平台）：源码为 Rust + Slint 纯软件渲染，理论上可交叉编译到 macOS / Windows，但这两平台未验证，且自动更新与 deb 安装仅支持 Linux
 - 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（当前不读取 tcp / ssh 远程地址）
-- 自动更新检查需要系统 `curl`（Linux / macOS / Windows 10+ 自带）；deb 自动安装还需要 `pkexec`（polkit 授权框）
+- 自动更新检查需要系统 `curl`；deb 自动安装还需要 `pkexec`（polkit 授权框）
 - 构建需要 Rust stable（edition 2021；MSRV 1.99，仓库内 `rust-toolchain.toml` 固定 stable 通道）
 
 ## 安装与构建
@@ -165,12 +165,12 @@ cargo check --all-targets
 
 ## 架构概览
 
-**三线程架构**：主线程（Slint 事件循环）+ consumer 线程（消息泵 + `invoke_from_event_loop`）+ tokio runtime（bollard async）。定时刷新走 tokio interval（软件渲染器下 Slint Timer 不触发）。
+**三线程架构**：主线程（Slint 事件循环）+ consumer 线程（消息泵 + `invoke_from_event_loop`）+ tokio runtime（bollard async）。列表刷新由 Docker `/events` 事件驱动（`event_watch::spawn` 常驻订阅 + 噪声黑名单过滤 + 400ms 合并 + 断流退避重连，连接建立补一次全量刷新，空闲零请求，无定时兜底轮询）；定时任务只剩 6s stats / 30s 磁盘占用 / 主题监听，仍走 tokio interval（软件渲染器下 Slint Timer 不触发）。
 
 ```
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
-│ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ 3s 刷新 interval    │
+│ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ docker /events 订阅 │
 │  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
 │ 窗口关闭 → shutdown   │ 按 120ms 窗口合并 UI 更新  │       │ spawn 异步任务      │
 │   flag                │ 只重建变化区域（日志/列表）│◀──────│ bollard API 调用    │
@@ -187,7 +187,7 @@ cargo check --all-targets
 - **两阶段铁律**：锁内只做分片 drain（单批 ≤2048 条）+ build → drop lock → 锁外 `invoke_from_event_loop` 更新 Slint Model。闭包里绝不碰 state。
 - **UI 更新节流**：consumer 最多每 120ms 应用一次 UI；日志洪峰时只**追加**日志行模型，不重算容器/镜像/网络/卷/抽屉，避免无界 invoke 与重排把 UI 线程压死。
 - **日志行模型只追加不重建**：行模型是日志窗口的镜像（滚动窗口 2000 行），能追加就追加（可见行不重排 → 不卡），窗口裁剪过前段才整体重建一次。
-- **Docker 调用有超时 + 刷新去重**：单次调用 10s 超时；上一次 3s 刷新未完成时跳过下一轮，防止守护进程无响应时任务叠加耗尽 tokio 线程。
+- **Docker 调用有超时 + 刷新去重**：单次调用 10s 超时；事件经 400ms 合并窗口触发刷新，`refresh_inflight` in-flight 去重（上一轮未完成只置脏标记、本轮结束补跑一次），防止守护进程无响应时任务叠加耗尽 tokio 线程；空闲时零请求。
 - **所有 Docker 结果走 `tx.send(Msg)`**——不直接碰 Slint Model，统一由 consumer pump 更新。
 
 详见 [docs/architecture.md](docs/architecture.md)。
@@ -246,7 +246,11 @@ docker-panel/
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()
 │   ├── config.rs           # AppConfig 持久化（directories + 手写 JSON 原子写）
 │   ├── theme.rs            # 系统主题检测（gsettings / GTK settings.ini）
-│   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建 + 3s 刷新 interval
+│   ├── lock.rs             # 共享状态锁中毒诊断（poison / acquire，禁止静默吞掉）
+│   ├── format.rs           # 中立格式化工具（format_bytes，UI 与 Docker 层共用）
+│   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建（列表刷新由 event_watch 事件驱动）
+│   ├── event_watch.rs      # Docker /events 订阅：噪声黑名单过滤 + 400ms 合并 + 断流退避重连（列表刷新唯一来源；连接建立补一次全量刷新，空闲零请求）
+│   ├── consumer/throttle.rs # UI 节流窗口（常规 120ms / 纯日志 250ms，从 consumer.rs 拆出）
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
 │   ├── models.rs           # Msg(+StatsBatch/LogBatch/DockerVersion/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
@@ -256,6 +260,8 @@ docker-panel/
 │   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
 │   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
 │   ├── ui_state/config_io.rs # AppState ↔ config.json 读写（字段搬运，越界值回落默认）
+│   ├── ui_state/refresh.rs # 列表刷新去重（in-flight + 脏标记：本轮结束补跑一次）
+│   ├── ui_state/rows_epoch.rs # 行模型代际账（per-list epoch，丢弃条件变更前的旧行）
 │   ├── follow_runtime.rs    # 日志流运行时：建流（单流 / 分组合并多流，共享取消信号）/退避重连/探针判定/保活降级/结局分类
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
@@ -277,7 +283,7 @@ docker-panel/
 │   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
 │   ├── callbacks_update.rs     # 自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 三个配置开关
 │   ├── callbacks_settings.rs   # 设置弹窗：开关弹窗 / 显式设置主题（0=跟随系统 1=浅色 2=深色）
-│   ├── update/                 # 自动更新：github（curl + JSON）/ version（纯逻辑 + 单测）/ markdown（Release 说明 → 纯文本）/ install（探测 + 安装）+ install/download（下载 + 校验）
+│   ├── update/                 # 自动更新：mod（任务编排 + 调度）/ discover（三级回退：静态清单 → jsDelivr @master → api.github.com）/ manifest（清单解析 + 资产派生 + 一致性断言）/ github（API 兜底）/ version（版本比较）/ markdown（说明清洗）/ install（下载 + SHA-256 + 安装）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove
@@ -298,7 +304,7 @@ docker-panel/
 │
 ├── docs/
 │   ├── architecture.md     # 架构总纲（技术栈 + 模块地图 + 文件规范 + 主题文档导航）
-│   ├── arch/               # 架构主题文档：threading / ui-interaction / docker-bollard
+│   ├── arch/               # 架构主题文档：threading / ui-interaction / list-layout / docker-bollard / update-manifest
 │   ├── agents-rules.md     # 规则配置层（规则地图 + 红线约束 + 四阶段门禁 + 冲突记录）
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/

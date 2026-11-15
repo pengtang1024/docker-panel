@@ -290,7 +290,7 @@ impl AppState {
 
     /// 回填尚未缓存的镜像层数（锁内 spawn，单条 Msg 批量回传）
     ///
-    /// inspect 失败的镜像按 0 层写入缓存，避免每 3s 反复重试。
+    /// inspect 失败的镜像按 0 层写入缓存，避免每次刷新反复重试。
     pub(crate) fn request_missing_layers(&mut self) {
         let missing: Vec<String> = self
             .images

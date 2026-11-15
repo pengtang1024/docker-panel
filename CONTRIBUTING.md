@@ -76,7 +76,7 @@ docker ps
 **结论：开发用 `cargo run`（debug 构建），发布形态用 `cargo build --release`。**
 
 ```bash
-git clone https://github.com/pengtang1024/docker-panel.git   # Gitee 镜像：https://gitee.com/pengtang1024/docker-panel.git
+git clone https://github.com/pengtang1024/docker-panel.git   # Gitee 站点：https://gitee.com/pengtang1024/docker-panel.git
 cd docker-panel
 cargo run
 ```

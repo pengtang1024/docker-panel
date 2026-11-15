@@ -128,8 +128,9 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `docs/translations.md` | 翻译机制与贡献流程：264 条 msgid、t/trf/trfp 用法、新增语言步骤 | ✅ 翻译权威源 |
 | `CONTRIBUTING.md` | 外部贡献入口：开发环境、分支与 PR、代码规范速览、文档同步门禁 | — 引用型，规范全文仍以 AGENTS.md / 本文件为准 |
 | `SECURITY.md` | 漏洞报告渠道、支持范围、安全模型与不视为漏洞的设计边界 | ✅ 安全策略权威源 |
+| `CODE_OF_CONDUCT.md` | 贡献者行为准则（Contributor Covenant 2.1）与四级执行阶梯 | — 上游模板，只在升级版本时改 |
 | `SUPPORT.md` | 支持渠道（GitHub / Gitee Issues）与提问必附信息清单 | — 索引型 |
-| `.github/ISSUE_TEMPLATE/`、`PULL_REQUEST_TEMPLATE.md` | Issue/PR 表单：版本、Docker 版本、发行版、会话类型等结构化字段 | — 与 SUPPORT.md 字段保持一致 |
+| `.github/ISSUE_TEMPLATE/`、`PULL_REQUEST_TEMPLATE.md` | Issue/PR 表单：版本、Docker 版本、发行版、会话类型等结构化字段；`config.yml` 关闭空白 issue 并把安全/排障/支持/Gitee 四条渠道前置 | — 与 SUPPORT.md 字段保持一致 |
 | `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 精简版 |
 | `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
 | `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |

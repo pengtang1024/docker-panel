@@ -10,7 +10,7 @@
 **文档导航**
 [Wiki (GitHub)](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki (Gitee)](https://gitee.com/pengtang1024/docker-panel/wikis) — 安装、使用、常见问题
 [配置手册](docs/configuration.md) · [故障排查](docs/troubleshooting.md) · [翻译指南](docs/translations.md) — 用户向
-[贡献指南](CONTRIBUTING.md) · [行为与支持](SUPPORT.md) · [安全策略](SECURITY.md) — 参与向
+[贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [支持与求助](SUPPORT.md) · [安全策略](SECURITY.md) — 参与向
 [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md) — 实现向
 [更新日志](CHANGELOG.md) · [许可证](LICENSE) · [第三方声明](THIRD-PARTY-NOTICES.md)
 
@@ -331,6 +331,7 @@ docker-panel/
 ├── LICENSING.md            # 许可选择记录（Slint Royalty-free 2.0）
 ├── THIRD-PARTY-NOTICES.md  # 第三方组件清单与许可索引
 ├── CONTRIBUTING.md         # 贡献指南（开发环境 / 分支 / PR / 代码规范 / 文档同步）
+├── CODE_OF_CONDUCT.md      # 贡献者行为准则（Contributor Covenant 2.1 + 执行分级）
 ├── SECURITY.md             # 安全策略（漏洞报告渠道 / 支持范围 / 安全模型边界）
 ├── SUPPORT.md              # 支持渠道与提问信息清单
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）

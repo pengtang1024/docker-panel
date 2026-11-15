@@ -179,7 +179,8 @@ Wiki 有**两个独立 git 仓库**：
 - 缺陷与功能建议：[GitHub Issues](https://github.com/pengtang1024/docker-panel/issues) · [Gitee Issues](https://gitee.com/pengtang1024/docker-panel/issues)
 - 提问前请先看 [SUPPORT.md](SUPPORT.md)（该附哪些信息）与 [docs/troubleshooting.md](docs/troubleshooting.md)（按症状排障）
 - **安全漏洞走私有渠道**，不要发公开 Issue，见 [SECURITY.md](SECURITY.md)
-- 本项目暂无行为准则文件与邮件列表 / 论坛 / 商业支持
+- 参与本项目即表示同意遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)（Contributor Covenant 2.1）
+- 本项目没有邮件列表 / 论坛 / 商业支持频道，所有沟通走上面两个 Issue 入口
 
 ## 相关文档
 
@@ -192,4 +193,7 @@ Wiki 有**两个独立 git 仓库**：
 | [docs/configuration.md](docs/configuration.md) | config.json 字段全表 |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | 故障排查 |
 | [docs/translations.md](docs/translations.md) | 翻译流程 |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | 行为准则与执行分级 |
+| [SUPPORT.md](SUPPORT.md) | 支持渠道与提问必附信息 |
+| [SECURITY.md](SECURITY.md) | 安全策略与漏洞报告渠道 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |

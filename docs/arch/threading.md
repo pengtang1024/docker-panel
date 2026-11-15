@@ -205,13 +205,14 @@ rt_handle.spawn(async move {
 - `Error` + 致命（`LogError.status_code == 404` / `No such container`，容器已被删除）：`End`，避免僵尸任务无限重试。
 - `Error` + 可恢复：`Recover`，按 `retry_delay` 退避重连，1s → 2s → 4s → 8s → 10s（上限）。**连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），永不放弃跟随**——旧实现会静默停止，用户看到日志停在半截却毫无提示。退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
 
-**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。文案唯一定义处是 `src/log_status.rs` 的 3 条 i18n key 常量：
+**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。文案唯一定义处是 `src/log_status.rs` 的 4 条 i18n key 常量（`NOTICE_INTERRUPTED` / `NOTICE_RECOVERED` / `NOTICE_STOPPED` / `NOTICE_SAMPLED`，见规范 #14 四态）：
 
 | 提示 | 触发时机 |
 |---|---|
 | 「日志流中断，正在重连…」 | 进入 `Recover` 且此前未提示过（每条流只提示一次，不刷屏） |
 | 「日志流已恢复连接」 | ① 重连后收到**首行日志**；② `Idle` 结局（连接已保持 180s 证明流通）；③ 探针从「不可达」跃迁到「可达」。三者均要求此前已提示过「正在重连」 |
 | 「日志流已停止」 | `End` 且非 `Cancelled`（容器停止 / 被删除 / 致命错误） |
+| 「日志洪峰：已按比例抽样显示，省略 N 行」 | 通道积压超 `LOG_BACKLOG_HIGH`（2 万行）期间每 2s 刷新一次，退出抽样发空串清除（仅单流；分组合并日志的多流共享 epoch，不发此提示，见规范 #33） |
 
 **状态清除**：切换选中资源或按 Clear 走 `ui_apply::clear_log_panel`（日志行模型 + 状态提示全清）；同一容器重建日志流走 `clear_log_status`（只清状态、保留已缓冲的日志行）——新流没有「正在重连」之类的历史状态，但旧内容仍有效。`AppState::ensure_follow` 返回「是否新建了流」，调用方据此决定是否清残留提示。
 

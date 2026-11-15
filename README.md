@@ -7,7 +7,12 @@
 [![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#环境要求)
 <a href="https://slint.dev"><img src="https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png" alt="Made with Slint" height="24"></a>
 
-文档导航：[Wiki (GitHub)](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki (Gitee)](https://gitee.com/pengtang1024/docker-panel/wikis) · [架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md)（AI 协作入口）· [更新日志](CHANGELOG.md)
+**文档导航**
+[Wiki (GitHub)](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki (Gitee)](https://gitee.com/pengtang1024/docker-panel/wikis) — 安装、使用、常见问题
+[配置手册](docs/configuration.md) · [故障排查](docs/troubleshooting.md) · [翻译指南](docs/translations.md) — 用户向
+[贡献指南](CONTRIBUTING.md) · [行为与支持](SUPPORT.md) · [安全策略](SECURITY.md) — 参与向
+[架构设计](docs/architecture.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md) — 实现向
+[更新日志](CHANGELOG.md) · [许可证](LICENSE) · [第三方声明](THIRD-PARTY-NOTICES.md)
 
 ## 界面预览
 
@@ -263,7 +268,7 @@ docker-panel/
 │   ├── ui_state/refresh.rs # 列表刷新去重（in-flight + 脏标记：本轮结束补跑一次）
 │   ├── ui_state/rows_epoch.rs # 行模型代际账（per-list epoch，丢弃条件变更前的旧行）
 │   ├── follow_runtime.rs    # 日志流运行时：建流（单流 / 分组合并多流，共享取消信号）/退避重连/探针判定/保活降级/结局分类
-│   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
+│   ├── log_status.rs       # 日志流状态提示文案唯一定义处（4 条 i18n key：重连中 / 已恢复 / 已停止 / 洪峰抽样）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
 │   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）/ sort（三个资源列表共用的「过滤→排序→映射」骨架）
@@ -302,9 +307,17 @@ docker-panel/
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   # gettext 翻译（编译期嵌入）
 │
+├── .github/
+│   ├── workflows/          # CI：quality（fmt/clippy/test）/ license（cargo-deny）/ release
+│   ├── ISSUE_TEMPLATE/     # bug_report.yml / feature_request.yml
+│   └── PULL_REQUEST_TEMPLATE.md
+│
 ├── docs/
 │   ├── architecture.md     # 架构总纲（技术栈 + 模块地图 + 文件规范 + 主题文档导航）
 │   ├── arch/               # 架构主题文档：threading / ui-interaction / list-layout / docker-bollard / update-manifest
+│   ├── configuration.md    # 配置手册（config.json 15 字段 / 环境变量 / CLI / 快捷键 / 更新调度）
+│   ├── troubleshooting.md  # 故障排查（启动 / 连接 / 列表 / 更新 / 日志 / 安装卸载 / 数据安全）
+│   ├── translations.md     # 翻译指南（264 条 msgid / t·trf·trfp / 新增语言步骤）
 │   ├── agents-rules.md     # 规则配置层（规则地图 + 红线约束 + 四阶段门禁 + 冲突记录）
 │   └── git-flow.md         # Git Flow 分支与发版规范
 ├── packaging/
@@ -317,6 +330,9 @@ docker-panel/
 ├── LICENSE                 # 自有代码 MIT
 ├── LICENSING.md            # 许可选择记录（Slint Royalty-free 2.0）
 ├── THIRD-PARTY-NOTICES.md  # 第三方组件清单与许可索引
+├── CONTRIBUTING.md         # 贡献指南（开发环境 / 分支 / PR / 代码规范 / 文档同步）
+├── SECURITY.md             # 安全策略（漏洞报告渠道 / 支持范围 / 安全模型边界）
+├── SUPPORT.md              # 支持渠道与提问信息清单
 ├── AGENTS.md               # AI 协作入口（首次进入仓库请先读）
 ├── CHANGELOG.md            # 更新日志
 └── README.md

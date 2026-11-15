@@ -104,6 +104,11 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | 功能特性变更（新增 / 删除 / 修改用户可见功能） | CHANGELOG.md、README 功能特性、AGENTS.md 当前已知限制、Wiki Home / Usage |
 | 新增 bollard 类型坑条 | docs/arch/docker-bollard.md（唯一权威源） |
 | 规则 / 红线变更 | 本文件对应章节 + AGENTS.md 规则地图同步 |
+| 配置文件字段增删（src/config.rs） | docs/configuration.md 字段表 + Wiki Usage 设置段 |
+| 命令行参数 / 全局快捷键变更（src/cli.rs、ui/app.slint） | docs/configuration.md + Wiki Usage |
+| 用户可感知的错误文案 / 安装与卸载路径变更 | docs/troubleshooting.md 报错对照表 + Wiki FAQ |
+| 新增翻译条目或新增语言支持 | docs/translations.md（msgid 计数）+ CONTRIBUTING.md 翻译入口 |
+| 新增文档文件 | README 文档导航 + 项目结构树 + 本文件 §6.2 清单 |
 | 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
 
 > 表中所有 `Wiki` 均指 **GitHub Wiki 与 Gitee Wiki 两份**，同一变更必须两处都改（见 §6.2 / §6.3），避免镜像漂移。
@@ -117,7 +122,14 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `AGENTS.md` | AI 协作入口：硬约束红线、规则地图索引、技术栈版本约束、线程模型/消息流速查、代码规范、已知限制 | — 入口型；规则全文以 agents-rules.md 为准 |
 | `docs/agents-rules.md` | 规则配置层：规则地图 + 红线约束 + 四阶段门禁 + 冲突记录 + 文档同步规范 | ✅ **规则唯一权威源**（本文件） |
 | `docs/architecture.md` | 架构总纲：技术栈、模块地图与依赖方向、文件规范 + 主题文档导航 | ✅ 总纲权威源 |
-| `docs/arch/*.md` | 架构主题文档：threading（线程/消息/回调）· ui-interaction（Slint 交互/拆分原则）· docker-bollard（Docker 接入 + bollard 坑条） | ✅ 各主题权威源 |
+| `docs/arch/*.md` | 架构主题文档：threading（线程/消息/回调）· ui-interaction（Slint 交互/拆分原则）· list-layout（列表布局与列宽契约）· docker-bollard（Docker 接入 + bollard 坑条）· update-manifest（更新清单与 CDN 分发） | ✅ 各主题权威源 |
+| `docs/configuration.md` | 面向使用者：config.json 15 个字段全表、环境变量、命令行参数、快捷键、自动更新调度 | ✅ 配置项权威源（字段以 src/config.rs 为准） |
+| `docs/troubleshooting.md` | 面向使用者：按症状排查（启动/连接/列表/日志/更新/安装卸载/数据安全）+ 真实报错文案对照表 | ✅ 排障权威源（文案以 src/ 内 i18n 调用为准） |
+| `docs/translations.md` | 翻译机制与贡献流程：264 条 msgid、t/trf/trfp 用法、新增语言步骤 | ✅ 翻译权威源 |
+| `CONTRIBUTING.md` | 外部贡献入口：开发环境、分支与 PR、代码规范速览、文档同步门禁 | — 引用型，规范全文仍以 AGENTS.md / 本文件为准 |
+| `SECURITY.md` | 漏洞报告渠道、支持范围、安全模型与不视为漏洞的设计边界 | ✅ 安全策略权威源 |
+| `SUPPORT.md` | 支持渠道（GitHub / Gitee Issues）与提问必附信息清单 | — 索引型 |
+| `.github/ISSUE_TEMPLATE/`、`PULL_REQUEST_TEMPLATE.md` | Issue/PR 表单：版本、Docker 版本、发行版、会话类型等结构化字段 | — 与 SUPPORT.md 字段保持一致 |
 | `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 精简版 |
 | `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
 | `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |

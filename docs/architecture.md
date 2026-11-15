@@ -59,7 +59,7 @@ docker-panel/
 │   ├── ui_state/log_sync.rs   日志窗口裁剪 + UI 行模型同步账（LogSyncPlan / trim_logs / log_sync_plan / commit_log_sync）
 │   ├── ui_state/config_io.rs  AppState ↔ config.json 读写（字段搬运，越界值回落默认；从 ui_state 拆出）
 │   ├── follow_runtime.rs       日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级/结局分类（从 ui_state 拆出）
-│   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
+│   ├── log_status.rs           日志流状态提示文案唯一定义处（4 条 i18n key：重连中 / 已恢复 / 已停止 / 洪峰抽样）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
 │   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）/ sort（三个资源列表共用的「过滤→排序→映射」骨架）

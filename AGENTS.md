@@ -21,6 +21,22 @@ agkit shot --list-apps                                # 查看已记录的固定
 
 `--app` 定位不到时才退回 `--region WxH+X+Y`（坐标基准是**整个虚拟桌面**，双屏 3840x1080）。
 
+**要出可放进 README / Wiki 的成品图时**（`assets/screenshots/` 四张，统一 1280x720 深色主题），按下面的配方走，能避开三类污染源（原生标题栏、GNOME dock 遮挡、桌面通知横幅）：
+
+```bash
+agkit desktop enable --yes --ttl 10m          # 限时开关 + 审计；只用 win 子命令，不注入键鼠
+./target/release/docker-panel &
+id=$(agkit desktop win list | sed 's/^\* //' | awk '/docker-panel/{print $1}' | head -1)
+agkit desktop win resize "$id" --size 1280x752   # 先 resize，再 move（反序会被 WM 拒绝）
+agkit desktop win move  "$id" --to 0,32
+agkit desktop mouse move 1900 1060            # 指针移出窗口，否则残留 hover 浮层进画面
+agkit shot --app docker-panel -o /tmp/raw.png
+python3 -c "from PIL import Image; Image.open('/tmp/raw.png').crop((0,32,1280,752)).save('assets/screenshots/x.png')"
+agkit desktop disable
+```
+
+窗口高度取 752 再裁掉顶部 32px 标题栏 → 正好 1280x720。截图期间临时 `gsettings set org.gnome.desktop.notifications show-banners false`（**必须用 trap 还原**）；抽屉 / 清理弹窗这类需要交互的状态用环境变量门控的**临时状态注入**（`ui_apply::open_drawer` / `cleanup_counts()` + `set_cleanup_open(true)`）构造，**不要注入键鼠事件**，截完立刻移除注入代码。
+
 Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 属性值（如逐列核对 `absolutePosition.x` 与 `size.width`、确认某个属性是否被赋值）时，临时构建 `cargo build --release --features slint/mcp` 并用 `get_element_tree` / `get_element_properties`（Trae MCP：`"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }`）。它不再承担截图与验收，验收一律以 `agkit shot` 的出图为准。
 
 **修复 UI 问题必须附截图证据，不要依赖用户口述。**

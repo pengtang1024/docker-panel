@@ -111,6 +111,7 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | 命令行参数 / 全局快捷键变更（src/cli.rs、ui/app.slint） | docs/configuration.md + Wiki Usage |
 | 用户可感知的错误文案 / 安装与卸载路径变更 | docs/troubleshooting.md 报错对照表 + Wiki FAQ |
 | 新增翻译条目或新增语言支持 | docs/translations.md（msgid 计数）+ CONTRIBUTING.md 翻译入口 |
+| 功能增删 / 方向调整 | `docs/roadmap.md`（当前阶段与候选方向）+ `README.md` 已知限制 |
 | 新增文档文件 | README 文档导航 + 项目结构树 + 本文件 §6.2 清单；新文档必须按 [文档风格与排版规范](style-guide.md) 写 |
 | 文档排版 / 结构改造 | `docs/style-guide.md` 是唯一规范；改造后按其中 §10 自检清单过一遍，两站渲染各抽查一次 |
 | 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
@@ -130,6 +131,7 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `docs/configuration.md` | 面向使用者：config.json 15 个字段全表、环境变量、命令行参数、快捷键、自动更新调度 | ✅ 配置项权威源（字段以 src/config.rs 为准） |
 | `docs/troubleshooting.md` | 面向使用者：按症状排查（启动/连接/列表/日志/更新/安装卸载/数据安全）+ 真实报错文案对照表 | ✅ 排障权威源（文案以 src/ 内 i18n 调用为准） |
 | `docs/translations.md` | 翻译机制与贡献流程：264 条 msgid、t/trf/trfp 用法、新增语言步骤 | ✅ 翻译权威源 |
+| `docs/roadmap.md` | 路线图：当前阶段、候选方向（未排期，不构成承诺）、明确不做的事 | ✅ 方向权威源（只写已想清楚的方向，不写日期） |
 | `docs/style-guide.md` | 文档风格与排版规范：页头三件套、两站可用语法白名单、提示块口径、折叠与页脚导航、提交前 9 项自检 | ✅ **排版唯一规范** |
 | `CONTRIBUTING.md` | 外部贡献入口：开发环境、分支与 PR、代码规范速览、文档同步门禁 | — 引用型，规范全文仍以 AGENTS.md / 本文件为准 |
 | `SECURITY.md` | 漏洞报告渠道、支持范围、安全模型与不视为漏洞的设计边界 | ✅ 安全策略权威源 |

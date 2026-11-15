@@ -37,6 +37,7 @@ DOCS = [
     "docs/configuration.md",
     "docs/troubleshooting.md",
     "docs/translations.md",
+    "docs/roadmap.md",
     "docs/arch/threading.md",
     "docs/arch/ui-interaction.md",
     "docs/arch/list-layout.md",

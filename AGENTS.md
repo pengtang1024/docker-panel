@@ -289,7 +289,7 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 ## 当前已知限制
 
-- **无 Docker Compose 导入导出、无定时清理**（后续 phase 再加）
+- **无 Docker Compose 导入导出、无定时清理**（属 [docs/roadmap.md](docs/roadmap.md) 的候选方向，未排期）
 - **镜像 / 网络 / 卷行不支持多选批量**（当前只有容器视图支持 CheckBox 多选）
 - **断流窗口的日志会补回，但单次最多 2000 行**：`json-file` 驱动的跟随流一律带 `timestamps` 建立游标，断裂后的重连带 `since(游标秒)` + 纳秒过滤，断流期间写入的日志会被补回（不再是黑洞）；单次回放只保留最新 `REPLAY_MAX = 2000` 行（与日志窗口上限对齐，更早的行即使补回也会立刻被裁剪）。边界：①**仅 `json-file` 日志驱动生效**，其它驱动 / 驱动探测失败仍按旧行为（`tail=0`，窗口内日志不补回）；②**时钟回拨安全阀**：连续 2 次重连收到的行全被游标过滤且 `attempt ≥ 2` 时丢弃游标、退回 `tail=0`（只 `eprintln`，不占状态栏）；③首次建流与 `Clear` 永不带 `since`，不存在「清空后历史复活」
 - **日志窗口最多保留 2000 行**：超出后分块丢掉最旧的一段（保留 1000 行）；「复制日志」复制的是窗口内容（与面板所见一致），不是容器的全部历史日志
@@ -307,4 +307,5 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 - [文档排版规范](docs/style-guide.md) — 写或改任何文档前先读；`python3 scripts/check-docs.py` 一键自检
 - [配置项说明](docs/configuration.md) · [故障排查](docs/troubleshooting.md) · [翻译贡献](docs/translations.md)
 - [贡献指南](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [支持渠道](SUPPORT.md)
+- [路线图](docs/roadmap.md) — 当前阶段 / 候选方向（未排期）/ 明确不做
 - [更新日志](CHANGELOG.md)

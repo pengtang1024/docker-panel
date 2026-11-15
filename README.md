@@ -206,7 +206,7 @@ cargo check --all-targets
 
 | 限制 | 说明 |
 |------|------|
-| 无 Compose 导入 / 导出、无定时清理 | 属后续阶段功能 |
+| 无 Compose 导入 / 导出、无定时清理 | 属[路线图](docs/roadmap.md)里的候选方向，未排期 |
 | 镜像 / 网络 / 卷不支持多选批量 | 只有容器视图支持 CheckBox 多选；网络 / 卷当前没有行内删除入口 |
 | 单实例前置请求只是尽力而为 | 第二个实例只提示并退出，同时给已有实例发一次前置请求（`show` + `set_minimized(false)` + `request_redraw()`）。GNOME Wayland 没有合法的窗口激活途径（终端启动的第二个进程拿不到 `XDG_ACTIVATION_TOKEN`；winit 在 Wayland 下 `focus_window()` 是空函数、`set_minimized()` 被忽略；`request_user_attention` 与 GTK `present()` 实测均无效；桌面文件无 `DBusActivatable`），**窗口不会自动到前台**，这是合成器协议层面的限制，不是本项目的实现缺陷。协议层细节与未来方案见 `src/single_instance.rs` 文件头 |
 | 镜像行的 ▶（Run）按钮只回显提示 | 尚未接入真正的 `docker run` |
@@ -437,5 +437,6 @@ docker-panel/
 | **只是想用** | [Wiki（GitHub）](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki（Gitee）](https://gitee.com/pengtang1024/docker-panel/wikis) | 安装、使用、常见问题（两站内容一致，国内外访问速度不同可互为备份） |
 | | [配置手册](docs/configuration.md) · [故障排查](docs/troubleshooting.md) · [翻译指南](docs/translations.md) | 改配置、修毛病、加翻译 |
 | **想参与** | [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [支持与求助](SUPPORT.md) · [安全策略](SECURITY.md) | 提 PR、提问、报漏洞 |
+| | [路线图](docs/roadmap.md) | 下一步想做什么、明确不做什么 |
 | **想读实现** | [架构设计](docs/architecture.md) · [文档风格规范](docs/style-guide.md) · [规则配置层](docs/agents-rules.md) · [Git Flow 规范](docs/git-flow.md) · [AGENTS.md](AGENTS.md) | 线程模型、模块地图、开发门禁 |
 | **变更与法务** | [更新日志](CHANGELOG.md) · [许可证](LICENSE) · [第三方声明](THIRD-PARTY-NOTICES.md) · [许可选择](LICENSING.md) | 版本改了什么、许可义务 |

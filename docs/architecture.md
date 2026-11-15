@@ -15,6 +15,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | [arch/ui-interaction.md](arch/ui-interaction.md) | Slint UI 模块交互（交互总图 + 4 种交互模式 + 文件清单）、Slint 拆分原则 |
 | [arch/docker-bollard.md](arch/docker-bollard.md) | Docker 接入约定、bollard 0.21 易踩坑速查（**唯一权威源**） |
 | [arch/list-layout.md](arch/list-layout.md) | 统一列表布局：四个视图的列表形态、台账内联 Compose 树、三个资源列表的表头排序、落点清单、验收标准 |
+| [arch/update-manifest.md](arch/update-manifest.md) | 自动更新的静态清单（`version.json`）与静态 CDN 分发：字段可信度、CI 生成顺序、三级回退链、失败降级、安全边界（**唯一权威源**） |
 
 ## 1. 技术栈（精确版本）
 

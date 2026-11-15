@@ -79,7 +79,9 @@ docker-panel/
 │   │
 │   ├── update/
 │   │   ├── mod.rs             任务编排 + 启动调度（24h 节流）+ Msg 投递 + UI 视图快照
-│   │   ├── github.rs          GitHub Releases API（系统 curl + JSON 解析，阻塞）
+│   │   ├── discover.rs        更新发现三级回退：清单两级 → API 兜底（fetcher 可注入 + 单测）
+│   │   ├── manifest.rs        清单解析 / 资产 URL 派生 / 与 checksums.txt 一致性断言（纯逻辑 + 单测）
+│   │   ├── github.rs          GitHub Releases API（第 3 级兜底；系统 curl + JSON 解析，阻塞）
 │   │   ├── version.rs         版本比较 / 资产选择 / checksums 解析（纯逻辑 + 单测）
 │   │   ├── install.rs         环境探测 / 安装方式判定 / deb（pkexec）与裸二进制替换
 │   │   └── install/download.rs 缓存目录 / curl 下载 / SHA-256 校验
@@ -150,7 +152,7 @@ main.rs
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（status_toast）
-  ├── update/        → github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
+  ├── update/        → discover（三级回退）+ manifest（清单纯逻辑）+ github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；

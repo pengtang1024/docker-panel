@@ -3,7 +3,8 @@
 > 隶属 [architecture.md 总纲](../architecture.md)。本文件是「静态更新清单 + 静态托管 / CDN」的**唯一权威源**：
 > 字段契约、CI 生成顺序、客户端回退链、失败降级与安全边界。AGENTS.md 只留指针，不维护副本。
 >
-> 状态：**方案（未实施）**。实测时间 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
+> 状态：**已实施**（客户端三级回退 + CI 生成步骤）。实测时间 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
+> 实现落点：`src/update/manifest.rs`（解析 / 派生 / 断言）、`src/update/discover.rs`（回退链）、`src/update/mod.rs`（`build_info` 透传）、`.github/workflows/release.yml`（生成步骤）。
 
 ## 0. 结论
 
@@ -44,14 +45,18 @@
 | `version_code` | int | 由 `version` 派生 `major*10^6 + minor*10^3 + patch` | 低 | 纯数字比较的备用键（避免再解析字符串） |
 | `channel` | string | 常量 `stable` | 低 | 预留；本期恒 `stable`，其它值整份丢弃 |
 | `released_at` | string(RFC3339) | CI 构建时间 | 低 | 仅展示 / 诊断，**不参与任何判定** |
-| `mandatory` | bool | 人工填（本期恒 `false`） | 低 | 预留「强制更新」；本期不接 UI（见 §9） |
-| `notes_url` | string | 固定 `…/releases/tag/v{version}` | 低 | 更新说明页；只允许本仓库域名前缀 |
+| `mandatory` | bool | 人工填（本期恒 `false`） | 低 | 预留「强制更新」；本期**解析后丢弃**（不落模型，避免死代码），行为同 `false`（§9） |
+| `notes_url` | string | 固定 `…/releases/tag/{version}` | 低 | 更新说明页；只允许本仓库域名前缀，否则改回派生值 |
 | `assets.deb.name` / `.size` | string / int | CI 从产出的 deb 读 | 低 | 资产名 + 字节数（大小只做「下载前预检」） |
 | `assets.deb.sha256` | string(64 hex) | **从 `checksums.txt` 抽取** | **低** | 只能与 `checksums.txt` 交叉核对（§7） |
 | `assets.binary.*` | 同上 | 同上（裸二进制） | 同上 | 同上 |
 
+`version` 允许带 `v` 前缀（历史兼容），客户端一律归一化成 `major.minor.patch`；
+`version_code` 必须与归一化后的 `version` 逐字对应（`major*10^6 + minor*10^3 + patch`），不一致整份丢弃。
+
 **刻意不提供 `download_url`**：URL 由客户端按 `version` + `name` 拼成
-`https://github.com/pengtang1024/docker-panel/releases/download/v{version}/{name}`。
+`https://github.com/pengtang1024/docker-panel/releases/download/{version}/{name}`
+（本仓库 tag **无** `v` 前缀，`git tag` 实测：`0.7.12`；写成 `v{version}` 会 404）。
 这样即使清单被 CDN / 中间人篡改，也改不掉下载地址（只能改版本号，而版本号会立刻被 `checksums.txt` 与 404 拦住）。
 若将来确实需要字段化 URL，必须加前缀白名单校验，且 `sha256` 仍只能与 `checksums.txt` 比对。
 
@@ -62,7 +67,7 @@
 1. `cargo build --release --locked`
 2. 生成 deb（`dpkg-deb --build`）
 3. **生成 `checksums.txt`**（deb + `target/release/docker-panel` 两条，现有 step 不动）
-4. **生成 `version.json`**：`version` 取 `steps.ver.outputs.version`，`sha256` / `size` **从第 3 步的 `checksums.txt` 与产物读取**，禁止在清单 step 里重新算一份独立来源
+4. **生成 `version.json`**：`version` 取 `steps.ver.outputs.version`，`sha256` 用 `awk` **从第 3 步的 `checksums.txt` 抽取**，`size` 用 `stat -c%s` 读产物，禁止在清单 step 里重新算一份独立来源；生成后 `python3 -m json.tool` 自检，坏了直接让 job 失败
 5. `softprops/action-gh-release` 上传：现有 `files:` 追加 `version.json`（与 `checksums.txt` 同一批）
 6. （可选，**仅在第 5 步成功之后**）把 `version.json` 提交到 `master`
 
@@ -75,19 +80,20 @@
 
 ## 4. 客户端改动点（文件级）
 
-| 文件 | 改动 | 说明 |
+| 文件 | 改动（已实施） | 说明 |
 |------|------|------|
-| `src/update/github.rs` | 新增 `fetch_manifest(base)` + `parse_manifest(text)` | 复用现有 `curl_get`（已带 `-fsSL`，404 会以退出码 22 触发 `curl_error`）；`parse_manifest` 是纯函数，配单测 |
-| `src/update/version.rs` | 新增「清单 → `Vec<UpdateAsset>`」派生 | URL 由 `version` + `name` 拼出；`normalize_tag` / `is_newer` / `plan_install` / `checksum_for` **不动** |
-| `src/update/mod.rs` | `build_info` 之前插入 `fetch_release_info()`：清单链 → 回落 `github::fetch_latest()` | `spawn_check` / `spawn_install` 只改调用点，调度与 `update_busy` 互斥不变 |
-| `src/models/update.rs` | `UpdateInfo` 加 `mandatory: bool` | 本期不接 UI（§9）；不加则该字段只解析不消费 |
-| `src/update/install.rs` | **不改** | `checksums.txt` 仍从 assets 里找、仍做 SHA-256 校验；清单的 `sha256` 只做交叉核对 |
-| `src/ui_update/update.rs` | **不改**（或仅节流判断） | 「无更新才写 `last_update_check`」的语义对清单路径同样成立 |
-| `src/callbacks_update.rs` | **不改** | 手动检查入口与今日一致 |
-| `translations/zh_CN/LC_MESSAGES/docker-panel.po` | 新增 1–2 条文案 | 清单不可用/结构不认识的诊断文案；默认仍回落 API，不新增打断式提示 |
+| `src/update/manifest.rs` | 新增 `parse_manifest` / `assets_from` / `assert_asset_sha` | 全部纯函数、无 IO；覆盖「合法 / 缺字段 / schema 不匹配 / sha256 不一致 / 版本回退 / tag 无 `v` 前缀」 |
+| `src/update/discover.rs` | 新增三级回退 `fetch_release()` + 更新说明补全 | fetcher 可注入，单测覆盖「1 级命中 / 回落 2 级 / 全落 3 级 / 全失败」 |
+| `src/update/mod.rs` | `spawn_check` 改调 `discover::fetch_release()`；`build_info` 透传 `manifest` | 调度、`update_busy` 互斥、节流不变 |
+| `src/update/github.rs` | 保留 `curl_get` / `curl_error` / `parse_release`；`RawRelease` 加 `manifest` 字段 | 删掉不再被调用的 `fetch_latest`（回退链统一走 `discover`） |
+| `src/models/update.rs` | 新增 `ManifestAsset` / `UpdateManifest`；`UpdateInfo` 加 `manifest: Option<UpdateManifest>` | `mandatory` 不落模型（未消费字段会触发 `dead_code`，而本期又不接 UI） |
+| `src/update/install.rs` | **校验路径不变**，仅在 `checksum_for` 之后追加清单一致性断言 | `checksums.txt` 仍是唯一校验源；清单不一致 → 拒绝安装 |
+| `src/ui_update/update.rs` / `src/callbacks_update.rs` | **不改** | 「无更新才写 `last_update_check`」的语义对清单路径同样成立 |
+| `translations/zh_CN/LC_MESSAGES/docker-panel.po` | 新增 1 条 | 「更新清单与校验文件不一致，已拒绝安装」；清单不可用只走 `eprintln`，不进 UI |
 | `.github/workflows/release.yml` | 新增「生成更新清单」step + `files:` 追加 | 见 §3 |
 
-不建议新增模块：`github.rs` 已有 `curl_get` / `curl_error`，`version.rs` 已有版本与资产纯逻辑，清单只是多一个输入形态。
+清单解析失败是**诊断信息**（`eprintln` 带来源 URL），不新增用户可见文案：
+三级全失败时用户看到的仍是第 3 级（API）的错误，与实施前一致。
 
 ## 5. 三级回退链
 
@@ -97,8 +103,13 @@
 | 2 | `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json` | 国内可达性好、零配额 | 最长 12h 陈旧（`s-maxage=43200`） | 16/16 成功，0.52–0.58s |
 | 3 | `https://api.github.com/repos/pengtang1024/docker-panel/releases/latest` | 现役路径，信息最全（含 notes / assets / size） | 60/h 未认证配额，同出口 IP 共享 | 3/3，0.53–0.84s；`remaining 26` |
 
-编排规则：**上一级「可解析且结构合法」即停**，不再往下要。只有「请求失败 / 404 / JSON 非法 / `schema` 不认识 / `channel ≠ stable`」才进下一级。
+编排规则：**上一级「可解析且结构合法」即停**，不再往下要。只有「请求失败 / 404 / JSON 非法 / `schema` 不认识 / `channel ≠ stable` / `version_code` 与 `version` 不符」才进下一级。
 清单可解析但「版本不新」→ 直接判「已是最新」，**不回落 API**（避免每次启动两次请求；最长接受 12h 发现延迟，而现有节流本来就是 24h）。
+
+**唯一的例外是「补更新说明」**：清单命中且 `is_newer` 为真时，额外 best-effort 拉一次第 3 级 API，
+只为拿到 `body`（`notes`）与 `html_url`；版本号与清单不一致、或请求失败，都保留清单结果照常继续。
+理由：清单刻意不承载 notes，而更新弹窗需要它；这条请求只在「确实有新版本」时发生（每个版本每台机器一次），
+不会把「每次启动两次请求」的代价带回来。
 
 ## 6. 失败与降级行为
 
@@ -108,9 +119,10 @@
 | 清单 404（首发前 / 老 tag） | 进下一级 | 否 |
 | 清单 JSON 非法 / `schema` 不认识 | 进下一级，`eprintln` 记来源 | 否 |
 | 清单版本 ≤ 当前 | 判定已是最新，写 `last_update_check` | 否 |
+| 清单命中但补说明的 API 失败 / 版本不一致 | 照常提示更新，更新说明留空（可打开下载页看） | 否 |
 | 资产 404（清单先于资产可见） | 安装阶段失败 → 提示「下载失败，可打开下载页」 | 是（仅安装） |
-| 清单 `sha256` 与 `checksums.txt` 不一致 | **拒绝安装**（fail closed），提示校验失败 | 是（仅安装） |
-| `mandatory = true`（本期） | 解析后**忽略**，行为同 `false` | 否 |
+| 清单 `sha256` 与 `checksums.txt` 不一致 / 清单未声明该资产 | **拒绝安装**（fail closed），提示校验失败 | 是（仅安装） |
+| `mandatory = true`（本期） | 解析后**丢弃**，行为同 `false` | 否 |
 
 ## 7. 安全边界
 
@@ -130,7 +142,7 @@
 ## 8. 文档与版本号三同步影响
 
 - **版本号仍只有三处**（`Cargo.toml` / `packaging/debian/control` / `CHANGELOG.md`），`version.json` **不是**第四处手写源：它的 `version` 由 `GITHUB_REF_NAME` 派生，无需人工同步，`scripts/check-version.sh` 也**不检查**它。
-- 实施时需要同步的文档：本文件（实现后把「状态：方案」改为「已实施」并补实测值）、`AGENTS.md` 的「当前已知限制」里「更新包无代码签名」条目（补一句「清单与 `checksums.txt` 双来源，冲突即 fail closed」）、`src/update/github.rs` 与 `src/update/mod.rs` 的模块注释、`CHANGELOG.md` 对应版本段落。
+- 本轮已同步：本文件（状态改为「已实施」+ 补实测值）、`AGENTS.md` 模块地图（`update/` 增 `discover` / `manifest`）与「当前已知限制」的「更新包无代码签名」条目、`docs/architecture.md` 的模块树与依赖表、`src/update/{mod,github}.rs` 模块注释、`CHANGELOG.md` 的 `[Unreleased]`。
 - `docs/git-flow.md` 的发布流程不变（清单由 CI 生成，不进入人工发版清单）。
 
 ## 9. 不建议做
@@ -146,7 +158,7 @@
 9. 让清单的 `sha256` 绕过或替代 `checksums.txt`。
 10. 为清单缩短 24h 节流或加轮询（清单不会比 Release 更实时，只会多打请求）。
 11. 把清单塞进 `Cargo.toml` / `README.md`（Content-Type 与语义都不对，且污染源码文件）。
-12. 为齐全信息而放弃 API 兜底（手动检查时用户需要 `notes.en` / 资产列表，清单不承载这些）。
+12. 为齐全信息而放弃 API 兜底（手动检查时用户需要 `notes.en` / 资产列表，清单不承载这些）；反过来也不要把 API 挪回主路径——它只做第 3 级兜底与「已确认有新版本时补说明」。
 
 ## 10. 风险与回归点
 
@@ -157,14 +169,18 @@
 | 清单与 `checksums.txt` 不一致 | 安装失败 | fail closed（§7），但不浮到自动检查路径 |
 | CI 顺序写错（清单先于 checksums） | 清单 `sha256` 缺失/错值 | `set -euo pipefail` + 只从 `checksums.txt` 抽取，禁止手写常量 |
 | 老版本客户端不认识清单 | 无 | 老客户端本来只走 API；新客户端对 404/非法结构一律回落 |
-| `install.rs` 被顺手「优化」成只信清单 | 安全边界被拆掉 | 在本文件与 `install.rs` 注释里双向互指 |
+| `install.rs` 被顺手「优化」成只信清单 | 安全边界被拆掉 | `install.rs` 里已显式注释「期望值仍只来自 checksums.txt」，`manifest.rs` 与本文双向互指 |
+| 本机出口 IP 配额耗尽（实测 `remaining 0`，API 返回 403） | 旧客户端（只有第 3 级）更新检查直接失败 | 新客户端前两级零配额；首个带 `version.json` 的 Release 发布后主路径不再依赖 API |
 
 ## 11. 待实测 / 留白
 
-以下内容**当前无证据**，实施时须补测后再改本文件：
+以下内容**当前无证据**，首次带 `version.json` 的正式发布后须补测：
 
-- `version.json` 的真实端到端（仓库里还没有该文件）：本轮只验证了**同一端点**对 `Cargo.toml` / `README.md` 的可达性、`Content-Type` 与缓存头。
-- `releases/latest/download/version.json` 的**正常命中**路径耗时（当前 404）。
-- jsDelivr 在**不同运营商 / 省份**的成功率（本轮是本机单出口 16 次，不代表全国）。
+- `version.json` 的真实端到端（仓库里还没有该文件）：本轮只用**本地构造的清单文件**验证了解析 / 派生 / 回退顺序 / 拒绝安装
+  （CI 那个 step 的脚本用假产物实跑出的 `version.json`，已用真实 `parse_manifest` 解析通过，派生出 3 条资产 URL），
+  并用同一 curl 参数（`-fsSL --connect-timeout 10 --max-time 20 --max-filesize 2097152`）从 `file://` 读通了同一份 JSON。
+- `releases/latest/download/version.json` 的**正常命中**路径耗时（当前 404，实测 1.11s 才拿到 404）。
+- jsDelivr 在**不同运营商 / 省份**的成功率（本轮是本机单出口 16 次，不代表全国）；`@master/version.json` 当前 404，
+  同端点取 `Cargo.toml` 为 200（0.68s），证明 URL 形态有效、只差文件。
 - `If-None-Match` 304 只测了一次，未验证分支端点刷新后的 ETag 变更行为。
 - `mandatory` 的 UI 交互与「拒绝升级」路径（本期不做，故无设计）。

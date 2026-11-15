@@ -1,7 +1,9 @@
 //! 自动更新：GitHub Releases 检查、下载、校验、安装与重启。
 //!
 //! 分层：
-//!   - `github`：HTTP + JSON（阻塞，调用方 spawn_blocking）
+//!   - `discover`：更新发现三级回退（静态清单两级 → API 兜底）
+//!   - `manifest`：清单解析 + 资产 URL 派生 + 与 checksums.txt 的一致性断言（纯逻辑）
+//!   - `github`：HTTP + JSON（第 3 级兜底；阻塞，调用方 spawn_blocking）
 //!   - `version`：纯逻辑（版本比较 / 资产选择 / checksums 解析）
 //!   - `install`：本机探测 + 下载 + SHA-256 + deb/二进制安装
 //!   - 本文件：任务编排 + Msg 投递 + UI 视图快照
@@ -16,8 +18,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::models::Msg;
 use crate::ui_state::{AppState, SharedState};
 
+pub mod discover;
 pub mod github;
 pub mod install;
+pub mod manifest;
 pub mod markdown;
 pub mod version;
 
@@ -124,7 +128,7 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
     rt.spawn(async move {
         let tx_task = tx.clone();
         let res = tokio::task::spawn_blocking(move || {
-            let raw = match github::fetch_latest() {
+            let raw = match discover::fetch_release() {
                 Ok(raw) => raw,
                 Err(e) => {
                     let _ = tx_task.send(Msg::UpdateCheckDone(manual, false, Err(e)));
@@ -277,6 +281,7 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
         page_url: raw.page_url,
         assets: raw.assets,
         plan,
+        manifest: raw.manifest,
     })
 }
 

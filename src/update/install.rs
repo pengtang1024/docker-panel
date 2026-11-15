@@ -57,6 +57,11 @@ pub fn download_and_install(
     let checksums = download::fetch_text(&checksums_asset.url)?;
     let expected = version::checksum_for(&checksums, &asset.name)
         .ok_or_else(|| i18n::t("Release checksums.txt does not contain this asset"))?;
+    // 清单只做一致性断言：期望值仍只来自 checksums.txt，不一致即拒绝安装（fail closed）
+    if let Some(m) = info.manifest.as_ref() {
+        crate::update::manifest::assert_asset_sha(m, &asset.name, &expected)
+            .map_err(|_| i18n::t("Update manifest does not match checksums.txt"))?;
+    }
 
     fs::create_dir_all(cache)
         .map_err(|e| i18n::trf("Failed to create update cache: {0}", &[&e.to_string()]))?;

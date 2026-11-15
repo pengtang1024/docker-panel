@@ -12,6 +12,10 @@
 
 - **发布流水线自动 purge jsDelivr 清单缓存**：`@master/version.json` 的分支端点带 `s-maxage=43200`（12h 边沿缓存），上一步提交清单后最长 12h 才能被备源读到。Release 流水线在「提交更新清单到 master」之后紧跟一步调用 jsDelivr 官方 purge 接口（免 token、免 secret），回读 CDN 确认已是本版；该步骤 `continue-on-error` + 内部只 `::warning`，**刷新失败不阻断发版**，退回 12h 陈旧。只刷清单：资产直链在 `github.com/.../releases/download/...`，不经过 jsDelivr，无可刷对象。
 
+### 修复
+
+- **更新安装后的自动重启不再让应用消失**：此前先拉起新进程、再 `quit_event_loop()`，而此时旧进程仍持有单实例锁 → 新进程打印 `already running, not starting a second window` 后退出，旧进程随后也退出，两个都没了、必须手动再开一次（0.7.12–0.7.14 均存在）。现在改为「置重启请求 → 退出事件循环 → `main` 释放 `InstanceGuard`（同步 unlink socket）→ 由独立短命 launcher 延时 `exec` 新二进制」，顺序由代码结构保证；launcher 只 sleep 一次就 `exec`、不重试，锁被其它实例长期持有时新进程立刻退出，不会堆积进程。手动「重启应用」按钮改走同一路径，一并修复。
+
 ### 变更
 
 - **补齐面向外部使用者的文档层**：此前仓库里只有「给维护者/AI 看」的实现文档（AGENTS.md、docs/arch/*、Wiki Architecture），缺对外那一层。本版新增 `CONTRIBUTING.md`、`SECURITY.md`、`SUPPORT.md`、`docs/configuration.md`（config.json 15 个字段全表 + 环境变量 + CLI + 快捷键 + 更新调度）、`docs/troubleshooting.md`（按症状排查 + 14 条真实报错文案对照表）、`docs/translations.md`（264 条 msgid 与新增语言步骤），以及 `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` 与 `PULL_REQUEST_TEMPLATE.md`。README 文档导航按读者分层重排，`docs/agents-rules.md` §6 触发表同步扩为「配置字段 / CLI 与快捷键 / 用户可见文案 / 翻译 / 新增文档」五类事件。

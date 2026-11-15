@@ -95,15 +95,13 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
     }
 
     {
-        let ui_q = ui.as_weak();
         let s = state.clone();
         actions.on_update_restart(move || {
-            let Some(ui) = ui_q.upgrade() else { return };
-            match crate::update::install::restart_current_exe() {
-                Ok(()) => {
-                    let _ = slint::quit_event_loop();
-                }
-                Err(e) => crate::ui_apply::status_toast(&ui, &s, &e),
+            // 与自动重启同一顺序：只置请求 + 退出事件循环；释放单实例锁、
+            // 拉起新二进制由 main 的退出流程统一负责（先释放锁再 spawn）。
+            if let Some(mut st) = crate::lock::acquire(&s, "callbacks_update") {
+                st.update.restart_on_exit = true;
+                let _ = slint::quit_event_loop();
             }
         });
     }

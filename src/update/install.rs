@@ -139,13 +139,40 @@ fn current_exe_path() -> Result<PathBuf, String> {
     Ok(exe)
 }
 
-/// 启动新进程（更新完成后由主线程调用 quit_event_loop）。
-pub fn restart_current_exe() -> Result<(), String> {
+/// 更新重启的拉起延时：给旧进程留出退出时间，避免新旧窗口短暂并存。
+const RELAUNCH_DELAY_SECS: u64 = 2;
+
+/// 由独立短命进程延时拉起当前可执行文件（更新安装完成后由 `main` 调用）。
+///
+/// **调用前必须已释放单实例锁**（见 `single_instance::release_then`）：新进程启动时
+/// 会重新 `acquire()`，锁还被旧进程持有时它只会打印 `already running` 后退出。
+/// 用短命 launcher 而不是旧进程直接 spawn，是为了让拉起动作不依赖旧进程的退出速度
+/// （旧进程还要 join 后台线程、drop tokio runtime）。launcher 只 sleep 一次就 `exec`，
+/// 不产生重试循环 —— 锁被别的实例长期持有时新进程立刻退出，不会堆积进程。
+pub fn restart_detached() -> Result<(), String> {
     let exe = current_exe_path()?;
-    Command::new(&exe)
+    launcher_command(&exe, RELAUNCH_DELAY_SECS)
         .spawn()
         .map(|_| ())
         .map_err(|e| i18n::trf("Failed to restart application: {0}", &[&e.to_string()]))
+}
+
+/// 构造 launcher：`sleep N; exec <exe>`。exe 作为位置参数传入、不做字符串拼接，
+/// 安装路径含空格或引号也不会被 shell 改写。
+#[cfg(unix)]
+fn launcher_command(exe: &Path, delay_secs: u64) -> Command {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c")
+        .arg("sleep \"$1\"; exec \"$2\"")
+        .arg("sh")
+        .arg(delay_secs.to_string())
+        .arg(exe);
+    cmd
+}
+
+#[cfg(not(unix))]
+fn launcher_command(exe: &Path, _delay_secs: u64) -> Command {
+    Command::new(exe)
 }
 
 fn path_in_target_dir(exe: &Path) -> bool {

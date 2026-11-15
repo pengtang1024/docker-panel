@@ -2,12 +2,13 @@
 //!
 //! 只做状态搬运，不碰 Slint：UI 灌入仍由 consumer::apply_ui 统一完成。
 
-use std::sync::mpsc::Sender;
-
 use crate::models::Msg;
 use crate::ui_state::AppState;
 
 use super::{DrainResult, UiFlag};
+
+/// 自动重启的退出延时：先让「restarting automatically…」状态文案上屏。
+const AUTO_RESTART_DELAY_SECS: u64 = 3;
 
 impl AppState {
     pub(super) fn apply_update_msg(&mut self, msg: Msg, res: &mut DrainResult) {
@@ -73,7 +74,8 @@ impl AppState {
                         {
                             self.update.update_status =
                                 crate::i18n::t("Update installed, restarting automatically...");
-                            Self::schedule_auto_restart(&self.tx, &self.rt);
+                            self.update.restart_on_exit = true;
+                            Self::schedule_auto_restart(&self.rt);
                         } else {
                             self.update.update_status = msg.clone();
                         }
@@ -90,30 +92,15 @@ impl AppState {
         }
     }
 
-    /// 3s 后启动替换后的新二进制并退出事件循环。
+    /// 延时退出事件循环；「释放单实例锁 → 拉起新二进制」由 `main` 的退出流程统一执行。
     ///
-    /// 纪律：这里只 clone tx / rt handle 后 spawn，绝不把锁或 self 带进异步任务；
-    /// 重启失败通过 Msg 回灌（spawn_blocking 里跑子进程/文件 IO）。
-    fn schedule_auto_restart(tx: &Sender<Msg>, rt: &tokio::runtime::Runtime) {
-        let tx = tx.clone();
+    /// 不能在这里 spawn 新进程：此刻旧进程仍持有单实例锁，新进程启动时会连上旧
+    /// listener、判为 `AlreadyRunning` 后退出，旧进程随后也退出 → 应用直接消失
+    /// （0.7.12–0.7.14 的真实缺陷）。顺序必须是「先释放锁、后 spawn」。
+    fn schedule_auto_restart(rt: &tokio::runtime::Runtime) {
         rt.handle().spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let result = match tokio::task::spawn_blocking(
-                crate::update::install::restart_current_exe,
-            )
-            .await
-            {
-                Ok(r) => r,
-                Err(e) => Err(e.to_string()),
-            };
-            match result {
-                Ok(()) => {
-                    let _ = slint::quit_event_loop();
-                }
-                Err(e) => {
-                    let _ = tx.send(Msg::UpdateProgress(100, e));
-                }
-            }
+            tokio::time::sleep(std::time::Duration::from_secs(AUTO_RESTART_DELAY_SECS)).await;
+            let _ = slint::quit_event_loop();
         });
     }
 }

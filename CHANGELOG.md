@@ -12,6 +12,11 @@
 
 - **发布流水线自动 purge jsDelivr 清单缓存**：`@master/version.json` 的分支端点带 `s-maxage=43200`（12h 边沿缓存），上一步提交清单后最长 12h 才能被备源读到。Release 流水线在「提交更新清单到 master」之后紧跟一步调用 jsDelivr 官方 purge 接口（免 token、免 secret），回读 CDN 确认已是本版；该步骤 `continue-on-error` + 内部只 `::warning`，**刷新失败不阻断发版**，退回 12h 陈旧。只刷清单：资产直链在 `github.com/.../releases/download/...`，不经过 jsDelivr，无可刷对象。
 
+### 变更
+
+- **补齐面向外部使用者的文档层**：此前仓库里只有「给维护者/AI 看」的实现文档（AGENTS.md、docs/arch/*、Wiki Architecture），缺对外那一层。本版新增 `CONTRIBUTING.md`、`SECURITY.md`、`SUPPORT.md`、`docs/configuration.md`（config.json 15 个字段全表 + 环境变量 + CLI + 快捷键 + 更新调度）、`docs/troubleshooting.md`（按症状排查 + 14 条真实报错文案对照表）、`docs/translations.md`（264 条 msgid 与新增语言步骤），以及 `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` 与 `PULL_REQUEST_TEMPLATE.md`。README 文档导航按读者分层重排，`docs/agents-rules.md` §6 触发表同步扩为「配置字段 / CLI 与快捷键 / 用户可见文案 / 翻译 / 新增文档」五类事件。
+- **修正文档与实现不一致的三处**：`src/log_status.rs` 实际定义 **4 条**日志状态文案（重连中 / 已恢复 / 已停止 / 洪峰抽样），README、`docs/architecture.md`、`docs/arch/threading.md` 均写「3 条」，四态表还漏了「洪峰抽样」行；`src/config.rs` 文件头注释写「7 个固定字段」，实际 `AppConfig` 为 **15 个**；`THIRD-PARTY-NOTICES.md` 的复核落款停在 0.6.0，已改为随 `Cargo.lock` 复核。
+
 ## [0.7.14] - 2026-11-15
 
 ### 新增

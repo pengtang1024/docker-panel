@@ -35,7 +35,11 @@ python3 -c "from PIL import Image; Image.open('/tmp/raw.png').crop((0,32,1280,75
 agkit desktop disable
 ```
 
-窗口高度取 752 再裁掉顶部 32px 标题栏 → 正好 1280x720。截图期间临时 `gsettings set org.gnome.desktop.notifications show-banners false`（**必须用 trap 还原**）；抽屉 / 清理弹窗这类需要交互的状态用环境变量门控的**临时状态注入**（`ui_apply::open_drawer` / `cleanup_counts()` + `set_cleanup_open(true)`）构造，**不要注入键鼠事件**，截完立刻移除注入代码。
+窗口高度取 752 再裁掉顶部 32px 标题栏 → 正好 1280x720。
+
+**成品图必须脱敏**：`assets/screenshots/` 是公开产物，不允许出现真实业务标识。容器名 / 镜像名 / 分组名一律换成中性示例值（`demo-gateway`、`demo/gateway:local`、`demo-stack`），容器 ID、PID、创建 / 启动时间、挂载路径同理；CPU 占用 TOP4 面板、抽屉标题与副标题、`详情` 页的 ID / PID / 时间 / 挂载都在范围内。做法是**同色底覆盖 + 同字号同色重绘**（PIL 按本地背景色填矩形，`DejaVuSans` 13px 画字；抽屉右栏背景是 `#18181b`，列表行是 `#0c0c0e`，被弹窗的遮罩压暗的图要取遮罩后的实际底色），**不要用黑条或马赛克**——那会破坏列宽对齐与观感。改完逐张放大复核（至少名称列、镜像列、抽屉 ID/时间区三处），确认没有残留真实标识再提交。
+
+截图期间临时 `gsettings set org.gnome.desktop.notifications show-banners false`（**必须用 trap 还原**）；抽屉 / 清理弹窗这类需要交互的状态用环境变量门控的**临时状态注入**（`ui_apply::open_drawer` / `cleanup_counts()` + `set_cleanup_open(true)`）构造，**不要注入键鼠事件**，截完立刻移除注入代码。
 
 Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 属性值（如逐列核对 `absolutePosition.x` 与 `size.width`、确认某个属性是否被赋值）时，临时构建 `cargo build --release --features slint/mcp` 并用 `get_element_tree` / `get_element_properties`（Trae MCP：`"slint-mcp": { "type": "http", "url": "http://127.0.0.1:8080/mcp" }`）。它不再承担截图与验收，验收一律以 `agkit shot` 的出图为准。
 

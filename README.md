@@ -44,7 +44,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 | **右侧抽屉（详情 / 日志 / 环境）** | **清理弹窗** |
 | ![右侧抽屉](assets/screenshots/drawer.png) | ![清理弹窗](assets/screenshots/cleanup.png) |
 
-<sub>截图来自 Linux + Wayland + 深色主题，由 `agkit shot --app docker-panel` 按 xdg app_id 定位窗口截取（见 [AGENTS.md](AGENTS.md) R1）；仅裁去窗口标题栏，未做内容合成、标注或调色。</sub>
+<sub>截图来自 Linux + Wayland + 深色主题，由 `agkit shot --app docker-panel` 按 xdg app_id 定位窗口截取（见 [AGENTS.md](AGENTS.md) R1），仅裁去窗口标题栏。**容器名、镜像名、分组名、容器 ID、PID、创建/启动时间与挂载路径已替换为中性示例值**（`demo-*`），版面、列宽与数值未作改动。</sub>
 
 ## 2. 功能特性
 

@@ -40,7 +40,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 
 | 容器台账（内联 Compose 树） | 镜像表格列表 |
 |:---:|:---:|
-| ![容器台账](assets/screenshots/ledger-expanded.png) | ![镜像列表](assets/screenshots/images.png) |
+| ![容器台账](assets/screenshots/ledger.png) | ![镜像列表](assets/screenshots/images.png) |
 | **右侧抽屉（详情 / 日志 / 环境）** | **清理弹窗** |
 | ![右侧抽屉](assets/screenshots/drawer.png) | ![清理弹窗](assets/screenshots/cleanup.png) |
 

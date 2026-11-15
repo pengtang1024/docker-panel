@@ -21,6 +21,7 @@
 - **补齐面向外部使用者的文档层**：此前仓库里只有「给维护者/AI 看」的实现文档（AGENTS.md、docs/arch/*、Wiki Architecture），缺对外那一层。本版新增 `CONTRIBUTING.md`、`SECURITY.md`、`SUPPORT.md`、`docs/configuration.md`（config.json 15 个字段全表 + 环境变量 + CLI + 快捷键 + 更新调度）、`docs/troubleshooting.md`（按症状排查 + 14 条真实报错文案对照表）、`docs/translations.md`（264 条 msgid 与新增语言步骤），以及 `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` 与 `PULL_REQUEST_TEMPLATE.md`。README 文档导航按读者分层重排，`docs/agents-rules.md` §6 触发表同步扩为「配置字段 / CLI 与快捷键 / 用户可见文案 / 翻译 / 新增文档」五类事件。
 - **修正文档与实现不一致的三处**：`src/log_status.rs` 实际定义 **4 条**日志状态文案（重连中 / 已恢复 / 已停止 / 洪峰抽样），README、`docs/architecture.md`、`docs/arch/threading.md` 均写「3 条」，四态表还漏了「洪峰抽样」行；`src/config.rs` 文件头注释写「7 个固定字段」，实际 `AppConfig` 为 **15 个**；`THIRD-PARTY-NOTICES.md` 的复核落款停在 0.6.0，已改为随 `Cargo.lock` 复核。
 - **文档补「第一次贡献」端到端流程，并把自动重启机制同步到新实现**：`CONTRIBUTING.md` 新增从 fork、切分支、过四项门禁到发起 PR 的完整命令序列，附新手最常卡住的五处（PR 目标选 `develop`、不要从 `master` 切分支、提交信息格式、文档同步义务、分支落后如何处理）与 Gitee 侧的差异说明。`docs/configuration.md` 与 `docs/arch/threading.md` 原先把自动重启写成「3s 后启动新二进制并退出」，与修复后的实现不符（`5c63c0e` 起）——现在改为「3s 倒计时仅退出事件循环，再由 `main` 退出流程先 `release_then` 释放单实例锁、后经 launcher 延时 2s `exec`」，并补上为什么顺序不能反；同时修正 `src/ui_update/update.rs:93` 这处因该修复而失效的行号引用。
+- **全站文档版面重排，并新增可执行的排版规范**：新增 `docs/style-guide.md`（页头三件套、编号章节、五种提示块口径、表格优先、折叠口径、页脚导航、两站语法白名单）与 `scripts/check-docs.py`（18 份受控文档 + Wiki 页面的版面 lint：栅栏配对、折叠配对、页内锚点、相对链接、禁用写法、占位符、R2 正文行数、章节编号连续）。README、四份社区文档、四份用户向文档、五份实现向文档与两站 Wiki 六页全部按规范重排：长清单与结构树改折叠、并列信息改表格、关键约束用提示块前置、每节结论先行、页脚补三栏导航。技术事实（命令、路径、行号、报错原文、常量、版本号）逐条回查源码与 HEAD，未作改动。
 
 ## [0.7.14] - 2026-11-15
 

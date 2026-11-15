@@ -1,8 +1,27 @@
 # 故障排查
 
-按**症状**查。每节给出：怎么确认 → 怎么修 → 修不好时往哪报。
+> **一句话**：给遇到启动失败、连不上 Docker、列表不动、更新装不上或日志异常的 Linux 桌面用户——先按症状表定位章节，每节都给出确认方式、修复动作与上报路径。
 
-底线信息先备齐（提 issue 时也需附上）：
+**相关页面**：[配置手册](configuration.md)（`config.json` 字段与重置）｜[README](../README.md)（功能与已知限制）
+
+## 0. 症状速查
+
+**结论**：先在这张表里按症状定位，再进对应章节；每节的结构都是「怎么确认 → 怎么修 → 修不好往哪报」。
+
+| 症状 | 先看这里 |
+|------|----------|
+| 双击图标没反应 / 一闪就退 | [启动与窗口](#1-启动与窗口) |
+| 窗口空白 / 花屏 / 字体全是方块 | [启动与窗口](#1-启动与窗口) |
+| 配置文件损坏导致启动异常 | [启动与窗口](#1-启动与窗口) |
+| 顶栏显示 `Disconnected` / 连不上 Docker | [连不上 Docker](#2-连不上-docker) |
+| 列表不刷新 / 数据不更新 | [列表不刷新 / 数据不更新](#3-列表不刷新--数据不更新) |
+| 点「检查更新」没反应 / 更新报错 | [自动更新](#4-自动更新) |
+| 日志面板提示异常 / 复制不全 | [日志面板](#5-日志面板) |
+| 二进制跑不起来 / 卸载有残留 | [安装与卸载](#6-安装与卸载) |
+| 误删容器、镜像或卷 | [删除与数据安全](#7-删除与数据安全) |
+| 以上都无法解决 | [仍无法解决](#8-仍无法解决) |
+
+提 issue 时先备齐这四行底线信息（也用于逐节排查）：
 
 ```bash
 docker-panel --version     # 应用版本
@@ -11,9 +30,9 @@ echo $XDG_SESSION_TYPE     # 显示会话（本项目仅验证 Wayland）
 echo $LANG                 # 语言环境（影响界面语言与字体回退）
 ```
 
----
-
 ## 1. 启动与窗口
+
+**结论**：先确认是不是「已经有实例在跑」，再区分 GUI 初始化失败与二进制本身失败，最后才怀疑配置文件。
 
 ### 双击图标没反应 / 一闪就退
 
@@ -36,6 +55,8 @@ docker-panel               # 正常启动，报错会打到 stderr
 
 ### 窗口空白 / 花屏 / 字体全是方块
 
+**结论**：这类问题基本都是系统字体缺失——本项目不内嵌字体，只从系统字体读字形。
+
 按顺序排查：
 
 ```bash
@@ -52,9 +73,12 @@ sudo pacman -S noto-fonts-cjk          # Arch
 fc-cache -fv
 ```
 
-**注意**：本项目用纯软件渲染器（`software-renderer-systemfonts`），**不内嵌字体**，完全依赖系统字体。字体已装但仍显示方块 → 用 `fc-match "sans:lang=zh"` 确认实际命中的字体文件是否存在（不是只有配置项）。
+> [!NOTE]
+> 本项目用纯软件渲染器（`software-renderer-systemfonts`），**不内嵌字体**，完全依赖系统字体。字体已装但仍显示方块 → 用 `fc-match "sans:lang=zh"` 确认实际命中的字体文件是否存在（不是只有配置项）。
 
 ### 配置文件损坏导致启动异常
+
+**结论**：单个字段损坏或越界不会导致启动失败，只有整份 JSON 损坏才按默认填充；想彻底重置直接删文件。
 
 配置文件在 `$XDG_CONFIG_HOME/docker-panel/config.json`，未设 `XDG_CONFIG_HOME` 时为 `~/.config/docker-panel/config.json`。
 
@@ -66,13 +90,13 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 
 应用下次启动会用全默认值重建。字段含义见 [configuration.md](configuration.md)。
 
----
-
 ## 2. 连不上 Docker
 
-顶栏显示 **○ Disconnected**（未连接）是这一类问题的统一表现。状态文本有三态：`Connecting...`（正在连接）/ `Connected`（已连接）/ `Disconnected`（未连接）。
+**结论**：顶栏显示 **○ Disconnected**（未连接）是这一类问题的统一表现；按「权限 → 守护进程 → socket 路径」顺序查，绝大多数是第一条。
 
-### 2.1 权限不足（最常见）
+状态文本有三态：`Connecting...`（正在连接）/ `Connected`（已连接）/ `Disconnected`（未连接）。
+
+### 权限不足（最常见）
 
 ```bash
 # 症状：docker ps 需要 sudo，或直接报 permission denied
@@ -85,14 +109,14 @@ sudo usermod -aG docker $USER
 
 重新登录后验证 `docker ps` 免 sudo，再重启 docker-panel。
 
-### 2.2 守护进程没跑
+### 守护进程没跑
 
 ```bash
 systemctl is-active docker       # 应输出 active
 sudo systemctl start docker
 ```
 
-### 2.3 socket 路径不是默认值
+### socket 路径不是默认值
 
 应用只识别 `unix://` 形式的 `DOCKER_HOST`（可指向其它本机 socket 路径），**不支持 tcp / ssh 远程地址**。
 
@@ -103,7 +127,7 @@ ls -l /var/run/docker.sock
 
 如果 Docker 装在了非默认位置（如 rootless 模式），把 `DOCKER_HOST=unix:///run/user/1000/docker.sock` 写进启动环境再启动应用。
 
-### 2.4 应用内报错文案
+### 应用内报错文案
 
 状态栏或抽屉里可能出现：
 
@@ -114,31 +138,27 @@ ls -l /var/run/docker.sock
 
 超时不等于断开：列表刷新有 in-flight 去重，短时抖动会自愈。持续超时请查 `journalctl -u docker -n 100`。
 
----
-
 ## 3. 列表不刷新 / 数据不更新
 
-本项目**没有定时兜底轮询**，列表即时性完全由 Docker `/events` 事件流驱动（另加 6s stats、30s 磁盘占用两个定时任务）。所以「列表不动」通常是事件流断了。
-
-排查：
+**结论**：本项目**没有定时兜底轮询**，列表即时性完全由 Docker `/events` 事件流驱动（另加 6s stats、30s 磁盘占用两个定时任务）；「列表不动」通常是事件流断了。
 
 ```bash
 # 手动验证事件流是否可用（应持续输出 JSON 事件）
 curl --unix-socket /var/run/docker.sock -N http://localhost/events
 ```
 
-- 事件流可用但应用不动 → 应用侧断流重连会按 1s→2s→4s→8s→10s 退避，并 `eprintln!("[events] stream error")` 打到 stderr；用命令行启动看有没有这行。
-- 事件流不可用（curl 也无输出）→ 问题在 Docker 侧（代理 / socket 转发不支持长连接），不是应用的问题。
+| 验证结果 | 判断 | 下一步 |
+|----------|------|--------|
+| 事件流持续输出，但应用不动 | 应用侧断流重连中 | 重连按 1s→2s→4s→8s→10s 退避，并 `eprintln!("[events] stream error")` 打到 stderr；用命令行启动看有没有这行 |
+| 事件流不可用（curl 也无输出） | 问题在 Docker 侧 | 代理 / socket 转发不支持长连接，不是应用的问题 |
 
 顶栏出现「实时数据可能已过期」提示（`Live data may be stale` / `Disk data may be stale` / 两者合并文案）表示采样连续多轮无结果：stats 连续 3 轮（约 18s）、磁盘占用连续 2 轮（约 60s）才提示，恢复一轮即自动清除。**这是提示，不是错误**；持续不消失再查 Docker。
 
----
-
 ## 4. 自动更新
 
-更新分三步：检查版本 → 下载 → 校验 SHA-256 → 安装。每步都可能独立失败。
+**结论**：更新链路是「检查版本 → 下载 → 校验 SHA-256 → 安装」，每步都可能独立失败；国内网络下前两级检查源可能超时，回退耗时较长属正常。
 
-### 4.1 点了「检查更新」没反应 / 一直检查中
+### 检查更新没反应 / 一直检查中
 
 检查走三级回退（GitHub 静态清单 → jsDelivr → `api.github.com`），全程用系统 `curl`。**国内网络下前两级可能超时**，应用会依次回退，耗时较长属正常。
 
@@ -151,7 +171,12 @@ curl -sIL https://api.github.com/repos/pengtang1024/docker-panel/releases/latest
 
 三级全不可达 → 网络问题，手动去 Releases 页下载。
 
-### 4.2 报错对照表
+### 报错对照表
+
+**结论**：报错文案是唯一可靠的判据——先按文案定位原因，再决定手动安装还是报告。
+
+<details>
+<summary><b>完整错误文案对照表（11 条）</b></summary>
 
 | 文案 | 原因 | 处理 |
 |------|------|------|
@@ -164,10 +189,12 @@ curl -sIL https://api.github.com/repos/pengtang1024/docker-panel/releases/latest
 | `Failed to locate install directory` | 找不到当前可执行文件所在目录 | 从固定路径启动，或手动安装 |
 | `Failed to replace binary: <详情>` | 裸二进制自替换失败（目录只读等） | 手动替换 |
 | `pkexec not found, please install the deb manually` | 系统没有 pkexec | `sudo apt install pkexec` 或手动装 |
-| `Failed to run pkexec: <详情>` | pkexec 启动失败 | 见 4.3 |
-| `Package installation failed: <详情>` | dpkg 返回失败 | 详情通常含依赖冲突，见 4.4 |
+| `Failed to run pkexec: <详情>` | pkexec 启动失败 | 见下节「pkexec 授权框不弹 / 弹了但点取消」 |
+| `Package installation failed: <详情>` | dpkg 返回失败 | 详情通常含依赖冲突，见下节「deb 依赖冲突」 |
 
-### 4.3 pkexec 授权框不弹 / 弹了但点取消
+</details>
+
+### pkexec 授权框不弹 / 弹了但点取消
 
 deb 自动安装走 `pkexec dpkg -i`，**依赖桌面环境的 polkit 授权代理**。
 
@@ -176,11 +203,13 @@ which pkexec                  # 没有就装
 systemctl status polkit       # 应为 active
 ```
 
-- 无桌面环境（纯终端 / SSH 会话）→ polkit 没有代理，授权框不可能弹出。手动 `sudo dpkg -i`。
-- 授权框弹出后取消 → 安装中止，重新点一次即可。
-- 授权框完全不出现且 polkit 正常 → 可能是会话类型不匹配（远程桌面 / 嵌套会话），同样走手动安装。
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| 授权框完全不出现 | 无桌面环境（纯终端 / SSH 会话），polkit 没有代理 | 授权框不可能弹出，手动 `sudo dpkg -i` |
+| 授权框弹出后取消 | 安装中止 | 重新点一次即可 |
+| 授权框不出现且 polkit 正常 | 可能是会话类型不匹配（远程桌面 / 嵌套会话） | 同样走手动安装 |
 
-### 4.4 deb 依赖冲突
+### deb 依赖冲突
 
 ```bash
 sudo dpkg -i docker-panel_<版本>_amd64.deb
@@ -195,7 +224,7 @@ sudo dpkg -r docker-panel        # 先卸载旧版
 sudo dpkg -i docker-panel_<版本>_amd64.deb
 ```
 
-### 4.5 手动安装与校验
+### 手动安装与校验
 
 ```bash
 # 下载 deb（或裸二进制）与同目录的 checksums.txt 后
@@ -206,11 +235,12 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 
 `checksums.txt` 每行格式为 `<64 位 SHA-256>  <文件名>`。Gitee Release 与 GitHub Release 的资产名一致，可互为备份（国内建议 Gitee）。
 
-**如实告知**：更新包**没有代码签名**，只依赖 HTTPS + 同一 Release 的 `checksums.txt`。校验通过只证明下载内容与 Release 页声明一致，不能证明上游未被攻破。详见 [SECURITY.md](../SECURITY.md)。
-
----
+> [!WARNING]
+> **如实告知**：更新包**没有代码签名**，只依赖 HTTPS + 同一 Release 的 `checksums.txt`。校验通过只证明下载内容与 Release 页声明一致，不能证明上游未被攻破。详见 [SECURITY.md](../SECURITY.md)。
 
 ## 5. 日志面板
+
+**结论**：工具条文案就是日志流状态机的状态位——看到哪条提示，就知道流处于哪个分支，多数情况不需要干预。
 
 | 现象 | 说明 |
 |------|------|
@@ -223,11 +253,11 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 
 断流窗口内的日志**会被补回**（仅 `json-file` 日志驱动生效），单次最多补 2000 行。容器用其它日志驱动时断流期间的行不会补回。
 
----
-
 ## 6. 安装与卸载
 
-### 6.1 二进制跑不起来（架构 / 依赖）
+**结论**：官方只发 **amd64** 包；卸载分 deb 与手工安装两种，配置目录不会随卸载自动删除。
+
+### 二进制跑不起来（架构 / 依赖）
 
 ```bash
 file $(which docker-panel)     # 应为 x86-64 ELF
@@ -236,7 +266,7 @@ ldd $(which docker-panel)      # 看缺失的共享库
 
 官方只发 **amd64** 包。ARM 或其它架构需自行从源码构建，见 [CONTRIBUTING.md](../CONTRIBUTING.md) 的开发环境一节。
 
-### 6.2 卸载
+### 卸载
 
 **deb 安装：**
 
@@ -261,7 +291,7 @@ rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel"
 
 单实例锁文件在 `$XDG_RUNTIME_DIR/docker-panel-<user>.sock`，进程正常退出时自动删除；异常退出（SIGKILL / panic abort）会留下陈旧 socket，下次启动会自动清理并重绑，**不需要手动删**。
 
-### 6.3 桌面图标不对 / Dock 显示「未识别程序」
+### 桌面图标不对 / Dock 显示「未识别程序」
 
 Wayland 下应用显式设置了 xdg app_id 为 `docker-panel`，用于匹配 `docker-panel.desktop`。图标异常通常是 desktop 文件没装到标准路径：
 
@@ -272,28 +302,43 @@ sudo update-desktop-database
 
 从源码跑（`./target/release/docker-panel`）而没执行 `install` 时没有 desktop 文件，Dock 只能显示通用图标——这是预期行为。
 
----
-
 ## 7. 删除与数据安全
 
-**删除操作没有二次确认，且容器删除带 `force=true`，不可恢复。**
+> [!CAUTION]
+> 删除操作没有二次确认，且容器删除带 `force=true`，不可恢复。
 
-- 容器：删掉后只能从镜像重建，容器内可写层数据随之丢失。挂载的具名卷不会被删除（数据仍在），匿名卷会被一并清理。
-- 镜像：`image is being used` 表示仍有容器在用，先删容器。
-- 批量删除前确认选择范围：台账勾选是跨行累积的，筛选变化不会自动清空选择。
+| 对象 | 后果 | 注意 |
+|------|------|------|
+| 容器 | 删掉后只能从镜像重建，容器内可写层数据随之丢失 | 挂载的具名卷不会被删除（数据仍在），匿名卷会被一并清理 |
+| 镜像 | `image is being used` 表示仍有容器在用 | 先删容器 |
+| 批量删除 | 台账勾选是跨行累积的，筛选变化不会自动清空选择 | 删除前确认选择范围 |
 
 **误删后的处理**：本项目不提供回收站或操作撤销。容器需重建；卷数据可在 `docker volume ls` 中确认是否仍存在。
 
----
-
 ## 8. 仍无法解决
 
-按 [SUPPORT.md](../SUPPORT.md) 收集信息后提 issue：
+**结论**：先按 [SUPPORT.md](../SUPPORT.md) 收集信息再提 issue；安全漏洞不要走公开 issue。
 
-- 缺陷：[GitHub Issues](https://github.com/pengtang1024/docker-panel/issues/new/choose) · [Gitee Issues](https://gitee.com/pengtang1024/docker-panel/issues)
-- 安全漏洞：**不要发公开 issue**，走 [SECURITY.md](../SECURITY.md) 私有渠道
-- 概念解释类问题（为什么不轮询、洪峰抽样口径等）见 Wiki [常见问题](https://github.com/pengtang1024/docker-panel/wiki/FAQ)
+| 类型 | 渠道 |
+|------|------|
+| 缺陷 | [GitHub Issues](https://github.com/pengtang1024/docker-panel/issues/new/choose) · [Gitee Issues](https://gitee.com/pengtang1024/docker-panel/issues) |
+| 安全漏洞 | **不要发公开 issue**，走 [SECURITY.md](../SECURITY.md) 私有渠道 |
+| 概念解释类问题（为什么不轮询、洪峰抽样口径等） | Wiki [常见问题](https://github.com/pengtang1024/docker-panel/wiki/FAQ) |
 
-## 相关文档
+**相关文档**：
 
-[configuration.md](configuration.md)（config.json 字段全表与重置）· [SUPPORT.md](../SUPPORT.md)（提问渠道）· [SECURITY.md](../SECURITY.md)（安全模型）· [README.md](../README.md)（功能与已知限制）· Wiki [安装与构建](https://github.com/pengtang1024/docker-panel/wiki/Install) / [使用指南](https://github.com/pengtang1024/docker-panel/wiki/Usage) / [常见问题](https://github.com/pengtang1024/docker-panel/wiki/FAQ)
+| 文档 | 内容 |
+|------|------|
+| [配置手册](configuration.md) | config.json 字段全表与重置 |
+| [SUPPORT.md](../SUPPORT.md) | 提问渠道 |
+| [SECURITY.md](../SECURITY.md) | 安全模型 |
+| [README](../README.md) | 功能与已知限制 |
+| Wiki [安装与构建](https://github.com/pengtang1024/docker-panel/wiki/Install) | 安装步骤与构建方式 |
+| Wiki [使用指南](https://github.com/pengtang1024/docker-panel/wiki/Usage) | 日常操作说明 |
+| Wiki [常见问题](https://github.com/pengtang1024/docker-panel/wiki/FAQ) | 概念与设计口径 |
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [配置手册](configuration.md) | [README 文档地图](../README.md#文档地图) | [翻译与 i18n](translations.md) |

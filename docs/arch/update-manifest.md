@@ -1,10 +1,29 @@
-# 更新清单（version.json）与静态 CDN 分发：可行性与方案
+# 更新清单（version.json）与静态 CDN 分发
 
-> 隶属 [architecture.md 总纲](../architecture.md)。本文件是「静态更新清单 + 静态托管 / CDN」的**唯一权威源**：
-> 字段契约、CI 生成顺序、客户端回退链、失败降级与安全边界。AGENTS.md 只留指针，不维护副本。
+> **一句话**：自动更新的「有没有新版本」不再每次打 `api.github.com`——发布流水线生成一份静态清单，客户端按三级回退去取。本页说明这份清单能信什么、不能信什么。
 >
-> 状态：**已实施**（客户端三级回退 + CI 生成步骤）。实测时间 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
-> 实现落点：`src/update/manifest.rs`（解析 / 派生 / 断言）、`src/update/discover.rs`（回退链）、`src/update/mod.rs`（`build_info` 透传）、`.github/workflows/release.yml`（生成步骤）。
+> **状态**：**已实施**（客户端三级回退 + CI 生成步骤）。实测 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
+>
+> 本文件是「静态更新清单 + 静态托管 / CDN」的**唯一权威源**：字段契约、CI 生成顺序、客户端回退链、失败降级与安全边界。[AGENTS.md](../../AGENTS.md) 只留指针，不维护副本。
+
+**对应源码**：`src/update/manifest.rs`（解析 / 派生 / 断言）、`src/update/discover.rs`（回退链）、`src/update/mod.rs`（`build_info` 透传）、`.github/workflows/release.yml`（生成步骤）｜**上位文档**：[architecture.md 总纲](../architecture.md)
+
+## 目录
+
+| # | 章节 | 你会在这里找到 |
+|:--:|------|----------------|
+| 0 | [结论](#0-结论) | 四条判断：可行、不能当信任根、12h 缓存已被 purge 覆盖、API 只做兜底 |
+| 1 | [实测基线](#1-实测基线) | 各端点的成功率、耗时与响应头 |
+| 2 | [清单字段与可信度](#2-清单字段与可信度) | 每个字段来源与「能不能信」 |
+| 3 | [CI 生成顺序与提交时机](#3-ci-生成顺序与提交时机) | 为什么先 checksums 再清单、为什么最后才提交到 master |
+| 4 | [客户端改动点](#4-客户端改动点文件级) | 文件级落点清单 |
+| 5 | [三级回退链](#5-三级回退链) | 三个来源的优劣与实测结果 |
+| 6 | [失败与降级行为](#6-失败与降级行为) | 每种失败会不会打扰用户 |
+| 7 | [安全边界](#7-安全边界) | 三条收紧规则与「为什么不引入签名」 |
+| 8 | [文档与版本号三同步影响](#8-文档与版本号三同步影响) | 为什么 `version.json` 不是第四处版本源 |
+| 9 | [不建议做](#9-不建议做) | 12 条已经想清楚不做的事 |
+| 10 | [风险与回归点](#10-风险与回归点) | 风险 → 影响 → 缓解 |
+| 11 | [已实测与待补测](#11-已实测与待补测) | 哪些有证据、哪些还没有 |
 
 ## 0. 结论
 
@@ -62,6 +81,8 @@
 
 ## 3. CI 生成顺序与提交时机
 
+### 3.1 生成顺序
+
 `.github/workflows/release.yml` 的 `release` job 内，**严格按此顺序**（`set -euo pipefail`）：
 
 1. `cargo build --release --locked`
@@ -70,6 +91,8 @@
 4. **生成 `version.json`**：`version` 取 `steps.ver.outputs.version`，`sha256` 用 `awk` **从第 3 步的 `checksums.txt` 抽取**，`size` 用 `stat -c%s` 读产物，禁止在清单 step 里重新算一份独立来源；生成后 `python3 -m json.tool` 自检，坏了直接让 job 失败
 5. `softprops/action-gh-release` 上传：现有 `files:` 追加 `version.json`（与 `checksums.txt` 同一批）
 6. **提交 `version.json` 到 `master`**（已实现，见下）
+
+### 3.2 为什么是这个顺序
 
 顺序约束的理由：
 
@@ -81,7 +104,7 @@
   「刷新 jsDelivr 清单缓存」步骤会把这份缓存打掉（§3.7），主源时效不受这一步影响。
 - 不做「清单先行、资产后补」：客户端失败会退化成「下载 404」，比「发现不了新版本」更难解释。
 
-### 6. 清单提交到 master（jsDelivr 备源，已实现）
+### 3.6 清单提交到 master（jsDelivr 备源，已实现）
 
 `release.yml` 的「提交更新清单到 master（jsDelivr 备源）」步骤，关键行为：
 
@@ -104,7 +127,7 @@ release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产
 若某次流水线推送失败（权限 / 并发 / 网络），`master` 会停留在上一版清单，jsDelivr 备源保持陈旧（主源不受影响），
 下一次发版或手工补提交即可。
 
-### 7. 刷新 jsDelivr 缓存（已实现）
+### 3.7 刷新 jsDelivr 缓存（已实现）
 
 「提交更新清单到 master」之后紧跟一步 `刷新 jsDelivr 清单缓存`，调用官方去缓存接口
 `https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json`，把 §0 第 3 条里的 12h 窗口消掉。
@@ -235,3 +258,9 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 - jsDelivr 在**不同运营商 / 省份**的成功率（本机单出口样本，不代表全国）。
 - `If-None-Match` 304 只测了一次，未验证分支端点刷新后的 ETag 变更行为。
 - `mandatory` 的 UI 交互与「拒绝升级」路径（本期不做，故无设计）。
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [Docker 接入层](docker-bollard.md) | [README 文档导航](../../README.md#文档地图) | [架构总纲](../architecture.md) |

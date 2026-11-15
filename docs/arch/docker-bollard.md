@@ -1,6 +1,10 @@
 # Docker 接入层：接入约定与 bollard 0.21 坑条
 
-> 隶属 [architecture.md 总纲](../architecture.md)。本文件是 Docker 接入约定与 bollard 坑条的**唯一权威源**（AGENTS.md 只留指针，不维护副本）。
+> **一句话**：调用 Docker API 前先看这页——哪些接口走 bollard、哪些必须自己发裸 HTTP，以及 bollard 0.21 已经踩过的类型坑。
+>
+> **本文件是 Docker 接入约定与 bollard 坑条的唯一权威源**（[AGENTS.md](../../AGENTS.md) 只留指针，不维护副本）。
+
+**对应源码**：`src/docker/`（`mod.rs` / `raw_http.rs` / `logs.rs` / `stats.rs` / `system.rs`）｜**上位文档**：[architecture.md 总纲](../architecture.md)
 
 ## 1. Docker 接入约定
 
@@ -35,3 +39,9 @@
 | 依赖 | `futures-util = "0.3"` | 提供 `StreamExt` 调 `.next().await` / `join_all` |
 
 > 升级 bollard 版本时重新核对本表；新增坑条只写在本文件（触发 agents-rules.md §6.1 文档同步）。
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [架构总纲](../architecture.md) | [README 文档导航](../../README.md#文档地图) | [更新清单与 CDN 分发](update-manifest.md) |

@@ -1,8 +1,25 @@
 # 配置、命令行与快捷键手册
 
-本文面向 Linux 桌面用户，说明 Docker Panel 的配置文件、环境变量、命令行参数、全局快捷键与自动更新调度；遇到问题先看 [故障排查](troubleshooting.md)。
+> **一句话**：给要改界面状态、查环境变量或确认命令行与快捷键的 Linux 桌面用户——配置只读写一个 `config.json`，字段缺失或越界只回落该字段。
 
-## 配置文件
+**对应源码**：`src/config.rs`、`src/cli.rs`、`src/i18n.rs`、`src/single_instance.rs`、`src/main.rs`、`src/models.rs`、`src/update/mod.rs`、`src/ui_update/update.rs`、`src/ui_state/config_io.rs`、`ui/app.slint`、`ui/list-area.slint`｜**相关页面**：[故障排查](troubleshooting.md)
+
+## 0. 本页导航
+
+**结论**：本页六节覆盖配置文件、环境变量、命令行、快捷键与更新调度，按表直达对应章节。
+
+| # | 章节 | 你会在这里找到 |
+|:--:|------|----------------|
+| 1 | [配置文件](#1-配置文件) | 路径、加载与字段级回落、写入、15 个字段、重置 |
+| 2 | [环境变量](#2-环境变量) | Docker socket、配置根目录、锁目录、语言检测 |
+| 3 | [命令行参数](#3-命令行参数) | `--version` / `--help` 与未知参数的处理时机 |
+| 4 | [全局快捷键](#4-全局快捷键) | 搜索、刷新、切视图、`Esc` 归还焦点 |
+| 5 | [自动更新调度](#5-自动更新调度) | 启动检查、24h 节流、6h 轮询、重启顺序 |
+| 6 | [相关文档](#6-相关文档) | 上下游页面与权威源 |
+
+## 1. 配置文件
+
+**结论**：应用只读写一个 `config.json`，缺字段或值越界只回落该字段；只有整份 JSON 损坏时才按默认重建。
 
 ### 路径
 
@@ -11,7 +28,8 @@
 | `XDG_CONFIG_HOME` 已设置且非空 | `$XDG_CONFIG_HOME/docker-panel/config.json` |
 | 缺失或为空 | `$HOME/.config/docker-panel/config.json` |
 
-应用只写这一个文件；不常驻后台、不注册服务、不上传数据，也不写日志文件（`src/config.rs:194-201`）。
+> [!IMPORTANT]
+> 应用只写这一个文件：不常驻后台、不注册服务、不上传数据，也不写日志文件（`src/config.rs:194-201`）。写入失败是**静默**的——配置丢失不影响主流程。
 
 ### 加载与字段级回落
 
@@ -28,7 +46,7 @@
 
 ### 写入
 
-`src/config.rs:154-191` 手工拼 JSON（零额外依赖），先写 `config.json.tmp` 再 `rename` 原子替换；字符串做最小转义（引号 / 反斜杠 / 换行 / 制表符 / 控制字符）。写入失败**静默**——配置丢失不影响主流程。
+`src/config.rs:154-191` 手工拼 JSON（零额外依赖），先写 `config.json.tmp` 再 `rename` 原子替换；字符串做最小转义（引号 / 反斜杠 / 换行 / 制表符 / 控制字符）。
 
 ```json
 {
@@ -74,6 +92,7 @@
 
 三个资源排序字段共用 `ResourceSort` 编码：**低 3 位 = 列下标，第 3 位（值 `8`）= 降序标记**（`src/models.rs:302-349`，Slint 侧由 `ui/list-area.slint` 的 `SortCodec` 解包），越界回落默认；三个视图各自独立，切走再回来仍保留。
 
+> [!NOTE]
 > 口径提示：上表是配置文件字段**缺失或越界时的回落默认**（`AppConfig::default()`）。首次启动且完全没有配置文件时，界面实际默认按 Compose 分组排序、升序（`src/ui_state/config_io.rs:42-63`，对应 `sort_field=-1` / `sort_desc=false`），与表中口径不同但互不冲突。
 
 ### 重置
@@ -84,7 +103,9 @@
 rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 ```
 
-## 环境变量
+## 2. 环境变量
+
+**结论**：只有 `DOCKER_HOST` 影响连接，且只认 `unix://`；其余变量只决定配置/锁路径与界面语言。
 
 | 变量 | 作用 | 回落 / 边界 |
 |------|------|-------------|
@@ -94,7 +115,9 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 | `LANG` / `LC_ALL` / `LC_MESSAGES` | 界面语言检测 | `zh*` → 简体中文（zh_CN）；其它一律回落英文 msgid 源串。优先级 `LC_ALL` > `LC_MESSAGES` > `LANG`（`src/i18n.rs:84-102`） |
 | `WAYLAND_DISPLAY` | 桌面坞图标匹配 | 仅当该变量存在时调用 `slint::set_xdg_app_id("docker-panel")`，让坞正确匹配应用图标（`src/main.rs:108-112`） |
 
-## 命令行参数
+## 3. 命令行参数
+
+**结论**：`--version` / `--help` 在拿单实例锁之前处理，已有实例在跑也照常可用；其余任何参数都按正常启动 GUI 处理。
 
 用法：`docker-panel [选项]`（`src/cli.rs`）。
 
@@ -106,7 +129,9 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 
 不带参数直接启动图形界面。`--version` 可用于确认二进制版本，不会被单实例锁挡住。
 
-## 全局快捷键
+## 4. 全局快捷键
+
+**结论**：快捷键由根级 `FocusScope` 统一处理；没有焦点元素时 Slint 完全不派发按键，所以启动和弹窗关闭后都要归还焦点。
 
 定义于 `ui/app.slint:117-165`，根级 `FocusScope` 名为 `global-shortcuts`。
 
@@ -120,7 +145,9 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 
 > 无焦点元素时 Slint 完全不派发按键，因此根级 `FocusScope` 包裹全部 UI，并做启动焦点引导（延时 300ms 投递 `boot_tick`）；弹窗/抽屉关闭导致内部焦点悬空时，`Esc` 分支会主动调 `global-shortcuts.focus()` 归还焦点。
 
-## 自动更新调度
+## 5. 自动更新调度
+
+**结论**：启动 10s 后查一次，两次启动检查间隔 24h，常驻每 6h 醒来判断窗口；自动安装后必须**先释放单实例锁、再拉起新进程**。
 
 | 环节 | 行为 |
 |------|------|
@@ -134,14 +161,23 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 
 三个开关默认开启，可在设置页（顶栏齿轮）或更新弹窗逐项关闭，关闭后持久化到 `config.json` 对应字段：`check_updates` / `auto_install` / `auto_restart`。调度常量见 `src/update/mod.rs:29-34`（`CHECK_INTERVAL_SECS` / `SCHEDULER_TICK_SECS` / `STARTUP_DELAY_SECS`）、3s 倒计时见 `src/ui_update/update.rs:11` 与 `:100-102`、launcher 延时见 `src/update/install.rs:143`。校验边界与三级回退见 [更新清单与 CDN 分发](arch/update-manifest.md)，失败处理见 [故障排查](troubleshooting.md)。
 
-## 相关文档
+## 6. 相关文档
 
-- [故障排查](troubleshooting.md) — 连接、字体、列表、日志、更新的排查路径
-- [架构设计](architecture.md) — 技术栈与模块地图
-- [线程模型](arch/threading.md) — 三线程、消息类型与事件订阅
-- [更新清单与 CDN 分发](arch/update-manifest.md) — 三级回退、checksums 与 fail closed
-- [Git Flow 规范](git-flow.md) — 发版门禁与 CI 系统依赖
-- [README](../README.md) — 功能总览
-- [Wiki（GitHub）](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki（Gitee）](https://gitee.com/pengtang1024/docker-panel/wikis)
+**结论**：排障先看第一行，设计细节再往下钻。
 
-本文档对应源码/权威源：`src/config.rs`、`src/cli.rs`、`src/i18n.rs`、`src/single_instance.rs`、`src/main.rs`、`src/models.rs`、`src/update/mod.rs`、`src/ui_update/update.rs`、`src/ui_state/config_io.rs`、`ui/app.slint`、`ui/list-area.slint`。
+| 文档 | 内容 |
+|------|------|
+| [故障排查](troubleshooting.md) | 连接、字体、列表、日志、更新的排查路径 |
+| [架构设计](architecture.md) | 技术栈与模块地图 |
+| [线程模型](arch/threading.md) | 三线程、消息类型与事件订阅 |
+| [更新清单与 CDN 分发](arch/update-manifest.md) | 三级回退、checksums 与 fail closed |
+| [Git Flow 规范](git-flow.md) | 发版门禁与 CI 系统依赖 |
+| [README](../README.md) | 功能总览 |
+| [Wiki（GitHub）](https://github.com/pengtang1024/docker-panel/wiki) | 社区 Wiki（需外网） |
+| [Wiki（Gitee）](https://gitee.com/pengtang1024/docker-panel/wikis) | 国内可直连的镜像站 |
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [README](../README.md) | [README 文档地图](../README.md#文档地图) | [故障排查](troubleshooting.md) |

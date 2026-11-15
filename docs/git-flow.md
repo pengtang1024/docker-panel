@@ -1,9 +1,12 @@
 # Git Flow 协作规范
 
-docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching-model/) 分支模型。
-本文档记录具体约定，任何改动分支拓扑的操作都以此为准。
+> **一句话**：docker-panel 的分支拓扑、发版顺序与流水线门禁的唯一权威源——**动分支、打 tag、发版之前先读这页**。
+>
+> 采用 [git flow](https://nvie.com/posts/a-successful-git-branching-model/) 分支模型，任何改动分支拓扑的操作都以此为准。
 
-## 分支模型
+**对应源码**：`.github/workflows/{quality,license,release}.yml`、`scripts/check-version.sh`、`scripts/release-notes.sh`｜**相关页面**：[贡献指南](../CONTRIBUTING.md)、[更新日志](../CHANGELOG.md)
+
+## 1. 分支模型
 
 | 分支 | 职责 | 允许的写入方式 |
 |------|------|----------------|
@@ -14,7 +17,7 @@ docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching
 | `release/*` | 发版准备，从 `develop` 切出 | `git flow release finish` 合入 `master` 并回灌 `develop` |
 | `hotfix/*` | 线上紧急修复，从 `master` 切出 | `git flow hotfix finish` 合入 `master` 并回灌 `develop` |
 
-## 铁律
+## 2. 铁律
 
 1. **禁止直接合并 `develop` 到 `master`。**
    `master` 只能由 `git flow release finish` 或 `git flow hotfix finish` 写入。
@@ -43,7 +46,7 @@ docker-panel 采用 [git flow](https://nvie.com/posts/a-successful-git-branching
    ```
    CI 在 develop / master 的 `push` 与 `pull_request` 上跑 Quality（fmt / clippy `-D warnings` / test）与 License（cargo-deny）两条门禁；Release 只在打 tag 时构建发布。本地仍需先跑上面的命令。
 
-## 发版流程
+## 3. 发版流程
 
 ```bash
 # 0. 发版前门禁（Quality / License 流水线已在 push/PR 上跑；本地先自检一遍）
@@ -92,7 +95,7 @@ git push origin refs/tags/0.1.1
 scripts/check-version.sh            # 比较三处版本 + CHANGELOG 段落 + 当前 tag
 ```
 
-## 线上紧急修复
+## 4. 线上紧急修复
 
 hotfix 同样产出补丁版本，**同样要写版本更新日志**——热修不是"偷偷发个补丁"，
 `CHANGELOG.md` 必须新增 `[X.Y.Z]` 段落，版本号三处同步不能省。
@@ -127,7 +130,7 @@ git push origin refs/tags/0.1.2
 
 hotfix 同样会触发 Release 流水线，产出补丁版本。
 
-## 流水线
+## 5. 流水线
 
 仓库有三条工作流：
 
@@ -173,7 +176,7 @@ mkdir -p /tmp/fake-pc && ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/{x11,xcb,way
 PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 fontconfig 的失败
 ```
 
-## 常见错误
+## 6. 常见错误
 
 | 现象 | 成因 | 正解 |
 |------|------|------|
@@ -187,3 +190,9 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改（`scripts/check-version.sh` 可一键核对） |
 | 推了 tag 但流水线没触发，重推后却跑出**两个** run，第二个报 `Cannot delete asset from an immutable release` | 第一次 run 已发布 Release 并把它设为 immutable；重推 tag 又触发一次 run，它想先删同名旧资产 → 被 immutable 拒绝 | 第二个 run 失败**不影响结果**（Release 与资产已由第一个 run 生成好）；排查时先确认 `gh release list` 里有没有该版本，再决定要不要重推。推 tag 前先 `git push origin refs/tags/X.Y.Z`，若 `gh run list` 查不到，等 1~2 分钟再重推（重推会留下两条流水线记录） |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [文档风格与排版规范](style-guide.md) | [README 文档导航](../README.md#文档地图) | [架构设计](architecture.md) |

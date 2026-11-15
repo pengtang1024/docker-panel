@@ -1,12 +1,11 @@
-// image-list.slint — 镜像表格列表（表头可排序 + 30px 虚拟化行）
+// image-list.slint — 镜像表格列表（表头走 TableShell + 30px 虚拟化行）
 //
 // 精简列：名称（+ tag 芯片）· 大小 · 创建时间
-// 列起点固定：表头与行共用同一组列宽（由本组件统一下发），表头右侧额外让出
-// 滚动条槽 8px（表头在滚动区之外，行在滚动区之内）。
+// 列起点固定：表头与行共用 TableShell 下发的 name_w（规范 #20）。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText, CardMenu } from "components-align.slint";
 import { IconBtn } from "components-interact.slint";
-import { ListCols, ListHeadCell } from "components-list.slint";
+import { ListCols, TableShell } from "components-list.slint";
 import { ImageRow } from "models.slint";
 import { ListView } from "@material";
 
@@ -118,99 +117,43 @@ component ImageRowView inherits Rectangle {
     }
 }
 
-export component ImageList inherits Rectangle {
+export component ImageList inherits TableShell {
     in-out property <[ImageRow]> rows: [];
-    /// 当前排序列（0=名称 1=大小 2=创建时间）
-    in-out property <int> sort_field: 0;
-    in-out property <bool> sort_desc: true;
 
-    callback sort_pick(int);
     callback select(string);
     callback run(string);
     callback menu_toggle(string, int, bool, length, length);
 
-    // —— 列宽（表头与行共用）——
-    property <length> size_w: 96px;
-    property <length> created_w: 110px;
-    property <length> act_w: 56px;
-    property <length> content_w: root.width - ListCols.scrollbar_slot - ListCols.pad_x * 2;
-    property <length> name_w: root.content_w - root.size_w - root.created_w - root.act_w
-        - ListCols.gap * 3;
+    name_label: @tr("Image");
+    col2_label: @tr("Size");
+    col2_w: 96px;
+    col2_right: true;
+    col3_label: @tr("Created");
+    col3_w: 110px;
+    col3_right: true;
+    act_w: 56px;
 
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: 0px;
-
-        // 表头（固定在滚动区之外 → 天然 sticky）
-        Rectangle {
-            vertical-stretch: 0;
-            height: ListCols.head_h;
-            background: Theme.bg;
-            Rectangle {
-                y: parent.height - 1px;
-                width: 100%; height: 1px;
-                background: Theme.line;
-            }
-            HorizontalLayout {
-                width: 100%; height: 100%;
-                spacing: ListCols.gap;
-                padding-left: ListCols.pad_x;
-                padding-right: ListCols.pad_x + ListCols.scrollbar_slot;
-                cross-axis-alignment: center;
-
-                ListHeadCell {
-                    text: @tr("Image");
-                    cell_w: root.name_w;
-                    active: root.sort_field == 0;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(0); }
-                }
-                ListHeadCell {
-                    text: @tr("Size");
-                    right: true;
-                    cell_w: root.size_w;
-                    active: root.sort_field == 1;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(1); }
-                }
-                ListHeadCell {
-                    text: @tr("Created");
-                    right: true;
-                    cell_w: root.created_w;
-                    active: root.sort_field == 2;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(2); }
-                }
-                // 操作列占位
-                Rectangle { width: root.act_w; height: 1px; }
-            }
-        }
-
-        // 行列表（虚拟化：只渲染视口内的行）
-        list := ListView {
-            vertical-stretch: 1;
+    // 行列表（虚拟化：只渲染视口内的行）
+    list := ListView {
+        vertical-stretch: 1;
+        width: 100%;
+        vertical-scrollbar-policy: as-needed;
+        horizontal-scrollbar-policy: always-off;
+        content_width: self.visible_width;
+        mouse_drag_pan_enabled: false;
+        for row[i] in root.rows : ImageRowView {
+            data: row;
+            menu_open: CardMenu.id == row.id;
             width: 100%;
-            vertical-scrollbar-policy: as-needed;
-            horizontal-scrollbar-policy: always-off;
-            content_width: self.visible_width;
-            mouse_drag_pan_enabled: false;
-            for row[i] in root.rows : ImageRowView {
-                data: row;
-                menu_open: CardMenu.id == row.id;
-                width: 100%;
-                height: ListCols.row_h;
-                name_w: root.name_w;
-                size_w: root.size_w;
-                created_w: root.created_w;
-                act_w: root.act_w;
-                select(id) => { root.select(id); }
-                run(id) => { root.run(id); }
-                menu_toggle(id, kind, can_stop, mx, my) => {
-                    root.menu_toggle(id, kind, can_stop, mx, my);
-                }
+            height: ListCols.row_h;
+            name_w: root.name_w;
+            size_w: root.col2_w;
+            created_w: root.col3_w;
+            act_w: root.act_w;
+            select(id) => { root.select(id); }
+            run(id) => { root.run(id); }
+            menu_toggle(id, kind, can_stop, mx, my) => {
+                root.menu_toggle(id, kind, can_stop, mx, my);
             }
         }
     }

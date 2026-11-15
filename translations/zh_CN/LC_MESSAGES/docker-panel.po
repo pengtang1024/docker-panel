@@ -822,3 +822,6 @@ msgstr "镜像大小"
 
 msgid "Disk = container writable layer (exclusive).\nShared read-only image layers are not counted; see the Images view."
 msgstr "磁盘 = 容器可写层（独占）。\n共享只读的镜像层不计入；镜像占用见「镜像大小」与镜像视图。"
+
+msgid "Update manifest does not match checksums.txt"
+msgstr "更新清单与校验文件 checksums.txt 不一致，已拒绝安装"

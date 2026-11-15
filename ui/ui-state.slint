@@ -1,0 +1,58 @@
+// ui-state.slint — 显示态 global（Rust 单写入方）
+//
+// 只承载「Rust → UI」的显示数据：连接/采样状态、计数与汇总、行模型、资源列表排序。
+// 这些属性原先要从 app.slint 根属性一路 `<=>` 转发到 MainArea → SubBar / ListArea /
+// FootBar，每加一个字段都要改三层；组件直接读 global 后转发链消失。
+//
+// 不搬的东西（写入语义不同，仍留在 app.slint 根属性）：
+//   - view / filter / sort_field / sort_desc / search_q —— 用户操作态（规范 #18）
+//   - theme_mode / system_dark（经 Theme 双向绑定）
+//   - 抽屉 / 拉取 / 清理 / 更新 / 设置弹窗状态
+import { ContainerRow, ImageRow, NetworkRow, VolumeRow, LedgerSummary } from "models.slint";
+
+export global UiState {
+    // —— 顶栏 / 底栏状态 ——
+    in-out property <bool> docker_ok: false;
+    /// 采样过期状态位（连续多轮拿不到 stats / 磁盘占用）：顶栏提示，不弹窗
+    in-out property <bool> stats_stale: false;
+    in-out property <bool> disk_stale: false;
+    /// Docker 守护进程版本（Rust 查询 /version 后写入；空串表示尚未取到，底栏显示占位符）
+    in-out property <string> docker_version: "";
+    in-out property <string> status_text: @tr("Ready");
+
+    // —— 列表工作区 ——
+    /// 首次数据拉取期间显示骨架屏
+    in-out property <bool> loading: true;
+    /// 多选模式独立开关（与 batch_count 解耦：进入 sel-mode 后可先不选任何项）
+    in-out property <bool> sel_mode: false;
+    in-out property <int> batch_count: 0;
+
+    // —— 统计（底栏 / 筛选栏 / 视图 Tab）——
+    in-out property <int> total_containers: 0;
+    in-out property <int> running_containers: 0;
+    in-out property <int> total_images: 0;
+    in-out property <int> total_networks: 0;
+    in-out property <int> total_volumes: 0;
+    in-out property <string> cpu_total: "0%";
+    in-out property <string> mem_total: "0MB";
+    in-out property <string> disk_total: "0MB";
+    /// 镜像总占用（全部镜像 size 之和，底栏「镜像大小」项）
+    in-out property <string> image_total: "0MB";
+    /// 筛选栏芯片计数（**可见容器集合**的容器数 / 运行中数，与台账行数同口径）
+    in-out property <int> chip_total: 0;
+    in-out property <int> chip_running: 0;
+    /// 台账概览带（方向 A）：4 个计数 + CPU TOP4，与容器行同批产出
+    in-out property <LedgerSummary> ledger_summary;
+
+    // —— 行模型 ——
+    in-out property <[ContainerRow]> container_rows: [];
+    in-out property <[ImageRow]> image_rows: [];
+    in-out property <[NetworkRow]> network_rows: [];
+    in-out property <[VolumeRow]> volume_rows: [];
+
+    // —— 三个资源列表各自的排序（低 3 位=列下标，第 3 位=降序标记；
+    //    解码统一走 list-area.slint 的 SortCodec，编码见 src/models.rs 的 ResourceSort）——
+    in-out property <int> sort_images: 0;
+    in-out property <int> sort_networks: 0;
+    in-out property <int> sort_volumes: 0;
+}

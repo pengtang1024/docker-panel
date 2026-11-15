@@ -1,6 +1,7 @@
 // foot-bar.slint — 底栏
 import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
+import { UiState } from "ui-state.slint";
 
 component OvItem inherits Rectangle {
     in property <string> label: "";
@@ -60,20 +61,7 @@ export component FootBar inherits Rectangle {
     // prototype: .foot{border-top:1px solid var(--line)}
     Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.line; }
 
-    in-out property <bool> docker_ok: false;
-    /// Docker 守护进程版本文案；空串（未取到 / 查询失败）时显示占位符，绝不伪造版本号
-    in-out property <string> docker_version: "";
-    in-out property <string> status: "";
-    in-out property <int> total_containers: 0;
-    in-out property <int> running_containers: 0;
-    in-out property <int> total_images: 0;
-    in-out property <int> total_networks: 0;
-    in-out property <int> total_volumes: 0;
-    in-out property <string> cpu_total: "0%";
-    in-out property <string> mem_total: "0MB";
-    in-out property <string> disk_total: "0MB";
-    /// 镜像总占用（全部镜像 size 之和；与容器「磁盘」列的可写层口径互补）
-    in-out property <string> image_total: "0MB";
+    // 连接 / 版本 / 状态 / 资源汇总全部读 UiState（Rust 单写入方，规范 #27）
 
     // ⚠️ cross-axis-alignment:center 让所有子元素（状态点/分隔线/OvItem/Text）垂直居中
     HorizontalLayout {
@@ -83,30 +71,30 @@ export component FootBar inherits Rectangle {
         padding-right: Theme.s4;
         cross-axis-alignment: center;
 
-        Rectangle { width: 6px; height: 6px; border-radius: 3px; background: root.docker_ok ? Theme.ok : Theme.stop;}
+        Rectangle { width: 6px; height: 6px; border-radius: 3px; background: UiState.docker_ok ? Theme.ok : Theme.stop;}
         Rectangle { width: Theme.s2; }
         VCenterText {
-            text: root.status;
+            text: UiState.status_text;
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
         }
 
         Rectangle { width: 1px; height: 16px; background: Theme.line_2;}
 
-        OvItem { label: @tr("Docker"); val: root.docker_version == "" ? "—" : root.docker_version; ic: "docker";}
-        OvItem { label: @tr("Containers"); val: root.running_containers + "/" + root.total_containers; ic: "container";}
-        OvItem { label: @tr("Images"); val: root.total_images; ic: "image";}
-        OvItem { label: @tr("Networks"); val: root.total_networks; ic: "network";}
-        OvItem { label: @tr("Volumes"); val: root.total_volumes; ic: "volume";}
-        OvItem { label: @tr("CPU"); val: root.cpu_total; ic: "cpu";}
-        OvItem { label: @tr("Memory"); val: root.mem_total; ic: "memory";}
-        OvItem { label: @tr("Images size"); val: root.image_total; ic: "image";}
-        OvItem { label: @tr("Disk"); val: root.disk_total; ic: "disk"; show_border: false;}
+        OvItem { label: @tr("Docker"); val: UiState.docker_version == "" ? "—" : UiState.docker_version; ic: "docker";}
+        OvItem { label: @tr("Containers"); val: UiState.running_containers + "/" + UiState.total_containers; ic: "container";}
+        OvItem { label: @tr("Images"); val: UiState.total_images; ic: "image";}
+        OvItem { label: @tr("Networks"); val: UiState.total_networks; ic: "network";}
+        OvItem { label: @tr("Volumes"); val: UiState.total_volumes; ic: "volume";}
+        OvItem { label: @tr("CPU"); val: UiState.cpu_total; ic: "cpu";}
+        OvItem { label: @tr("Memory"); val: UiState.mem_total; ic: "memory";}
+        OvItem { label: @tr("Images size"); val: UiState.image_total; ic: "image";}
+        OvItem { label: @tr("Disk"); val: UiState.disk_total; ic: "disk"; show_border: false;}
 
         Rectangle { horizontal-stretch: 1; }
 
         VCenterText {
-            text: @tr("{0} containers · {1} images · {2} nets · {3} vols", root.total_containers, root.total_images, root.total_networks, root.total_volumes);
+            text: @tr("{0} containers · {1} images · {2} nets · {3} vols", UiState.total_containers, UiState.total_images, UiState.total_networks, UiState.total_volumes);
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
         }

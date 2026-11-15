@@ -3,6 +3,7 @@ import { Theme } from "theme.slint";
 import { VCenterText } from "components-align.slint";
 import { Dropdown, MenuItem, IconBtn } from "components-interact.slint";
 import { StateArea } from "components-state.slint";
+import { UiState } from "ui-state.slint";
 
 // ============ Chip（严格对齐 prototype .chip{height:28px;padding:0 12px;border-radius:14px;font-size:12px;font-weight:600}）============
 component Chip inherits Rectangle {
@@ -64,19 +65,12 @@ export component SubBar inherits Rectangle {
         background: Theme.line;
     }
 
+    // 视图 / 筛选 / 排序是用户操作态，仍由 MainArea 转发（规范 #18）；
+    // 计数与多选模式是显示态，直接读 UiState
     in-out property <int> view: 0;
     in-out property <string> filter: "all";
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: true;
-    in-out property <bool> sel_mode: false;
-    in-out property <int> total_containers: 0;
-    in-out property <int> running_containers: 0;
-    /// 筛选栏芯片计数（compose 范围内的容器数 / 运行中数）
-    in-out property <int> chip_total: 0;
-    in-out property <int> chip_running: 0;
-    in-out property <int> total_images: 0;
-    in-out property <int> total_networks: 0;
-    in-out property <int> total_volumes: 0;
 
     // 排序菜单锚点：写在本组件内（点排序按钮时），读方是 app.slint 的 SortMenu 浮层。
     // 必须声明为 in-out —— 上层 MainArea 要把它透传出去（out 属性不可被外部赋值）。
@@ -101,9 +95,9 @@ export component SubBar inherits Rectangle {
         // —— 容器视图专属：状态芯片 + 排序菜单 + 多选 ——
         // 芯片计数口径 = **可见容器集合**（内联树展开后实际渲染成行的那些容器），
         // 与台账行数同源；其它三个视图各有自己的表头排序，这些控件对它们无意义。
-        if root.view == 0 : Chip { label: @tr("All"); n: root.chip_total; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
-        if root.view == 0 : Chip { label: @tr("Running"); n: root.chip_running; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
-        if root.view == 0 : Chip { label: @tr("Stopped"); n: root.chip_total - root.chip_running; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
+        if root.view == 0 : Chip { label: @tr("All"); n: UiState.chip_total; active: root.filter == "all"; key: "all"; clicked(k) => { root.set_filter(k); } }
+        if root.view == 0 : Chip { label: @tr("Running"); n: UiState.chip_running; active: root.filter == "running"; key: "running"; clicked(k) => { root.set_filter(k); } }
+        if root.view == 0 : Chip { label: @tr("Stopped"); n: UiState.chip_total - UiState.chip_running; active: root.filter == "stopped"; key: "stopped"; clicked(k) => { root.set_filter(k); } }
 
         Rectangle { horizontal-stretch: 1; }
 
@@ -176,9 +170,9 @@ export component SubBar inherits Rectangle {
             size: 28px;
             icon_size: 14px;
             outline: true;
-            active: root.sel_mode;
-            icon_name: root.sel_mode ? "x" : "check-square";
-            tip: root.sel_mode ? @tr("Exit select") : @tr("Select");
+            active: UiState.sel_mode;
+            icon_name: UiState.sel_mode ? "x" : "check-square";
+            tip: UiState.sel_mode ? @tr("Exit select") : @tr("Select");
             clicked => { root.sel_toggle(); }
         }
 
@@ -190,10 +184,10 @@ export component SubBar inherits Rectangle {
             HorizontalLayout {
                 width: 100%; height: 100%;
                 spacing: 2px; padding: 2px; alignment: center;
-                ViewTab { label: @tr("Containers"); n: root.total_containers; active: root.view == 0; idx: 0; clicked(i) => { root.set_view(i); } }
-                ViewTab { label: @tr("Images"); n: root.total_images; active: root.view == 1; idx: 1; clicked(i) => { root.set_view(i); } }
-                ViewTab { label: @tr("Networks"); n: root.total_networks; active: root.view == 2; idx: 2; clicked(i) => { root.set_view(i); } }
-                ViewTab { label: @tr("Volumes"); n: root.total_volumes; active: root.view == 3; idx: 3; clicked(i) => { root.set_view(i); } }
+                ViewTab { label: @tr("Containers"); n: UiState.total_containers; active: root.view == 0; idx: 0; clicked(i) => { root.set_view(i); } }
+                ViewTab { label: @tr("Images"); n: UiState.total_images; active: root.view == 1; idx: 1; clicked(i) => { root.set_view(i); } }
+                ViewTab { label: @tr("Networks"); n: UiState.total_networks; active: root.view == 2; idx: 2; clicked(i) => { root.set_view(i); } }
+                ViewTab { label: @tr("Volumes"); n: UiState.total_volumes; active: root.view == 3; idx: 3; clicked(i) => { root.set_view(i); } }
             }
         }
     }

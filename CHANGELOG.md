@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-11-15
+
+### 新增
+
+- **更新发现改为「静态清单 + 三级回退」**：检查顺序为 `releases/latest/download/version.json` → jsDelivr `@master/version.json` → `api.github.com/.../releases/latest`，任一级可解析即停，静默换级。清单只当「不可信的版本号广播」——资产 URL 由版本号派生（`releases/download/{version}/{name}`），下载完整性仍只认 Release 的 `checksums.txt`；清单里的 `name` / `size` / `sha256` 只做一致性断言，与 `checksums.txt` 不一致即拒绝安装。清单命中且确实有新版本时，额外 best-effort 拉一次 API 补更新说明（失败不影响安装）。版本号未变时仍然只发一次请求。CI 在 `release.yml` 生成并随资产上传 `version.json`（在 `checksums.txt` 之后，sha256 从 `checksums.txt` 抽取）。单测覆盖：合法 / 缺字段 / schema 不匹配 / `version_code` 不符 / sha256 不一致 / 版本回退 / tag 无 `v` 前缀历史兼容 / 三级回退顺序 / 拒绝安装。
+
+### 修复
+
+- **打开详情抽屉后磁盘列整列消失**：容器台账的响应式列阈值要求列表宽 ≥1000px 才显示磁盘列，而 1280 默认窗口开抽屉后列表只剩 880px（1280 − 抽屉 400）→ 磁盘列被隐掉，既看不到数值也点不到表头排序。阈值下调到 860px（端口列仍为 1150px）：880px 下名称 / 镜像两列各 190px，表头、容器行与分组带共用同一判定，列起点保持一致。边界副作用：窗口宽 860–999px 且抽屉关闭时磁盘列也会显示，名称 / 镜像各窄 36px。
+
 ## [0.7.12] - 2026-11-14
 
 ### 新增
@@ -393,7 +403,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...HEAD
+[0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13
 [0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12
 [0.7.11]: https://github.com/pengtang1024/docker-panel/compare/0.7.10...0.7.11
 [0.7.10]: https://github.com/pengtang1024/docker-panel/compare/0.7.9...0.7.10

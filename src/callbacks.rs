@@ -13,7 +13,7 @@ use slint::{ComponentHandle, SharedString};
 use crate::docker;
 use crate::models::{Msg, SortField};
 use crate::slint_gen::*;
-use crate::ui_state::SharedState;
+use crate::ui_state::{SharedState, ROWS_CONTAINERS, ROWS_IMAGES};
 
 pub fn bind_callbacks(ui: &MainWindow, state: &SharedState) {
     restore_config(ui, state);
@@ -43,9 +43,12 @@ fn restore_config(ui: &MainWindow, state: &SharedState) {
     ui.set_filter(SharedString::from(s.filter.as_str()));
     ui.set_sort_field(s.sort_field.to_ui_index() as i32);
     // 三个资源列表的排序（打包值：低 3 位=列下标，第 3 位=降序标记）
-    ui.set_sort_images(s.sort_images.to_ui());
-    ui.set_sort_networks(s.sort_networks.to_ui());
-    ui.set_sort_volumes(s.sort_volumes.to_ui());
+    ui.global::<UiState>()
+        .set_sort_images(s.sort_images.to_ui());
+    ui.global::<UiState>()
+        .set_sort_networks(s.sort_networks.to_ui());
+    ui.global::<UiState>()
+        .set_sort_volumes(s.sort_volumes.to_ui());
     ui.set_sort_desc(s.sort_desc);
     ui.set_search_q(SharedString::from(s.container_query.as_str()));
     ui.set_log_follow(s.log_follow);
@@ -87,7 +90,8 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 };
                 st.container_query = q.clone();
                 st.image_query = q;
-                st.rows_dirty();
+                // 搜索框同时过滤容器与镜像，网络 / 卷不受影响
+                st.rows_dirty(ROWS_CONTAINERS | ROWS_IMAGES);
                 st.persist();
             }
             // 网络/卷无定时刷新，必须立即重建，否则过滤看不到效果
@@ -168,7 +172,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                     return;
                 };
                 st.filter = key;
-                st.rows_dirty();
+                st.rows_dirty(ROWS_CONTAINERS);
                 st.persist();
             }
             if let Some(st) = crate::lock::acquire(&s, "callbacks") {
@@ -191,7 +195,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 // 切换到新字段默认降序；同字段重复点击则翻转方向
                 st.sort_desc = st.sort_field != new_field || !st.sort_desc;
                 st.sort_field = new_field;
-                st.rows_dirty();
+                st.rows_dirty(ROWS_CONTAINERS);
                 st.persist();
                 (st.sort_field.to_ui_index() as i32, st.sort_desc)
             };
@@ -215,7 +219,7 @@ fn bind_sub_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                     return;
                 };
                 st.sort_desc = !st.sort_desc;
-                st.rows_dirty();
+                st.rows_dirty(ROWS_CONTAINERS);
                 st.persist();
                 st.sort_desc
             };
@@ -243,9 +247,10 @@ fn bind_pull_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedState)
             let Some(ui) = ui_p.upgrade() else { return };
             let text = spec.to_string();
             if text.trim().is_empty() {
-                ui.set_status_text(SharedString::from(crate::i18n::t(
-                    "Please enter an image name",
-                )));
+                ui.global::<UiState>()
+                    .set_status_text(SharedString::from(crate::i18n::t(
+                        "Please enter an image name",
+                    )));
                 return;
             }
             ui.set_pull_busy(true);
@@ -284,9 +289,10 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
                 let Some(ui) = ui_c.upgrade() else { return };
                 ui.set_cleanup_open(false);
                 if !stopped && !dangling && !unused_net && !unused_vol {
-                    ui.set_status_text(SharedString::from(crate::i18n::t(
-                        "Select at least one item",
-                    )));
+                    ui.global::<UiState>()
+                        .set_status_text(SharedString::from(crate::i18n::t(
+                            "Select at least one item",
+                        )));
                     return;
                 }
                 let (rt_handle, tx) = {

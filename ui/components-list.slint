@@ -1,9 +1,9 @@
-// components-list.slint — 资源列表共用基件（表头单元格 + 列宽契约）
+// components-list.slint — 资源列表共用基件（表头单元格 + 表格外壳 + 列宽契约）
 //
-// 四个列表（容器台账 / 镜像 / 网络 / 卷）共用同一套表头单元格：
+// 四个列表（容器台账 / 镜像 / 网络 / 卷）共用同一套表头单元格与同构表格外壳：
 //   - 命中顺序铁律（规范 #19）：热区先声明、内容布局在后 —— 布局里的 Text 没有
 //     输入区，点击会穿透到热区；反过来热区会被布局内元素盖住。
-//   - 列起点固定是表格的核心价值：表头与行必须用同一组列宽（由各列表统一下发）。
+//   - 列起点固定是表格的核心价值：表头与行必须用同一组列宽（由 TableShell 统一下发）。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
 
@@ -103,5 +103,85 @@ export component ListHeadCell inherits Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
         }
+    }
+}
+
+/// 资源表格外壳：固定表头（3 列可排序）+ 行列表插槽
+///
+/// 镜像 / 网络 / 卷三个列表结构同构，只差列标签、列宽与行内容：
+/// 外壳负责表头几何（与行共用 `name_w`）和滚动区容器，行 delegate 由子类传入。
+///
+/// ⚠️ Slint 不允许前向引用：本组件依赖 ListHeadCell，必须声明在其之后。
+export component TableShell inherits Rectangle {
+    in property <string> name_label: "";
+    in property <string> col2_label: "";
+    in property <string> col3_label: "";
+    in property <bool> col2_right: false;
+    in property <bool> col3_right: false;
+    in property <length> col2_w: 96px;
+    in property <length> col3_w: 110px;
+    /// 行尾操作列宽度（0 = 无操作列）
+    in property <length> act_w: 0px;
+    in-out property <int> sort_field: 0;
+    in-out property <bool> sort_desc: true;
+    /// 名称列宽度：表头与行共用（弹性列必须由父级统一算出，规范 #20）
+    out property <length> name_w: max(0px, root.width - ListCols.scrollbar_slot
+        - ListCols.pad_x * 2 - root.col2_w - root.col3_w - root.act_w
+        - ListCols.gap * (2 + (root.act_w > 0px ? 1 : 0)));
+    callback sort_pick(int);
+
+    VerticalLayout {
+        width: 100%; height: 100%;
+        spacing: 0px;
+
+        // 表头（固定在滚动区之外 → 天然 sticky）
+        Rectangle {
+            vertical-stretch: 0;
+            height: ListCols.head_h;
+            background: Theme.bg;
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%; height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                width: 100%; height: 100%;
+                spacing: ListCols.gap;
+                padding-left: ListCols.pad_x;
+                padding-right: ListCols.pad_x + ListCols.scrollbar_slot;
+                cross-axis-alignment: center;
+
+                ListHeadCell {
+                    text: root.name_label;
+                    cell_w: root.name_w;
+                    active: root.sort_field == 0;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(0); }
+                }
+                ListHeadCell {
+                    text: root.col2_label;
+                    right: root.col2_right;
+                    cell_w: root.col2_w;
+                    active: root.sort_field == 1;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(1); }
+                }
+                ListHeadCell {
+                    text: root.col3_label;
+                    right: root.col3_right;
+                    cell_w: root.col3_w;
+                    active: root.sort_field == 2;
+                    desc: root.sort_desc;
+                    show_arrow: true;
+                    picked => { root.sort_pick(2); }
+                }
+                if root.act_w > 0px : Rectangle { width: root.act_w; height: 1px; }
+            }
+        }
+
+        // 行列表（子类传入）
+        @children
     }
 }

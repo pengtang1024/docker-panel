@@ -6,7 +6,7 @@ use crate::ui_state::AppState;
 use super::{head, kv, or_dash, DrawerData};
 
 pub(crate) fn build_network(s: &AppState) -> Option<DrawerData> {
-    let n = s.networks.iter().find(|n| n.id == s.sel_key)?;
+    let n = s.networks.iter().find(|n| n.id == s.sel.key)?;
     let count = super::network_container_count(s, &n.name);
     Some(DrawerData {
         title: n.name.clone(),
@@ -36,7 +36,7 @@ pub(crate) fn build_network(s: &AppState) -> Option<DrawerData> {
 }
 
 pub(crate) fn build_volume(s: &AppState) -> Option<DrawerData> {
-    let v = s.volumes.iter().find(|v| v.name == s.sel_key)?;
+    let v = s.volumes.iter().find(|v| v.name == s.sel.key)?;
     let size = match s.volume_sizes.get(&v.name) {
         Some(bytes) => crate::format::format_bytes(*bytes),
         None => super::dash(),

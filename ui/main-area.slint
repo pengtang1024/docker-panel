@@ -12,44 +12,14 @@ import { Theme } from "theme.slint";
 import { SubBar } from "sub-bar.slint";
 import { BatchBar } from "batch-bar.slint";
 import { ListArea } from "list-area.slint";
-import {
-    ContainerRow, ImageRow, NetworkRow, VolumeRow, LedgerSummary
-} from "models.slint";
+import { UiState } from "ui-state.slint";
 
 export component MainArea inherits Rectangle {
-    // —— 视图与筛选 ——
+    // —— 视图与筛选（用户操作态，规范 #18：仍由根属性转发）——
     in-out property <int> view: 0;
     in-out property <string> filter: "all";
     in-out property <int> sort_field: 0;
     in-out property <bool> sort_desc: true;
-    in-out property <bool> sel_mode: false;
-    in-out property <bool> loading: false;
-
-    // —— 数据 ——
-    in-out property <[ContainerRow]> container_rows: [];
-    in-out property <[ImageRow]> image_rows: [];
-    in-out property <[NetworkRow]> network_rows: [];
-    in-out property <[VolumeRow]> volume_rows: [];
-    /// 台账概览带（容器视图用）
-    in-out property <LedgerSummary> ledger_summary;
-    // —— 三个资源列表各自的排序（打包值：低 3 位=列下标，第 3 位=降序标记）——
-    in-out property <int> sort_images: 0;
-    in-out property <int> sort_networks: 0;
-    in-out property <int> sort_volumes: 0;
-
-    // —— 计数 ——
-    in-out property <int> total_containers: 0;
-    in-out property <int> running_containers: 0;
-    in-out property <int> total_images: 0;
-    in-out property <int> total_networks: 0;
-    in-out property <int> total_volumes: 0;
-
-    // —— 批量操作 ——
-    in-out property <int> batch_count: 0;
-
-    /// 筛选栏芯片计数（**可见容器集合**的容器数 / 运行中数，与台账行数同口径）
-    in-out property <int> chip_total: 0;
-    in-out property <int> chip_running: 0;
 
     // —— 排序菜单（浮层在 app.slint，这里只提供开关与锚点）——
     in-out property <bool> sort_open: false;
@@ -102,14 +72,6 @@ export component MainArea inherits Rectangle {
             filter <=> root.filter;
             sort_field <=> root.sort_field;
             sort_desc <=> root.sort_desc;
-            sel_mode <=> root.sel_mode;
-            total_containers <=> root.total_containers;
-            running_containers <=> root.running_containers;
-            chip_total <=> root.chip_total;
-            chip_running <=> root.chip_running;
-            total_images <=> root.total_images;
-            total_networks <=> root.total_networks;
-            total_volumes <=> root.total_volumes;
             sort_open <=> root.sort_open;
             menu_x <=> root.menu_x;
             menu_y <=> root.menu_y;
@@ -120,9 +82,8 @@ export component MainArea inherits Rectangle {
             sel_toggle() => { root.sel_toggle(); }
         }
 
-        if root.batch_count > 0 : BatchBar {
+        if UiState.batch_count > 0 : BatchBar {
             height: Theme.batch_h;
-            count <=> root.batch_count;
             start => { root.batch_start(); }
             stop => { root.batch_stop(); }
             restart => { root.batch_restart(); }
@@ -133,17 +94,7 @@ export component MainArea inherits Rectangle {
         ListArea {
             vertical-stretch: 1;
             view <=> root.view;
-            sel_mode <=> root.sel_mode;
-            loading <=> root.loading;
-            containers <=> root.container_rows;
-            images <=> root.image_rows;
-            networks <=> root.network_rows;
-            volumes <=> root.volume_rows;
-            ledger_summary <=> root.ledger_summary;
             sort_field <=> root.sort_field;
-            sort_images <=> root.sort_images;
-            sort_networks <=> root.sort_networks;
-            sort_volumes <=> root.sort_volumes;
             c_select(id) => { root.c_select(id); }
             c_toggle(id) => { root.c_toggle(id); }
             c_restart(id) => { root.c_restart(id); }

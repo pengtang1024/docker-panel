@@ -74,7 +74,7 @@ pub fn bind_netvol_actions(ui: &MainWindow, state: &SharedState) {
     }
 }
 
-/// 写 sel/sel_key → 立即按当前 AppState 重建抽屉内容并灌入 UI
+/// 写选中项 → 立即按当前 AppState 重建抽屉内容并灌入 UI
 fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
     // 选中对象变了：旧日志文本与状态提示都不再属于当前对象
     crate::ui_apply::clear_log_panel(ui);
@@ -83,15 +83,11 @@ fn open_selected(ui: &MainWindow, s: &SharedState, kind: SelKind, key: String) {
             crate::lock::poison("callbacks_netvol");
             return;
         };
-        st.sel = kind;
-        st.sel_key = key;
-        st.clear_logs();
+        st.select(kind, key);
         crate::detail_fmt::build_drawer_data(&st)
     };
-    ui.set_drawer_open(true);
-    ui.set_drawer_tab(0);
     // 从分组合并日志切到网络/卷详情：恢复详情/环境 Tab
-    ui.set_drawer_log_only(false);
+    crate::ui_apply::open_drawer(ui, 0, false);
     if let Some(d) = data {
         crate::ui_apply::apply_drawer(ui, &d);
     }

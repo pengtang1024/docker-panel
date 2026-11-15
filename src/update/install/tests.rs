@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::download;
 use super::*;
+use crate::models::update::{ManifestAsset, UpdateManifest};
 use crate::update::{InstallKind, UpdateAsset, UpdateInfo};
 
 #[test]
@@ -58,6 +59,7 @@ fn binary_info(source: &Path) -> UpdateInfo {
             }),
             reason: None,
         },
+        manifest: None,
     }
 }
 
@@ -105,6 +107,38 @@ fn rejects_checksum_mismatch_without_touching_exe() {
     let mut progress = |_p: i32, _t: String| {};
     let err = download_and_install(&info, &exe, &cache, &mut progress).unwrap_err();
     assert!(err.contains("checksum"), "{err}");
+    assert_eq!(fs::read(&exe).unwrap(), b"old-binary");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[cfg(unix)]
+fn rejects_manifest_mismatch_without_touching_exe() {
+    let dir = temp_dir("manifest");
+    let new_bin = dir.join("docker-panel.new");
+    fs::write(&new_bin, b"new-binary").unwrap();
+    // checksums.txt 与文件本身一致；清单声明的 sha256 却是别的值 → 必须拒绝
+    let hash = download::sha256_file(&new_bin).unwrap();
+    fs::write(dir.join("checksums.txt"), format!("{hash}  docker-panel\n")).unwrap();
+
+    let exe = dir.join("docker-panel");
+    fs::write(&exe, b"old-binary").unwrap();
+    let mut info = binary_info(&new_bin);
+    info.manifest = Some(UpdateManifest {
+        version: "9.9.9".into(),
+        notes_url: String::new(),
+        deb: None,
+        binary: Some(ManifestAsset {
+            name: "docker-panel".into(),
+            size: fs::metadata(&new_bin).unwrap().len(),
+            sha256: "0".repeat(64),
+        }),
+    });
+    let cache = dir.join("cache");
+
+    let mut progress = |_p: i32, _t: String| {};
+    let err = download_and_install(&info, &exe, &cache, &mut progress).unwrap_err();
+    assert!(err.contains("manifest"), "{err}");
     assert_eq!(fs::read(&exe).unwrap(), b"old-binary");
     let _ = fs::remove_dir_all(&dir);
 }

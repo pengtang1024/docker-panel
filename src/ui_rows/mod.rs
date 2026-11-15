@@ -9,6 +9,7 @@
 //!   group_totals.rs → 分组资源汇总（组内成员之和）
 //!   images.rs       → 镜像卡片行
 //!   netvol.rs       → 网络 / 卷卡片行
+//!   sort.rs         → 三个资源列表共用的「过滤 → 排序 → 映射」骨架
 
 mod compose_tree;
 mod containers;
@@ -16,6 +17,7 @@ mod group_totals;
 mod images;
 mod ledger;
 mod netvol;
+mod sort;
 
 pub use compose_tree::{group_label, group_members, GroupMember};
 pub use images::build_image_rows;

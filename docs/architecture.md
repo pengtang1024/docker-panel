@@ -15,6 +15,7 @@ v0.2.0 重写版：Slint 原生 GUI + 纯软件渲染器 + 三线程消息架构
 | [arch/ui-interaction.md](arch/ui-interaction.md) | Slint UI 模块交互（交互总图 + 4 种交互模式 + 文件清单）、Slint 拆分原则 |
 | [arch/docker-bollard.md](arch/docker-bollard.md) | Docker 接入约定、bollard 0.21 易踩坑速查（**唯一权威源**） |
 | [arch/list-layout.md](arch/list-layout.md) | 统一列表布局：四个视图的列表形态、台账内联 Compose 树、三个资源列表的表头排序、落点清单、验收标准 |
+| [arch/update-manifest.md](arch/update-manifest.md) | 自动更新的静态清单（`version.json`）与静态 CDN 分发：字段可信度、CI 生成顺序、三级回退链、失败降级、安全边界（**唯一权威源**） |
 
 ## 1. 技术栈（精确版本）
 
@@ -61,7 +62,7 @@ docker-panel/
 │   ├── log_status.rs           日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs              CachedModel 差量同步（sync_model：数据 PartialEq 相同则跳过 set_vec）+ 日志行模型 Append/Reset
 │   ├── detail_fmt/            详情格式化：mod（公共 head/kv/format_bytes/network_counts）+ container / image / netvol
-│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）
+│   ├── ui_rows/               行构建：mod（hit_any 搜索命中）+ containers（容器台账行）/ ledger（概览带 + 台账入口）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷，含排序）/ sort（三个资源列表共用的「过滤→排序→映射」骨架）
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_update/drain.rs     DrainResult：UiFlag 位掩码 + 声明宏生成 has_ui_changes / logs_only / merge
 │   ├── ui_update/update.rs    自动更新消息 → AppState / DrainResult（从 ui_update 拆出）
@@ -78,7 +79,9 @@ docker-panel/
 │   │
 │   ├── update/
 │   │   ├── mod.rs             任务编排 + 启动调度（24h 节流）+ Msg 投递 + UI 视图快照
-│   │   ├── github.rs          GitHub Releases API（系统 curl + JSON 解析，阻塞）
+│   │   ├── discover.rs        更新发现三级回退：清单两级 → API 兜底（fetcher 可注入 + 单测）
+│   │   ├── manifest.rs        清单解析 / 资产 URL 派生 / 与 checksums.txt 一致性断言（纯逻辑 + 单测）
+│   │   ├── github.rs          GitHub Releases API（第 3 级兜底；系统 curl + JSON 解析，阻塞）
 │   │   ├── version.rs         版本比较 / 资产选择 / checksums 解析（纯逻辑 + 单测）
 │   │   ├── install.rs         环境探测 / 安装方式判定 / deb（pkexec）与裸二进制替换
 │   │   └── install/download.rs 缓存目录 / curl 下载 / SHA-256 校验
@@ -116,10 +119,10 @@ docker-panel/
     ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）
     ├── ledger-band.slint      台账概览带：4 个计数 + CPU 占用 TOP4
     ├── ledger-cols.slint      台账列宽契约 global（表头与行共用同一组列宽）
-    ├── image-list.slint       镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
-    ├── network-list.slint     网络表格列表：名称 · driver · 子网（表头可点排序）
-    ├── volume-list.slint      卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
-    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
+    ├── image-list.slint       镜像表格列表（inherits TableShell）：repo:tag · 大小 · 创建时间 + 行内 play/more
+    ├── network-list.slint     网络表格列表（inherits TableShell）：名称 · driver · 子网
+    ├── volume-list.slint      卷表格列表（inherits TableShell）：名称 · 大小 · 挂载点
+    ├── components-list.slint  列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳
     ├── skel.slint             骨架屏占位
     ├── foot-bar.slint         底部 9 项资源概览（含镜像大小）
     ├── batch-bar.slint        批量操作浮动栏
@@ -130,6 +133,7 @@ docker-panel/
     ├── update-dialog.slint    自动更新弹窗：版本对比 / 更新说明 / 进度 / 开关 / 安装与重启
     ├── settings-dialog.slint  设置弹窗：外观三选 + 自动更新三个开关（check/install/restart）
     ├── update-state.slint     自动更新 UI 状态 global（TopBar / UpdateDialog / Rust 共享）
+    ├── ui-state.slint         显示态 global（TopBar / FootBar / MainArea / ListArea 与 Rust 共享）
     ├── menu-layers.slint      浮动菜单层：排序菜单 + 行「···」菜单（须在列表区之后渲染，否则被列表 clip 裁掉）
     └── components-*.slint     原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 ```
@@ -148,7 +152,7 @@ main.rs
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（status_toast）
-  ├── update/        → github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
+  ├── update/        → discover（三级回退）+ manifest（清单纯逻辑）+ github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；

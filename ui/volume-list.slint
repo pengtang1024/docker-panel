@@ -1,10 +1,10 @@
-// volume-list.slint — 卷表格列表（表头可排序 + 30px 虚拟化行）
+// volume-list.slint — 卷表格列表（表头走 TableShell + 30px 虚拟化行）
 //
 // 精简列：名称 · 大小 · 挂载点
-// 列起点固定：表头与行共用同一组列宽（由本组件统一下发）。
+// 列起点固定：表头与行共用 TableShell 下发的 name_w（规范 #20）。
 import { Theme } from "theme.slint";
 import { VCenterText, RightText } from "components-align.slint";
-import { ListCols, ListHeadCell } from "components-list.slint";
+import { ListCols, TableShell } from "components-list.slint";
 import { VolumeRow } from "models.slint";
 import { ListView } from "@material";
 
@@ -63,87 +63,34 @@ component VolumeRowView inherits Rectangle {
     }
 }
 
-export component VolumeList inherits Rectangle {
+export component VolumeList inherits TableShell {
     in-out property <[VolumeRow]> rows: [];
-    /// 当前排序列（0=名称 1=大小 2=挂载点）
-    in-out property <int> sort_field: 0;
-    in-out property <bool> sort_desc: true;
 
-    callback sort_pick(int);
     callback select(string);
 
-    // —— 列宽（表头与行共用）——
-    property <length> size_w: 96px;
-    property <length> mount_w: 320px;
-    property <length> content_w: root.width - ListCols.scrollbar_slot - ListCols.pad_x * 2;
-    property <length> name_w: root.content_w - root.size_w - root.mount_w - ListCols.gap * 2;
+    name_label: @tr("Volume");
+    col2_label: @tr("Size");
+    col2_w: 96px;
+    col2_right: true;
+    col3_label: @tr("Mountpoint");
+    col3_w: 320px;
 
-    VerticalLayout {
-        width: 100%; height: 100%;
-        spacing: 0px;
-
-        // 表头（固定在滚动区之外 → 天然 sticky）
-        Rectangle {
-            vertical-stretch: 0;
-            height: ListCols.head_h;
-            background: Theme.bg;
-            Rectangle {
-                y: parent.height - 1px;
-                width: 100%; height: 1px;
-                background: Theme.line;
-            }
-            HorizontalLayout {
-                width: 100%; height: 100%;
-                spacing: ListCols.gap;
-                padding-left: ListCols.pad_x;
-                padding-right: ListCols.pad_x + ListCols.scrollbar_slot;
-                cross-axis-alignment: center;
-
-                ListHeadCell {
-                    text: @tr("Volume");
-                    cell_w: root.name_w;
-                    active: root.sort_field == 0;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(0); }
-                }
-                ListHeadCell {
-                    text: @tr("Size");
-                    right: true;
-                    cell_w: root.size_w;
-                    active: root.sort_field == 1;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(1); }
-                }
-                ListHeadCell {
-                    text: @tr("Mountpoint");
-                    cell_w: root.mount_w;
-                    active: root.sort_field == 2;
-                    desc: root.sort_desc;
-                    show_arrow: true;
-                    picked => { root.sort_pick(2); }
-                }
-            }
-        }
-
-        // 行列表（虚拟化：只渲染视口内的行）
-        list := ListView {
-            vertical-stretch: 1;
+    // 行列表（虚拟化：只渲染视口内的行）
+    list := ListView {
+        vertical-stretch: 1;
+        width: 100%;
+        vertical-scrollbar-policy: as-needed;
+        horizontal-scrollbar-policy: always-off;
+        content_width: self.visible_width;
+        mouse_drag_pan_enabled: false;
+        for row[i] in root.rows : VolumeRowView {
+            data: row;
             width: 100%;
-            vertical-scrollbar-policy: as-needed;
-            horizontal-scrollbar-policy: always-off;
-            content_width: self.visible_width;
-            mouse_drag_pan_enabled: false;
-            for row[i] in root.rows : VolumeRowView {
-                data: row;
-                width: 100%;
-                height: ListCols.row_h;
-                name_w: root.name_w;
-                size_w: root.size_w;
-                mount_w: root.mount_w;
-                select(id) => { root.select(id); }
-            }
+            height: ListCols.row_h;
+            name_w: root.name_w;
+            size_w: root.col2_w;
+            mount_w: root.col3_w;
+            select(id) => { root.select(id); }
         }
     }
 }

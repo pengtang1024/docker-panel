@@ -3,6 +3,7 @@ import { Theme } from "theme.slint";
 import { VCenterText, CenterText } from "components-align.slint";
 import { IconBtn, Dot } from "components-interact.slint";
 import { UpdateState } from "update-state.slint";
+import { UiState } from "ui-state.slint";
 
 export component TopBar inherits Rectangle {
     height: Theme.top_h;
@@ -12,10 +13,7 @@ export component TopBar inherits Rectangle {
         y: parent.height - 1px; width: 100%; height: 1px; background: Theme.line;
     }
 
-    in-out property <bool> docker_ok: false;
-    // 采样过期：连续多轮拿不到 stats / 磁盘占用时点亮（边沿触发，单次抖动不会闪）
-    in-out property <bool> stats_stale: false;
-    in-out property <bool> disk_stale: false;
+    // 连接 / 采样过期状态位直接读 UiState（全局显示态，Rust 单写入方）
     in-out property <string> search_q: "";
     callback theme_click();
     callback settings_click();
@@ -58,24 +56,24 @@ export component TopBar inherits Rectangle {
 
         // .conn{gap:5px;font-size:11px;margin-left:2px}
         Rectangle { width: 2px; }  // margin-left:2px 等效间距
-        Dot { on: root.docker_ok; dot_size: 6px; }
+        Dot { on: UiState.docker_ok; dot_size: 6px; }
         VCenterText {
             horizontal-stretch: 0;
-            text: root.docker_ok ? @tr("Connected") : @tr("Disconnected");
+            text: UiState.docker_ok ? @tr("Connected") : @tr("Disconnected");
             font-size: 11px; font-weight: 600; color: Theme.ink_3;
         }
 
         // 采样过期提示（状态位，不是弹窗）：连续多轮没取到数据才出现，恢复后自动消失
-        if root.stats_stale || root.disk_stale : Rectangle {
+        if UiState.stats_stale || UiState.disk_stale : Rectangle {
             horizontal-stretch: 0;
             width: 5px; height: 5px;
             border-radius: 2.5px;
             background: Theme.warn;
         }
-        if root.stats_stale || root.disk_stale : VCenterText {
+        if UiState.stats_stale || UiState.disk_stale : VCenterText {
             horizontal-stretch: 0;
-            text: (root.stats_stale && root.disk_stale) ? @tr("Live and disk data may be stale")
-                : root.stats_stale ? @tr("Live data may be stale")
+            text: (UiState.stats_stale && UiState.disk_stale) ? @tr("Live and disk data may be stale")
+                : UiState.stats_stale ? @tr("Live data may be stale")
                 : @tr("Disk data may be stale");
             font-size: 11px; font-weight: 600; color: Theme.warn;
         }

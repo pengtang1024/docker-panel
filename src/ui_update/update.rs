@@ -14,8 +14,8 @@ impl AppState {
         match msg {
             Msg::UpdateCheckDone(manual, auto_installing, r) => {
                 res.mark(UiFlag::UpdateCheckDone);
-                self.update_progress = 0;
-                self.update_busy_ui = auto_installing;
+                self.update.update_progress = 0;
+                self.update.update_busy_ui = auto_installing;
                 match r {
                     Ok(info) => {
                         let newer = crate::update::version::is_newer(
@@ -25,14 +25,14 @@ impl AppState {
                         // 有更新时不节流：下次启动/6h 轮询继续检查，避免重启后徽标丢失；
                         // 失败也不节流，网络恢复后可以尽快重试。
                         if !newer {
-                            self.last_update_check = crate::update::now_secs();
+                            self.update.last_update_check = crate::update::now_secs();
                             self.persist();
                         }
-                        let was_available = self.update_available;
-                        self.update_available = newer && !self.update_restart_needed;
-                        self.update_info = Some(info.clone());
+                        let was_available = self.update.update_available;
+                        self.update.update_available = newer && !self.update.update_restart_needed;
+                        self.update.update_info = Some(info.clone());
                         // 任何一次成功检查都清掉旧状态（含“已有任务在运行”的占位提示）
-                        self.update_status.clear();
+                        self.update.update_status.clear();
                         // 启动检查发现新版本：只提示一次，不弹窗
                         if !manual && newer && !auto_installing && !was_available {
                             res.status_text = Some(crate::i18n::trf(
@@ -45,41 +45,44 @@ impl AppState {
                     Err(e) => {
                         // 启动检查失败静默；手动检查把错误显示在弹窗里
                         if manual {
-                            self.update_status = e;
+                            self.update.update_status = e;
                         }
                     }
                 }
             }
             Msg::UpdateProgress(percent, text) => {
-                self.update_progress = percent.clamp(0, 100);
-                self.update_status = text;
-                self.update_busy_ui = true;
+                self.update.update_progress = percent.clamp(0, 100);
+                self.update.update_status = text;
+                self.update.update_busy_ui = true;
                 res.mark(UiFlag::UpdateProgress);
             }
             Msg::UpdateDone(r, restart_needed) => {
                 res.mark(UiFlag::UpdateDone);
-                self.update_busy_ui = false;
+                self.update.update_busy_ui = false;
                 match r {
                     Ok(msg) => {
-                        self.update_restart_needed |= restart_needed;
-                        self.update_available = false;
-                        self.update_progress = 100;
+                        self.update.update_restart_needed |= restart_needed;
+                        self.update.update_available = false;
+                        self.update.update_progress = 100;
                         // 自动重启：安装成功且开关开启 → 提示后延时重启
                         // （pkexec 授权框本身就是一次用户在场确认；开关默认开，
                         //   想留在当前会话的可在设置里关掉）
-                        if restart_needed && self.update_restart_needed && self.auto_restart {
-                            self.update_status =
+                        if restart_needed
+                            && self.update.update_restart_needed
+                            && self.update.auto_restart
+                        {
+                            self.update.update_status =
                                 crate::i18n::t("Update installed, restarting automatically...");
                             Self::schedule_auto_restart(&self.tx, &self.rt);
                         } else {
-                            self.update_status = msg.clone();
+                            self.update.update_status = msg.clone();
                         }
                         res.status_text = Some(msg);
                         res.mark(UiFlag::Toast);
                     }
                     Err(e) => {
-                        self.update_progress = 0;
-                        self.update_status = e;
+                        self.update.update_progress = 0;
+                        self.update.update_status = e;
                     }
                 }
             }

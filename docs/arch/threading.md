@@ -90,11 +90,11 @@ invoke_from_event_loop(move || {
 - **单批上限**：`MAX_DRAIN_BATCH = 2048`，避免日志洪峰时无界 `try_recv` 长时间占锁。
 - **UI 节流**：`UI_MIN_INTERVAL = 120ms`（约 8 次/秒）；有待更新时 `poll_timeout` 只睡到窗口结束（≤100ms，兼顾 shutdown），把最坏 UI 应用延迟从约 200ms 收敛到约 120ms。
 - **变化区域**：`DrainResult` 按列表分别标记 `containers_changed / images_changed / networks_changed / volumes_changed / drawer_changed / logs_changed`；纯日志消息不会重算容器/镜像/网络/卷/抽屉。`has_ui_changes()` 为 false 时不 apply（被 epoch 丢弃的旧日志不会触发空 invoke）。
-- **日志缓冲**：`LogBatch(epoch, lines)` 整批推入 `AppState.logs`，超上限时**分块**裁剪（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）；UI 侧是逐行的 `VecModel<LogRow>`，只追加不重建。
+- **日志缓冲**：`LogBatch(epoch, lines)` 整批推入 `AppState.log.logs`，超上限时**分块**裁剪（`LOG_ROWS_MAX = 2000` → 保留 `LOG_ROWS_KEEP = 1000`）；UI 侧是逐行的 `VecModel<LogRow>`，只追加不重建。
 - **日志流取消**：`AppState` 持有 `watch::Sender`；切换容器时 drop sender，旧 `follow_logs` 在 `select!` 中立即退出。日志行携带 stream epoch，consumer 只接受当前流；工具条 Clear 以 `tail=0` 重启当前流，清空前的排队日志按旧 epoch 丢弃。
 - **日志续流**：日志缓冲代际与流代际分离。`log_epoch` 只在 clear/切容器时递增，用于 UI 日志行模型的过期判断；`stream_epoch` 每次建流递增，用于日志行/结束消息。`history_done` 记录当前选中会话是否已加载历史：收到首条日志，或在有缓冲/活动流时 Clear 后置 true；空缓冲且无活动流时保持 false，让下次 `ensure_follow` 用 `tail=200` 重试。首次/空历史/首流失败用 `tail=200`，否则用 `tail=0`。重新选中容器（含同一容器）会重置，Clear 的持久性仅到下一次选中。
 - **两阶段铁律**：锁内只 build，`invoke_from_event_loop` 闭包绝不碰 `Mutex<AppState>`；`log_epoch` 用共享 `Arc<AtomicU64>`，闭包只读原子判断行模型是否已过期。
-- **行模型过期判定（`rows_epoch`）**：行是在锁内按**当时**的排序/筛选/搜索条件建的，锁外才写 UI；期间用户改了条件，这批行落地就会让列表顺序与排序箭头打架。排序/筛选/搜索变更时回调递增 `AppState::rows_epoch`，consumer 在锁内快照、锁外比对，epoch 变了就丢弃这批旧行（回调已用新条件重建并应用过）。
+- **行模型过期判定（`rows_epoch`，per-list 位掩码）**：行是在锁内按**当时**的排序/筛选/搜索条件建的，锁外才写 UI；期间用户改了条件，这批行落地就会让列表顺序与排序箭头打架。排序/筛选/搜索变更时回调按受影响列表递增 `AppState::rows_epoch`（搜索 = 容器 + 镜像；排序 = 对应列表），consumer 在锁内快照、锁外逐列表比对，该列表代际变了才丢弃这批旧行（回调已用新条件重建并应用过）。
 - **consumer 不回写用户操作过的状态**：`sort_field` / `sort_desc` / `filter` / `view` 等由 UI 回调独占写入（回调在 UI 线程同步改 state → `ui.set_xxx` → 重建列表）。consumer 只刷数据：它锁内取的是快照、锁外才写 UI，回写就会把用户刚改的状态打回旧值（甚至偶发对不上）。详见 [ui-interaction.md §3.2](ui-interaction.md)。
 
 ### 定时刷新走 tokio interval（不是 Slint Timer）
@@ -109,7 +109,7 @@ invoke_from_event_loop(move || {
   - **首轮不跳过**，且**首屏加载拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数还会独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。
   - CPU% 靠差值计算，本地没有 prev（进程刚起 / 该容器首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 `docker-bollard.md`）→ 首帧即真实 CPU%，不会先显示一轮 0.0%。
 - **30s 磁盘占用**（`bootstrap::spawn_disk_usage_interval`）：`/system/df?type=volume` 与 `?type=container` 并行采样，低频单独跑。容器可写层占用只从这里来（列表接口不带 `size=1`：遍历文件系统 + 删除中的容器会 404），列表刷新后用 `AppState::apply_container_sizes` 从缓存补回。
-- **自动更新**（`update::spawn_scheduler`）：启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs`。
+- **自动更新**（`update::spawn_scheduler`）：启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs`。
 - UI 回调与 interval tick 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI。
 - 这符合 Slint 线程安全模型：只有主线程可以修改 Model。
 - **主题监听可退出**：`dconf watch` 的阻塞读放在独立 reader 线程，监控线程用 `recv_timeout(200ms)` 轮询 shutdown；轮询回退路径也按 200ms 醒来检查。窗口关闭时 `theme-monitor` 能在 200ms 内 join，不会因 `reader.next()` 永久阻塞而让进程挂住。
@@ -129,13 +129,13 @@ invoke_from_event_loop(move || {
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |
 | `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记立即刷新 |
 | **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
-| **`LogBatch(u64, Vec<String>)`** | `follow_logs` Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.logs`（窗口 ≤2000 行）→ 追加到 UI 行模型 |
+| **`LogBatch(u64, Vec<String>)`** | `follow_logs` Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.log.logs`（窗口 ≤2000 行）→ 追加到 UI 行模型 |
 | `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
 | **`LogStreamStatus(u64, String)`** | follow_runtime 判定结局 | 仅当前 stream_epoch 时写入 `log_status`（日志面板工具栏状态位）；文案见 `src/log_status.rs`（重连中 / 已恢复 / 已停止） |
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
-| **`UpdateCheckDone(bool, bool, Result<UpdateInfo, String>)`** | 启动 10s 后 / 每 6h 轮询（24h 节流）/ 手动检查 | `(manual, auto_installing, result)`；成功写入 `AppState.update_info` 并更新顶栏徽标；启动检查失败静默，手动失败写弹窗状态 |
+| **`UpdateCheckDone(bool, bool, Result<UpdateInfo, String>)`** | 启动 10s 后 / 每 6h 轮询（24h 节流）/ 手动检查 | `(manual, auto_installing, result)`；成功写入 `AppState.update.update_info` 并更新顶栏徽标；启动检查失败静默，手动失败写弹窗状态 |
 | **`UpdateProgress(i32, String)`** | 下载 / 安装任务 | 弹窗进度条 + 状态文案（1% 节流，不逐 chunk 发） |
 | **`UpdateDone(Result<String, String>, bool)`** | 安装任务结束 | 成功标记 `update_restart_needed`、顶栏徽标转琥珀色；**`auto_restart` 开启时 3s 后自动启动新二进制并退出事件循环**（spawn_blocking 跑子进程，失败经 `UpdateProgress` 回灌）；失败保留可用状态供重试 |
 
@@ -195,7 +195,7 @@ rt_handle.spawn(async move {
 
 **行批投递（洪峰铁律）**：日志洪峰可达 4 万+ 行/秒。逐行 `tx.send` 会让 mpsc 每行唤醒一次 consumer（惊群），实测 CPU 打到 240%+。因此 `follow_logs` 只做三件事：① 行先攒进 `batch`，满 `LOG_BATCH_MAX = 1024` 行或距首行 `LOG_FLUSH_INTERVAL = 60ms` 才发一条 `Msg::LogBatch`（通道消息数下降 3 个数量级）；② 空闲超时用一个**常驻** `Sleep`（每行只 `reset` 截止时间，不逐行新建 `timeout`）；③ 每行只做一次 UTF-8 校验 + 一次堆分配。
 
-`AppState.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：有活动流时递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启；无活动流时只清缓冲并递增 log_epoch。仅当确有缓冲或有活动流时把 `history_done` 置 true；空缓冲且无流时保留 false，切回日志 Tab 仍可用 tail=200 补拉启动日志。重新选中容器会重置 history_done。
+`AppState.log.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：有活动流时递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启；无活动流时只清缓冲并递增 log_epoch。仅当确有缓冲或有活动流时把 `history_done` 置 true；空缓冲且无流时保留 false，切回日志 Tab 仍可用 tail=200 补拉启动日志。重新选中容器会重置 history_done。
 
 流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流时清空 `follow_id` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。空历史或首流失败时 `history_done` 仍为 false，会再次以 `tail=200` 重试。
 
@@ -221,7 +221,7 @@ rt_handle.spawn(async move {
 
 **状态清除**：切换选中资源或按 Clear 走 `ui_apply::clear_log_panel`（日志行模型 + 状态提示全清）；同一容器重建日志流走 `clear_log_status`（只清状态、保留已缓冲的日志行）——新流没有「正在重连」之类的历史状态，但旧内容仍有效。`AppState::ensure_follow` 返回「是否新建了流」，调用方据此决定是否清残留提示。
 
-**流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。跨流共享的 running 标志已移除——容器存活一律以探针结论为准。
+**流存活标志**：每条流持有独立的 `Arc<AtomicBool>`（`AppState.log.follow_active`）。`ensure_follow` 依据「id 相同 **且** 流仍存活」才幂等返回；旧流退出不会误标新流。这样 `LogStreamEnded` 已入队但尚未 drain 的窗口内切 Tab 也能正确重建流（不再出现「本次切 Tab 不建流、需再切一次」）。跨流共享的 running 标志已移除——容器存活一律以探针结论为准。
 
 ### 日志行模型：只追加，不重建（`src/ui_state/log_sync.rs`）
 
@@ -231,7 +231,7 @@ rt_handle.spawn(async move {
 
 | 位置 | 含义 |
 |------|------|
-| 窗口 = `[logs_total - logs.len(), logs_total)` | `AppState.logs`（滚动窗口，≤ `LOG_ROWS_MAX = 2000` 行） |
+| 窗口 = `[logs_total - logs.len(), logs_total)` | `AppState.log.logs`（滚动窗口，≤ `LOG_ROWS_MAX = 2000` 行） |
 | 模型 = `[model_total - model_rows, model_total)` | UI 侧 `VecModel<LogRow>` |
 
 - **起点相同** → 模型是窗口的前缀 → `LogSyncPlan::Append { from }`：只 `extend` 新行（1 个 `RowAdded` 事件），已有行索引不变，可见行不重排 → **不卡**。

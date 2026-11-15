@@ -69,6 +69,44 @@ jobs:
           (cd target/release && sha256sum docker-panel >> "$GITHUB_WORKSPACE/checksums.txt")
           cat checksums.txt
 
+      - name: 生成更新清单
+        # 顺序约束见 docs/arch/update-manifest.md §3：必须在「生成校验和」之后，
+        # sha256 只从 checksums.txt 抽取（两份来源分头计算迟早漂移）；
+        # 清单与 checksums.txt 同一批上传，避免出现「清单指向不存在的资产」窗口。
+        run: |
+          set -euo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          deb="docker-panel_${version}_amd64.deb"
+          bin="target/release/docker-panel"
+          sha_of() { awk -v n="$1" '$2 == n {print $1}' checksums.txt; }
+          deb_sha="$(sha_of "$deb")"
+          bin_sha="$(sha_of "docker-panel")"
+          if [ -z "$deb_sha" ] || [ -z "$bin_sha" ]; then
+            echo "::error::checksums.txt 缺少 deb 或裸二进制条目"
+            exit 1
+          fi
+          deb_size="$(stat -c%s "$deb")"
+          bin_size="$(stat -c%s "$bin")"
+          version_code="$(awk -F. '{printf "%d", $1*1000000 + $2*1000 + $3}' <<< "$version")"
+          cat > version.json <<EOF
+          {
+            "schema": 1,
+            "version": "${version}",
+            "version_code": ${version_code},
+            "channel": "stable",
+            "released_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "mandatory": false,
+            "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/${version}",
+            "assets": {
+              "deb": { "name": "${deb}", "size": ${deb_size}, "sha256": "${deb_sha}" },
+              "binary": { "name": "docker-panel", "size": ${bin_size}, "sha256": "${bin_sha}" }
+            }
+          }
+          EOF
+          # 结构自检：清单坏了宁可在发布前失败，也不要让客户端拿到半成品
+          python3 -m json.tool version.json > /dev/null
+          cat version.json
+
       - name: 提取版本更新日志
         run: |
           version="${{ steps.ver.outputs.version }}"
@@ -106,6 +144,7 @@ jobs:
             docker-panel_${{ steps.ver.outputs.version }}_amd64.deb
             target/release/docker-panel
             checksums.txt
+            version.json
             LICENSE
             LICENSING.md
             THIRD-PARTY-NOTICES.md

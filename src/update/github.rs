@@ -1,6 +1,7 @@
 //! GitHub Releases API 客户端（HTTP 走系统 curl，零 TLS 依赖）。
 //!
-//! 只做一件事：把 `releases/latest` 解析成 `RawRelease`。
+//! 更新发现的**第 3 级兜底**（前两级见 `discover`）：把 `releases/latest`
+//! 解析成 `RawRelease`，并提供共用的 `curl_get` / `curl_error`。
 //! 阻塞调用，调用方必须放在 `spawn_blocking` 里。
 
 use std::process::Command;
@@ -8,9 +9,11 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::i18n;
+use crate::models::update::UpdateManifest;
 use crate::update::{command_exists, tail_text, UpdateAsset};
 
-const API_LATEST: &str = "https://api.github.com/repos/pengtang1024/docker-panel/releases/latest";
+pub(crate) const API_LATEST: &str =
+    "https://api.github.com/repos/pengtang1024/docker-panel/releases/latest";
 const USER_AGENT: &str = concat!("docker-panel/", env!("CARGO_PKG_VERSION"));
 
 /// GitHub release 的原始字段（未经本机环境判定）。
@@ -20,19 +23,8 @@ pub struct RawRelease {
     pub notes: String,
     pub page_url: String,
     pub assets: Vec<UpdateAsset>,
-}
-
-/// 拉取最新正式 release（GitHub 的 latest 不返回 draft / prerelease）。
-pub fn fetch_latest() -> Result<RawRelease, String> {
-    let text = curl_get(
-        API_LATEST,
-        20,
-        &[
-            ("Accept", "application/vnd.github+json"),
-            ("X-GitHub-Api-Version", "2022-11-28"),
-        ],
-    )?;
-    parse_release(&text)
+    /// 来源是静态清单时保留原始声明（安装阶段做一致性断言）。
+    pub manifest: Option<UpdateManifest>,
 }
 
 /// 用系统 curl 拉取文本（GitHub API / checksums.txt 等小文件）。
@@ -144,6 +136,7 @@ pub fn parse_release(text: &str) -> Result<RawRelease, String> {
         notes,
         page_url,
         assets,
+        manifest: None,
     })
 }
 

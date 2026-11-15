@@ -206,6 +206,7 @@ docker-panel/
 │   ├── app.slint           # MainWindow：根级 global-shortcuts FocusScope（快捷键）+ 布局组装
 │   ├── overlays.slint      # 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取与清理弹窗 / 自动更新弹窗 / 全局 TipLayer
 │   ├── main-area.slint     # 主列表工作区：SubBar + BatchBar + ListArea
+│   ├── ui-state.slint      # 显示态 global：连接/采样状态 + 计数汇总 + 行模型 + 资源排序（Rust 单写入方）
 │   ├── app-actions.slint   # AppActions global：UI → Rust 的唯一回调入口
 │   ├── theme.slint         # 浅/深双套色板（31 个颜色令牌）+ 字号/间距，theme_mode 三态
 │   ├── material-theme.slint # M3 色板映射：Theme.* → MaterialScheme（@material 的 ScrollView/ListView 跟随应用主题）
@@ -218,10 +219,10 @@ docker-panel/
 │   ├── ledger-tree-row.slint # 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）
 │   ├── ledger-band.slint   # 台账概览带：4 个计数 + CPU 占用 TOP4
 │   ├── ledger-cols.slint   # 台账列宽契约 global（表头与行共用同一组列宽）
-│   ├── image-list.slint    # 镜像表格列表：repo:tag · 大小 · 创建时间（表头可点排序）
-│   ├── network-list.slint  # 网络表格列表：名称 · driver · 子网（表头可点排序）
-│   ├── volume-list.slint   # 卷表格列表：名称 · 大小 · 挂载点（表头可点排序）
-│   ├── components-list.slint # 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格
+│   ├── image-list.slint    # 镜像表格列表（inherits TableShell）：repo:tag · 大小 · 创建时间 + 行内 play/more
+│   ├── network-list.slint  # 网络表格列表（inherits TableShell）：名称 · driver · 子网
+│   ├── volume-list.slint   # 卷表格列表（inherits TableShell）：名称 · 大小 · 挂载点
+│   ├── components-list.slint # 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳
 │   ├── skel.slint          # 骨架屏占位
 │   ├── foot-bar.slint      # 底部 9 项资源概览（含镜像大小，与容器可写层互补）
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
@@ -249,7 +250,9 @@ docker-panel/
 │   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
 │   ├── models.rs           # Msg(+StatsBatch/LogBatch/DockerVersion/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
-│   ├── ui_state.rs         # AppState + 四列表刷新（去重/超时）+ 日志流状态字段 + cleanup_counts + persist
+│   ├── ui_state.rs         # AppState 骨架 + 四列表刷新（去重/超时）+ cleanup_counts + persist
+│   ├── ui_state/log.rs     # 日志面板状态：滚动窗口 + 跟随流账本（14 字段）
+│   ├── ui_state/update.rs  # 自动更新状态：检查结果 / 进度 / 双向 busy 标志
 │   ├── ui_state/follow_state.rs # 日志跟随状态机：单容器 / 分组合并日志的建流、Clear、幂等判定
 │   ├── ui_state/log_sync.rs # 日志窗口裁剪 + UI 行模型同步账（LogSyncPlan：Append / Reset）
 │   ├── ui_state/config_io.rs # AppState ↔ config.json 读写（字段搬运，越界值回落默认）
@@ -257,7 +260,7 @@ docker-panel/
 │   ├── log_status.rs       # 日志流状态提示文案唯一定义处（3 条 i18n key）
 │   ├── render.rs           # CachedModel 差量同步 + 日志行模型 Append/Reset 同步
 │   ├── detail_fmt/         # 抽屉详情格式化：mod（公共 kv/head/format_bytes）+ container / image / netvol
-│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）
+│   ├── ui_rows/            # 行构建：mod（hit_any 搜索）+ containers（容器台账行）/ ledger（概览带）/ compose_tree（台账内联树行 + tests.rs）/ group_totals（分组资源汇总）/ images / netvol（网络/卷）/ sort（三个资源列表共用的「过滤→排序→映射」骨架）
 │   ├── ui_update.rs        # 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_update/drain.rs  # DrainResult：UiFlag 位掩码 + 声明宏生成三份清单与一致性测试
 │   ├── ui_update/df.rs     # /system/df 结果 → AppState / DrainResult（从 ui_update 拆出，满足 R2）

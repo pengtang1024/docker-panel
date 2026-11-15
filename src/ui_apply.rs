@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use crate::detail_fmt::DrawerData;
-use crate::slint_gen::{ContainerRow, LedgerSummary, MainWindow};
+use crate::slint_gen::{ContainerRow, LedgerSummary, MainWindow, UiState};
 use crate::ui_state::SharedState;
 use slint::{ComponentHandle, SharedString};
 
@@ -35,11 +35,12 @@ pub fn apply_container_ledger(
     summary: LedgerSummary,
     visible: (usize, usize),
 ) {
-    ui.set_container_rows(crate::render::containers(rows));
-    ui.set_ledger_summary(summary);
+    ui.global::<UiState>()
+        .set_container_rows(crate::render::containers(rows));
+    ui.global::<UiState>().set_ledger_summary(summary);
     // 筛选栏芯片计数：可见容器集合的分布（与台账行数同口径）
-    ui.set_chip_total(visible.0 as i32);
-    ui.set_chip_running(visible.1 as i32);
+    ui.global::<UiState>().set_chip_total(visible.0 as i32);
+    ui.global::<UiState>().set_chip_running(visible.1 as i32);
 }
 
 /// UI 线程内按当前 AppState 立即重建四个资源列表（搜索/筛选/排序回调的即时反馈）。
@@ -48,11 +49,24 @@ pub fn refresh_lists_now(ui: &MainWindow, s: &crate::ui_state::AppState) {
     // 台账行与概览带同批产出：概览带数字口径 = 当前**可见**的容器集合
     let (rows, summary, visible) = crate::ui_rows::build_container_ledger(s);
     apply_container_ledger(ui, rows, summary, visible);
-    ui.set_image_rows(crate::render::images(crate::ui_rows::build_image_rows(s)));
-    ui.set_network_rows(crate::render::networks(crate::ui_rows::build_network_rows(
-        s,
-    )));
-    ui.set_volume_rows(crate::render::volumes(crate::ui_rows::build_volume_rows(s)));
+    ui.global::<UiState>()
+        .set_image_rows(crate::render::images(crate::ui_rows::build_image_rows(s)));
+    ui.global::<UiState>()
+        .set_network_rows(crate::render::networks(crate::ui_rows::build_network_rows(
+            s,
+        )));
+    ui.global::<UiState>()
+        .set_volume_rows(crate::render::volumes(crate::ui_rows::build_volume_rows(s)));
+}
+
+/// 抽屉打开协议（UI 部分）：打开抽屉并复位 Tab / 合并日志模式。
+///
+/// 「选中资源 → 打开抽屉」的回调统一走这里：三个属性漏写任一项，
+/// 抽屉就会带着上一个对象的 Tab 或 log_only 模式显示。
+pub fn open_drawer(ui: &MainWindow, tab: i32, log_only: bool) {
+    ui.set_drawer_open(true);
+    ui.set_drawer_tab(tab);
+    ui.set_drawer_log_only(log_only);
 }
 
 /// 清空整个日志面板（日志行 + 状态提示）。
@@ -78,7 +92,8 @@ pub fn clear_log_status(ui: &MainWindow) {
 /// （复制日志 / 清空日志 / 复制字段值）—— 这些动作不走 Msg 通道，
 /// 状态文本会一直停在结果上，看起来像卡住。
 pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
-    ui.set_status_text(SharedString::from(text));
+    ui.global::<UiState>()
+        .set_status_text(SharedString::from(text));
     let rt = {
         let Ok(s) = state.lock() else {
             crate::lock::poison("ui_apply");
@@ -93,8 +108,9 @@ pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
         slint::invoke_from_event_loop(move || {
             let Some(ui) = ui_w.upgrade() else { return };
             // 期间被别的消息改过（如新的操作结果 / 错误）就不覆盖
-            if ui.get_status_text().as_str() == owned {
-                ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+            if ui.global::<UiState>().get_status_text().as_str() == owned {
+                ui.global::<UiState>()
+                    .set_status_text(SharedString::from(crate::i18n::t("Ready")));
             }
         })
         .ok();

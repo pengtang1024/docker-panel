@@ -16,7 +16,7 @@ use super::callbacks_container::{spawn_container_op, OpKind};
 use crate::i18n::{t, trf};
 use crate::slint_gen::{AppActions, MainWindow};
 use crate::ui_rows::{group_label, group_members, GroupMember};
-use crate::ui_state::{SelKind, SharedState};
+use crate::ui_state::{SelKind, SharedState, ROWS_CONTAINERS};
 
 /// 绑定内联树回调
 pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
@@ -38,7 +38,7 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 st.compose_collapsed.insert(key);
             }
             // 行模型作废：consumer 手里那批行是旧展开状态建的
-            st.rows_dirty();
+            st.rows_dirty(ROWS_CONTAINERS);
             st.persist();
             crate::ui_rows::build_container_ledger(&st)
         };
@@ -113,18 +113,14 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
             // 抽屉切到「只展示日志」模式：隐藏详情 / 环境 Tab
             // （分组没有单个容器的详情，切过去只会看到上一个容器的残留内容）
             crate::ui_apply::clear_log_panel(&ui);
-            ui.set_drawer_open(true);
-            ui.set_drawer_tab(1);
-            ui.set_drawer_log_only(true);
+            crate::ui_apply::open_drawer(&ui, 1, true);
             ui.set_drawer_title(SharedString::from(label.as_str()));
             ui.set_drawer_sub(SharedString::from(merged.as_str()));
 
             let new_stream = match crate::lock::acquire(&s, "callbacks_compose") {
                 Some(mut st) => {
-                    st.sel = SelKind::Group;
-                    st.sel_key = key.clone();
                     // 切到分组日志：旧缓冲与旧流都属于别的对象，全部作废
-                    st.clear_logs();
+                    st.select(SelKind::Group, key.clone());
                     st.ensure_group_follow(&key, targets)
                 }
                 None => false,

@@ -8,8 +8,8 @@
 
 use slint::{ComponentHandle, Weak};
 
-use crate::slint_gen::{AppActions, MainWindow};
-use crate::ui_state::SharedState;
+use crate::slint_gen::{AppActions, MainWindow, UiState};
+use crate::ui_state::{SharedState, ROWS_IMAGES, ROWS_NETWORKS, ROWS_VOLUMES};
 
 /// 绑定三个资源列表的排序回调
 pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
@@ -30,11 +30,11 @@ fn bind_images(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_images.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_IMAGES);
             st.persist();
             st.sort_images.to_ui()
         };
-        ui.set_sort_images(packed);
+        ui.global::<UiState>().set_sort_images(packed);
         if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }
@@ -53,11 +53,11 @@ fn bind_networks(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_networks.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_NETWORKS);
             st.persist();
             st.sort_networks.to_ui()
         };
-        ui.set_sort_networks(packed);
+        ui.global::<UiState>().set_sort_networks(packed);
         if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }
@@ -76,11 +76,11 @@ fn bind_volumes(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 return;
             };
             st.sort_volumes.pick(f.clamp(0, 2) as u8);
-            st.rows_dirty();
+            st.rows_dirty(ROWS_VOLUMES);
             st.persist();
             st.sort_volumes.to_ui()
         };
-        ui.set_sort_volumes(packed);
+        ui.global::<UiState>().set_sort_volumes(packed);
         if let Some(st) = crate::lock::acquire(&s, "callbacks_sort") {
             crate::ui_apply::refresh_lists_now(&ui, &st);
         }

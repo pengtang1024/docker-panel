@@ -1,7 +1,9 @@
 //! 自动更新：GitHub Releases 检查、下载、校验、安装与重启。
 //!
 //! 分层：
-//!   - `github`：HTTP + JSON（阻塞，调用方 spawn_blocking）
+//!   - `discover`：更新发现三级回退（静态清单两级 → API 兜底）
+//!   - `manifest`：清单解析 + 资产 URL 派生 + 与 checksums.txt 的一致性断言（纯逻辑）
+//!   - `github`：HTTP + JSON（第 3 级兜底；阻塞，调用方 spawn_blocking）
 //!   - `version`：纯逻辑（版本比较 / 资产选择 / checksums 解析）
 //!   - `install`：本机探测 + 下载 + SHA-256 + deb/二进制安装
 //!   - 本文件：任务编排 + Msg 投递 + UI 视图快照
@@ -16,8 +18,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::models::Msg;
 use crate::ui_state::{AppState, SharedState};
 
+pub mod discover;
 pub mod github;
 pub mod install;
+pub mod manifest;
 pub mod markdown;
 pub mod version;
 
@@ -60,16 +64,16 @@ pub struct UpdateView {
 }
 
 pub fn view_snapshot(s: &AppState) -> UpdateView {
-    let info = s.update_info.as_ref();
+    let info = s.update.update_info.as_ref();
     UpdateView {
         latest: info.map(|i| i.version.clone()).unwrap_or_default(),
         notes: info.map(|i| i.notes.clone()).unwrap_or_default(),
-        status: s.update_status.clone(),
-        progress: s.update_progress,
-        available: s.update_available,
+        status: s.update.update_status.clone(),
+        progress: s.update.update_progress,
+        available: s.update.update_available,
         installable: info.map(|i| i.plan.installable()).unwrap_or(false),
-        busy: s.update_busy_ui,
-        restart_needed: s.update_restart_needed,
+        busy: s.update.update_busy_ui,
+        restart_needed: s.update.update_restart_needed,
         reason: info
             .and_then(|i| i.plan.reason)
             .map(|r| crate::i18n::t(r.msgid()))
@@ -95,9 +99,9 @@ pub fn spawn_scheduler(state: &SharedState) {
                     crate::lock::poison("update::spawn_scheduler");
                     return;
                 };
-                s.check_updates
-                    && !s.update_restart_needed
-                    && now_secs() - s.last_update_check >= CHECK_INTERVAL_SECS
+                s.update.check_updates
+                    && !s.update.update_restart_needed
+                    && now_secs() - s.update.last_update_check >= CHECK_INTERVAL_SECS
             };
             if due {
                 spawn_check(&state_t, false);
@@ -114,17 +118,17 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
             crate::lock::poison("update");
             return false;
         };
-        if s.update_busy.swap(true, Ordering::AcqRel) {
+        if s.update.update_busy.swap(true, Ordering::AcqRel) {
             return false;
         }
-        (s.rt.handle().clone(), s.tx.clone(), s.auto_install)
+        (s.rt.handle().clone(), s.tx.clone(), s.update.auto_install)
     };
     let state_t = state.clone();
     let state_for_check = state.clone();
     rt.spawn(async move {
         let tx_task = tx.clone();
         let res = tokio::task::spawn_blocking(move || {
-            let raw = match github::fetch_latest() {
+            let raw = match discover::fetch_release() {
                 Ok(raw) => raw,
                 Err(e) => {
                     let _ = tx_task.send(Msg::UpdateCheckDone(manual, false, Err(e)));
@@ -142,7 +146,7 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
             // 读取检查完成瞬间的开关（检查期间用户可能关掉自动安装）
             let auto_now = state_for_check
                 .lock()
-                .map(|s| s.auto_install)
+                .map(|s| s.update.auto_install)
                 .unwrap_or_else(|_| {
                     crate::lock::poison("update::check");
                     auto_install
@@ -163,7 +167,7 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
             ));
         }
         if let Some(s) = crate::lock::acquire(&state_t, "update") {
-            s.update_busy.store(false, Ordering::Release);
+            s.update.update_busy.store(false, Ordering::Release);
         }
     });
     true
@@ -176,7 +180,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
             crate::lock::poison("update");
             return false;
         };
-        s.update_info.clone()
+        s.update.update_info.clone()
     };
     let Some(info) = info else {
         let tx = {
@@ -198,7 +202,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
             crate::lock::poison("update");
             return false;
         };
-        if s.update_busy.swap(true, Ordering::AcqRel) {
+        if s.update.update_busy.swap(true, Ordering::AcqRel) {
             return false;
         }
         (s.rt.handle().clone(), s.tx.clone())
@@ -206,7 +210,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
 
     if !version::is_newer(&info.version, CURRENT_VERSION) || !info.plan.installable() {
         if let Some(s) = crate::lock::acquire(state, "update::spawn_install") {
-            s.update_busy.store(false, Ordering::Release);
+            s.update.update_busy.store(false, Ordering::Release);
         }
         let reason = info
             .plan
@@ -231,7 +235,7 @@ pub fn spawn_install(state: &SharedState) -> bool {
             ));
         }
         if let Some(s) = crate::lock::acquire(&state_t, "update") {
-            s.update_busy.store(false, Ordering::Release);
+            s.update.update_busy.store(false, Ordering::Release);
         }
     });
     true
@@ -277,6 +281,7 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
         page_url: raw.page_url,
         assets: raw.assets,
         plan,
+        manifest: raw.manifest,
     })
 }
 

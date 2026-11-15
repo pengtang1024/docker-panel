@@ -20,7 +20,9 @@ use slint::{invoke_from_event_loop, SharedString, Weak};
 
 use crate::models::Msg;
 use crate::slint_gen::*;
-use crate::ui_state::{LogSyncPlan, SharedState};
+use crate::ui_state::{
+    LogSyncPlan, SharedState, ROWS_CONTAINERS, ROWS_IMAGES, ROWS_NETWORKS, ROWS_VOLUMES,
+};
 use crate::ui_update::{DrainResult, UiFlag};
 
 mod throttle;
@@ -118,10 +120,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     // 日志行同步：模型是窗口的镜像 —— 能追加就追加（已有行索引不变，
     // 可见行不必重排，是日志流不卡的关键）；窗口裁剪过前段才整体重建。
     let log_sync = if res.is_set(UiFlag::LogsChanged) {
-        let epoch = s.log_epoch.load(Ordering::Acquire);
+        let epoch = s.log.log_epoch.load(Ordering::Acquire);
         let action = match s.log_sync_plan() {
             LogSyncPlan::Append { from } => {
-                let rows: Vec<LogRow> = s.logs[from..]
+                let rows: Vec<LogRow> = s.log.logs[from..]
                     .iter()
                     .map(|l| LogRow {
                         text: SharedString::from(l.as_str()),
@@ -131,6 +133,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             }
             LogSyncPlan::Reset => {
                 let rows: Vec<LogRow> = s
+                    .log
                     .logs
                     .iter()
                     .map(|l| LogRow {
@@ -141,7 +144,7 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
             }
         };
         s.commit_log_sync();
-        Some((action, s.log_epoch.clone(), epoch))
+        Some((action, s.log.log_epoch.clone(), epoch))
     } else {
         None
     };
@@ -171,10 +174,11 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let disk_total: u64 = s.containers.iter().map(|c| c.size_rw).sum();
     // 镜像总占用（底栏「镜像大小」）：全部镜像 size 之和，与容器可写层互补
     let image_total: i64 = s.images.iter().map(|i| i.size).sum();
-    // 行模型 epoch：排序/筛选/搜索变更时回调会重建行并递增 epoch。
-    // 这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
-    // 落地就会让列表顺序与排序箭头打架，故应用前比对 epoch，不一致就丢弃。
-    let rows_epoch = s.rows_epoch.load(Ordering::Acquire);
+    // 行模型代际（per-list）：排序/筛选/搜索变更时回调会重建行并递增对应列表
+    // 的代际。这批行是锁内按当时条件建的，锁外才写 UI —— 期间条件若被改过，
+    // 落地就会让列表顺序与排序箭头打架，故应用前逐列表比对，不一致就丢弃。
+    // 搜索只作废容器 + 镜像；网络 / 卷的合法批次继续上屏。
+    let rows_snapshot = s.rows_epoch.snapshot();
     let rows_epoch_ref = s.rows_epoch.clone();
     let rt_h = s.rt.handle().clone();
     // 更新弹窗：检查完成 / 进度 / 安装完成时取一次快照（锁内只读，锁外灌 UI）
@@ -189,23 +193,32 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
     let ui_w_for_toast = ui_w.clone();
     invoke_from_event_loop(move || {
         let Some(ui) = ui_w.upgrade() else { return };
-        ui.set_loading(false);
+        ui.global::<UiState>().set_loading(false);
         // 走 render::*（thread_local 缓存模型就地同步），只 set 变化的列表
-        // epoch 变了 = 排序/筛选/搜索条件已被回调改过，这批行是旧条件建的
-        // （回调已用新条件重建并应用），丢弃以免顺序与箭头不一致
-        if rows_epoch_ref.load(Ordering::Acquire) == rows_epoch {
+        // 每个列表独立判定代际：变了 = 条件已被回调改过（回调已用新条件重建并
+        // 应用），丢弃这批旧行以免顺序与箭头不一致
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_CONTAINERS) {
             if let Some((rows, summary, visible)) = container_ledger {
                 // 台账上屏统一走 ui_apply（与回调路径同一编排点）
                 crate::ui_apply::apply_container_ledger(&ui, rows, summary, visible);
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_IMAGES) {
             if let Some(rows) = image_rows {
-                ui.set_image_rows(crate::render::images(rows));
+                ui.global::<UiState>()
+                    .set_image_rows(crate::render::images(rows));
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_NETWORKS) {
             if let Some(rows) = network_rows {
-                ui.set_network_rows(crate::render::networks(rows));
+                ui.global::<UiState>()
+                    .set_network_rows(crate::render::networks(rows));
             }
+        }
+        if rows_epoch_ref.unchanged(&rows_snapshot, ROWS_VOLUMES) {
             if let Some(rows) = volume_rows {
-                ui.set_volume_rows(crate::render::volumes(rows));
+                ui.global::<UiState>()
+                    .set_volume_rows(crate::render::volumes(rows));
             }
         }
         if let Some((action, epoch_ref, epoch)) = log_sync {
@@ -214,41 +227,47 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                 ui.set_log_rows(crate::render::logs_sync(action));
             }
         }
-        ui.set_batch_count(batch_count as i32);
-        ui.set_total_containers(containers_len as i32);
-        ui.set_running_containers(running_count as i32);
-        ui.set_total_images(images_len as i32);
-        ui.set_total_networks(networks_len as i32);
-        ui.set_total_volumes(volumes_len as i32);
+        ui.global::<UiState>().set_batch_count(batch_count as i32);
+        ui.global::<UiState>()
+            .set_total_containers(containers_len as i32);
+        ui.global::<UiState>()
+            .set_running_containers(running_count as i32);
+        ui.global::<UiState>().set_total_images(images_len as i32);
+        ui.global::<UiState>()
+            .set_total_networks(networks_len as i32);
+        ui.global::<UiState>().set_total_volumes(volumes_len as i32);
         // 底部状态栏资源汇总（此前这三个属性从未被写入 → 恒显示 0% / 0MB）
-        ui.set_cpu_total(SharedString::from(format!("{cpu_total:.1}%")));
-        ui.set_mem_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            mem_total,
-        )));
-        ui.set_disk_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            disk_total,
-        )));
-        ui.set_image_total(SharedString::from(crate::detail_fmt::format_bytes_compact(
-            image_total.unsigned_abs(),
-        )));
+        ui.global::<UiState>()
+            .set_cpu_total(SharedString::from(format!("{cpu_total:.1}%")));
+        ui.global::<UiState>().set_mem_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(mem_total),
+        ));
+        ui.global::<UiState>().set_disk_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(disk_total),
+        ));
+        ui.global::<UiState>().set_image_total(SharedString::from(
+            crate::detail_fmt::format_bytes_compact(image_total.unsigned_abs()),
+        ));
         if let Some(v) = res.docker_ok {
-            ui.set_docker_ok(v);
+            ui.global::<UiState>().set_docker_ok(v);
         }
         // 采样过期提示：连续多轮取不到 stats / 磁盘占用时才亮，恢复后自动熄灭
         if let Some(v) = res.stats_stale {
-            ui.set_stats_stale(v);
+            ui.global::<UiState>().set_stats_stale(v);
         }
         if let Some(v) = res.disk_stale {
-            ui.set_disk_stale(v);
+            ui.global::<UiState>().set_disk_stale(v);
         }
         if let Some(ref text) = res.status_text {
-            ui.set_status_text(SharedString::from(text.as_str()));
+            ui.global::<UiState>()
+                .set_status_text(SharedString::from(text.as_str()));
         }
         if let Some(ref text) = res.log_status {
             ui.set_log_status(SharedString::from(text.as_str()));
         }
         if let Some(ref v) = res.docker_version {
-            ui.set_docker_version(SharedString::from(v.as_str()));
+            ui.global::<UiState>()
+                .set_docker_version(SharedString::from(v.as_str()));
         }
         if res.is_set(UiFlag::ResetPullBusy) {
             ui.set_pull_busy(false);
@@ -284,7 +303,8 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                     let Some(ui) = ui_weak_t.upgrade() else {
                         return;
                     };
-                    ui.set_status_text(SharedString::from(crate::i18n::t("Ready")));
+                    ui.global::<UiState>()
+                        .set_status_text(SharedString::from(crate::i18n::t("Ready")));
                 })
                 .ok();
             });

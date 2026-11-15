@@ -58,6 +58,37 @@ impl InstallPlan {
     }
 }
 
+/// 静态清单（`version.json`）里的单个资产声明。
+///
+/// **不可信**：`name` 用于派生下载 URL，`sha256` / `size` 只能用来与 Release 的
+/// `checksums.txt` 交叉核对，绝不能替代它（见 docs/arch/update-manifest.md §7）。
+#[derive(Debug, Clone)]
+pub struct ManifestAsset {
+    pub name: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+/// 静态更新清单。只当「版本号广播」用：资产 URL 由 `version` 派生，
+/// 下载完整性仍由 `checksums.txt` 决定。
+#[derive(Debug, Clone)]
+pub struct UpdateManifest {
+    pub version: String,
+    pub notes_url: String,
+    pub deb: Option<ManifestAsset>,
+    pub binary: Option<ManifestAsset>,
+}
+
+impl UpdateManifest {
+    /// 按资产名找清单里的声明（deb / 裸二进制）。
+    pub fn asset_named(&self, name: &str) -> Option<&ManifestAsset> {
+        [self.deb.as_ref(), self.binary.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|a| a.name == name)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {
     pub version: String,
@@ -65,4 +96,6 @@ pub struct UpdateInfo {
     pub page_url: String,
     pub assets: Vec<UpdateAsset>,
     pub plan: InstallPlan,
+    /// 来源是静态清单时保留原始声明，安装阶段用它做一致性断言。
+    pub manifest: Option<UpdateManifest>,
 }

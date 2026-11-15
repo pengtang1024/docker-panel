@@ -49,6 +49,23 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 
 任何文件去除头部与注释后，**正文内容超过 300 行必须按职责拆分**（头部、注释均不计入行数统计）。此限制适用于源码文件与文档，单一文件承担过多职责会导致维护困难与协作冲突。提交前需审查文件长度，若超限应拆分为独立模块。
 
+## ⚠️ 硬约束：基准仓库的破坏性操作必须先取得确认
+
+**GitHub 是基准，Gitee 是镜像。** 镜像不一致是可接受的现状，不构成动基准的理由。
+
+以下操作在**任何情况下**都必须先逐项说明影响并取得用户明确同意，禁止以「顺手」「为了让两站一致」「某个任务需要」作为理由自行执行：
+
+| 操作 | 风险 |
+| --- | --- |
+| 删除 GitHub Release / Release 资产 / tag ref | immutable release 会把 tag 名锁成墓碑，删掉后同名 ref **永久无法重建**（实测 `tag_name was used by an immutable release`） |
+| 改写历史（`filter-branch` / `filter-repo` / `commit --amend` 批量改） | 不可逆；未引用对象会被 GC |
+| 对 `develop` / `master` 强推（`--force`、`--force-with-lease`） | 覆盖他人提交 |
+| 修改仓库 ruleset / 分支保护 / immutable releases 设置 | 影响所有协作者与 CI |
+
+遇到保护机制（`repository rule violations`、`Cannot update this protected ref`、`Cannot upload assets to an immutable release`）时，**停止并报告**，不要通过删除对象来绕过保护——那正是上面这些不可恢复事故的来源。
+
+现状护栏（2026-11-16 起）：GitHub ruleset `protect-release-tags`（禁 tag 删除 / 更新 / 非快进）与 `protect-main-branches`（禁 develop / master 删除 / 非快进）；`release.yml` 使用 immutable releases，发布后资产不可补传。
+
 ## 规则地图与红线约束（外部配置层注入）
 
 > 行为规则的权威定义在独立配置层 [docs/agents-rules.md](docs/agents-rules.md)（规则全文 + 四阶段门禁 + 冲突记录），本文件只保留**规则地图**与**红线摘要**，规则与执行主体解耦。规则间冲突按 R3（架构优先）裁决。

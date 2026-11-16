@@ -11,8 +11,10 @@ use crate::i18n;
 use crate::update::{version, InstallEnv, InstallKind, UpdateInfo};
 
 mod download;
+mod managed;
 
 pub use download::cache_dir;
+pub use managed::{launcher_path, runtime_root};
 
 /// 探测本机安装环境（只读，不改文件）。
 pub fn detect_env(exe: &Path) -> InstallEnv {
@@ -23,6 +25,7 @@ pub fn detect_env(exe: &Path) -> InstallEnv {
         dpkg_managed: dpkg_managed(exe),
         pkexec_available: crate::update::command_exists("pkexec"),
         exe_dir_writable: exe.parent().map(dir_writable).unwrap_or(false),
+        runtime_dir_writable: ensure_dir_writable(&runtime_root()),
     }
 }
 
@@ -100,10 +103,25 @@ fn install_with(
     }
 
     progress(100, i18n::t("Installing update..."));
+    let root = runtime_root();
     let result = match info.plan.kind {
         // 静默路径：验签 → 原子自替换。全程不需要任何特权，也就不需要授权。
         InstallKind::Binary => {
-            verify(info, &target, &asset.name).and_then(|_| install_binary(&target, exe))
+            if managed::managed_install(exe, &root) {
+                // 启动器布局：落到版本目录 + 切 current（启动器启动时再独立复核）。
+                // checksums.txt.sig 不在清单里，按「checksums.txt 资产 URL + .sig」取。
+                install_managed(
+                    info,
+                    &target,
+                    &asset.name,
+                    &checksums,
+                    checksums_asset,
+                    &root,
+                    verify,
+                )
+            } else {
+                verify(info, &target, &asset.name).and_then(|_| install_binary(&target, exe))
+            }
         }
         // 系统级安装目录不可写时才走到这里：一次升级一次 polkit 授权。
         InstallKind::Deb => verify(info, &target, &asset.name).and_then(|_| install_deb(&target)),
@@ -166,7 +184,21 @@ const RELAUNCH_DELAY_SECS: u64 = 2;
 /// （旧进程还要 join 后台线程、drop tokio runtime）。launcher 只 sleep 一次就 `exec`，
 /// 不产生重试循环 —— 锁被别的实例长期持有时新进程立刻退出，不会堆积进程。
 pub fn restart_detached() -> Result<(), String> {
-    let exe = current_exe_path()?;
+    // 启动器布局（deb 种子 / 用户副本）：重启必须再走启动器，它才会挑到刚装的那一版。
+    // 直接 exec 当前 exe 会回到旧路径（种子或 `(deleted)` 的旧 inode）。
+    let root = runtime_root();
+    let exe = if managed::managed_install(&current_exe_path()?, &root) {
+        let launcher = launcher_path();
+        if !launcher.is_file() {
+            return Err(i18n::trf(
+                "Failed to restart application: {0}",
+                &[&format!("launcher not found: {}", launcher.display())],
+            ));
+        }
+        launcher
+    } else {
+        current_exe_path()?
+    };
     launcher_command(&exe, RELAUNCH_DELAY_SECS)
         .spawn()
         .map(|_| ())
@@ -204,6 +236,14 @@ fn dpkg_managed(exe: &Path) -> bool {
         return false;
     };
     out.status.success() && String::from_utf8_lossy(&out.stdout).contains("docker-panel")
+}
+
+/// 确保目录存在且可写（不存在则尝试创建；失败视为不可写）。
+fn ensure_dir_writable(dir: &Path) -> bool {
+    if fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    dir_writable(dir)
 }
 
 fn dir_writable(dir: &Path) -> bool {
@@ -251,6 +291,24 @@ fn verify_signed_artifact(info: &UpdateInfo, file: &Path, name: &str) -> Result<
     let actual = download::sha256_file(file)?;
     crate::update::manifest::assert_asset_sha(&manifest, name, &actual)
         .map_err(|_| i18n::t("Update manifest does not match the package"))
+}
+
+/// 启动器布局的安装：取 `checksums.txt.sig` → 用内置公钥验签 → 清单验签 → 落版本目录。
+fn install_managed(
+    info: &UpdateInfo,
+    target: &Path,
+    asset_name: &str,
+    checksums: &str,
+    checksums_asset: &crate::update::UpdateAsset,
+    root: &Path,
+    verify: &dyn Fn(&UpdateInfo, &Path, &str) -> Result<(), String>,
+) -> Result<(), String> {
+    let sig_url = format!("{}.sig", checksums_asset.url);
+    let signature = download::fetch_text(&sig_url)?;
+    crate::signature::verify_checksums_signature(checksums, &signature)
+        .map_err(|_| i18n::t("Release checksums.txt signature is invalid"))?;
+    verify(info, target, asset_name)?;
+    managed::install(&info.version, target, checksums, &signature, root)
 }
 
 /// 安装 deb：`pkexec dpkg -i`（验签由调用方在此之前完成）。

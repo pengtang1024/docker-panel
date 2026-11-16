@@ -953,10 +953,11 @@ dependencies = [
 
 [[package]]
 name = "docker-panel"
-version = "0.7.19"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "arboard",
+ "base64 0.22.1",
  "bollard",
  "ed25519-dalek",
  "futures",
@@ -966,6 +967,17 @@ dependencies = [
  "slint",
  "slint-build",
  "tokio",
+]
+
+[[package]]
+name = "docker-panel-launcher"
+version = "0.8.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "libc",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

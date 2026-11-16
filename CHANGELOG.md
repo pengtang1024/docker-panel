@@ -6,6 +6,33 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.8.0] - 2026-11-17
+
+### 新增
+
+- **deb 安装也能静默升级：`/usr/bin/docker-panel` 变成验签启动器，运行体挪到用户目录**。此前只有装在 `~/.local/bin` 的用户能免授权升级，deb（`/usr/bin`）用户每次升级都要 `pkexec` 弹一次授权。现在：① deb 里的 `/usr/bin/docker-panel` 是**启动器**（root 所有、非 setuid、无 capabilities），真正的运行体放在 `/usr/lib/docker-panel/seed/`；② 更新落到 `~/.local/opt/docker-panel/versions/<version>/`（运行体 + `version` + `checksums.txt` + `checksums.txt.sig`），再原子替换 `current` 软链；③ 启动器在「用户副本」与「deb 种子」之间挑**版本更高且通过校验**的那份 `execveat` 起来——用户副本必须验签（`checksums.txt` 签名 + 运行体 SHA-256），种子按 dpkg 的 root 属主信任（它的签名要到发布前才生成，打不进 deb）。任何一步不过都回落到种子，不会跑半个新版本。
+- **`packaging/release-signing.pub`：公钥清单成为唯一信任锚**（base64 行、支持轮换），应用（`src/signature.rs`）与启动器（`launcher/`）编译期读同一个文件，不再各存一份十六进制常量。
+
+### 安全
+
+- **签名私钥不再进入 CI：流水线只产草稿，签名与发布由维护者离线完成**。0.7.19 把私钥放进
+  GitHub Actions secret，等于把「谁能发布更新」交给 CI 供应链——构建机、依赖、Action 任何一环
+  被攻破都能签出**能通过客户端校验**的更新包。现在：CI 只构建草稿 Release（8 个构建产物）并
+  校验齐全，然后停下（草稿对用户不可见）；维护者在本机跑 `scripts/sign-release.sh <version>`
+  离线签名 `version.json` 与 `checksums.txt`、补传两个 `.sig`、才 `draft=false` 发布并同步
+  `master` 的清单。CI 被攻破最多改草稿，签不出能过校验的清单。
+- **内置公钥改为可轮换列表**（`src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX`）：验签逐个尝试，
+  任一通过即接受，因此换钥不必先发过渡版本；坏条目跳过而不拖垮整条链（单测覆盖）。
+- **`checksums.txt` 也签名**（`checksums.txt.sig`）：手工下载 deb 的用户可以不信任 HTTPS，
+  用 `openssl pkeyutl -verify` 直接复核校验和清单。
+
+### 新增
+
+- `scripts/sign-release.sh`：离线签名 → 补传 → 发布 → 同步 `master` 清单 → 刷 jsDelivr。
+- `scripts/verify-release.sh`：独立复核（签名、哈希、资产数量），只需公钥。
+- `scripts/check-release-guards.sh`：新增护栏——`release.yml` 里不得出现私钥或签名动作，
+  发布动作只允许出现在签名脚本里。
+
 ## [0.7.19] - 2026-11-17
 
 ### 新增
@@ -483,7 +510,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...HEAD
+[0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...HEAD
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17

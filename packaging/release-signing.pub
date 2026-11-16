@@ -1,0 +1,10 @@
+# docker-panel 发布签名公钥（Ed25519，raw 32 字节的 base64）
+#
+# 唯一信任锚：私钥离线保管，不进仓库、不进 CI、不进 GitHub Secret。
+# 应用与启动器用这里的公钥对 Release 的 `version.json` / `checksums.txt` 验签，
+# 验不过就拒绝安装或启动。公钥指纹（hex）：
+#   39f7d9d80fc007cba7f34f7d5155b0107458b64cb6653565298662c4c5365eae
+#
+# 轮换流程：新公钥先追加到本文件并随某个版本发布（老客户端能验新包），
+# 至少保留一个版本后再删掉旧行。`#` 开头为注释，空行忽略。
+OffZ2A/AB8un8099UVWwEHRYtky2ZTVlKYZixMU2Xq4=

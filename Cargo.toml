@@ -1,6 +1,10 @@
+[workspace]
+members = ["launcher"]
+resolver = "2"
+
 [package]
 name = "docker-panel"
-version = "0.7.19"
+version = "0.8.0"
 edition = "2021"
 rust-version = "1.99"
 description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"
@@ -34,6 +38,8 @@ sha2 = "0.10"
 
 # 更新清单 Ed25519 验签（App 与特权助手 docker-panel-update 共用 src/signature.rs）
 ed25519-dalek = "2"
+# 公钥清单是 base64 行（host + launcher 共用同一份文件）
+base64 = "0.22"
 
 [build-dependencies]
 slint-build = "1.18.1"

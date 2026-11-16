@@ -10,6 +10,10 @@
 
 ### 变更
 
+- **发布流水线改为「建 draft → 上传资产 → 校验齐全 → 发布」**：仓库开启了 immutable releases，已发布的 Release 拒绝任何补传（`422 Cannot upload assets to an immutable release`），原来的 `draft: false` + `files:` 一步到位写法在下一次发版时必然失败，且失败时 Release 已对外可见、无法补救。现在先以 draft 建好并上传 8 个资产，逐个核对齐全后才 `draft=false`，最后回读 `draft` / `immutable` 状态留痕。
+- **新增 `scripts/sync-gitee-release.py`**：Gitee 没有 CI，每次发版都要手工补齐 tag 与 Release；脚本按 GitHub Release 的 name / body / 资产清单幂等同步（本地缓存优先、缺失回 GitHub 直链取），上传后回读核对资产名。两平台是并列的正式发布渠道，不是主从。
+- **新增 `scripts/check-release-guards.sh`**：一条命令核对护栏是否还在——工作流的 draft → 发布顺序、发布资产清单、发版文档的双平台与不可变处置、GitHub 侧 immutable 开关与两个 ruleset（配 `GH_TOKEN` 时）。发版前跑一次，避免护栏被悄悄改掉。
+- **`docs/git-flow.md` 新增「发布之后：双平台补齐与核对」与「发布产物不可变：出了错怎么办」**：写清手工同步命令、两平台资产核对方法，以及「发了错的版本只能发 patch 版本、禁止删已发布 Release 重发」的原因（删掉会让该 tag 名永久不可重建，只能等 GitHub Support 清除镜像记录）。
 - **0.7.15 补齐到 Gitee 正式发布**：tag 与 Release（8 个资产，与 GitHub 逐字节一致，`checksums.txt` 校验通过）此前只在 GitHub 侧，两平台口径不一致；现已同步。同步脚本为 `.tmp-wiki/sync_release_one.py`（单版本、幂等、上传后回读核对资产名）。
 - **历史版本（0.4.3 – 0.7.14）的下载入口临时指向 Gitee**：GitHub 侧这些 Release 与 tag 受 immutable releases 的 tag 记录限制暂不可重建（详见 `docs/troubleshooting.md` 的下载排障一节），恢复前 README 与 Wiki Install 明确指到 Gitee，避免用户点进 404。
 

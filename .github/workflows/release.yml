@@ -130,11 +130,15 @@ jobs:
       - name: 打包许可全文
         run: tar -czf licenses.tar.gz licenses
 
-      - name: 发布 GitHub Release
+      # ⚠️ immutable releases：**已发布**的 Release 一律拒绝补传资产
+      # （422 Cannot upload assets to an immutable release）。所以顺序必须是
+      # 「建 draft → 上传 8 个资产 → 再 draft=false」，一步到位（draft: false + files）
+      # 在开启 immutable 的仓库里必失败，且失败时 Release 已经对外可见、无法补救。
+      - name: 创建草稿 Release 并上传资产
         uses: softprops/action-gh-release@v3
         with:
           name: docker-panel ${{ steps.ver.outputs.version }}
-          draft: false
+          draft: true
           # body_path = CHANGELOG.md 里该版本的完整段落（发版页面显示真正的更新日志，
           # 而不是 GitHub 自动生成的 "**Full Changelog**: <compare 链接>"——本仓库没有 PR，
           # 自动生成基本是空的）。generate_release_notes 保留，GitHub 会把 compare 链接追加在后面。
@@ -150,8 +154,34 @@ jobs:
             THIRD-PARTY-NOTICES.md
             licenses.tar.gz
 
+      - name: 发布 Release（draft → published）并自检
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.ver.outputs.version }}"
+          api="repos/${{ github.repository }}/releases/tags/${tag}"
+          # 资产不全就不发布：半截 Release 比没有更糟（用户下到 404 的资产链接，
+          # 而 immutable 下补传又被拒 → 只能发新版本补救）。
+          assets="$(gh api "$api" --jq '.assets[].name' | sort | tr '\n' ' ')"
+          count="$(printf '%s' "$assets" | wc -w)"
+          echo "draft 资产（${count}）：${assets}"
+          for f in docker-panel_${tag}_amd64.deb docker-panel checksums.txt version.json \
+                   LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
+            case " $assets " in
+              *" $f "*) ;;
+              *) echo "::error::draft Release 缺少资产 $f，放弃发布"; exit 1 ;;
+            esac
+          done
+          rel_id="$(gh api "$api" --jq '.id')"
+          gh api -X PATCH "repos/${{ github.repository }}/releases/${rel_id}" -F draft=false >/dev/null
+          # 回读确认真的发布了（不是 draft），并记录 immutable 状态供排查
+          read -r draft immutable <<<"$(gh api "$api" --jq '[.draft, .immutable] | @tsv' | tr '\t' ' ')"
+          echo "已发布 ${tag}：draft=${draft} immutable=${immutable}"
+          [ "$draft" = "false" ] || { echo "::error::Release ${tag} 仍是 draft"; exit 1; }
+
       # 第二级备源（jsDelivr `@master/version.json`）要求仓库里真的有这份文件。
-      # 顺序保证：只有上一步「发布 GitHub Release」成功（资产已全部上传）才会走到这里，
+      # 顺序保证：只有上一步「发布 Release（draft → published）」成功（资产已全部上传且已发布）才会走到这里，
       # 因此提交到 master 的清单一定指向已存在的 Release 与资产（见 docs/arch/update-manifest.md §3）。
       # 只提交 version.json：构建产物都是未跟踪文件，这里只点名它；
       # [skip ci] 让 push 到 master 不再触发 Quality / License（Release 只由 tag 触发）。

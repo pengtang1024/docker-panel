@@ -114,7 +114,8 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | 功能增删 / 方向调整 | `docs/roadmap.md`（当前阶段与候选方向）+ `README.md` 已知限制 |
 | 新增文档文件 | README 文档导航 + 项目结构树 + 本文件 §6.2 清单；新文档必须按 [文档风格与排版规范](style-guide.md) 写 |
 | 文档排版 / 结构改造 | `docs/style-guide.md` 是唯一规范；改造后按其中 §10 自检清单过一遍，两站渲染各抽查一次 |
-| 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
+| 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明；**Gitee 侧必须用 `scripts/sync-gitee-release.py` 补齐 tag 与 Release**（两平台并列，无主从） |
+| 改发版流程 / 发布脚本 / `.github/workflows/release.yml` | `docs/git-flow.md` §3（双平台发布、不可变产物处置）+ `AGENTS.md` 发版流程段；**禁止把发布步骤改回一步到位的 `draft: false` + `files:`**（immutable 下必失败） |
 
 > 表中所有 `Wiki` 均指 **GitHub Wiki 与 Gitee Wiki 两份**，同一变更必须两处都改（见 §6.2 / §6.3），避免两站内容漂移。
 

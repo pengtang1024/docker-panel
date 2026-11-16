@@ -95,6 +95,57 @@ git push origin refs/tags/0.1.1
 scripts/check-version.sh            # 比较三处版本 + CHANGELOG 段落 + 当前 tag
 ```
 
+### 发布之后：双平台补齐与核对
+
+GitHub 由 tag 触发的流水线自动发布；**Gitee 没有 CI，必须手工补一次**，否则会出现「GitHub 有新版本、Gitee 停在上一个版本」，用户点 Gitee 下载链接就是 404。
+
+```bash
+# 1. 先把 tag 推到 Gitee（tag 不推则 Gitee 无法建 Release）
+git push gitee refs/tags/X.Y.Z
+
+# 2. 把 GitHub Release 同步成 Gitee Release（幂等，可重复执行）
+export GITEE_TOKEN=<gitee 个人令牌，projects 权限>
+scripts/sync-gitee-release.py X.Y.Z --dry-run   # 先看计划
+scripts/sync-gitee-release.py X.Y.Z             # 实际执行
+```
+
+脚本会读 GitHub 的 `name` / `body` / 资产清单，逐个下载再上传到 Gitee，最后回读核对资产名（Gitee 额外附带 `<tag>.tar.gz` / `<tag>.zip` 两个源码包，属正常）。退出码非 0 表示有资产缺失，别当成功。
+
+发版前先确认护栏还在（有人改过工作流或仓库设置时尤其要跑）：
+
+```bash
+scripts/check-release-guards.sh              # 离线核对工作流与文档
+GH_TOKEN=<token> scripts/check-release-guards.sh   # 额外核对 immutable 与两个 ruleset
+```
+
+**发版后必做的两个核对**（两平台都要看，不是只看 GitHub）：
+
+```bash
+# 资产名与校验和一致
+gh release view X.Y.Z --json assets -q '.assets[].name' | sort
+curl -s "https://gitee.com/api/v5/repos/pengtang1024/docker-panel/releases/tags/X.Y.Z?access_token=$GITEE_TOKEN" \
+  | python3 -c 'import json,sys; print("\n".join(sorted(a["name"] for a in json.load(sys.stdin)["assets"])))'
+
+# 抽一个资产验字节（deb 的 sha256 应与同 Release 的 checksums.txt 一致）
+curl -sL -o /tmp/x.deb https://gitee.com/pengtang1024/docker-panel/releases/download/X.Y.Z/docker-panel_X.Y.Z_amd64.deb
+sha256sum /tmp/x.deb
+```
+
+### 发布产物不可变：出了错怎么办
+
+仓库开启了 GitHub 的 **immutable releases**：Release 一旦发布（`draft: false`），资产不可增删改，tag 也不可再生。这不是障碍而是保护——但它把「出错」的处理方式定死了：
+
+| 情况 | 正确做法 | 禁止做法 |
+| --- | --- | --- |
+| 资产传错 / 传漏 | 发一个 **patch 版本**（X.Y.Z+1），在 CHANGELOG 写清原因 | 删除 Release 重发同版本号 |
+| 更新日志写错 | 用 `gh release edit` 改 body（body 不在不可变范围内，可改） | 删除重建 |
+| tag 指错 commit | 发新版本；必要时在**未发布**的 draft 阶段修复 | 强推 / 删除 tag 重建 |
+| 版本号已经发错（如核心功能坏的版本） | 立即发 patch 版本并在 Release 说明里提示升级 | 让用户“重装旧版本” |
+
+**删已发布的 Release 会导致该 tag 名永久不可重建**：GitHub 会记录 `tag_name was used by an immutable release`，之后任何创建同名 ref 的路径都返回 422，仓库层面的 immutable 开关关掉也不解除，只能等 GitHub Support 清除记录（2026-11-16 的 0.4.3–0.7.14 就是这么丢的）。
+
+流水线已按此顺序实装（`.github/workflows/release.yml`）：**建 draft → 上传 8 个资产 → 校验齐全 → `draft=false` 发布**。不要改回 `draft: false` + `files:` 的一步到位写法，那在 immutable 下必失败，而且失败时 Release 已经对外可见。
+
 ## 4. 线上紧急修复
 
 hotfix 同样产出补丁版本，**同样要写版本更新日志**——热修不是"偷偷发个补丁"，

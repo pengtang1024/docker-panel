@@ -69,6 +69,7 @@ fn df_rebuilds_drawer_for_selected_stopped_container() {
         "已停止容器没有 stats 推送，df 到达必须重建抽屉磁盘行"
     );
     assert_eq!(s.containers[0].size_rw, 4096);
+    assert_eq!(s.containers[0].disk_used, 4096);
 
     // 卷占用到达同样要刷新抽屉（磁盘 = 可写层 + 挂载卷）
     s.containers[0].volumes = vec!["data".into()];
@@ -76,7 +77,8 @@ fn df_rebuilds_drawer_for_selected_stopped_container() {
         .unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert!(res.is_set(UiFlag::DrawerChanged));
-    assert_eq!(s.containers[0].size_rw, 4096 + 39_000);
+    assert_eq!(s.containers[0].size_rw, 4096);
+    assert_eq!(s.containers[0].disk_used, 4096 + 39_000);
 }
 
 #[test]

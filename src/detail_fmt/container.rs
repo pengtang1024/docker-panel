@@ -34,7 +34,7 @@ fn detail_rows(d: &ContainerDetail, c: Option<&ContainerInfo>) -> Vec<DetailPair
         kv("ID", or_dash(&d.id), true),
         kv(
             &t("Disk"),
-            c.map(|c| crate::format::format_bytes(c.size_rw))
+            c.map(|c| crate::format::format_bytes(c.disk_used))
                 .filter(|s| s != "0 B")
                 .unwrap_or_else(dash),
             true,

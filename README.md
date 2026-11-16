@@ -199,7 +199,7 @@ cargo check --all-targets
 5. `Ctrl+1`~`Ctrl+4` 切换 容器 / 镜像 / 网络 / 卷 视图；`Esc` 关闭抽屉 / 弹窗或退出多选。
 6. 容器视图点分组带的箭头或分组名展开 / 收起 Compose 分组；分组带 hover 后出现启动 / 合并日志 / 组菜单；镜像 / 网络 / 卷点表头按列排序。
 7. 顶栏按钮：切换主题 / 刷新 / 清理 / 检查更新 / 拉取镜像；发现新版本时更新图标带徽标点。
-8. 底部栏显示 9 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘）与最近操作结果；「镜像大小」是全部镜像占用之和，与容器「磁盘」列（可写层、独占）互补。
+8. 底部栏显示 9 项资源概览（Docker / 容器 / 镜像 / 网络 / 卷 / CPU / 内存 / 镜像大小 / 磁盘）与最近操作结果；「镜像大小」是全部镜像占用之和；「磁盘」是容器合计（镜像按 `image_id` 去重 + 可写层 + 挂载卷，见[列表布局](docs/arch/list-layout.md#容器磁盘列镜像--可写层--挂载卷)），两者口径不同、不要相加。
 9. 同一用户只允许一个实例：再次启动会提示已有实例运行并以非 0 退出，同时向已有实例发前置请求（`show` + 取消最小化 + 重绘）——**这只能是尽力而为**，是否置顶由 compositor / WM 决定（详见 §6 与 [使用指南](https://github.com/pengtang1024/docker-panel/wiki/Usage)）。`--version` / `-V` / `--help` 在拿锁之前处理，实例运行时照常可用。
 
 ## 6. 已知限制
@@ -288,7 +288,7 @@ docker-panel/
 │   ├── volume-list.slint   # 卷表格列表（inherits TableShell）：名称 · 大小 · 挂载点
 │   ├── components-list.slint # 列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳
 │   ├── skel.slint          # 骨架屏占位
-│   ├── foot-bar.slint      # 底部 9 项资源概览（含镜像大小，与容器可写层互补）
+│   ├── foot-bar.slint      # 底部 9 项资源概览（含镜像大小与去重后的容器磁盘合计）
 │   ├── batch-bar.slint     # 批量操作浮动栏（选中容器才显示）
 │   ├── drawer.slint        # 右侧抽屉：详情/日志/环境 三 Tab（四种资源共用；合并日志时 log_only 只展示日志）
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）

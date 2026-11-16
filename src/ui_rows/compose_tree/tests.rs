@@ -22,6 +22,7 @@ fn rc(project: &str, service: &str, cpu: f64, mem: u64, disk: u64) -> ContainerI
         cpu_percent: cpu,
         mem_usage: mem,
         size_rw: disk,
+        disk_used: disk,
         ..Default::default()
     }
 }
@@ -161,6 +162,7 @@ fn stopped_members_count_for_disk_only() {
             cpu_percent: 20.0,
             mem_usage: 500,
             size_rw: 2000,
+            disk_used: 2000,
             ..Default::default()
         },
     ]);

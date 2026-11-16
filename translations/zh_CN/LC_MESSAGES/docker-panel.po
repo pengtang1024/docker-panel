@@ -820,8 +820,8 @@ msgstr "更新已安装，即将自动重启…"
 msgid "Images size"
 msgstr "镜像大小"
 
-msgid "Disk = container writable layer (exclusive).\nShared read-only image layers are not counted; see the Images view."
-msgstr "磁盘 = 容器可写层（独占）。\n共享只读的镜像层不计入；镜像占用见「镜像大小」与镜像视图。"
+msgid "Disk = image + writable layer + mounted volumes (what this container occupies).\nImages shared by several containers are counted in each row; the footer total deduplicates them."
+msgstr "磁盘 = 镜像 + 可写层 + 挂载卷（这个容器占了多少）。\n共享镜像在每行各自计入；底栏合计按镜像去重。"
 
 msgid "Update manifest does not match checksums.txt"
 msgstr "更新清单与校验文件 checksums.txt 不一致，已拒绝安装"

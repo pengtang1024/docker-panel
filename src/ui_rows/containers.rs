@@ -117,11 +117,11 @@ pub fn sort_containers(
             }
         }),
         SortField::Disk => list.sort_by(|a, b| {
-            // 排序键必须与台账「磁盘」列的显示值同源（size_rw = 可写层占用），
+            // 排序键必须与台账「磁盘」列的显示值同源（disk_used = 镜像 + 可写层 + 卷），
             // 否则点表头排序看到的顺序与列里的数字对不上。
             // 曾经用 block_read + block_write 排序，而这两个字段从未被赋值（恒 0）
             // → 所有容器排序键相等，稳定排序保持原序 → 点「磁盘」排序毫无反应。
-            let cmp = a.size_rw.cmp(&b.size_rw);
+            let cmp = a.disk_used.cmp(&b.disk_used);
             if desc {
                 cmp.reverse()
             } else {
@@ -227,7 +227,7 @@ pub fn container_row(c: &ContainerInfo, selected: bool, depth: i32) -> Container
         } else {
             SharedString::from("—")
         },
-        disk: SharedString::from(format_bytes_compact(c.size_rw)),
+        disk: SharedString::from(format_bytes_compact(c.disk_used)),
         cpu_ratio: cpu_ratio as f32,
         mem_ratio: mem_ratio as f32,
         ports_text: SharedString::from(port_short_labels(c)),
@@ -238,18 +238,18 @@ pub fn container_row(c: &ContainerInfo, selected: bool, depth: i32) -> Container
 mod tests {
     use super::*;
 
-    fn with_disk(name: &str, size_rw: u64) -> ContainerInfo {
+    fn with_disk(name: &str, disk_used: u64) -> ContainerInfo {
         ContainerInfo {
             name: name.to_string(),
-            size_rw,
+            disk_used,
             ..Default::default()
         }
     }
 
-    /// 「磁盘」列显示的是 size_rw → 排序键必须同源，
+    /// 「磁盘」列显示的是 disk_used → 排序键必须同源，
     /// 否则点表头排序看到的顺序与列里的数字对不上（曾经用恒 0 的 block_read/block_write）。
     #[test]
-    fn disk_sort_uses_size_rw() {
+    fn disk_sort_uses_disk_used() {
         let list = [
             with_disk("mid", 500),
             with_disk("big", 900),

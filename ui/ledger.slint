@@ -190,13 +190,13 @@ export component LedgerArea inherits Rectangle {
                     picked => { root.sort_pick(2); }
                 }
 
-                // 磁盘（可点击排序）：tooltip 解释口径——可写层（容器独占），
-                // 镜像层共享只读不计入，避免与「容器有多大」的直觉冲突
+                // 磁盘（可点击排序）：tooltip 解释口径——镜像 + 可写层 + 挂载卷，
+                // 即「这个容器占了多少」；共享镜像按容器各计一遍，全局去重看底栏
                 if root.show_disk : HeadCell {
                     text: @tr("Disk"); right: true;
                     cell_w: LedgerCols.disk_w;
                     active: root.sort_field == 3;
-                    tip: @tr("Disk = container writable layer (exclusive).\nShared read-only image layers are not counted; see the Images view.");
+                    tip: @tr("Disk = image + writable layer + mounted volumes (what this container occupies).\nImages shared by several containers are counted in each row; the footer total deduplicates them.");
                     picked => { root.sort_pick(3); }
                 }
 

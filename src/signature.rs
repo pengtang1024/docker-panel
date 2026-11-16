@@ -1,4 +1,4 @@
-//! 更新清单的 Ed25519 签名校验。
+//! 更新清单的 Ed25519 签名校验（支持公钥轮换）。
 //!
 //! 信任链：**内置公钥** → `version.json.sig` 验签 `version.json` → 清单声明的
 //! 包 SHA-256 → 实际下载的包。任何一环缺失或不匹配都 fail closed。
@@ -6,18 +6,22 @@
 //! 校验发生在**安装之前、应用自己的进程里**：验不过就不写盘、不改可执行文件，
 //! 因此不需要任何特权参与（用户级自替换的信任闸门见 `src/update/install.rs`）。
 //!
-//! 私钥只存在于发布流水线（GitHub Actions secret `UPDATE_SIGNING_KEY`）与维护者
-//! 本机，二进制里只有公钥；没有私钥就造不出能通过校验的清单 —— 中间人换掉下载包
-//! 也过不了清单里的哈希断言。
+//! **私钥不进入 CI**：流水线只构建草稿 Release，签名由维护者离线完成
+//! （`scripts/sign-release.sh`），签完才发布。CI 里没有私钥，构建机被攻破也签不出
+//! 能通过校验的清单；二进制里只有公钥。
 //!
-//! 轮换密钥必须同时发新版本：旧版用户只认旧公钥，换钥后旧版会拒绝更新清单。
+//! 轮换：`MANIFEST_PUBLIC_KEYS_HEX` 是**有序**列表，新钥放最前，旧钥保留到所有在用
+//! 版本都升级完毕再删。任一内置公钥验签通过即接受，因此换钥不需要先发「过渡版本」，
+//! 但**删旧钥**必须等旧版本全部淘汰——旧版本只认自己的那份列表。
 
-/// 更新清单签名公钥（32 字节 Ed25519 公钥的十六进制）。
+/// 内置可信公钥列表（32 字节 Ed25519 公钥的十六进制），**顺序即优先级**。
 ///
-/// 指纹在 `docs/arch/update-manifest.md` 里同步记录，发布说明里也公布，
+/// 公钥指纹记录在 `docs/arch/update-manifest.md`，发布说明里也公布，
 /// 便于用户核对「这个版本确实由项目维护者签名」。
-pub const MANIFEST_PUBLIC_KEY_HEX: &str =
-    "39f7d9d80fc007cba7f34f7d5155b0107458b64cb6653565298662c4c5365eae";
+pub const MANIFEST_PUBLIC_KEYS_HEX: &[&str] = &[
+    // 0.7.19 起使用的第一把发布钥
+    "39f7d9d80fc007cba7f34f7d5155b0107458b64cb6653565298662c4c5365eae",
+];
 
 /// Ed25519 detached signature 的固定长度。
 pub const SIGNATURE_LEN: usize = 64;
@@ -26,7 +30,14 @@ pub const SIGNATURE_LEN: usize = 64;
 pub const MANIFEST_MAX_BYTES: usize = 256 * 1024;
 
 /// 校验 `manifest` 的 detached 签名。返回 `Err` 时**不得**继续安装。
+///
+/// 依次尝试每个内置公钥：任一通过即接受（轮换过渡期新旧钥并存）。
 pub fn verify_manifest_signature(manifest: &[u8], signature: &[u8]) -> Result<(), String> {
+    verify_with_keys(MANIFEST_PUBLIC_KEYS_HEX, manifest, signature)
+}
+
+/// 校验主体：公钥列表可注入，便于单测覆盖轮换与坏条目。
+fn verify_with_keys(keys: &[&str], manifest: &[u8], signature: &[u8]) -> Result<(), String> {
     use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
     if manifest.is_empty() {
@@ -41,15 +52,27 @@ pub fn verify_manifest_signature(manifest: &[u8], signature: &[u8]) -> Result<()
             signature.len()
         ));
     }
-    let key = decode_hex32(MANIFEST_PUBLIC_KEY_HEX)
-        .ok_or_else(|| "built-in update public key is malformed".to_string())?;
-    let verifying = VerifyingKey::from_bytes(&key)
-        .map_err(|e| format!("built-in update public key is invalid: {e}"))?;
     let sig = Signature::from_slice(signature)
         .map_err(|e| format!("manifest signature is malformed: {e}"))?;
-    verifying
-        .verify(manifest, &sig)
-        .map_err(|_| "manifest signature verification failed".to_string())
+
+    let mut usable = 0usize;
+    for key_hex in keys {
+        // 单把公钥写坏不该拖垮其它公钥：跳过并继续。
+        let Some(raw) = decode_hex32(key_hex) else {
+            continue;
+        };
+        let Ok(verifying) = VerifyingKey::from_bytes(&raw) else {
+            continue;
+        };
+        usable += 1;
+        if verifying.verify(manifest, &sig).is_ok() {
+            return Ok(());
+        }
+    }
+    if usable == 0 {
+        return Err("built-in update public keys are malformed".to_string());
+    }
+    Err("manifest signature verification failed".to_string())
 }
 
 /// 解析 64 个十六进制字符为 32 字节。
@@ -87,16 +110,39 @@ mod tests {
     }
 
     #[test]
-    fn built_in_key_parses() {
-        assert!(decode_hex32(MANIFEST_PUBLIC_KEY_HEX).is_some());
-        assert_eq!(MANIFEST_PUBLIC_KEY_HEX.len(), 64);
+    fn built_in_keys_parse() {
+        assert!(!MANIFEST_PUBLIC_KEYS_HEX.is_empty());
+        for key in MANIFEST_PUBLIC_KEYS_HEX {
+            assert_eq!(key.len(), 64, "公钥必须是 64 个十六进制字符：{key}");
+            assert!(decode_hex32(key).is_some(), "公钥不是合法十六进制：{key}");
+        }
     }
 
+    /// 轮换：列表里任一公钥都能通过；坏条目被跳过，而不是拖垮整条链。
     #[test]
-    fn hex_decoder_rejects_bad_input() {
-        assert!(decode_hex32("").is_none());
-        assert!(decode_hex32("zz").is_none());
-        assert!(decode_hex32(&"0".repeat(63)).is_none());
+    fn any_embedded_key_verifies() {
+        let manifest = br#"{"schema":1,"version":"0.9.9"}"#;
+        let active = SigningKey::from_bytes(&[9u8; 32]);
+        let sig = active.sign(manifest).to_bytes();
+        let hex = |k: &SigningKey| {
+            k.verifying_key()
+                .to_bytes()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        };
+        let other = hex(&test_key());
+        let active_hex = hex(&active);
+
+        // 第一把不匹配 → 落到第二把 → 通过
+        assert!(verify_with_keys(&[&other, &active_hex], manifest, &sig).is_ok());
+        // 坏条目（非法十六进制）被跳过，不影响后面的好钥匙
+        assert!(verify_with_keys(&["zz", &active_hex], manifest, &sig).is_ok());
+        // 全是坏条目 → 明确报「公钥损坏」而不是「验签失败」
+        let err = verify_with_keys(&["zz"], manifest, &sig).unwrap_err();
+        assert!(err.contains("malformed"), "{err}");
+        // 都不匹配 → 拒绝
+        assert!(verify_with_keys(&[&other], manifest, &sig).is_err());
     }
 
     #[test]

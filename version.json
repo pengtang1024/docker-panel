@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "version": "0.7.13",
-  "version_code": 7013,
+  "version": "0.7.15",
+  "version_code": 7015,
   "channel": "stable",
-  "released_at": "2026-11-15T03:52:31Z",
+  "released_at": "2026-11-16T02:45:18Z",
   "mandatory": false,
-  "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/0.7.13",
+  "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/0.7.15",
   "assets": {
-    "deb": { "name": "docker-panel_0.7.13_amd64.deb", "size": 5571640, "sha256": "619fa41ad19a1a5cf22a648bba7a733188717ad178ef26c9eecc8d09468175c9" },
-    "binary": { "name": "docker-panel", "size": 13663288, "sha256": "60d16d18554a58d9fe3e535ac8f79f2d3770d77afa9b7787262e4664f9419e87" }
+    "deb": { "name": "docker-panel_0.7.15_amd64.deb", "size": 5572888, "sha256": "8f8aa70f272363b5961f4f59fec729bbfd92caf30e7cfffb8fcc79777b29d4af" },
+    "binary": { "name": "docker-panel", "size": 13662264, "sha256": "6356ba274cb472113f2aeeb1a6a9e91893f157286adb3fa9c89bed0843c6ffe7" }
   }
 }

@@ -12,7 +12,7 @@
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
 │ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ docker /events 订阅 │
-│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 2s stats interval   │
+│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
 │ 窗口关闭 → shutdown   │ pending.merge 聚合        │       │ 30s 磁盘占用 interval│
 │   flag                │ 120ms 节流 apply          │◀──────│ bollard API 调用    │
 │                        │ 只重建变化区域 → drop lock│       │ tx.send(Msg)        │
@@ -111,7 +111,7 @@ invoke_from_event_loop(move || {
 | 任务 | 触发 / 频率 | 纪律 |
 |------|-------------|------|
 | 列表刷新 | `event_watch::spawn` 常驻订阅 Docker `/events` | **只有事件这一个来源**：`type` 过滤 container/image/network/volume，动作过滤用**噪声黑名单**（只忽略 `health_status` / `exec_*` / `attach` / `detach`，未知动作宁可多刷一次也不漏刷）；收到非噪声事件即锁内 `s.refresh_kinds(kinds_of(&ev))`——**按事件类型只刷那一路**（`Kinds` 位掩码；容器事件只拉 `/containers/json`，实测 18ms vs 全量 77.7ms，镜像的「被引用容器数」改用新容器列表在应用侧本地重算，网络/卷只在自身事件或全量刷新时拉；连接建立 / 手动刷新 / prune 兜底仍走 `Kinds::ALL` 四路并发），结果走 `tx.send(Msg::*)`→ 400ms 合并窗口**双沿**：窗口内首事件立即刷新（动作反馈快），后续事件只记账、到期补刷一次（`Debouncer`，只丢不补会漏掉窗口尾部的状态变化）；断流按 1s→30s 指数退避重连、永不放弃，重连后**补一次全量刷新**（连接建立那一刻的状态才是真相）；空闲时零请求。**没有定时兜底轮询**：曾用 3s（`size=1` 容器列表 ≈70ms + 镜像列表 ≈96ms，每分钟吃掉 dockerd ≈3.3s），15s 兜底也一起删掉了——兜底只会把「事件漏刷 / 过滤写错 / 代理不支持长连接」这类 bug 藏成「最多慢 N 秒」。`refresh_kinds()` 带 in-flight 去重（上一轮未完成只把种类并进 `refresh_dirty` 掩码、本轮结束按掩码补跑，不丢事件触发的刷新，也不会在慢 Docker 下叠多个调用） |
-| 2s stats 采样（一轮拆 8 片投递） | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats，且**一律 `one_shot(true)`**（不带 pre 帧、不等 1–2s 双采样，整轮 2.6–3ms）。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（仅首屏那一轮走双采样，之后靠本地 prev 做「上一次采样」窗口差值，见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
+| 6s stats 采样（整轮一次投递） | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats，且**一律 `one_shot(true)`**（不带 pre 帧、不等 1–2s 双采样，整轮 2.6–3ms）。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（仅首屏那一轮走双采样，之后靠本地 prev 做「上一次采样」窗口差值，见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
 | 30s 磁盘占用 | `bootstrap::spawn_disk_usage_interval` | `/system/df?type=volume` 与 `?type=container` 并行采样，低频单独跑。容器可写层占用只从这里来（列表接口不带 `size=1`：遍历文件系统 + 删除中的容器会 404），列表刷新后用 `AppState::apply_container_sizes` 从缓存补回 |
 | 自动更新 | `update::spawn_scheduler` | 启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs` |
 | UI 回调与 tick | 主线程 | 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI（Slint 线程安全模型：只有主线程可以修改 Model） |
@@ -130,7 +130,7 @@ invoke_from_event_loop(move || {
 | `Networks(Result<Vec<NetworkInfo>>)` | `/events` / 手动刷新 / 操作完成 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | `/events` / 手动刷新 / 操作完成 | 替换卷列表（卷视图） |
 | **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（与首屏四列表并行，慢/失败不拖列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到为占位符 `—`，不伪造版本号） |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 2s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（一轮拆 8 片、片内整批：同片容器同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮一次投递：同轮容器同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗；列表交给 `image/pull` 事件（不刷新） |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本；列表交给 `/events`（不刷新） |
@@ -317,7 +317,7 @@ ui.on_xxx_requested(move || {
 | 模块 | 职责边界 |
 |------|----------|
 | `main.rs` | 纯组装：i18n → AppState → MainWindow → 各模块启动 → `ui.run()` → 优雅退出，不写业务 |
-| `consumer.rs` | 独占 Receiver + 分批 drain/节流 apply 两阶段泵；列表刷新由独立的 `event_watch.rs` 发起，2s stats、30s 磁盘占用与首屏加载在 `bootstrap.rs` |
+| `consumer.rs` | 独占 Receiver + 分批 drain/节流 apply 两阶段泵；列表刷新由独立的 `event_watch.rs` 发起，6s stats、30s 磁盘占用与首屏加载在 `bootstrap.rs` |
 | `detail_fmt/` | 详情字段格式化；`ui_state.rs` 只管状态变更与后台任务 |
 | `ui_update.rs` | 只做 Msg 聚合：`DrainResult` + 有上限 `drain_messages` + 单条 `apply_msg`，保持日志洪峰防护逻辑独立 |
 | `ui_state.rs` | 只做状态与后台任务：刷新去重/超时、follow 建流、清理计数、配置持久化 |

@@ -21,13 +21,10 @@ use crate::ui_state::{SharedState, DISK_USAGE_INTERVAL};
 ///
 /// ⚠️ 首轮**不**跳过：启动即采一轮，容器列表尚未到达时 ids 为空 → 空轮次无副作用。
 /// 真正的首次有效采样由 `spawn_initial_load` 在拿到容器列表后立刻补一轮（见该函数）。
-/// 采样周期：2s。原先 6s —— CPU% / 内存都靠「两次采样求差」，6s 意味着
-/// 数字最多滞后 6s，用户拖动窗口或用 `docker stats` 对照时能明显看出慢半拍。
-const STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// 一轮采样分成几片投递。片内整批（同一帧更新的容器数值一致），片间留间隔，
-/// 让 UI 每次只重绘 1/N 的行 —— 软件渲染器按**行**标脏，摊开比集中重绘省时间。
-const STATS_APPLY_SLICES: usize = 8;
+/// 周期固定 6s、整轮一次投递。CPU% / 内存靠「两次采样求差」，所以数字最多滞后 6s；
+/// 更快的周期试过（2s）会按周期数成倍放大重绘成本，拆片投递同样乘成本，实测数据见
+/// `AGENTS.md` #34：6s 单批 0.19% → 2s 单批 0.52% → 2s 拆 8 片 2.3%。
+const STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6);
 
 pub fn spawn_stats_interval(state: &SharedState) {
     let state_s = state.clone();
@@ -57,28 +54,13 @@ pub fn spawn_stats_interval(state: &SharedState) {
                         .collect(),
                 )
             };
-            // 一轮采样分片投递：片内整批（同片容器同帧更新，不会片内阶梯跳动），
-            // 片间按 interval/N 留间隔 —— 每片只让 1/N 的行变脏，重绘被摊到一个周期里。
+            // 整轮一次投递：一次 apply 有约 6ms 固定重绘成本，把一轮拆成多片投递只会
+            // 把重绘次数按片数乘上去（实测 6s 单批 0.19% / 2s 单批 0.52% /
+            // 2s 八片 2.3%），既不提高单行新鲜度也更费 CPU。
             let batch = crate::docker::sample_all(&ids, true).await;
             let got_sample = !batch.is_empty();
             if got_sample {
-                let total = batch.len();
-                let slices = STATS_APPLY_SLICES.min(total.max(1));
-                let per = total.div_ceil(slices);
-                let gap = STATS_INTERVAL / slices as u32;
-                let mut rest = batch.into_iter();
-                let mut sent_any = false;
-                loop {
-                    let chunk: Vec<_> = rest.by_ref().take(per).collect();
-                    if chunk.is_empty() {
-                        break;
-                    }
-                    if sent_any {
-                        tokio::time::sleep(gap).await;
-                    }
-                    sent_any = true;
-                    let _ = tx.send(Msg::StatsBatch(chunk));
-                }
+                let _ = tx.send(Msg::StatsBatch(batch));
             }
             // 没有运行中容器时本来就不该有样本 → 不算失败，顺带清掉过期提示
             if let Some(now_stale) = stale.observe(got_sample || ids.is_empty()) {

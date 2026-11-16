@@ -35,7 +35,7 @@
 | `ContainerStatsResponse.networks` | `Option<HashMap<String, ContainerNetworkStats>>` | `rx_bytes/tx_bytes` 是 **u64**（不是 Option） |
 | `ContainerStatsResponse.precpu_stats` | `Option<ContainerCpuStats>` | 非流式 stats（`stream=false`）时守护进程会**先采一帧 pre、等约 1s 再采当前帧**，两帧一并返回 → **首次采样就能算出 CPU%**，不必等下一个采样周期（本项目 `ContainerStatsSnapshot::precpu()` 用它兜底） |
 | `docker.stats()` | 返回 Stream（不是 future） | `.next().await` 取第一帧 |
-| `StatsOptions.one_shot` | `stream=false` **不带** `one_shot` 时守护进程要等约 1–2s 双采样才返回（实测 23 个并发容器整轮 2.03s） | 周期采样一律 `one_shot(true)`：立刻返回单帧、整轮 2.6–3ms；CPU% 用本地 `stats_prev` 做「上一次采样」窗口差值（周期改 2s 后仍是同口径，仍精确）。**只有首次采样**（`spawn_initial_load`）保留双采样，好让首帧就有 `precpu_stats` 兜底 |
+| `StatsOptions.one_shot` | `stream=false` **不带** `one_shot` 时守护进程要等约 1–2s 双采样才返回（实测 23 个并发容器整轮 2.03s） | 周期采样一律 `one_shot(true)`：立刻返回单帧、整轮 2.6–3ms；CPU% 用本地 `stats_prev` 做「上一次采样」窗口差值（6s 周期下仍是同口径，仍精确）。**只有首次采样**（`spawn_initial_load`）保留双采样，好让首帧就有 `precpu_stats` 兜底 |
 | `docker.df()` | `SystemDataUsageResponse` 只建模了废弃的 `VolumeUsage` 键 | 守护进程（API ≥1.25）返回的是 `Volumes` 数组 → 走 bollard 解析出来的卷占用**恒空**；改走 `docker::raw_http::get("/system/df?type=volume")` 自己读 `Volumes` |
 | `docker.list_images()` | 只返回镜像，**不带**「被几个容器引用」 | 需要引用数就自己算；但**别在 `list_images` 内部再 `list_containers`**——刷新与首屏本来就并发拉了一遍 `/containers/json`，重复那次等于每轮多一次请求（实测 30ms，把整轮从 88ms 拖到 118ms）。现在拆成 `list_images_raw()`（只取镜像）+ `attach_container_refs(images, &containers)`（按 `image_id` 命中、`sha256:` 前缀可选，匹配不到再按 `name:tag` 兜底），由调用方把同一轮的容器列表传进来 |
 | 共享客户端上的请求顺序 | bollard `Docker` 是 `Arc<Transport>`，HTTP/1.1 keep-alive **同一连接上的请求是串行的** | 谁先发谁先拿连接。首屏别把慢请求先发出去：`/images/json` 90–150ms、`/containers/json` 约 34ms，镜像先发会把容器行拖到 ~275ms（实测）；正确顺序是先拉容器并立刻上屏，再拉镜像/网络/卷 |

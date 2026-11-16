@@ -55,7 +55,7 @@ use crate::slint_gen::MainWindow;
 use crate::ui_state::AppState;
 
 fn main() {
-    // 命令行参数：--version / -V / --help 在此直接退出，不初始化 Slint、
+    // 命令行参数：--version / -V / --help / --status 在此直接退出，不初始化 Slint、
     // 不连 Docker、不设置 xdg app_id；未知参数按正常启动 GUI 处理。
     match cli::parse_args(std::env::args().skip(1)) {
         cli::CliAction::Version => {
@@ -64,6 +64,16 @@ fn main() {
         }
         cli::CliAction::Help => {
             print!("{}", cli::help_text());
+            return;
+        }
+        // 只读查询：不建锁、不碰窗口，退出码 0=已有实例在跑 / 1=没在跑（脚本可据此判断）
+        cli::CliAction::Status => {
+            if single_instance::is_running() {
+                println!("docker-panel: running");
+            } else {
+                println!("docker-panel: not running");
+                std::process::exit(1);
+            }
             return;
         }
         cli::CliAction::Run => {}

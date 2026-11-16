@@ -1,14 +1,15 @@
 //! 命令行参数解析（纯函数，可单测）。
 //!
-//! 只识别 `--version` / `-V` / `--help` 三个参数；其余任何参数（含未知参数）
+//! 只识别 `--version` / `-V` / `--help` / `--status` 四个参数；其余任何参数（含未知参数）
 //! 一律按「正常启动 GUI」处理——桌面入口可能带额外参数，报错退出会破坏启动。
 
-/// 解析结果：启动 GUI / 打印版本 / 打印帮助。
+/// 解析结果：启动 GUI / 打印版本 / 打印帮助 / 查询是否已有实例。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CliAction {
     Run,
     Version,
     Help,
+    Status,
 }
 
 /// 按出现顺序解析参数（调用方传入的参数不含 argv[0]）。
@@ -23,6 +24,7 @@ where
         match arg.as_ref() {
             "--version" | "-V" => return CliAction::Version,
             "--help" => return CliAction::Help,
+            "--status" => return CliAction::Status,
             _ => {}
         }
     }
@@ -44,6 +46,7 @@ pub fn help_text() -> &'static str {
      选项:\n\
      \x20   -V, --version    打印版本号后退出\n\
      \x20       --help       打印本帮助后退出\n\
+     \x20       --status     查询是否已有实例在运行（退出码 0=在跑 / 1=没跑）\n\
      \n\
      不带参数时启动图形界面。\n"
 }
@@ -61,6 +64,12 @@ mod tests {
     fn version_long_and_short() {
         assert_eq!(parse_args(["--version"]), CliAction::Version);
         assert_eq!(parse_args(["-V"]), CliAction::Version);
+    }
+
+    #[test]
+    fn status_flag() {
+        assert_eq!(parse_args(["--status"]), CliAction::Status);
+        assert_eq!(parse_args(["--unknown", "--status"]), CliAction::Status);
     }
 
     #[test]
@@ -90,6 +99,7 @@ mod tests {
         let help = help_text();
         assert!(help.contains("--version"));
         assert!(help.contains("--help"));
+        assert!(help.contains("--status"));
         assert!(help.contains("用法"));
     }
 }

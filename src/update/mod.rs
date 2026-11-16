@@ -48,6 +48,9 @@ pub struct InstallEnv {
     pub dpkg_managed: bool,
     pub pkexec_available: bool,
     pub exe_dir_writable: bool,
+    /// 用户副本根目录（`~/.local/opt/docker-panel`）是否可写：启动器布局下
+    /// 装到版本目录即可静默升级，不需要 root。
+    pub runtime_dir_writable: bool,
 }
 
 /// consumer 用的 UI 快照（锁内构造，锁外灌给 Slint）。

@@ -77,7 +77,7 @@ pub fn plan_install(assets: &[UpdateAsset], env: &InstallEnv) -> InstallPlan {
 
     // 静默更新优先：可执行文件所在目录可写时一律走「自替换二进制」——
     // 不需要 root、不需要授权，这是唯一能做到「装好之后升级不再打扰」的路径。
-    if env.exe_dir_writable {
+    if env.exe_dir_writable || env.runtime_dir_writable {
         return match select_asset(assets, InstallKind::Binary, env.arch) {
             Some(asset) if has_checksums(assets) => InstallPlan {
                 kind: InstallKind::Binary,
@@ -189,6 +189,7 @@ mod tests {
             dpkg_managed: true,
             pkexec_available: true,
             exe_dir_writable: false,
+            runtime_dir_writable: false,
         }
     }
 

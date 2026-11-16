@@ -1,16 +1,35 @@
-# 更新清单（version.json）与静态 CDN 分发：可行性与方案
+# 更新清单（version.json）与静态 CDN 分发
 
-> 隶属 [architecture.md 总纲](../architecture.md)。本文件是「静态更新清单 + 静态托管 / CDN」的**唯一权威源**：
-> 字段契约、CI 生成顺序、客户端回退链、失败降级与安全边界。AGENTS.md 只留指针，不维护副本。
+> **一句话**：自动更新的「有没有新版本」不再每次打 `api.github.com`——发布流水线生成一份静态清单，客户端按三级回退去取。本页说明这份清单能信什么、不能信什么。
 >
-> 状态：**已实施**（客户端三级回退 + CI 生成步骤）。实测时间 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
-> 实现落点：`src/update/manifest.rs`（解析 / 派生 / 断言）、`src/update/discover.rs`（回退链）、`src/update/mod.rs`（`build_info` 透传）、`.github/workflows/release.yml`（生成步骤）。
+> **状态**：**已实施**（客户端三级回退 + CI 生成步骤）。实测 2026-11-15，测试对象 `pengtang1024/docker-panel`，本机单出口网络。
+>
+> 本文件是「静态更新清单 + 静态托管 / CDN」的**唯一权威源**：字段契约、CI 生成顺序、客户端回退链、失败降级与安全边界。[AGENTS.md](../../AGENTS.md) 只留指针，不维护副本。
+
+**对应源码**：`src/update/manifest.rs`（解析 / 派生 / 断言）、`src/update/discover.rs`（回退链）、`src/update/mod.rs`（`build_info` 透传）、`.github/workflows/release.yml`（生成步骤）｜**上位文档**：[architecture.md 总纲](../architecture.md)
+
+## 目录
+
+| # | 章节 | 你会在这里找到 |
+|:--:|------|----------------|
+| 0 | [结论](#0-结论) | 四条判断：可行、不能当信任根、12h 缓存已被 purge 覆盖、API 只做兜底 |
+| 1 | [实测基线](#1-实测基线) | 各端点的成功率、耗时与响应头 |
+| 2 | [清单字段与可信度](#2-清单字段与可信度) | 每个字段来源与「能不能信」 |
+| 3 | [CI 生成顺序与提交时机](#3-ci-生成顺序与提交时机) | 为什么先 checksums 再清单、为什么最后才提交到 master |
+| 4 | [客户端改动点](#4-客户端改动点文件级) | 文件级落点清单 |
+| 5 | [三级回退链](#5-三级回退链) | 三个来源的优劣与实测结果 |
+| 6 | [失败与降级行为](#6-失败与降级行为) | 每种失败会不会打扰用户 |
+| 7 | [安全边界](#7-安全边界) | 三条收紧规则与「为什么不引入签名」 |
+| 8 | [文档与版本号三同步影响](#8-文档与版本号三同步影响) | 为什么 `version.json` 不是第四处版本源 |
+| 9 | [不建议做](#9-不建议做) | 12 条已经想清楚不做的事 |
+| 10 | [风险与回归点](#10-风险与回归点) | 风险 → 影响 → 缓解 |
+| 11 | [已实测与待补测](#11-已实测与待补测) | 哪些有证据、哪些还没有 |
 
 ## 0. 结论
 
 1. **可行**：静态清单能替代 `api.github.com` 做常规版本广播，前两级来源（Release 资产直链、jsDelivr）**不吃 API 配额**。
 2. **但清单不能当信任根**：清单只提供「有个新版本号」这一条不可信广播。资产 URL 必须由版本号派生，SHA-256 必须只认 Release 的 `checksums.txt`（见 §7）。
-3. **「更新后几分钟延迟」不成立**：jsDelivr 分支端点 `s-maxage=43200`（12h 边沿缓存），tag 端点才是 `immutable`。要「发布即可见」只能走 `releases/latest/download/`。
+3. **「更新后几分钟延迟」已由 CI purge 覆盖**：jsDelivr 分支端点 `s-maxage=43200`（12h 边沿缓存），tag 端点才是 `immutable`；发布流水线在提交清单后调官方 purge 接口（§3.7），purge 成功即「发布即可见」，失败才退回最长 12h 陈旧。主源 `releases/latest/download/` 任何时候都即时生效，不受缓存影响。
 4. **不应替换 API，而应前置**：清单链全部失败时才回落 API，保留今天的行为作为兜底。
 
 ## 1. 实测基线
@@ -62,6 +81,8 @@
 
 ## 3. CI 生成顺序与提交时机
 
+### 3.1 生成顺序
+
 `.github/workflows/release.yml` 的 `release` job 内，**严格按此顺序**（`set -euo pipefail`）：
 
 1. `cargo build --release --locked`
@@ -71,16 +92,19 @@
 5. `softprops/action-gh-release` 上传：现有 `files:` 追加 `version.json`（与 `checksums.txt` 同一批）
 6. **提交 `version.json` 到 `master`**（已实现，见下）
 
+### 3.2 为什么是这个顺序
+
 顺序约束的理由：
 
 - 4 在 3 之后：清单里的 `sha256` 必须与首发的校验文件逐字一致，两份来源分头计算迟早漂移。
 - 5 在 4 之后：清单不能先于资产出现在任何可访问位置，否则存在「清单指向不存在的资产」窗口。
 - 6 在 5 之后：**这是「清单指向的 Release 一定已存在」的来源**——`action-gh-release` 步骤成功即代表
   Release 与全部资产已上传完毕，此时才允许清单进入 jsDelivr 读取的 `master`；提前提交会让备源指向
-  不存在的 Release（客户端会下载 404）。jsDelivr 的 `@master` 端点另有最长 12h 缓存，这一步不改变主源时效。
+  不存在的 Release（客户端会下载 404）。jsDelivr 的 `@master` 端点另有最长 12h 缓存，紧随其后的
+  「刷新 jsDelivr 清单缓存」步骤会把这份缓存打掉（§3.7），主源时效不受这一步影响。
 - 不做「清单先行、资产后补」：客户端失败会退化成「下载 404」，比「发现不了新版本」更难解释。
 
-### 6. 清单提交到 master（jsDelivr 备源，已实现）
+### 3.6 清单提交到 master（jsDelivr 备源，已实现）
 
 `release.yml` 的「提交更新清单到 master（jsDelivr 备源）」步骤，关键行为：
 
@@ -102,6 +126,21 @@ release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产
 因此不需要手工把 `master` 合回 `develop`；版本三同步与 `scripts/check-version.sh` 都不检查 `version.json`。
 若某次流水线推送失败（权限 / 并发 / 网络），`master` 会停留在上一版清单，jsDelivr 备源保持陈旧（主源不受影响），
 下一次发版或手工补提交即可。
+
+### 3.7 刷新 jsDelivr 缓存（已实现）
+
+「提交更新清单到 master」之后紧跟一步 `刷新 jsDelivr 清单缓存`，调用官方去缓存接口
+`https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json`，把 §0 第 3 条里的 12h 窗口消掉。
+
+| 项 | 约定 |
+|----|------|
+| 触发条件 | 紧跟在「提交更新清单到 master」之后；上一步没跑（Release 发布失败）时本步虽然会执行，但清单仍是旧的，purge 也只是无害空刷 |
+| 鉴权 | 免费公开接口，**不需要 token / secret**；仓库也无需任何额外配置 |
+| 成功判定 | 响应 JSON 的 `status == finished`（最多 3 次，间隔 5s）；随后回读 CDN 校验 `"version"` 已是本版，最多 3 次 |
+| 失败处理 | `continue-on-error: true` + 内部所有失败都只 `::warning` → **备源刷新失败不阻断发版**，退回最长 12h 陈旧 |
+| 只刷清单 | purge 接口只能清 jsDelivr 自己缓存的路径。deb / 裸二进制 / `checksums.txt` 的下载地址在 `github.com/.../releases/download/...`（302 到 `release-assets.githubusercontent.com`），不经过 jsDelivr，其缓存由 GitHub 负责，因此**不刷也不存在可刷的对象**（§1 实测资产直链无 `x-ratelimit`、也不带 CDN 缓存头） |
+
+purge 只影响备源时效：主源 `releases/latest/download/version.json` 发布即生效，不依赖这一步。
 
 ## 4. 客户端改动点（文件级）
 
@@ -125,7 +164,7 @@ release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产
 | 级 | 来源 | 优点 | 缺点 | 实测 |
 |----|------|------|------|------|
 | 1 | `https://github.com/pengtang1024/docker-panel/releases/latest/download/version.json` | 发布即生效、零 API 配额 | 依赖 GitHub 可达；不存在时也要先走一次 302→404 | 首跳 302、`GET -L` 需一次重定向 |
-| 2 | `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json` | 国内可达性好、零配额；文件由发布流水线在 Release 成功后提交到 `master`（§3） | 最长 12h 陈旧（`s-maxage=43200`）；依赖 CI 提交步骤成功 | 0.7.13 发布时仍 404（当版无提交步骤）；同端点取 `Cargo.toml` 为 200，证明 URL 形态有效 |
+| 2 | `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json` | 国内可达性好、零配额；文件由发布流水线在 Release 成功后提交到 `master`（§3），并由下一步 purge 掉 12h 缓存（§3.7） | 依赖 CI 提交 + purge 步骤成功；purge 失败时退回最长 12h 陈旧（`s-maxage=43200`） | 0.7.13 发布时仍 404（当版无提交步骤）；0.7.14 实测：purge 前返回 `0.7.13`（`age: 12489`），purge 后立即返回 `0.7.14` |
 | 3 | `https://api.github.com/repos/pengtang1024/docker-panel/releases/latest` | 现役路径，信息最全（含 notes / assets / size） | 60/h 未认证配额，同出口 IP 共享 | 3/3，0.53–0.84s；配额耗尽时 403 `remaining 0`（0.7.13 发布实测） |
 
 编排规则：**上一级「可解析且结构合法」即停**，不再往下要。只有「请求失败 / 404 / JSON 非法 / `schema` 不认识 / `channel ≠ stable` / `version_code` 与 `version` 不符」才进下一级。
@@ -189,7 +228,7 @@ release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| 分支端点 12h 陈旧 | 新版本最长 12h 才发现 | 第 1 级是 `releases/latest/download`，正常路径不受影响 |
+| 分支端点 12h 缓存 | 未 purge 时新版本最长 12h 才发现 | 发布流水线提交清单后调 jsDelivr purge 接口（§3.7）；purge 失败时第 1 级主源仍即时生效 |
 | 共享出口 IP 的 60/h 配额（实测 `used 34`） | 第 3 级（API）失败 | 前两级零配额；失败即静默，手动检查才报错 |
 | 清单与 `checksums.txt` 不一致 | 安装失败 | fail closed（§7），但不浮到自动检查路径 |
 | CI 顺序写错（清单先于 checksums） | 清单 `sha256` 缺失/错值 | `set -euo pipefail` + 只从 `checksums.txt` 抽取，禁止手写常量 |
@@ -207,9 +246,21 @@ release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产
 - 应用自身 `parse_manifest` 解析真实清单并派生 3 条资产 URL，HEAD 全部 200；`discover::fetch_release()` 在 API `remaining 0` / 403 时仍由清单命中（`from_manifest=true`），证明主路径不依赖 API。
 - jsDelivr `@master/version.json` 与 `@0.7.13/version.json` 均为 404——该版流水线尚无提交步骤，符合预期。
 
+0.7.14 发布已实测（2026-11-15）——「提交清单到 master」步骤首次真实运行：
+
+- `master` 出现 `github-actions[bot]` 的 `chore(update): 同步 0.7.14 更新清单到 master [skip ci]`，只改 `version.json`；该文件 sha256 与 `releases/latest/download/version.json` **完全相同**，两个资产的 `sha256` 与 `checksums.txt` 逐字节一致。
+- jsDelivr 在 purge 前返回 **200 但是 `0.7.13`**（`age: 12489`，正是 0.7.13 清单被边沿缓存的时长）；调 purge 接口后立即返回 `0.7.14`，sha256 一致 → **12h 窗口可被 purge 消掉**，这就是 §3.7 那一步的依据。
+- 流水线整体 success，新增的 `刷新 jsDelivr 清单缓存` 步骤尚未随真实 Release 运行（本版发版时该步骤还不存在）。
+
 以下内容**当前无证据**，后续版本补测：
 
-- 加入「提交清单到 master」步骤后，jsDelivr `@master/version.json` 的实际生效时间与 12h 缓存内陈旧表现（首次生效需下一次 Release 或手工补提交）。
+- `刷新 jsDelivr 清单缓存` 步骤在真实 Release 中的表现（下一次发版观察 `purge 已受理` / 是否落到 `::warning`）。
 - jsDelivr 在**不同运营商 / 省份**的成功率（本机单出口样本，不代表全国）。
 - `If-None-Match` 304 只测了一次，未验证分支端点刷新后的 ETag 变更行为。
 - `mandatory` 的 UI 交互与「拒绝升级」路径（本期不做，故无设计）。
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [Docker 接入层](docker-bollard.md) | [README 文档导航](../../README.md#文档地图) | [架构总纲](../architecture.md) |

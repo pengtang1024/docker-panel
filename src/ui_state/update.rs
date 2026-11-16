@@ -26,6 +26,8 @@ pub struct UpdateState {
     pub update_available: bool,
     /// 已安装更新，等待重启
     pub update_restart_needed: bool,
+    /// 退出事件循环后是否需要释放单实例锁并拉起新二进制（瞬态，不持久化）
+    pub restart_on_exit: bool,
     /// 下载/安装进度 0~100
     pub update_progress: i32,
     /// 更新状态文案（检查中 / 下载中 / 错误）

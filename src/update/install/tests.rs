@@ -65,6 +65,32 @@ fn binary_info(source: &Path) -> UpdateInfo {
 
 #[test]
 #[cfg(unix)]
+fn launcher_execs_target_after_delay() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_dir("launcher");
+    // 路径带空格：验证 exe 走位置参数而非拼进脚本字符串
+    let dir = root.join("dir with space");
+    fs::create_dir_all(&dir).unwrap();
+    let marker = dir.join("marker");
+    let target = dir.join("target.sh");
+    fs::write(
+        &target,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    let mut perm = fs::metadata(&target).unwrap().permissions();
+    perm.set_mode(0o755);
+    fs::set_permissions(&target, perm).unwrap();
+
+    let status = launcher_command(&target, 0).status().expect("launcher");
+    assert!(status.success(), "launcher 应正常 exec 目标并退出");
+    assert!(marker.exists(), "目标必须在延时后被 exec");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+#[cfg(unix)]
 fn installs_verified_binary() {
     let dir = temp_dir("ok");
     let new_bin = dir.join("docker-panel.new");

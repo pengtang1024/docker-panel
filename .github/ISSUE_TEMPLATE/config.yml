@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞（请勿公开提交）
+    url: https://github.com/pengtang1024/docker-panel/security/advisories/new
+    about: 安全漏洞请走私有的 GitHub 安全公告渠道，不要开公开 issue。详见 SECURITY.md。
+  - name: 使用与排障问题
+    url: https://github.com/pengtang1024/docker-panel/blob/develop/docs/troubleshooting.md
+    about: 启动异常、连不上 Docker、更新失败、字体与日志问题，先按症状查排障手册。
+  - name: 提问与求助
+    url: https://github.com/pengtang1024/docker-panel/blob/develop/SUPPORT.md
+    about: 不知道该开 issue 还是先自查时，看支持说明里的渠道与必附信息清单。
+  - name: Gitee 镜像仓库
+    url: https://gitee.com/pengtang1024/docker-panel/issues
+    about: 国内网络访问 GitHub 困难时，可在 Gitee 镜像仓库提交 issue。

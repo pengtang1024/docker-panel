@@ -1,7 +1,10 @@
-# agents-rules.md — 规则配置层（规则地图 + 红线约束）
+# 规则配置层（规则地图 + 红线约束）
 
-> 本文件是 agent 行为规则的**唯一权威配置层**，与执行主体彻底解耦：AGENTS.md 只保留规则地图索引与红线摘要，规则全文、校验方式、违规处置以本文件为准。
+> **一句话**：本文件规定「什么绝对不能做、动手前要过哪几道门、改了代码必须同步哪些文档」——它是 agent 行为规则的**唯一权威配置层**，与执行主体彻底解耦；[AGENTS.md](../AGENTS.md) 只保留规则地图索引与红线摘要。
+>
 > **首次进入仓库：先读 AGENTS.md，再读完本文件，才允许开始任何开发活动。**
+
+**对应源码**：无（纯规则）｜**相关页面**：[文档风格与排版规范](style-guide.md)、[Git Flow 规范](git-flow.md)、[架构设计](architecture.md)
 
 ## 0. 规则体系说明
 
@@ -104,9 +107,16 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | 功能特性变更（新增 / 删除 / 修改用户可见功能） | CHANGELOG.md、README 功能特性、AGENTS.md 当前已知限制、Wiki Home / Usage |
 | 新增 bollard 类型坑条 | docs/arch/docker-bollard.md（唯一权威源） |
 | 规则 / 红线变更 | 本文件对应章节 + AGENTS.md 规则地图同步 |
+| 配置文件字段增删（src/config.rs） | docs/configuration.md 字段表 + Wiki Usage 设置段 |
+| 命令行参数 / 全局快捷键变更（src/cli.rs、ui/app.slint） | docs/configuration.md + Wiki Usage |
+| 用户可感知的错误文案 / 安装与卸载路径变更 | docs/troubleshooting.md 报错对照表 + Wiki FAQ |
+| 新增翻译条目或新增语言支持 | docs/translations.md（msgid 计数）+ CONTRIBUTING.md 翻译入口 |
+| 功能增删 / 方向调整 | `docs/roadmap.md`（当前阶段与候选方向）+ `README.md` 已知限制 |
+| 新增文档文件 | README 文档导航 + 项目结构树 + 本文件 §6.2 清单；新文档必须按 [文档风格与排版规范](style-guide.md) 写 |
+| 文档排版 / 结构改造 | `docs/style-guide.md` 是唯一规范；改造后按其中 §10 自检清单过一遍，两站渲染各抽查一次 |
 | 发版（打 tag） | CHANGELOG.md 新增版本段落、三个版本号同步（Cargo.toml / debian control / CHANGELOG）、Wiki Home 版本声明 |
 
-> 表中所有 `Wiki` 均指 **GitHub Wiki 与 Gitee Wiki 两份**，同一变更必须两处都改（见 §6.2 / §6.3），避免镜像漂移。
+> 表中所有 `Wiki` 均指 **GitHub Wiki 与 Gitee Wiki 两份**，同一变更必须两处都改（见 §6.2 / §6.3），避免两站内容漂移。
 
 ### 6.2 文档清单与职责
 
@@ -117,7 +127,17 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `AGENTS.md` | AI 协作入口：硬约束红线、规则地图索引、技术栈版本约束、线程模型/消息流速查、代码规范、已知限制 | — 入口型；规则全文以 agents-rules.md 为准 |
 | `docs/agents-rules.md` | 规则配置层：规则地图 + 红线约束 + 四阶段门禁 + 冲突记录 + 文档同步规范 | ✅ **规则唯一权威源**（本文件） |
 | `docs/architecture.md` | 架构总纲：技术栈、模块地图与依赖方向、文件规范 + 主题文档导航 | ✅ 总纲权威源 |
-| `docs/arch/*.md` | 架构主题文档：threading（线程/消息/回调）· ui-interaction（Slint 交互/拆分原则）· docker-bollard（Docker 接入 + bollard 坑条） | ✅ 各主题权威源 |
+| `docs/arch/*.md` | 架构主题文档：threading（线程/消息/回调）· ui-interaction（Slint 交互/拆分原则）· list-layout（列表布局与列宽契约）· docker-bollard（Docker 接入 + bollard 坑条）· update-manifest（更新清单与 CDN 分发） | ✅ 各主题权威源 |
+| `docs/configuration.md` | 面向使用者：config.json 15 个字段全表、环境变量、命令行参数、快捷键、自动更新调度 | ✅ 配置项权威源（字段以 src/config.rs 为准） |
+| `docs/troubleshooting.md` | 面向使用者：按症状排查（启动/连接/列表/日志/更新/安装卸载/数据安全）+ 真实报错文案对照表 | ✅ 排障权威源（文案以 src/ 内 i18n 调用为准） |
+| `docs/translations.md` | 翻译机制与贡献流程：264 条 msgid、t/trf/trfp 用法、新增语言步骤 | ✅ 翻译权威源 |
+| `docs/roadmap.md` | 路线图：当前阶段、候选方向（未排期，不构成承诺）、明确不做的事 | ✅ 方向权威源（只写已想清楚的方向，不写日期） |
+| `docs/style-guide.md` | 文档风格与排版规范：页头三件套、两站可用语法白名单、提示块口径、折叠与页脚导航、提交前 9 项自检 | ✅ **排版唯一规范** |
+| `CONTRIBUTING.md` | 外部贡献入口：开发环境、分支与 PR、代码规范速览、文档同步门禁 | — 引用型，规范全文仍以 AGENTS.md / 本文件为准 |
+| `SECURITY.md` | 漏洞报告渠道、支持范围、安全模型与不视为漏洞的设计边界 | ✅ 安全策略权威源 |
+| `CODE_OF_CONDUCT.md` | 贡献者行为准则（Contributor Covenant 2.1）与四级执行阶梯 | — 上游模板，只在升级版本时改 |
+| `SUPPORT.md` | 支持渠道（GitHub / Gitee Issues）与提问必附信息清单 | — 索引型 |
+| `.github/ISSUE_TEMPLATE/`、`PULL_REQUEST_TEMPLATE.md` | Issue/PR 表单：版本、Docker 版本、发行版、会话类型等结构化字段；`config.yml` 关闭空白 issue 并把安全/排障/支持/Gitee 四条渠道前置 | — 与 SUPPORT.md 字段保持一致 |
 | `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 精简版 |
 | `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
 | `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |
@@ -150,11 +170,17 @@ git add -A && git commit -m "docs(wiki): xxx" && git push origin HEAD:master
 | _Sidebar.md | —（导航） | 页面增删时同步 |
 
 > **Wiki 内链接统一用标准 Markdown 相对链接** `[Label](Page)`（如 `[架构设计](Architecture)`）：GitHub Gollum 与 Gitee CommonMark 都渲染成 `<a>`。**禁止**用 `[[Page|Label]]`（Gollum MediaWiki 语法）——Gitee 的 CommonMark 解析器会把它原样输出成纯文本，变成坏链（实测 `POST /api/v5/markdown` 返回未转义的 `[[Architecture|架构设计]]`）。`_Sidebar.md` 是 GitHub Gollum 约定，Gitee 会当作普通页面列入原生树形导航，导航本身仍可用。
-> **图片统一用国内可达的 jsDelivr GH CDN 绝对地址** `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@develop/assets/screenshots/<name>.png`，不要写死 `raw.githubusercontent.com` 外链（国内常不可达）；Wiki 仓库自身不放二进制图片，避免两份镜像各自维护一份资产。
+> **图片统一用国内可达的 jsDelivr GH CDN 绝对地址** `https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@develop/assets/screenshots/<name>.png`，不要写死 `raw.githubusercontent.com` 外链（国内常不可达）；Wiki 仓库自身不放二进制图片，避免两个平台各自维护一份资产。
 
 ### 6.3 双份同步原则
 
 - **AGENTS.md ↔ architecture.md**：线程模型 / 消息流两处都有，架构变更时**两边必须同步更新**。AGENTS 放 ASCII 图 + 速查表（AI 读），architecture.md 放完整深度版（人读）。
 - **in-tree ↔ Wiki**：Architecture 页与 `docs/architecture.md`、Install 页与 README 安装章节、Usage 页与 README 使用章节，**同一变更必须两处都改**，避免双源漂移。
-- **GitHub Wiki ↔ Gitee Wiki**：两份 Wiki 是**同一份内容的两个镜像**，任何 Wiki 变更必须**同一批改动同时推送到两个仓库**，禁止只更新一侧；推送后分别 `git ls-remote` 核对 HEAD 一致。README 文档导航需同时给出两个 Wiki 入口。
+- **GitHub Wiki ↔ Gitee Wiki**：两份 Wiki 是**两个平台各自的正式发布物，不存在主从**；任何 Wiki 变更必须**同一批改动同时推送到两个仓库**，禁止只更新一侧；推送后分别 `git ls-remote` 核对 HEAD 一致。README 文档导航需同时给出两个 Wiki 入口。
 - 提交前快速校验：`grep -ri dvkit .`（零残留）+ 核对 README 项目结构树 + 核对各文件行数（R2 口径）。
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [架构设计](architecture.md) | [README 文档导航](../README.md#文档地图) | [文档风格与排版规范](style-guide.md) |

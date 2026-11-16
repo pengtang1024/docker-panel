@@ -1,15 +1,16 @@
 # UI 层架构：Slint 模块交互与拆分原则
 
-> 隶属 [architecture.md 总纲](../architecture.md)。本文件是 Slint 模块交互与 Slint 拆分原则的权威深度版。
+> **一句话**：41 个 `.slint` 文件如何组装、数据与事件从哪来往哪去——加组件、改布局、调回调之前先读这一页。
+
+**对应源码**：`ui/app.slint`、`ui/ledger.slint`、`ui/list-area.slint`、`ui/components-*.slint`、`src/main.rs`｜**相关页面**：[架构总纲](../architecture.md)、[运行时架构](threading.md)
 
 ## 1. Slint UI 模块交互
 
-41 个 `.slint` 文件——app.slint 是唯一组装入口。子文件间**不互相 import 组件**，
-只允许 import 跨文件 global（`app-actions` / `update-state` / `ui-state` / `ledger-cols`）。
+**结论：41 个 `.slint` 文件里，`app.slint` 是唯一组装入口；子文件之间不互相 import 组件，只允许 import 跨文件 global（`app-actions` / `update-state` / `ui-state` / `ledger-cols`）。**
 
 ### 交互总图
 
-```
+```text
                     app.slint（组装层 + 布局 + global-shortcuts 快捷键）
         ╱      ╱       ╱        ╲        ╲        ╲        ╲
    top-bar  sub-bar  list-area  foot-bar  batch-bar  drawer  dialogs/menu-layers
@@ -26,9 +27,9 @@
 
 ### 交互模式
 
-#### ① models.slint → Rust：property 数据注入
+#### 行数据注入（models.slint → Rust）
 
-```
+```text
 models.slint struct               Rust consumer 构造
 ┌──────────────────────────┐      ┌─────────────────────────────┐
 │ ContainerRow { id, ... } │      │ let rows = ui_rows::build_* │
@@ -42,28 +43,26 @@ models.slint struct               Rust consumer 构造
 
 `include_modules!()` 在 `slint_gen.rs` 一次展开，其余 Rust 模块通过 `use crate::slint_gen::*` 导入。
 
-#### ② 列表/行组件 ← app.slint：callback 属性注入
+#### 事件注入（列表 / 行组件 ← app.slint）
 
-列表与行组件不 import AppActions global——只声明 `callback toggle(string)` 等。
-app.slint / list-area.slint 组装处注入实现转发到 AppActions。
+列表与行组件不 import AppActions global——只声明 `callback toggle(string)` 等；`app.slint` / `list-area.slint` 组装处注入实现转发到 AppActions。
 
-#### ③ top-bar / sub-bar ↔ app.slint：`<=>` 双向绑定（仅用户操作态）
+#### 用户操作态双向绑定（top-bar / sub-bar ↔ app.slint）
 
-`search_q <=> root.search_q` / `view <=> root.view`
+`search_q <=> root.search_q` / `view <=> root.view`。
 
-#### ③b 显示态走 `ui-state.slint` global（不经根属性转发）
+#### 显示态走 ui-state global（不经根属性转发）
 
-连接 / 采样状态位、计数与汇总、行模型、资源列表排序都由 Rust 单写入方写 `UiState`，
-TopBar / SubBar / BatchBar / ListArea / FootBar 直接读 global（`UiState.chip_total` 等），
-省掉 app.slint → MainArea → 子组件三层 `<=>` 转发。用户操作态（view / filter / sort_field /
-sort_desc / search_q）仍留在根属性，保持规范 #18 的单一写入方语义。
+连接 / 采样状态位、计数与汇总、行模型、资源列表排序都由 Rust 单写入方写 `UiState`，TopBar / SubBar / BatchBar / ListArea / FootBar 直接读 global（`UiState.chip_total` 等），省掉 app.slint → MainArea → 子组件三层 `<=>` 转发。用户操作态（view / filter / sort_field / sort_desc / search_q）仍留在根属性，保持规范 #18 的单一写入方语义。
 
-#### ④ Drawer：条件渲染 + 自绘 Tab
+#### 抽屉：条件渲染 + 自绘 Tab
 
-`if root.drawer_open : Drawer {}` 条件渲染；抽屉内详情/日志/环境三 Tab 自绘 TabBar 切换。
-**Esc 关闭弹层后焦点悬空**——app.slint Esc 分支末尾调 `global-shortcuts.focus()` 归还焦点。
+`if root.drawer_open : Drawer {}` 条件渲染；抽屉内详情/日志/环境三 Tab 自绘 TabBar 切换。**Esc 关闭弹层后焦点悬空**——app.slint Esc 分支末尾调 `global-shortcuts.focus()` 归还焦点。
 
 ### Slint 文件清单速查
+
+<details>
+<summary><b>完整 Slint 文件清单（39 项：行数 / 职责 / import 谁）</b></summary>
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
@@ -107,23 +106,32 @@ sort_desc / search_q）仍留在根属性，保持规范 #18 的单一写入方�
 | `components-feedback.slint` | 30 | Tip / 反馈类组件 | theme |
 | `components-dialog.slint` | 54 | DialogShell 基类（手搓 inherits Rectangle，未用 Material Modal） | theme |
 
+</details>
+
 ## 2. Slint 拆分原则
 
-- app.slint 做组装层——只放 MainWindow 骨架 + global-shortcuts FocusScope + import 语句 + 布局 markup
-- 子文件之间不互相 import——避免循环依赖和跨文件 global 可见性问题
-- 行组件用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑
-- 顶栏/筛选栏用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见
-- **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸
+**结论：拆分按「组装 / 展示 / 数据」三层切，任何一层都不许反向依赖另一层。**
 
-## 3. 两条容易踩的 Slint 规则
+| 原则 | 做法 |
+|------|------|
+| 组装层唯一 | `app.slint` 只放 MainWindow 骨架 + global-shortcuts FocusScope + import 语句 + 布局 markup |
+| 子文件不互 import | 避免循环依赖和跨文件 global 可见性问题 |
+| 行的交互用 callback | 行组件用 callback 属性注入代替直接 import AppActions global，绕开 Rust 侧 glob import 兼容性坑 |
+| 用户操作态用双向绑定 | 顶栏/筛选栏用 in-out 属性 `<=>` 双向绑定——数据流向一眼可见 |
+| Tab 内容显式定尺寸 | **TabWidget 内容必须显式 width/height**——Slint Tab 容器不传 parent 尺寸 |
 
-### 3.1 命中顺序：TouchArea 声明在布局之后 = 盖住布局里的热区
+## 3. Slint 使用中的已知坑与铁律
 
-Slint 按**声明顺序**做命中测试：后声明的兄弟节点画在上面，也先拿到指针事件。
-所以一个按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，就会盖住布局内部
-自己声明的 TouchArea——布局里的热区永远收不到点击。
+**结论：这一节的每一条都是实测踩过的坑，条目标题即是规则，违反后的表现写在「错误做法」列。**
 
-本项目的写法约定（`Chip` / `ViewTab` / 排序按钮统一）：
+### 命中顺序：TouchArea 声明在布局之后 = 盖住布局里的热区
+
+Slint 按**声明顺序**做命中测试：后声明的兄弟节点画在上面，也先拿到指针事件。所以一个按钮的「整块热区」TouchArea 若声明在 HorizontalLayout **之后**，就会盖住布局内部自己声明的 TouchArea——布局里的热区永远收不到点击。
+
+> [!WARNING]
+> 踩过的坑：排序按钮的外层 TouchArea 声明在布局之后 → 方向箭头的 `set_sort_dir()` 永远不触发，点箭头只会开菜单、方向翻不动。
+
+本项目的写法约定（`Chip` / `ViewTab` / 排序按钮统一）：热区在前、内容在后。
 
 ```slint
 component Chip inherits Rectangle {
@@ -132,36 +140,25 @@ component Chip inherits Rectangle {
 }
 ```
 
-- 热区在前 → 布局内的独立热区（排序按钮的方向箭头）能被点到；
-  布局里的 `Text` 没有 input region，点击会**穿透**到下面的热区（打开菜单）。
+- 热区在前 → 布局内的独立热区（排序按钮的方向箭头）能被点到；布局里的 `Text` 没有 input region，点击会**穿透**到下面的热区（打开菜单）。
 - 热区在后 → 布局内的热区是死代码（点箭头只会触发外层热区）。
 
-> 踩过的坑：排序按钮的外层 TouchArea 声明在布局之后 → 方向箭头的
-> `set_sort_dir()` 永远不触发，点箭头只会开菜单、方向翻不动。
+### UI 状态单一写入方：回调写，consumer 不回写
 
-### 3.2 UI 状态单一写入方：回调写，consumer 不回写
+Slint 属性（如 `sort_field` / `sort_desc` / `filter` / `view`）由 **UI 回调**独占写入：回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。
 
-Slint 属性（如 `sort_field` / `sort_desc` / `filter` / `view`）由 **UI 回调**独占写入：
-回调在 UI 线程里同步改 `AppState` → 立刻 `ui.set_xxx(...)` → 重建受影响的列表。
+consumer 在事件触发的刷新里**不得**回写这些属性：它在锁内取快照、锁外才写 UI，期间用户改了条件的话，回写的就是**旧值**——排序状态与箭头会偶发对不上（甚至被旧快照打回旧方向）。consumer 只负责「按 Msg 增量刷新数据」。
 
-consumer 在事件触发的刷新里**不得**回写这些属性：它在锁内取快照、锁外才写 UI，
-期间用户改了条件的话，回写的就是**旧值**——排序状态与箭头会偶发对不上
-（甚至被旧快照打回旧方向）。
+需要防的另一种竞态（锁内建行、锁外应用，期间条件被改）用 `AppState::rows_epoch`（per-list 位掩码）判定：该列表代际变了就丢弃这批旧行（回调已用新条件重建过）。
 
-consumer 只负责「按 Msg 增量刷新数据」，不负责「回写用户操作过的状态」。
-需要防的另一种竞态（锁内建行、锁外应用，期间条件被改）用
-`AppState::rows_epoch`（per-list 位掩码）判定：该列表代际变了就丢弃这批旧行（回调已用新条件重建过）。
+### 密集表格：弹性列的宽度不能交给 Slint 布局分配
 
-### 3.3 密集表格：弹性列的宽度不能交给 Slint 布局分配
+台账（`ledger.slint`）的核心承诺是**列起点固定**：表头与每一行逐列同 x 同宽，CPU / 内存两列能竖着扫读比较。
 
-台账（`ledger.slint`）的核心承诺是**列起点固定**：表头与每一行逐列同 x 同宽，
-CPU / 内存两列能竖着扫读比较。
+Slint 的 `HorizontalLayout` 分配空间时，**先给每个子项「首选宽度」（文本的自然宽度）**，再把剩余空间按 `horizontal-stretch` 比例分。子项是 `Text` 时，首选宽度 = 文本多长 → 容器名一长，名称列就被撑宽 → CPU / 内存列的起点**逐行漂移**，表格直接失去意义。
 
-Slint 的 `HorizontalLayout` 分配空间时，**先给每个子项「首选宽度」（文本的自然宽度）**，
-再把剩余空间按 `horizontal-stretch` 比例分。子项是 `Text` 时，首选宽度 = 文本多长
-→ 容器名一长，名称列就被撑宽 → CPU / 内存列的起点**逐行漂移**，表格直接失去意义。
-
-正确写法：**由父级统一算出列宽，显式下发给表头与行**。
+> [!IMPORTANT]
+> 正确写法：**由父级统一算出列宽，显式下发给表头与行**——弹性列永远不要靠 `horizontal-stretch: 1` 自己分配。
 
 ```slint
 // ledger.slint：LedgerArea 统一算，两个弹性列平分剩余宽度
@@ -174,69 +171,50 @@ VCenterText { text: root.data.name; width: root.name_w; horizontal-stretch: 0; o
 
 配套的两条约束：
 
-- **表头在滚动区外、行在滚动区内**：行列表视口比区域窄一个滚动条槽（8px），
-  所以表头的 `padding-right` 要额外加上 `scrollbar_slot`，表头内容宽才与行内容宽相等。
-- **响应式列显隐由父级统一判定**（`show_disk` / `show_ports`），
-  表头与行共用同一组判定，隐列时列数与间距数同步变化，不会出现「表头 10 列、行 9 列」。
+- **表头在滚动区外、行在滚动区内**：行列表视口比区域窄一个滚动条槽（8px），所以表头的 `padding-right` 要额外加上 `scrollbar_slot`，表头内容宽才与行内容宽相等。
+- **响应式列显隐由父级统一判定**（`show_disk` / `show_ports`），表头与行共用同一组判定，隐列时列数与间距数同步变化，不会出现「表头 10 列、行 9 列」。
 
-验收方式：MCP `get_element_tree` 取表头与各行的 `absolutePosition.x` / `size.width`，
-逐列比对必须完全相等（不要靠肉眼读截图，12px 的偏移肉眼很难发现）。
+验收方式：MCP `get_element_tree` 取表头与各行的 `absolutePosition.x` / `size.width`，逐列比对必须完全相等（不要靠肉眼读截图，12px 的偏移肉眼很难发现）。
 
-### 3.4 台账内联树（Compose）：分组是分组，不是筛选器
+### 台账内联树（Compose）：分组是分组，不是筛选器
 
-Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有左侧栏。
-踩过 / 固化下来的五条：
+Compose 层级改为**台账内联树**（`ledger-tree-row.slint`），不再有左侧栏。踩过 / 固化下来的五条：
 
 | 坑 | 正确做法 |
 |----|----------|
-| **分组带一行两个热区**（展开箭头 + 分组名） | 两个热区**互不重叠**：箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 谁也不抢谁的事件（§3.1 命中顺序铁律） |
+| **分组带一行两个热区**（展开箭头 + 分组名） | 两个热区**互不重叠**：箭头落在状态点列内（按 `depth*18` 缩进），分组名热区从名称起点开始 → 谁也不抢谁的事件（见「命中顺序」铁律） |
 | **分组带通栏，不参与列宽计算** | 分组带是独立 delegate（`kind = 1/2`），不占用台账的列契约；否则「项目名」会被算成一列，表格列起点漂移 |
 | **分组名要与同层容器行的名称列起点对齐** | 箭头占 14px（与状态点列同槽）+ 色点 18px → 分组名落在 `44px + depth*18`，与同层容器行名称列**逐像素对齐**；层级只靠缩进表达，不靠「分组名比孩子更右」的半格错位 |
 | **分组是分组不是筛选器** | 排序字段只决定**组内**顺序，组间按组名稳定排；展开状态存「**收起**的分组键」集合（`project:<名>` / `svc:<项目>/<服务>`），不在集合里 = 展开 → 新分组默认展开 |
 | **分组带的操作按钮** | 与容器行同构的 3 个按钮（主操作 / 日志 / 更多），但动作**作用于组内全部成员**：主按钮按「是否全部运行中」在启动全组 / 重启全组间切换；日志走组内运行中成员的**合并流**（每条流带 `[容器名]` 行前缀）；「更多」菜单 = 停止全部 / 重启全部 / 合并日志 / 删除全部。成员口径 = **当前筛选后的容器**（与台账可见行一致），筛选外的容器不会被组操作误伤 |
 | **分组带要显示资源汇总** | 汇总 = **组内成员之和**（CPU / 内存只算运行中成员，磁盘算全部成员），落在与容器行**同 x** 的 CPU / 内存 / 磁盘列 → 分组带内部必须**镜像 `ledger-row.slint` 的列结构与列宽**（同一套 `LedgerCols` + 父级下发的同一组 `name_w` / `image_w` / `show_disk` / `show_ports`）；⚠️ 改一行必须同步改另一行。微条**统一用 docker stats 口径**（绝对占比）：CPU = 相对单核的百分比 / 100，内存 = usage/limit；**分组带的条 = 组内成员条之和** → 父子关系自洽（不用「视图内最大值归一」：那会让组带与容器行量纲不同，同列出现「组数字是成员的 2 倍、条却一样长」） |
 
-计数口径：概览带与筛选 chips 都取**可见容器集合**（实际渲染成行的那些容器），
-折叠分组后计数同步变小——三个数字必须同源，否则会出现「台账 3 行但芯片写着全部 9」。
+计数口径：概览带与筛选 chips 都取**可见容器集合**（实际渲染成行的那些容器），折叠分组后计数同步变小——三个数字必须同源，否则会出现「台账 3 行但芯片写着全部 9」。没有 Compose 归属的容器**直接在顶层**（depth=0），不另设「独立容器」分组带。
 
-没有 Compose 归属的容器**直接在顶层**（depth=0），不另设「独立容器」分组带。
+### 窗口级浮层必须做边界收敛（菜单不得越出窗口）
 
-### 3.5 窗口级浮层必须做边界收敛（菜单不得越出窗口）
+卡片 / 分组「···」菜单是**窗口级绝对定位浮层**：锚点由行提供（`menu_my = 行顶 + 26px`，即行底上方 4px；`menu_mx = 行右 - 14px - 124px`），`overlays.slint` 按这个锚点把菜单放在行下方。问题出在**列表最后几行**：
 
-卡片 / 分组「···」菜单是**窗口级绝对定位浮层**：锚点由行提供
-（`menu_my = 行顶 + 26px`，即行底上方 4px；`menu_mx = 行右 - 14px - 124px`），
-`overlays.slint` 按这个锚点把菜单放在行下方。问题出在**列表最后几行**：
-
-```
+```text
 锚点 y = 716px（最后一行） + 菜单高 110px = 826px  >  窗口高 760px
 ```
 
-溢出窗口的部分**既看不见也点不到**（末项「日志 / 删除」整块落在窗口外），
-用户表现为「点最后几行的 ··· 选不了」。
+溢出窗口的部分**既看不见也点不到**（末项「日志 / 删除」整块落在窗口外），用户表现为「点最后几行的 ··· 选不了」。约定（`overlays.slint` 的 `card_menu_x` / `card_menu_y`）：
 
-约定（`overlays.slint` 的 `card_menu_x` / `card_menu_y`）：
-
-- **下方空间不足就整块翻到锚点行上方**——菜单底贴锚点行底
-  （`anchor_bottom = CardMenu.my + 4px`），而不是滑到窗口边上盖住触发按钮；
+- **下方空间不足就整块翻到锚点行上方**——菜单底贴锚点行底（`anchor_bottom = CardMenu.my + 4px`），而不是滑到窗口边上盖住触发按钮；
 - 翻上去仍放不下时（窗口极矮）再用 `Math.max(Theme.s1, …)` 兜底；
 - **水平方向同样 clamp**：窗口窄时锚点会把菜单推出右边界；
-- 菜单高度是几何契约的一部分（`card_menu_h`：分组菜单 140px / 112px，其它 110px），
-  收敛判定与实例化用的必须是**同一个属性**，否则判定和实际尺寸会漂移。
+- 菜单高度是几何契约的一部分（`card_menu_h`：分组菜单 140px / 112px，其它 110px），收敛判定与实例化用的必须是**同一个属性**，否则判定和实际尺寸会漂移。
 
-下方空间充足时位置与原来完全一致（不动常规弹向）。验收用 MCP：`find_elements_by_id`
-取 `CardMenuLayer::root` 的 `absolutePosition.y + size.height` 必须 ≤ 窗口高，
-再 `move_pointer` 到末项中心截图确认 hover 高亮（= 输入区可达）。
+下方空间充足时位置与原来完全一致（不动常规弹向）。验收用 MCP：`find_elements_by_id` 取 `CardMenuLayer::root` 的 `absolutePosition.y + size.height` 必须 ≤ 窗口高，再 `move_pointer` 到末项中心截图确认 hover 高亮（= 输入区可达）。
 
 ## 4. 窗口身份（xdg app_id）与 Dock 图标
-桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。
 
-| 后端 | 机制 | 不设置的后果 |
-|------|------|--------------|
-| Wayland | toplevel 的 `app_id`（`xdg_toplevel.set_app_id`） | GNOME Shell 匹配不到 `docker-panel.desktop` → Dock 显示「未识别程序」，图标退化成通用占位图 |
-| X11 | `WM_CLASS` 的 class 段 | winit 用 argv[0] 回退 → class = `docker-panel`，与 `.desktop` 的 `StartupWMClass` 一致 → 正常 |
+**结论：窗口身份必须在窗口 show 之前设好，且只在 Wayland 会话下设置——漏设会让 Dock 显示「未识别程序」和通用占位图。**
 
-Slint 1.18 提供了 `slint::set_xdg_app_id(app_id)`，但**不主动调用**（`i-slint-backend-winit` 只在
-`WindowInner::xdg_app_id()` 有值时才调 `with_name(app_id, "")`）。所以本项目在 `src/main.rs` 里显式设置：
+桌面环境靠「窗口身份」把窗口关联到 `.desktop` 文件，再决定 Dock（面板坞）里显示什么图标和名字。Wayland 下身份是 toplevel 的 `app_id`（`xdg_toplevel.set_app_id`）；不设置时 GNOME Shell 匹配不到 `docker-panel.desktop` → Dock 显示「未识别程序」，图标退化成通用占位图。
+
+Slint 1.18 提供了 `slint::set_xdg_app_id(app_id)`，但**不主动调用**（`i-slint-backend-winit` 只在 `WindowInner::xdg_app_id()` 有值时才调 `with_name(app_id, "")`）。所以本项目在 `src/main.rs` 里显式设置：
 
 ```rust
 // Wayland：app_id = desktop 文件名去掉 .desktop 后缀
@@ -247,12 +225,11 @@ if std::env::var_os("WAYLAND_DISPLAY").is_some() {
 
 三个关键约束：
 
-1. **时机**——必须早于窗口 show。native window 在 `ui.run()` 里才创建（`ensure_window`），
-   所以放在 `MainWindow::new()` 之后、`ui.run()` 之前即可。
-2. **只在 Wayland 下设置**——Slint 对 X11 也用 `with_name(app_id, "")`，会让 `WM_CLASS` 的 class 段变空，
-   反而破坏 X11 下的匹配。
-3. **取值必须是 desktop 文件基名**——`docker-panel` → 查 `docker-panel.desktop` → `Icon=docker-panel` →
-   `hicolor/scalable/apps/docker-panel.svg`。
+| # | 约束 | 说明 |
+|---|------|------|
+| 1 | 时机 | 必须早于窗口 show。native window 在 `ui.run()` 里才创建（`ensure_window`），所以放在 `MainWindow::new()` 之后、`ui.run()` 之前即可 |
+| 2 | 只在 Wayland 下设置 | 其它后端下 Slint 同样用 `with_name(app_id, "")`，会把窗口类名段置空、反而破坏匹配 |
+| 3 | 取值必须是 desktop 文件基名 | `docker-panel` → 查 `docker-panel.desktop` → `Icon=docker-panel` → `hicolor/scalable/apps/docker-panel.svg` |
 
 验证方法（不依赖截图）：
 
@@ -260,3 +237,9 @@ if std::env::var_os("WAYLAND_DISPLAY").is_some() {
 WAYLAND_DEBUG=1 ./target/release/docker-panel 2>wl.log
 grep set_app_id wl.log     # 应有 xdg_toplevel#N.set_app_id("docker-panel")
 ```
+
+---
+
+| ◀ 上一页 | 文档地图 | 下一页 ▶ |
+|----------|----------|----------|
+| [运行时架构](threading.md) | [README 文档导航](../../README.md#文档地图) | [统一列表与内联树](list-layout.md) |

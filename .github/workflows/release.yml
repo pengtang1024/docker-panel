@@ -185,6 +185,40 @@ jobs:
           echo "::error::连续 3 次未能把 version.json 提交到 master"
           exit 1
 
+      # jsDelivr 分支端点带 s-maxage=43200（12h 边沿缓存），不主动清理的话备源最长 12h 才看到新清单。
+      # 用官方 purge 接口去缓存：无需 token / secret，purge 后 CDN 会重新回源 GitHub raw。
+      # 这一步只影响备源时效，失败不该阻断发版 → continue-on-error，且内部失败也只 ::warning。
+      # 只刷清单文件：purge 接口只能清 jsDelivr 自己缓存的路径，而 deb / 裸二进制 / checksums.txt
+      # 都在 github.com 的 release-assets 上，不经过 jsDelivr（其缓存由 GitHub 负责，无从 purge）。
+      - name: 刷新 jsDelivr 清单缓存
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          version="${{ steps.ver.outputs.version }}"
+          cdn="https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
+          purge="https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
+          for attempt in 1 2 3; do
+            out="$(curl -fsS --max-time 20 "$purge" 2>/dev/null || true)"
+            status="$(printf '%s' "$out" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' 2>/dev/null || true)"
+            if [ "$status" = "finished" ]; then
+              echo "purge 已受理（第 ${attempt} 次）"
+              break
+            fi
+            echo "::warning::purge 第 ${attempt} 次未完成：$(printf '%s' "$out" | head -c 200)"
+            sleep 5
+          done
+          # 只做提示、不做断言：purge 传播有秒级延迟，陈旧一会儿不算失败
+          for attempt in 1 2 3; do
+            body="$(curl -fsS --max-time 20 "$cdn" 2>/dev/null || true)"
+            if printf '%s' "$body" | grep -q "\"version\": \"$version\""; then
+              echo "jsDelivr 已返回 ${version}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::jsDelivr 仍返回旧清单（CDN 传播延迟），主源与 API 兜底不受影响"
+
       # 历史版本（流水线修好之前发的）页面只有一行 "**Full Changelog**: ..."，
       # 这里用 CHANGELOG.md 的段落回填。immutable release 改不了就跳过，不影响本次发布。
       - name: 回填历史 Release 更新日志

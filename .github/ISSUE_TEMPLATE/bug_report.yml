@@ -1,0 +1,59 @@
+name: Bug 报告
+description: 报告可复现的问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **安全漏洞请勿在此公开。** 请通过 GitHub 私有渠道提交：
+        https://github.com/pengtang1024/docker-panel/security/advisories/new
+        提交前请先阅读仓库 SECURITY.md。
+  - type: input
+    id: version
+    attributes:
+      label: docker-panel 版本
+      description: 执行 `docker-panel --version` 后的完整输出
+    validations: {required: true}
+  - type: input
+    id: docker
+    attributes:
+      label: Docker 版本
+      description: 执行 `docker version` 后 Server 段的 Version
+    validations: {required: true}
+  - type: dropdown
+    id: distro
+    attributes:
+      label: 发行版
+      options: [Ubuntu, Debian, Fedora, Arch, openSUSE, 其它]
+    validations: {required: true}
+  - type: dropdown
+    id: session
+    attributes:
+      label: 显示会话
+      description: 本项目仅在 Wayland 下验证。
+      options: [Wayland, 其它]
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从启动到问题出现的操作顺序，编号列出
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你预期发生什么
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么，附截图（`agkit shot --app docker-panel -o /tmp/dp.png` 或系统截图）与底部状态栏文案
+    validations: {required: true}
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其它信息
+      description: 日志片段、复现频率、额外环境信息等；配置文件路径 `$XDG_CONFIG_HOME/docker-panel/config.json`（缺失时回退 `~/.config/docker-panel/config.json`），删除该文件可重置全部界面状态。
+    validations: {required: false}

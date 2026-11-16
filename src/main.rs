@@ -163,11 +163,30 @@ fn main() {
 
     let _ = ui.run();
 
+    // 更新后的重启：先释放单实例锁、再拉起新进程（顺序不能反过来）。
+    // 反过来就是 0.7.12–0.7.14 的缺陷：新进程在旧进程仍持锁时启动 → 连上旧 listener
+    // → 判为 AlreadyRunning 后退出；旧进程随后也退出 → 应用直接消失。
+    let restarting = crate::lock::acquire(&state, "main::restart")
+        .map(|s| s.update.restart_on_exit)
+        .unwrap_or(false);
+
     // 优雅退出：shutdown flag → consumer / theme-monitor 轮询发现后 break → join
     if let Some(s) = crate::lock::acquire(&state, "main::shutdown") {
         s.shutdown.store(true, Ordering::Relaxed);
         s.persist(); // 退出落盘（搜索词等高频变更项只在此处保存）
     }
+
+    if restarting {
+        // 同步释放锁：InstanceGuard::drop 会 unlink socket（listener 已移交 raise
+        // 线程时只剩 unlink），新进程随后才能 bind。再交给独立短命 launcher 延时
+        // exec 新二进制：拉起动作不依赖后台线程退出的快慢。
+        single_instance::release_then(guard.take(), || {
+            if let Err(e) = update::install::restart_detached() {
+                eprintln!("docker-panel: relaunch after update failed: {e}");
+            }
+        });
+    }
+
     let _ = consumer_handle.join();
     let _ = theme_monitor.join();
 }

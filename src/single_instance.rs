@@ -84,6 +84,18 @@ impl Drop for InstanceGuard {
     }
 }
 
+/// 先释放锁、再拉起新实例（更新安装后重启的唯一正确顺序）。
+///
+/// `launch` 里 spawn 的新进程启动时会调用 `acquire()`：如果旧进程还持有 socket，
+/// 新进程会连上旧 listener → 判为 `AlreadyRunning` 后退出，而旧进程此时也在退出
+/// → 应用直接消失（0.7.12–0.7.14 的自动重启缺陷）。所以顺序不能反过来。
+///
+/// 只调用一次、不重试：锁被别的实例长期持有时新进程会立刻退出，不会堆积进程。
+pub fn release_then<T>(guard: Option<InstanceGuard>, launch: impl FnOnce() -> T) -> T {
+    drop(guard);
+    launch()
+}
+
 /// 用默认路径获取锁（主实例 / 已运行 / IO 错误）。
 pub fn acquire() -> std::io::Result<Acquire> {
     acquire_in(&default_path())
@@ -230,6 +242,58 @@ mod tests {
         assert!(!path.exists(), "Drop 后应删除 socket 文件");
         let again = acquire_in(&path).expect("again");
         assert!(matches!(again, Acquire::Primary(_)), "释放后可再次获取");
+        cleanup(&path);
+    }
+
+    #[test]
+    fn launch_after_release_gets_lock() {
+        let path = temp_path("launch");
+        let guard = match acquire_in(&path).expect("first") {
+            Acquire::Primary(g) => g,
+            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
+        };
+        // 模拟「旧进程释放锁 → launcher 拉起新进程」：闭包里的 acquire 必须成功
+        let acquired = release_then(Some(guard), || acquire_in(&path).expect("reacquire"));
+        assert!(
+            matches!(acquired, Acquire::Primary(_)),
+            "锁释放后新进程必须能接管"
+        );
+        cleanup(&path);
+    }
+
+    #[test]
+    fn release_with_raise_listener_allows_reacquire() {
+        let path = temp_path("raise-release");
+        let mut guard = match acquire_in(&path).expect("first") {
+            Acquire::Primary(g) => g,
+            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
+        };
+        // 生产路径：listener 已移交 raise 线程，Drop 只剩 remove_file
+        guard.spawn_raise_listener(|| {});
+        let acquired = release_then(Some(guard), || acquire_in(&path).expect("reacquire"));
+        assert!(
+            matches!(acquired, Acquire::Primary(_)),
+            "监听线程仍持有旧 listener 时，unlink 后新实例也必须能接管"
+        );
+        cleanup(&path);
+    }
+
+    #[test]
+    fn launch_while_lock_held_fails_fast() {
+        let path = temp_path("held");
+        let holder = match acquire_in(&path).expect("holder") {
+            Acquire::Primary(g) => g,
+            Acquire::AlreadyRunning => panic!("holder 应拿到锁"),
+        };
+        // 锁一直没释放：只尝试一次，拿到 AlreadyRunning 就结束（没有重试循环）
+        let mut attempts = 0;
+        let acquired = release_then(None, || {
+            attempts += 1;
+            acquire_in(&path).expect("attempt")
+        });
+        assert!(matches!(acquired, Acquire::AlreadyRunning));
+        assert_eq!(attempts, 1, "锁未释放时只尝试一次，不堆积进程");
+        drop(holder);
         cleanup(&path);
     }
 

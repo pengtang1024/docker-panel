@@ -8,3 +8,7 @@
 /.openidea/
 /.screenshots/.tmp/
 /.screenshots/
+
+# Python 字节码（scripts/check-docs.py 运行时产生）
+__pycache__/
+*.pyc

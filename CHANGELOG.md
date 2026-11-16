@@ -8,6 +8,25 @@
 
 ## [Unreleased]
 
+## [0.7.15] - 2026-11-16
+
+### 新增
+
+- **发布流水线自动 purge jsDelivr 清单缓存**：`@master/version.json` 的分支端点带 `s-maxage=43200`（12h 边沿缓存），上一步提交清单后最长 12h 才能被备源读到。Release 流水线在「提交更新清单到 master」之后紧跟一步调用 jsDelivr 官方 purge 接口（免 token、免 secret），回读 CDN 确认已是本版；该步骤 `continue-on-error` + 内部只 `::warning`，**刷新失败不阻断发版**，退回 12h 陈旧。只刷清单：资产直链在 `github.com/.../releases/download/...`，不经过 jsDelivr，无可刷对象。
+
+### 修复
+
+- **更新安装后的自动重启不再让应用消失**：此前先拉起新进程、再 `quit_event_loop()`，而此时旧进程仍持有单实例锁 → 新进程打印 `already running, not starting a second window` 后退出，旧进程随后也退出，两个都没了、必须手动再开一次（0.7.12–0.7.14 均存在）。现在改为「置重启请求 → 退出事件循环 → `main` 释放 `InstanceGuard`（同步 unlink socket）→ 由独立短命 launcher 延时 `exec` 新二进制」，顺序由代码结构保证；launcher 只 sleep 一次就 `exec`、不重试，锁被其它实例长期持有时新进程立刻退出，不会堆积进程。手动「重启应用」按钮改走同一路径，一并修复。
+
+### 变更
+
+- **补齐面向外部使用者的文档层**：此前仓库里只有「给维护者/AI 看」的实现文档（AGENTS.md、docs/arch/*、Wiki Architecture），缺对外那一层。本版新增 `CONTRIBUTING.md`、`SECURITY.md`、`SUPPORT.md`、`docs/configuration.md`（config.json 15 个字段全表 + 环境变量 + CLI + 快捷键 + 更新调度）、`docs/troubleshooting.md`（按症状排查 + 14 条真实报错文案对照表）、`docs/translations.md`（264 条 msgid 与新增语言步骤），以及 `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` 与 `PULL_REQUEST_TEMPLATE.md`。README 文档导航按读者分层重排，`docs/agents-rules.md` §6 触发表同步扩为「配置字段 / CLI 与快捷键 / 用户可见文案 / 翻译 / 新增文档」五类事件。
+- **修正文档与实现不一致的三处**：`src/log_status.rs` 实际定义 **4 条**日志状态文案（重连中 / 已恢复 / 已停止 / 洪峰抽样），README、`docs/architecture.md`、`docs/arch/threading.md` 均写「3 条」，四态表还漏了「洪峰抽样」行；`src/config.rs` 文件头注释写「7 个固定字段」，实际 `AppConfig` 为 **15 个**；`THIRD-PARTY-NOTICES.md` 的复核落款停在 0.6.0，已改为随 `Cargo.lock` 复核。
+- **文档补「第一次贡献」端到端流程，并把自动重启机制同步到新实现**：`CONTRIBUTING.md` 新增从 fork、切分支、过四项门禁到发起 PR 的完整命令序列，附新手最常卡住的五处（PR 目标选 `develop`、不要从 `master` 切分支、提交信息格式、文档同步义务、分支落后如何处理）与 Gitee 侧的差异说明。`docs/configuration.md` 与 `docs/arch/threading.md` 原先把自动重启写成「3s 后启动新二进制并退出」，与修复后的实现不符（`5c63c0e` 起）——现在改为「3s 倒计时仅退出事件循环，再由 `main` 退出流程先 `release_then` 释放单实例锁、后经 launcher 延时 2s `exec`」，并补上为什么顺序不能反；同时修正 `src/ui_update/update.rs:93` 这处因该修复而失效的行号引用。
+- **新增路线图，文档导航全线接入**：`docs/roadmap.md` 只写三类内容——当前阶段（已交付能力）、候选方向（批量操作 / Compose 导入导出 / 定时清理 / 远程连接等，**明确标注未排期、不构成承诺**）、明确不做（非 Wayland 后端适配、Electron 外壳、GPU 渲染、定时兜底轮询、守护进程管理、遥测）。README 文档地图、AGENTS 文档导航、`docs/agents-rules.md` §6.2 文档清单与 §6.1 触发表（新增「功能增删 / 方向调整」事件）、两站 Wiki 的主仓文档表与侧栏全部接入；`scripts/check-docs.py` 的受控清单由 18 份扩到 19 份。
+- **界面预览截图按当前版本重拍**：四张图（容器台账 / 镜像列表 / 右侧抽屉 / 清理弹窗）原为 2026-10-25 所拍，此后 `ui/` 有 20 个提交（磁盘列阈值、列表外壳统一、采样过期可见化、更新弹窗精简等）已与界面不符。本轮统一由 `agkit shot --app docker-panel` 按 xdg app_id 定位窗口截取（1280x720，深色主题，零弹窗），仅裁去窗口标题栏。图上真实业务标识（容器名、镜像名、分组名、容器 ID、PID、创建/启动时间、挂载路径）已替换为中性示例值（`demo-*`），手法是「同色底覆盖 + 同字号同色重绘」——不是黑条或马赛克，列宽与版面完全保持；README 截图说明与 AGENTS.md R1 配方（新增脱敏步骤）同步写清这一点。
+- **全站文档版面重排，并新增可执行的排版规范**：新增 `docs/style-guide.md`（页头三件套、编号章节、五种提示块口径、表格优先、折叠口径、页脚导航、两站语法白名单）与 `scripts/check-docs.py`（18 份受控文档 + Wiki 页面的版面 lint：栅栏配对、折叠配对、页内锚点、相对链接、禁用写法、占位符、R2 正文行数、章节编号连续）。README、四份社区文档、四份用户向文档、五份实现向文档与两站 Wiki 六页全部按规范重排：长清单与结构树改折叠、并列信息改表格、关键约束用提示块前置、每节结论先行、页脚补三栏导航。技术事实（命令、路径、行号、报错原文、常量、版本号）逐条回查源码与 HEAD，未作改动。
+
 ## [0.7.14] - 2026-11-15
 
 ### 新增
@@ -18,7 +37,7 @@
 
 - **文档与注释统一为「事件驱动刷新」口径**：列表刷新早已改为 Docker `/events` 驱动（400ms 合并窗口 + 断流退避重连），但架构文档、规则层与源码注释里仍残留多处「3s 刷新 / 3s 心跳」的旧描述。本版把这些表述统一改为「事件触发的刷新」，避免后续维护者按过时文档推断出并不存在的定时轮询；同时把 `event_watch` 的动作过滤在两份文档里统一写成「噪声黑名单」（与实现一致，此前一处仍写白名单）。
 - **README 平台范围收敛为 Linux**：徽章与「环境要求」明确当前唯一验证与支持的平台是 Linux——源码理论上可交叉编译到 macOS / Windows，但两平台未验证，且自动更新与 deb 安装本身就只做 Linux。文档导航同时补上 Gitee Wiki 入口，截图来源说明改为 `agkit shot --app docker-panel`（与项目验收口径一致）。
-- **Wiki 同步规范扩为双站点镜像**：`docs/agents-rules.md` 的 Wiki 更新流程从「GitHub Wiki 单站点」改为「GitHub Wiki + Gitee Wiki 两份镜像，任何变更同批推送」，并记录 Gitee Wiki 的惰性创建方式、链接语法约束（用标准 Markdown 相对链接，禁用 Gollum 的 `[[Page|Label]]`）与图片地址约束（用 jsDelivr GH CDN，不用国内常不可达的 `raw.githubusercontent.com`）。
+- **Wiki 同步规范扩为双平台同步发布**：`docs/agents-rules.md` 的 Wiki 更新流程从「GitHub Wiki 单站点」改为「GitHub Wiki + Gitee Wiki 两个平台并列发布，任何变更同批推送」，并记录 Gitee Wiki 的惰性创建方式、链接语法约束（用标准 Markdown 相对链接，禁用 Gollum 的 `[[Page|Label]]`）与图片地址约束（用 jsDelivr GH CDN，不用国内常不可达的 `raw.githubusercontent.com`）。
 
 ## [0.7.13] - 2026-11-15
 
@@ -415,7 +434,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
+[0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14
 [0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13
 [0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12

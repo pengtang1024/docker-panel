@@ -1,7 +1,7 @@
 //! 用户配置持久化：~/.config/docker-panel/config.json
 //!
 //! 零额外依赖：读取走 serde_json::Value（serde_json 已在依赖树），
-//! 写入是 7 个固定字段的手工 JSON。任何损坏/越界值都回落到 Default。
+//! 写入是 15 个固定字段的手工 JSON。任何损坏/越界值都回落到 Default。
 
 use std::fs;
 use std::path::PathBuf;

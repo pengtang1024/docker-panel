@@ -353,7 +353,10 @@ python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾�
 | 进程 → 首屏容器行 | 153–172ms（中位 159ms；旧的 `join!` 全到齐再推是 181–209ms） |
 | 进程 → 首屏镜像行 | 273–292ms（镜像最慢一路，让容器行先上屏） |
 | 四列表并发一轮（`bootstrap join` / 每次刷新） | 143–165ms（`/images/json` 92ms 为最慢一路，`/containers/json` 34ms、网络 8ms、卷 8ms） |
+| apply（Rust 侧：行构建 + 模型同步） | 23 行 12µs + 5µs ≈ **17µs/轮**；200 行 86µs + 48µs ≈ 134µs |
 | 日志热路径（每行） | 正常段 71ns/行（剥前缀+拼前缀+入批，≈1400 万行/s 单线程）；回放段 23ns/行；抽样判定 0.2ns/行 |
+
+apply 这一段单独量（临时基准，`container_row` ×200 轮取均值 + `render::containers` 的差量同步两条路径：全等走比对、全变走 `set_row_data`）。**结论是数据管线已经到地板**：一次 6s stats 应用在 23 容器下只消耗 17µs，折算 0.0003% CPU。空闲 CPU 那 0.20–0.33% 基本不是它——是 Slint 软件渲染器在每次 apply 后按脏区重绘整窗（23 行的百分比文字 + 微条 + 概览带 + 底栏合计会同时变），要再往下压只能减少重绘面积或降采样频率，那是 UI 行为取舍，不是代码效率问题。同一轮还量了「名称排序比较器零分配化」：`to_lowercase` 4.2ms vs `chars().flat_map(char::to_lowercase)` 6.1ms（200 项 ×200 次排序），更慢，**不要改**。
 
 日志热路径单独量，跑 `cargo test --release bench_log_pipeline -- --ignored --nocapture`（`src/docker/log_batch.rs` 的 `bench` 模块，只覆盖应用侧每行成本，不含 Docker 流读取与 UI 行模型同步）。它只在改 `log_ts` / `log_batch` 热路径时才需要复测——按 76k 行/s 的真实码率折算，71ns/行 ≈ 每 1.3 万行消耗 1ms CPU，不是瓶颈。
 

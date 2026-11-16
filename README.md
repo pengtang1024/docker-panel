@@ -146,7 +146,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 
 ### 4.1 Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`（0.7.15 及以后）：
+从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`（0.7.15 及以后；0.7.16 只打了 tag、没有 Release，请用 0.7.17）：
 
 ```bash
 sudo dpkg -i docker-panel_<版本>_amd64.deb

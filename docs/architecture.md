@@ -97,7 +97,7 @@ docker-panel/
 │   ├── callbacks_update.rs    自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 三个配置开关
 │   │
 │   ├── update/
-│   │   ├── mod.rs             任务编排 + 启动调度（24h 节流）+ Msg 投递 + UI 视图快照
+│   │   ├── mod.rs             任务编排 + 启动调度（1h 节流）+ Msg 投递 + UI 视图快照
 │   │   ├── discover.rs        更新发现三级回退：清单两级 → API 兜底（fetcher 可注入 + 单测）
 │   │   ├── manifest.rs        清单解析 / 资产 URL 派生 / 与 checksums.txt 一致性断言（纯逻辑 + 单测）
 │   │   ├── github.rs          GitHub Releases API（第 3 级兜底；系统 curl + JSON 解析，阻塞）

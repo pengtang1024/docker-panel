@@ -168,7 +168,7 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 | 3 | `https://api.github.com/repos/pengtang1024/docker-panel/releases/latest` | 现役路径，信息最全（含 notes / assets / size） | 60/h 未认证配额，同出口 IP 共享 | 3/3，0.53–0.84s；配额耗尽时 403 `remaining 0`（0.7.13 发布实测） |
 
 编排规则：**上一级「可解析且结构合法」即停**，不再往下要。只有「请求失败 / 404 / JSON 非法 / `schema` 不认识 / `channel ≠ stable` / `version_code` 与 `version` 不符」才进下一级。
-清单可解析但「版本不新」→ 直接判「已是最新」，**不回落 API**（避免每次启动两次请求；最长接受 12h 发现延迟，而现有节流本来就是 24h）。
+清单可解析但「版本不新」→ 直接判「已是最新」，**不回落 API**（避免每次启动两次请求；清单节流 1h，发现延迟由 CDN 传播决定）。
 
 **唯一的例外是「补更新说明」**：清单命中且 `is_newer` 为真时，额外 best-effort 拉一次第 3 级 API，
 只为拿到 `body`（`notes`）与 `html_url`；版本号与清单不一致、或请求失败，都保留清单结果照常继续。
@@ -276,7 +276,7 @@ openssl pkeyutl -verify -pubin -inkey <公钥.pem> -rawin \
 7. 用 GitHub Pages 另起一套静态站（多一套部署 + 与 Release 双写，收益不抵维护）。
 8. 本期做 `mandatory` 的强制更新 UI（没有「拒绝升级」的退出路径设计，弹窗只能变成打扰）。
 9. 让清单的 `sha256` 绕过或替代 `checksums.txt`。
-10. 为清单缩短 24h 节流或加轮询（清单不会比 Release 更实时，只会多打请求）。
+10. 为清单再加独立轮询（清单不会比 Release 更实时，只会多打请求；1h 节流已经是够用的粒度）。
 11. 把清单塞进 `Cargo.toml` / `README.md`（Content-Type 与语义都不对，且污染源码文件）。
 12. 为齐全信息而放弃 API 兜底（手动检查时用户需要 `notes.en` / 资产列表，清单不承载这些）；反过来也不要把 API 挪回主路径——它只做第 3 级兜底与「已确认有新版本时补说明」。
 

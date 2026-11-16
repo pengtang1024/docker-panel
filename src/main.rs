@@ -101,9 +101,13 @@ fn main() {
             std::process::exit(1);
         }
         Err(e) => {
-            // 锁不可用不阻断启动：运行目录异常时宁可多开一个窗口，也不能打不开面板
-            eprintln!("docker-panel: single-instance lock unavailable ({e}), continuing");
-            None
+            // fail closed：拿不到锁就不启动。抽象锁不依赖任何文件路径，走到这里只可能是
+            // 真正的系统错误（fd 耗尽 / 内核限制），此时放行才是多开的入口。
+            eprintln!(
+                "docker-panel: cannot create the single-instance lock ({e}); \
+                 refusing to start a second window"
+            );
+            std::process::exit(1);
         }
     };
 

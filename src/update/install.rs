@@ -83,10 +83,20 @@ fn install_with(
     let file_name = download::asset_file_name(&asset.name);
     let target = cache.join(file_name);
 
-    progress(0, i18n::t("Downloading update..."));
-    if let Err(e) = download::download_file(asset, &target, progress) {
-        let _ = fs::remove_dir_all(cache);
-        return Err(e);
+    // 已下载且哈希对得上的包直接复用：失败重试 / 重启后不必再拉几 MB。
+    // 只认 sha256 一致，半截文件与旧包都会重新下载。
+    let reused = target.is_file()
+        && download::sha256_file(&target)
+            .map(|sha| sha == expected)
+            .unwrap_or(false);
+    if reused {
+        progress(100, i18n::t("Using the package already downloaded"));
+    } else {
+        progress(0, i18n::t("Downloading update..."));
+        if let Err(e) = download::download_file(asset, &target, progress) {
+            let _ = fs::remove_dir_all(cache);
+            return Err(e);
+        }
     }
 
     progress(100, i18n::t("Verifying update..."));

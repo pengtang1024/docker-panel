@@ -1,10 +1,20 @@
 //! 单实例保障：同一用户只允许跑一个 docker-panel GUI 实例。
 //!
 //! 互斥是**两道锁**，权威的是不落盘的那一道：
-//!   1. 抽象命名空间 socket（`@docker-panel-<16hex>`，名字由锁路径哈希而来）：只在内核
-//!      命名空间里占个名字，没有文件、外部删不掉，进程退出时内核自动回收。
-//!   2. 文件系统 socket（`/run/user/<uid>/docker-panel-<uid>.sock`）：沿用既有语义，
-//!      既是「请把已有窗口提到前台」的 IPC 通道，也让 `ls` / `ss` 看得见锁。
+//!   1. 抽象命名空间 socket——`@docker-panel-lock-<uid>` 按用户全局唯一（**与锁文件路径无关**，
+//!      TMPDIR / XDG_RUNTIME_DIR / 运行目录怎么变都撞同一个名字），另加一个路径派生名
+//!      `@docker-panel-<16hex>` 用来和 0.8.1 及更早版本互斥。没有文件、外部删不掉，
+//!      进程退出时内核自动回收。
+//!   2. 文件系统 socket（`/run/user/<uid>/docker-panel-<uid>.sock`）：只承担
+//!      「请把已有窗口提到前台」的 IPC 与可见性（`ls` / `ss` 看得见锁）。
+//!      拿不到它（运行目录不可写等）**不影响互斥**，也不会因此放行第二个实例。
+//!
+//! # 权威锁名为什么按 uid 而不是按路径
+//!
+//! 早先的抽象名由锁路径哈希而来。路径虽然已按 uid 派生，但 `lock_dir()` 在
+//! `/run/user/<uid>` 不可用时会退到 `std::env::temp_dir()`——而 TMPDIR 是逐进程环境变量：
+//! 从不同 shell / systemd 单元启动就可能算出不同路径 → 不同抽象名 → 互斥失效、照样多开。
+//! 改成「名字只由 uid 决定」后，多开防护不再依赖任何文件路径算得一致。
 //!
 //! # 为什么权威锁必须不落盘（2026-11-16 的真实事故）
 //!
@@ -67,13 +77,15 @@ pub enum Acquire {
 
 /// 主实例持有的锁；`Drop` 时删除 socket 文件（正常退出不留残留）。
 pub struct InstanceGuard {
-    path: PathBuf,
+    /// 文件 socket 路径；极端环境（运行目录不可写且临时目录也不可用）下没有文件锁，
+    /// 只剩抽象锁——互斥不受影响，只是少了 raise 通道与可见性。
+    path: Option<PathBuf>,
     /// 文件系统 socket：raise IPC 通道 + 可见的锁文件（可能已移交 raise 线程）
     listener: Option<UnixListener>,
     /// 抽象命名空间互斥锁：不落盘、删不掉，**只由本结构体持有**。
     /// 只为了持有而持有——读它没有任何意义，锁的生命周期就是本结构体的生命周期。
     #[expect(dead_code, reason = "仅持有抽象锁，Drop 时由内核回收")]
-    exclusive: UnixListener,
+    exclusive: Vec<UnixListener>,
 }
 
 impl InstanceGuard {
@@ -105,7 +117,9 @@ impl Drop for InstanceGuard {
     fn drop(&mut self) {
         // listener 先于文件删除释放（字段顺序：path 在前，这里显式丢弃监听）
         self.listener.take();
-        let _ = std::fs::remove_file(&self.path);
+        if let Some(path) = &self.path {
+            let _ = std::fs::remove_file(path);
+        }
         // `exclusive` 在本体执行完后随结构体销毁 → 抽象名由内核立即回收
     }
 }
@@ -131,19 +145,107 @@ pub fn acquire() -> std::io::Result<Acquire> {
         request_raise(&legacy);
         return Ok(Acquire::AlreadyRunning);
     }
-    match acquire_in(&primary) {
-        Ok(acquired) => Ok(acquired),
-        // 运行目录不可写（极少见）时退回系统临时目录，而不是放任多开
-        Err(e) if e.kind() == ErrorKind::PermissionDenied => {
-            acquire_in(&std::env::temp_dir().join(lock_name()))
-        }
-        Err(e) => Err(e),
+    // 权威互斥**先于任何文件系统操作**：抽象锁不落盘，运行目录不可写、TMPDIR 不同、
+    // XDG_RUNTIME_DIR 缺失都不影响它——这正是多开防护不能再依赖「文件路径算得一致」的原因。
+    let names = exclusive_names(&primary);
+    let Some(exclusive) = bind_exclusives(&names, Some(&primary))? else {
+        return Ok(Acquire::AlreadyRunning);
+    };
+    // 文件 socket 只做 raise IPC 与可见性：拿不到也照样能互斥，绝不因此放行第二个实例。
+    let (path, listener) = attach_file_socket(&primary);
+    Ok(Acquire::Primary(InstanceGuard {
+        path,
+        listener,
+        exclusive,
+    }))
+}
+
+/// 生产环境的权威锁名：
+///   1. `docker-panel-lock-<uid>`：按用户全局唯一，**与锁文件路径无关**
+///      （两个进程从不同 TMPDIR / XDG_RUNTIME_DIR 出发也能撞上）；
+///   2. 路径派生名（`@docker-panel-<16hex>`）：与 0.8.1 及更早版本互斥用，它们只认这个。
+fn exclusive_names(primary: &Path) -> Vec<String> {
+    let mut names = vec![uid_lock_name()];
+    let path_name = path_lock_name(primary);
+    if !names.contains(&path_name) {
+        names.push(path_name);
     }
+    names
+}
+
+/// 按 uid 全局唯一的抽象锁名。
+fn uid_lock_name() -> String {
+    match current_uid() {
+        Some(uid) => format!("docker-panel-lock-{uid}"),
+        None => format!("docker-panel-lock-{}", sanitized_user()),
+    }
+}
+
+/// 绑定一个抽象命名空间监听器（纯内核命名，没有文件可删）。
+fn bind_abstract(name: &str) -> std::io::Result<UnixListener> {
+    let addr = SocketAddr::from_abstract_name(name.as_bytes())?;
+    UnixListener::bind_addr(&addr)
+}
+
+/// 依次绑定全部权威锁。
+///
+/// 返回 `Ok(None)` 表示有锁名已被占用（= 已有实例在跑），调用方应放弃启动；
+/// 返回 `Err` 只可能是真正的系统错误（随后由调用方按 fail-closed 处理）。
+fn bind_exclusives(
+    names: &[String],
+    raise_path: Option<&Path>,
+) -> std::io::Result<Option<Vec<UnixListener>>> {
+    let mut held = Vec::with_capacity(names.len());
+    for name in names {
+        match bind_abstract(name) {
+            Ok(listener) => held.push(listener),
+            Err(e) if e.kind() == ErrorKind::AddrInUse => {
+                if let Some(path) = raise_path {
+                    request_raise(path);
+                }
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(Some(held))
+}
+
+/// 绑定文件系统 socket（raise IPC + 可见性）：先主路径，再临时目录；都不行就放弃。
+fn attach_file_socket(primary: &Path) -> (Option<PathBuf>, Option<UnixListener>) {
+    for path in [
+        primary.to_path_buf(),
+        std::env::temp_dir().join(lock_name()),
+    ] {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        match UnixListener::bind(&path) {
+            Ok(listener) => return (Some(path), Some(listener)),
+            Err(e) if e.kind() == ErrorKind::AddrInUse => {
+                // 活着的实例占着文件锁：raise 一下，然后不带文件 socket 继续
+                // （互斥已由抽象锁保证，文件 socket 只是 IPC 通道）。
+                let _ = request_raise(&path);
+            }
+            Err(_) => {}
+        }
+    }
+    (None, None)
 }
 
 /// 是否已有实例在跑（`--status` 用；零副作用，不建锁、不打扰运行中的实例）。
 pub fn is_running() -> bool {
-    is_running_in(&default_path())
+    let primary = default_path();
+    match bind_exclusives(&exclusive_names(&primary), None) {
+        // 能绑上全部锁名 → 没人持有；随后释放并探一眼文件 socket（兼容旧版本）
+        Ok(Some(held)) => {
+            drop(held);
+            UnixStream::connect(&primary).is_ok()
+        }
+        Ok(None) => true,
+        // 绑定出错（极少见）时按文件 socket 判定，宁可少报也不打扰运行中的实例
+        Err(_) => UnixStream::connect(&primary).is_ok(),
+    }
 }
 
 /// 指定路径查询是否已有实例（单测用）。
@@ -151,6 +253,7 @@ pub fn is_running() -> bool {
 /// 判定依据是**能不能绑上抽象锁**：能绑上说明没人在跑（随即释放），再去探一眼旧版本
 /// 的文件锁；绑不上（AddrInUse）说明有实例持有。刻意不 `connect` 抽象 listener ——
 /// 它不 accept 连接，探一次就会在 backlog 里留一条永不释放的连接。
+#[cfg(test)]
 pub fn is_running_in(path: &Path) -> bool {
     match bind_exclusive(path) {
         Ok(listener) => {
@@ -168,6 +271,7 @@ pub fn is_running_in(path: &Path) -> bool {
 ///   - 抽象锁绑不上（AddrInUse）→ 已有实例；
 ///   - 抽象锁绑上、文件锁 `bind` 报已存在 → 尝试连接：连得上说明对方活着（AlreadyRunning，
 ///     并已发出 raise 请求，同时释放刚拿到的抽象锁）；连不上说明是崩溃残留 → 删掉重绑。
+#[cfg(test)]
 pub fn acquire_in(path: &Path) -> std::io::Result<Acquire> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -187,9 +291,9 @@ pub fn acquire_in(path: &Path) -> std::io::Result<Acquire> {
             Ok(listener) => {
                 let exclusive = exclusive.take().expect("exclusive lock bound above");
                 return Ok(Acquire::Primary(InstanceGuard {
-                    path: path.to_path_buf(),
+                    path: Some(path.to_path_buf()),
                     listener: Some(listener),
-                    exclusive,
+                    exclusive: vec![exclusive],
                 }));
             }
             Err(e) if e.kind() == ErrorKind::AddrInUse => {
@@ -219,22 +323,22 @@ fn request_raise(path: &Path) -> bool {
     }
 }
 
-/// 绑定抽象命名空间的互斥锁。
+/// 绑定路径派生的互斥锁（`acquire_in` / 单测用）。
+#[cfg(test)]
 fn bind_exclusive(path: &Path) -> std::io::Result<UnixListener> {
-    let addr = exclusive_addr(path)?;
-    UnixListener::bind_addr(&addr)
+    bind_abstract(&path_lock_name(path))
 }
 
-/// 抽象名对**完整路径**取 FNV-1a：与锁路径一一对应（单测各用独立临时目录时互不抢占），
-/// 生产路径本身已含 uid，因此天然按用户隔离。抽象名上限 107 字节，这里只有 29 字节。
-fn exclusive_addr(path: &Path) -> std::io::Result<SocketAddr> {
+/// 路径派生的抽象名（FNV-1a 哈希）——兼容 0.8.1 及更早版本，单测也靠它做路径级隔离。
+/// 抽象名上限 107 字节，这里只有 29 字节。
+fn path_lock_name(path: &Path) -> String {
     use std::os::unix::ffi::OsStrExt;
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in path.as_os_str().as_bytes() {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    SocketAddr::from_abstract_name(format!("docker-panel-{hash:016x}").as_bytes())
+    format!("docker-panel-{hash:016x}")
 }
 
 /// `/run/user/<uid>/docker-panel-<uid>.sock`；目录不可用时落系统临时目录。
@@ -490,6 +594,35 @@ mod tests {
         let acquired = acquire_in(&path).expect("acquire over file");
         assert!(matches!(acquired, Acquire::Primary(_)));
         cleanup(&path);
+    }
+
+    #[test]
+    fn global_lock_name_depends_only_on_uid() {
+        let name = uid_lock_name();
+        if let Some(uid) = current_uid() {
+            assert_eq!(name, format!("docker-panel-lock-{uid}"));
+        }
+        // 路径变化不改变全局锁名（这正是 TMPDIR 不同也能互斥的原因）
+        let a = exclusive_names(Path::new("/run/user/1000/docker-panel-1000.sock"));
+        let b = exclusive_names(Path::new("/tmp/docker-panel-1000.sock"));
+        assert_eq!(a[0], b[0], "全局锁名必须与路径无关");
+        assert_eq!(a[0], name);
+        // 两个名字都必须参与绑定：全局名 + 路径派生名（后者兼容旧版本）
+        assert_eq!(a.len(), 2);
+        assert_ne!(a[0], a[1]);
+    }
+
+    #[test]
+    fn occupied_global_lock_name_blocks_acquisition() {
+        // 用测试专属名字，避免碰到生产锁（机器上可能正跑着 GUI）
+        let name = format!("dp-test-{}-global", std::process::id());
+        let _held = bind_abstract(&name).expect("首个抽象锁应能绑上");
+        let names = vec![name, "dp-test-second".to_string()];
+        match bind_exclusives(&names, None) {
+            Ok(None) => {}
+            Ok(Some(_)) => panic!("同名抽象锁已被占用，不应再绑上"),
+            Err(e) => panic!("绑定出错：{e}"),
+        }
     }
 
     #[test]

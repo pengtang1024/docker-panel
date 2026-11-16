@@ -840,3 +840,6 @@ msgstr "更新清单签名无法验证：{0}"
 
 msgid "Version {0} is already installed, restart to apply"
 msgstr "版本 {0} 已安装，重启后生效"
+
+msgid "Using the package already downloaded"
+msgstr "使用已下载的更新包"

@@ -6,6 +6,28 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.8.2] - 2026-11-17
+
+### 修复
+
+- **多开堵掉三处漏口**：抽象锁名从「锁文件路径的哈希」改为**按用户全局唯一**的
+  `docker-panel-lock-<uid>`——此前 `/run/user/<uid>` 不可用时锁目录退到 `temp_dir()`，
+  而 `TMPDIR` 逐进程不同，算出的抽象名也就不同，同一用户能反复开；现在名字与任何路径无关。
+  文件 socket 不再参与互斥判定（它只做窗口前置 IPC，拿不到也不会放行第二个实例），
+  抽象锁绑定失败（非 `AddrInUse`，例如 fd 耗尽）一律 `exit(1)` 而不再「提示后继续」。
+  路径派生名保留，用于和 0.8.1 及更早的实例互斥。
+- **`auto_restart` 开关此前只被持久化、从不读取**：关掉「安装后自动重启」照样重启。现在
+  `install_and_report` 真正按该开关决定是否重启。
+- **「已安装，重启生效」提示会残留**：重启之后 `already_installed` 仍为真，弹窗继续挂着一条
+  早已生效的提示。现在只有「dpkg 已装版本 ≥ 清单版本**且比当前运行的版本新**」才算待重启。
+
+### 变更
+
+- **自动检查节流 24h → 1h，轮询 6h → 30min**：0.7.18 发布时本机刚检查过 40 分钟，
+  被 24h 冷却直接挡到第二天。清单只有 541 字节，1h 一次的代价可以忽略。
+- **已下载的更新包直接复用**：缓存里同名文件 SHA-256 与清单一致时跳过下载
+  （不再每个新进程都重下 5.5MB）。
+
 ## [0.8.1] - 2026-11-17
 
 ### 修复
@@ -521,7 +543,8 @@
 
 [0.8.1]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...HEAD
+[0.8.2]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...0.8.2
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17

@@ -26,10 +26,14 @@ pub mod markdown;
 pub mod version;
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// 启动检查的节流周期：24 小时。
-pub const CHECK_INTERVAL_SECS: i64 = 24 * 60 * 60;
-/// 常驻进程的轮询周期：每 6 小时看一次是否到期。
-const SCHEDULER_TICK_SECS: u64 = 6 * 60 * 60;
+/// 自动检查的节流周期：1 小时。
+///
+/// 之前是 24 小时，代价很实在：发版后当天启动的用户看不到更新（本机 0.7.18 发布两小时后
+/// 检查仍被 24h 冷却挡着）。清单只有一个 541 字节的 JSON，1 小时一次的请求量可以忽略；
+/// 真正的重活（下载 5.5MB、安装）另有开关与条件，不会因为检查变密就变多。
+pub const CHECK_INTERVAL_SECS: i64 = 60 * 60;
+/// 常驻进程的轮询周期：每 30 分钟看一次是否到期（检查本身仍受 1 小时节流约束）。
+const SCHEDULER_TICK_SECS: u64 = 30 * 60;
 /// 启动后延迟检查：先让首屏 Docker 数据加载完。
 const STARTUP_DELAY_SECS: u64 = 10;
 
@@ -147,12 +151,12 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
             };
             let newer = version::is_newer(&info.version, CURRENT_VERSION);
             // 读取检查完成瞬间的开关（检查期间用户可能关掉自动安装）
-            let auto_now = state_for_check
+            let (auto_now, auto_restart) = state_for_check
                 .lock()
-                .map(|s| s.update.auto_install)
+                .map(|s| (s.update.auto_install, s.update.auto_restart))
                 .unwrap_or_else(|_| {
                     crate::lock::poison("update::check");
-                    auto_install
+                    (auto_install, true)
                 });
             // 只有「用户级二进制自替换」能真正静默：不需要 root，也就不需要授权。
             // deb 安装（目录不可写）仍要用户点一次授权，不算自动安装。
@@ -165,7 +169,7 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
                 && silent;
             let _ = tx_task.send(Msg::UpdateCheckDone(manual, auto, Ok(info.clone())));
             if auto {
-                install_and_report(&info, &tx_task);
+                install_and_report(&info, &tx_task, auto_restart);
             }
         })
         .await;
@@ -233,10 +237,17 @@ pub fn spawn_install(state: &SharedState) -> bool {
     }
 
     let state_t = state.clone();
+    let auto_restart = state
+        .lock()
+        .map(|s| s.update.auto_restart)
+        .unwrap_or_else(|_| {
+            crate::lock::poison("update::spawn_install");
+            true
+        });
     rt.spawn(async move {
         let tx_task = tx.clone();
         let res = tokio::task::spawn_blocking(move || {
-            install_and_report(&info, &tx_task);
+            install_and_report(&info, &tx_task, auto_restart);
         })
         .await;
         if res.is_err() {
@@ -286,10 +297,14 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
     let exe = std::env::current_exe().unwrap_or_default();
     let env = install::detect_env(&exe);
     let plan = version::plan_install(&raw.assets, &env);
-    // 「已经装好、只差重启」：dpkg 记录的版本 ≥ 清单版本。
-    // 自动安装闸门据此关掉，否则每个新进程都会重下一遍 deb、再弹一次授权。
+    // 「新版本已经装到盘上、只差重启」：dpkg 记录 ≥ 清单版本 **且** 比正在跑的进程新。
+    // 只看「≥ 清单版本」会在重启之后继续保持「已安装，重启后生效」——重启完还是这句，
+    // 用户会以为没生效。补上「比当前运行的版本新」就把这个状态限定在真正待重启的窗口内。
     let already_installed = install::installed_deb_version()
-        .map(|installed| !version::is_newer(&version, &installed))
+        .map(|installed| {
+            !version::is_newer(&version, &installed)
+                && version::is_newer(&installed, CURRENT_VERSION)
+        })
         .unwrap_or(false);
     Ok(UpdateInfo {
         version,
@@ -302,7 +317,7 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
     })
 }
 
-fn install_and_report(info: &UpdateInfo, tx: &Sender<Msg>) {
+fn install_and_report(info: &UpdateInfo, tx: &Sender<Msg>, auto_restart: bool) {
     let exe = std::env::current_exe().unwrap_or_default();
     let cache = install::cache_dir(&info.version);
     let mut progress = |percent: i32, text: String| {
@@ -316,6 +331,8 @@ fn install_and_report(info: &UpdateInfo, tx: &Sender<Msg>) {
         )),
         Err(e) => Err(e),
     };
-    let restart = done.is_ok();
+    // 「自动重启」开关此前只被持久化、从未被读取——装完一律重启，关掉开关也不生效。
+    // 关掉时保持「已更新，重启后生效」，由用户自己选时机。
+    let restart = done.is_ok() && auto_restart;
     let _ = tx.send(Msg::UpdateDone(done, restart));
 }

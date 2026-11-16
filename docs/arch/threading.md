@@ -344,7 +344,8 @@ python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾�
 
 | 指标 | 实测 |
 |------|------|
-| 空闲 CPU（1s 分辨率平均） | 0.20% – 0.33% |
+| 空闲 CPU（1s 分辨率平均，整进程） | 0.20% – 0.33% |
+| 空闲 CPU（60s，**UI 线程** schedstat 精确值） | **0.198%**（118.8ms/60s，24 行可见）；同样空闲但过滤成 0 行可见时 **0.035%**（21.2ms/60s） |
 | RSS | 启动 48–51MB → 约 100s 后稳定在 54MB（**不是泄漏**，是有界热身后趋平） |
 | 线程数 | 33–35（tokio 阻塞池按需伸缩，不单调增长） |
 | 6s stats 整轮 | `one_shot` 前 2.03s，后 2.6–3ms |
@@ -355,6 +356,17 @@ python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾�
 | 四列表并发一轮（`bootstrap join` / 每次刷新） | 143–165ms（`/images/json` 92ms 为最慢一路，`/containers/json` 34ms、网络 8ms、卷 8ms） |
 | apply（Rust 侧：行构建 + 模型同步） | 23 行 12µs + 5µs ≈ **17µs/轮**；200 行 86µs + 48µs ≈ 134µs |
 | 日志热路径（每行） | 正常段 71ns/行（剥前缀+拼前缀+入批，≈1400 万行/s 单线程）；回放段 23ns/行；抽样判定 0.2ns/行 |
+
+**按线程归因（别再猜「是不是 tokio 在烧 CPU」）**：整进程 60s 采样里只有 UI 主线程有可测开销，tokio worker 连一个 10ms tick 都攒不满。用 `/proc/<pid>/task/<pid>/schedstat` 第 1 字段（ns 级运行时间）直接量主线程：
+
+```bash
+PID=$(pgrep -x docker-panel)
+read a < <(cut -d' ' -f1 /proc/$PID/task/$PID/schedstat); sleep 60
+read b < <(cut -d' ' -f1 /proc/$PID/task/$PID/schedstat)
+echo "UI 线程 $(( (b-a)/1000000 ))ms / 60s"
+```
+
+结论：24 行可见 118.8ms/60s、0 行可见 21.2ms/60s → **约 83% 的空闲开销是「行真的变了 → 重绘那几行」**（每 6s 一轮约 1.6ms/24 行），剩下 0.035% 是底栏/概览带的固定重绘。同时量了事件风暴（6 次 `docker restart` 共 62s）**0.225%**，与空闲同量级——8ms 档位没有把 UI 线程变成忙等。想再往下只剩「降采样频率」（6s→10s 约再省 40%，CPU% 最多晚 4s），那是产品取舍，不是代码效率。
 
 apply 这一段单独量（临时基准，`container_row` ×200 轮取均值 + `render::containers` 的差量同步两条路径：全等走比对、全变走 `set_row_data`）。**结论是数据管线已经到地板**：一次 6s stats 应用在 23 容器下只消耗 17µs，折算 0.0003% CPU。空闲 CPU 那 0.20–0.33% 基本不是它——是 Slint 软件渲染器在每次 apply 后按脏区重绘整窗（23 行的百分比文字 + 微条 + 概览带 + 底栏合计会同时变），要再往下压只能减少重绘面积或降采样频率，那是 UI 行为取舍，不是代码效率问题。同一轮还量了「名称排序比较器零分配化」：`to_lowercase` 4.2ms vs `chars().flat_map(char::to_lowercase)` 6.1ms（200 项 ×200 次排序），更慢，**不要改**。
 

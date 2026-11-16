@@ -247,6 +247,7 @@ tag 推送 → CI 建草稿（draft=true，用户不可见）
 - 启动器候选排序「版本高的优先、同版本用户副本优先」，逐个校验：**用户副本必须验签**（`checksums.txt.sig` → 清单里 `docker-panel` 行 sha256 → 对 `O_PATH` 打开的 inode 算哈希 → 用同一个 fd `execveat(fd, "", …, AT_EMPTY_PATH)`，校验与执行是同一个 inode，没有 TOCTOU 窗口）；**种子按属主信任**（root 所有且组/其他不可写）。
 - 为什么种子不走签名：`checksums.txt.sig` 要到发布前离线签名时才存在，而 deb 是 CI 构建的，签名打不进包里；种子的信任来源是 dpkg（要改它得先拿到 root）。
 - 任何一步失败都**不降级执行**该候选，而是换下一个；全坏就明确报错退出（不会跑一个「验不过但能用」的版本）。
+- **重启必须指向正式安装路径**：自替换是「旧 exe → `<exe>.previous`，新二进制 → `<exe>`」，替换完成后旧进程的 `/proc/self/exe` 指向 `.previous`（旧 inode）。直接 exec 那份备份等于把旧版本重新拉起来（文件是新的、跑的是旧的）——重启一律剥掉 `.previous` 指回正式路径；此外启动时若发现自己是 `.previous` 副本，直接 `exec` 正式路径自愈。
 - 目录不可写且不是种子布局（极少见）→ 退回 `pkexec dpkg -i`，每次升级一次 polkit 授权；这是写系统目录的权限边界，代码里不做绕过。
 
 deb 本身仍**没有 dpkg/debsig 签名**；但从 0.8.0 起 Release 提供 `checksums.txt.sig`，手工下载的用户可以离线复核：

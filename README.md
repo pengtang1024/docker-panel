@@ -96,7 +96,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 | 顶栏 | 拉取镜像（实时进度弹窗）· 清理未使用资源（已停止的容器 / 悬空镜像 / 未使用的网络 / 未使用的卷，可任意组合） |
 
 > [!NOTE]
-> 操作完成后列表由 Docker `/events` 事件统一刷一轮（400ms 合并窗口），操作消息**不再自带刷新**——所以连续启停多个容器只会看到一次列表重排。
+> 操作完成后列表由 Docker `/events` 事件统一刷新（400ms 合并窗口：首事件立刻刷，窗口内后续事件到期补刷一次），操作消息**不再自带刷新**——所以连续启停多个容器只会看到两次列表重排，而不是每个容器各一次。
 
 ### 2.5 全局快捷键
 
@@ -146,7 +146,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 
 ### 4.1 Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`（0.7.15 及以后）：
+从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`（0.7.15 及以后；0.7.16 只打了 tag、没有 Release，请用 0.7.17）：
 
 ```bash
 sudo dpkg -i docker-panel_<版本>_amd64.deb
@@ -294,7 +294,7 @@ docker-panel/
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
-│   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启）
+│   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 安装与重启）
 │   ├── update-state.slint  # 自动更新 UI 状态 global（顶栏 / 弹窗 / Rust 共享）
 │   ├── settings-dialog.slint # 设置弹窗（外观三选 + 自动更新三个开关）
 │   ├── settings-state.slint # 设置弹窗开关 global
@@ -302,9 +302,9 @@ docker-panel/
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）
-│   ├── main.rs             # 组装入口：CLI 参数（--version/-V/--help）→ 单实例锁 → i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
-│   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help；未知参数照常启动 GUI
-│   ├── single_instance.rs  # 单实例锁（Unix socket 互斥 + raise IPC；陈旧锁自动清理，Drop 时释放）
+│   ├── main.rs             # 组装入口：CLI 参数（--version/-V/--help/--status）→ 单实例锁 → i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
+│   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help / --status；未知参数照常启动 GUI
+│   ├── single_instance.rs  # 单实例锁（抽象 socket 互斥 + 文件 socket raise IPC；锁文件被删仍拦截，陈旧锁自动清理，Drop 时释放）
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
 │   ├── stale.rs            # 采样过期判定：连续多轮无样本 → 边沿触发的状态位（stats 3 轮 / df 2 轮）
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()

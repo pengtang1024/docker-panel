@@ -135,6 +135,7 @@ jobs:
       # 「建 draft → 上传 8 个资产 → 再 draft=false」，一步到位（draft: false + files）
       # 在开启 immutable 的仓库里必失败，且失败时 Release 已经对外可见、无法补救。
       - name: 创建草稿 Release 并上传资产
+        id: release
         uses: softprops/action-gh-release@v3
         with:
           name: docker-panel ${{ steps.ver.outputs.version }}
@@ -160,10 +161,14 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.ver.outputs.version }}"
-          api="repos/${{ github.repository }}/releases/tags/${tag}"
+          rel_id="${{ steps.release.outputs.id }}"
+          # 草稿在发布前**不按 tag 索引**：`GET /releases/tags/{tag}` 对 draft 返回 404
+          # （0.7.17 就是这样在 CI 里失败、只能手工 PATCH 发布的）。所以定位草稿只能用
+          # 上一步 action 输出的 release id，发布成功后才改用 tag 回读。
+          [ -n "$rel_id" ] || { echo "::error::拿不到草稿 Release id"; exit 1; }
           # 资产不全就不发布：半截 Release 比没有更糟（用户下到 404 的资产链接，
           # 而 immutable 下补传又被拒 → 只能发新版本补救）。
-          assets="$(gh api "$api" --jq '.assets[].name' | sort | tr '\n' ' ')"
+          assets="$(gh api "repos/${{ github.repository }}/releases/${rel_id}/assets" --jq '.[].name' | sort | tr '\n' ' ')"
           count="$(printf '%s' "$assets" | wc -w)"
           echo "draft 资产（${count}）：${assets}"
           for f in docker-panel_${tag}_amd64.deb docker-panel checksums.txt version.json \
@@ -173,9 +178,9 @@ jobs:
               *) echo "::error::draft Release 缺少资产 $f，放弃发布"; exit 1 ;;
             esac
           done
-          rel_id="$(gh api "$api" --jq '.id')"
           gh api -X PATCH "repos/${{ github.repository }}/releases/${rel_id}" -F draft=false >/dev/null
           # 回读确认真的发布了（不是 draft），并记录 immutable 状态供排查
+          api="repos/${{ github.repository }}/releases/tags/${tag}"
           read -r draft immutable <<<"$(gh api "$api" --jq '[.draft, .immutable] | @tsv' | tr '\t' ' ')"
           echo "已发布 ${tag}：draft=${draft} immutable=${immutable}"
           [ "$draft" = "false" ] || { echo "::error::Release ${tag} 仍是 draft"; exit 1; }

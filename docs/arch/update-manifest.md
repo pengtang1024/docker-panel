@@ -20,7 +20,7 @@
 | 5 | [三级回退链](#5-三级回退链) | 三个来源的优劣与实测结果 |
 | 6 | [失败与降级行为](#6-失败与降级行为) | 每种失败会不会打扰用户 |
 | 7 | [安全边界](#7-安全边界) | 三条收紧规则与「为什么不引入签名」 |
-| 8 | [文档与版本号三同步影响](#8-文档与版本号三同步影响) | 为什么 `version.json` 不是第四处版本源 |
+| 8 | [文档与版本号同步影响](#8-文档与版本号同步影响) | 为什么 `version.json` 不算版本源 |
 | 9 | [不建议做](#9-不建议做) | 12 条已经想清楚不做的事 |
 | 10 | [风险与回归点](#10-风险与回归点) | 风险 → 影响 → 缓解 |
 | 11 | [已实测与待补测](#11-已实测与待补测) | 哪些有证据、哪些还没有 |
@@ -123,7 +123,7 @@
 `git flow release finish` 时，release 分支合入 `master` 是普通三方合并——`master` 侧有 `version.json`、
 release 侧没有该文件，合并结果保留 `master` 的旧清单，**不产生冲突**；随后 finish 把 tag 回灌 `develop`
 （本项目历史为 `Merge tag 'X.Y.Z' into develop`），这条 CI 提交随 tag 进入 `develop`，分叉自动收敛。
-因此不需要手工把 `master` 合回 `develop`；版本三同步与 `scripts/check-version.sh` 都不检查 `version.json`。
+因此不需要手工把 `master` 合回 `develop`；发版时的版本号同步核对（`scripts/check-version.sh`）都不检查 `version.json`。
 若某次流水线推送失败（权限 / 并发 / 网络），`master` 会停留在上一版清单，jsDelivr 备源保持陈旧（主源不受影响），
 下一次发版或手工补提交即可。
 
@@ -203,9 +203,9 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 若把清单提交到 `master` 供 jsDelivr 读，它就与 Release 是**两个可独立修改的渠道** → 这正是不能把它当信任根的原因。
 本期**不**引入 minisign / 自建签名（不在方案范围内），也不新增其它信任锚。
 
-## 8. 文档与版本号三同步影响
+## 8. 文档与版本号同步影响
 
-- **版本号仍只有三处**（`Cargo.toml` / `packaging/debian/control` / `CHANGELOG.md`），`version.json` **不是**第四处手写源：它的 `version` 由 `GITHUB_REF_NAME` 派生，无需人工同步，`scripts/check-version.sh` 也**不检查**它。
+- **版本号仍只有四处手写同步**（`Cargo.toml` / `packaging/debian/control` / `Cargo.lock` / `CHANGELOG.md`），`version.json` **不是**其中之一：它的 `version` 由 `GITHUB_REF_NAME` 派生，无需人工同步，`scripts/check-version.sh` 也**不检查**它。
 - 本轮已同步：本文件（状态改为「已实施」+ 补实测值）、`AGENTS.md` 模块地图（`update/` 增 `discover` / `manifest`）与「当前已知限制」的「更新包无代码签名」条目、`docs/architecture.md` 的模块树与依赖表、`src/update/{mod,github}.rs` 模块注释、`CHANGELOG.md` 的 `[Unreleased]`。
 - `docs/git-flow.md` 的发布流程不变（清单由 CI 生成，不进入人工发版清单）。
 

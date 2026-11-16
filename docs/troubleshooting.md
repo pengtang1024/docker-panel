@@ -229,6 +229,7 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 0.7.15 及以后的版本打不开 | 版本号写错，或该 Release 尚未发布 | 在 [Releases 列表](https://github.com/pengtang1024/docker-panel/releases) 里挑实际存在的版本 |
+| **0.7.16 找不到 Release** | 该版本 CI 构建失败（`Cargo.lock` 未同步版本号），只推了 tag 没发 Release；tag 受保护不可重指 | 直接用 0.7.17（已包含该版本的全部改动） |
 | **0.4.3 – 0.7.14 的 GitHub 链接 404** | 这些 Release 与 tag 在 GitHub 侧因 immutable releases 的 tag 记录限制暂不可重建 | 改从 [Gitee Releases](https://gitee.com/pengtang1024/docker-panel/releases) 下载；资产名与 `checksums.txt` 与 GitHub 完全一致 |
 | 0.4.2 及更早 | 缺少第三方许可文件与 Slint 署名，已按许可要求下架 | 不提供下载；变更记录仍在 [CHANGELOG](../CHANGELOG.md) |
 
@@ -297,7 +298,7 @@ sudo update-desktop-database 2>/dev/null || true
 rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel"
 ```
 
-单实例锁文件在 `$XDG_RUNTIME_DIR/docker-panel-<user>.sock`，进程正常退出时自动删除；异常退出（SIGKILL / panic abort）会留下陈旧 socket，下次启动会自动清理并重绑，**不需要手动删**。
+单实例锁由两道机制组成：权威互斥是**抽象命名空间 socket**（`@docker-panel-<16hex>`，不落盘、进程退出由内核回收），另有一个文件 socket `/run/user/<uid>/docker-panel-<uid>.sock`（无法创建时回退 `/tmp`）只承担前置请求（raise）与可见性。进程正常退出时文件 socket 会被删除；异常退出（SIGKILL / panic abort）留下的陈旧 socket 下次启动会自动清理并重绑，**不需要手动删**——即使手动删掉，抽象锁仍然拦住第二个实例。查询是否已有实例在跑用 `docker-panel --status`（退出码 0=在跑 / 1=没跑）。
 
 ### 桌面图标不对 / Dock 显示「未识别程序」
 

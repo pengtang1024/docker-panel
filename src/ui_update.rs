@@ -125,6 +125,12 @@ impl AppState {
                         self.stats_prev.retain(|id, _| alive.contains(id.as_str()));
                         // 列表不再带 size=1 → 磁盘列从 /system/df 缓存补回
                         self.apply_container_sizes();
+                        // 容器变化会改变镜像的「被引用容器数」：用新列表本地重算，
+                        // 这样容器事件只需拉一路 /containers/json（省一次 ≈50ms 的镜像请求）
+                        if crate::docker::attach_container_refs(&mut self.images, &self.containers)
+                        {
+                            res.mark(UiFlag::ImagesChanged);
+                        }
                     }
                     // 列表刷新失败不写状态栏：每轮闪一次会让底栏数字被推挤，
                     // 且失败已由连接红点表达；仅留 stderr 供排查。
@@ -134,8 +140,10 @@ impl AppState {
             Msg::Images(r) => {
                 res.docker_ok = Some(r.is_ok());
                 match r {
-                    Ok(list) => {
+                    Ok(mut list) => {
                         res.mark(UiFlag::ImagesChanged);
+                        // 引用数不来自 /images/json：用当前容器列表回填（与上一条同源）
+                        crate::docker::attach_container_refs(&mut list, &self.containers);
                         self.images = list;
                         // 列表 API 不给层数，首次/新增镜像后台补查一次
                         self.request_missing_layers();

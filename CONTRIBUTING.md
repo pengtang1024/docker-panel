@@ -249,7 +249,7 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 | 架构变更 | AGENTS.md 线程模型与消息表 · docs/architecture.md 与 docs/arch/ · README 架构 ASCII 图 · Wiki Architecture |
 | 用户可见功能变更 | CHANGELOG.md · README 功能特性 · AGENTS.md 已知限制 · Wiki Home 与 Usage |
 | 规则变更 | docs/agents-rules.md · AGENTS.md 规则地图 |
-| 发版 | CHANGELOG 新增版本段落 · 三处版本号同步（`Cargo.toml` / `packaging/debian/control` / `CHANGELOG.md`）· Wiki Home 版本声明 |
+| 发版 | CHANGELOG 新增版本段落 · 四处版本号同步（`Cargo.toml` / `packaging/debian/control` / `Cargo.lock` / `CHANGELOG.md`）· Wiki Home 版本声明 |
 
 完整触发表见 [docs/agents-rules.md](docs/agents-rules.md) §6。
 

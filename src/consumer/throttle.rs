@@ -7,21 +7,32 @@ use std::time::Duration;
 
 use crate::ui_update::DrainResult;
 
-/// UI 刷新最短间隔：日志洪峰下把上千次 invoke 合并成每秒 ~8 次
+/// 含日志批的 UI 刷新最短间隔：日志洪峰下把上千次 invoke 合并成每秒 ~8 次
 pub(super) const UI_MIN_INTERVAL: Duration = Duration::from_millis(120);
+
+/// 不含日志的批（列表 / 抽屉 / 状态栏 / 弹窗）的最小间隔。
+///
+/// 这一档要压的只是「同一时刻到达的多条 Msg」：列表本身只在 Docker 事件或
+/// 6s stats 时变化，事件又已被 `event_watch` 的 400ms 合并窗口收敛，再压到
+/// 120ms 只会让首屏的镜像/网络/卷、以及事件触发的列表更新白等一个窗口
+/// （实测首屏镜像行因此从 152ms 漂到 272ms）。
+pub(super) const NON_LOG_MIN_INTERVAL: Duration = Duration::from_millis(8);
 /// 纯日志批的 UI 刷新间隔：日志行只影响日志视口，放宽到 250ms
 /// （跟随滞后上限 ~250ms；其它任何 UI 变化仍走 UI_MIN_INTERVAL）
 pub(super) const LOG_UI_MIN_INTERVAL: Duration = Duration::from_millis(250);
 /// 锁外阻塞超时：兼顾退出检查与空闲时尽快 flush pending
 pub(super) const RECV_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// 本轮 pending 适用的 UI 节流窗口：只有日志行变化时用宽松窗口，
-/// 其余情况（列表 / 抽屉 / 状态栏 / 弹窗）一律 120ms。
+/// 本轮 pending 适用的 UI 节流窗口，按「有没有日志行」分三档：
+/// 纯日志 250ms（只有日志视口变）/ 日志混批 120ms（洪峰主力防护）/
+/// 不含日志 8ms（只合并同一时刻到达的多条 Msg）。
 pub(super) fn apply_interval(pending: &DrainResult) -> Duration {
     if pending.logs_only() {
         LOG_UI_MIN_INTERVAL
-    } else {
+    } else if pending.is_set(crate::ui_update::UiFlag::LogsChanged) {
         UI_MIN_INTERVAL
+    } else {
+        NON_LOG_MIN_INTERVAL
     }
 }
 
@@ -99,15 +110,15 @@ mod tests {
         let mut d = DrainResult::default();
         d.mark(UiFlag::LogsChanged);
         assert_eq!(apply_interval(&d), LOG_UI_MIN_INTERVAL);
-        // 任何其它 UI 变化都退回常规窗口
+        // 日志 + 其它变化混批：退回 120ms（洪峰主力防护）
         d.docker_ok = Some(true);
         assert_eq!(apply_interval(&d), UI_MIN_INTERVAL);
         d.docker_ok = None;
         d.status_text = Some("x".into());
         assert_eq!(apply_interval(&d), UI_MIN_INTERVAL);
-        // 没有日志变化（例如只有列表）也走常规窗口
+        // 没有日志变化（例如只有列表）走 8ms 窄窗口，不再白等一个 120ms 窗口
         let mut d2 = DrainResult::default();
         d2.mark(UiFlag::ContainersChanged);
-        assert_eq!(apply_interval(&d2), UI_MIN_INTERVAL);
+        assert_eq!(apply_interval(&d2), NON_LOG_MIN_INTERVAL);
     }
 }

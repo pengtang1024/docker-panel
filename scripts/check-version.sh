@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 版本三同步核对：Cargo.toml / packaging/debian/control / CHANGELOG.md
+# 版本四处同步核对：Cargo.toml / packaging/debian/control / Cargo.lock / CHANGELOG.md
 #
 # 发版与 hotfix 收尾时跑一次，避免出现「deb 版本号与源码不一致」或「有 tag 没更新日志」。
 #
 # 用法：
-#   scripts/check-version.sh            # 核对三处一致性（不要求已打 tag）
-#   scripts/check-version.sh --tag     # 额外核对当前分支最新 tag 与三处一致
+#   scripts/check-version.sh            # 核对四处一致性（不要求已打 tag）
+#   scripts/check-version.sh --tag     # 额外核对当前分支最新 tag 与四处一致
 #
 # 退出码：0 = 全部一致；1 = 存在不一致（逐条打印差异）
 
@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 
 fail=0
 
-# ---- 读取三处版本 ----
+# ---- 读取四处版本 ----
 cargo_ver=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 deb_ver=$(sed -n 's/^Version: \(.*\)$/\1/p' packaging/debian/control | head -1)
 changelog_ver=$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md \
@@ -82,4 +82,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "✓ 版本三同步一致"
+echo "✓ 版本四处同步一致"

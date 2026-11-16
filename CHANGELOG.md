@@ -8,6 +8,23 @@
 
 ## [Unreleased]
 
+## [0.7.18] - 2026-11-16
+
+### 修复
+
+- **单实例锁改为「抽象 socket + 文件 socket」两道锁，锁文件被外部删除也不再允许多开**：此前互斥完全建立在「锁文件还在」之上——`rm -f` 掉 `/run/user/1000/docker-panel-pt.sock` 后任何新进程都能 bind 成功，2026-11-16 本机因此同时跑出 **8 个**窗口（性能基准脚本每轮删锁文件再起新实例）。现在权威锁是**抽象命名空间 socket**（`@docker-panel-<16hex>`，名字取自锁路径的 FNV-1a 哈希）：不落盘、外部删不掉、进程退出由内核回收；文件 socket 只保留前置请求（raise）与可见性，路径改为按 uid 派生 `/run/user/<uid>/docker-panel-<uid>.sock`（**不再读 `XDG_RUNTIME_DIR`**——桌面与终端启动时该变量可能不同或缺失，两套路径互不冲突同样会多开）。新增 `--status`（退出码 0=在跑 / 1=没跑），与 `--version` / `--help` 一样在拿锁之前处理。
+- **事件合并窗口改为双沿（leading + trailing），窗口尾部的事件不再被吞**：原来 400ms 窗口内的后续事件直接 `continue` 丢弃，`start` 之后 400ms 内到达的 `stop` 会被吞掉，列表会一直停在 running 直到下一个事件为止。现在窗口内的事件由 `Debouncer` 记账，事件循环用 `select!` 同时等「新事件」与「窗口到期」，到期补刷一次；首事件仍然立即刷新（动作反馈不变慢）。代价上界是每个突发窗口多一轮刷新（实测一轮约 70ms 墙钟、应用侧 CPU 0–10ms，空闲仍零请求）。
+- **发版流水线的「发布」步骤按 release id 定位草稿，而不是按 tag 查**：`GET /releases/tags/{tag}` 对**草稿**返回 404（草稿发布前不按 tag 索引），0.7.17 的发版因此在「发布 Release（draft → published）并自检」这一步失败，草稿与 8 个资产都建好了却没能自动发布，只能手工 `PATCH draft=false`。现在草稿步骤带 `id: release`，资产校验与发布都用 `steps.release.outputs.id`（`/releases/{id}/assets`），发布成功后才改用 `releases/tags/{tag}` 回读断言 `draft=false`。
+
+### 变更
+
+- **UI 节流窗口按批分档**：不含日志的批 8ms 上屏（列表 / 抽屉 / 状态栏），日志混批 120ms，纯日志 250ms。此前统一 120ms，镜像 / 网络 / 卷经常要等满一个窗口才出现（实测「数据已到 → 上屏」在 0.2 / 106 / 120ms 之间跳变），现在降到 1ms 内；日志洪峰防护不变。
+- **启动即发首屏请求**：`bootstrap::spawn_initial_load` 从 `MainWindow::new()` 之后移到 `AppState::new()` 之后，让 Docker 冷连接（首个请求 73–99ms）与窗口创建（25–34ms）重叠——它只需要 `tx` 与 tokio handle，消息先进 mpsc 队列由稍后启动的 consumer 线程消费，UI 写入时机不变。首个非空容器行模型的写入从 153–164ms（中位 154ms）降到 30–41ms（中位 33ms）。
+- 事件驱动的列表刷新按事件类型收窄：容器启停只拉 `/containers/json`（实测 18.0ms，此前四路并发 77.7ms），镜像的「被引用容器数」改用新容器列表在应用侧本地重算（`Msg::Containers` / `Msg::Images` 处理时回填），网络与卷只在自身事件或全量刷新时拉取；刷新去重的脏标记从 bool 改为 `Kinds` 位掩码，部分刷新与补跑可以共存（`src/ui_state/refresh.rs`）
+- **版本号同步口径在全部文档里统一为「四处（含 Cargo.lock）」**：此前 `CONTRIBUTING.md` 的文档同步表、`docs/agents-rules.md` 的 R9 与 packaging 行、`docs/git-flow.md` 的流程注释与「四个位置」表（缺 `Cargo.lock` 行）、`docs/arch/update-manifest.md` §8 仍写「三处/三同步」，与已经核对第四处的 `scripts/check-version.sh` 自相矛盾——漏改 `Cargo.lock` 会让 CI 的 `--locked` 直接失败（0.7.16 就是这么炸的）。
+
+- **修正 12 组文档与实现不一致（含 3 处指向不存在的 API / 路径）**：`AGENTS.md` 把 `slint_build::compile` 写成真实调用的 `compile_with_config` + `with_bundled_translations`、把已不存在的 `detail-log-panel.slint` 改为 `drawer.slint`、M3 色板角色数 `53 → 49`（`material_schemes.slint` 的 `MaterialScheme` 实测 49 个字段）、`update-dialog` 不再声称有开关（三个开关只在设置弹窗）；`docs/arch/threading.md` 的消息表把 `PullDone` / `ActionDone` 改回「不刷新、交给 `/events`」（只有 `CleanupDone` 保留 `refresh_now` 兜底）、`LogStreamEnded` 补「全部流都退出」条件、日志状态提示三态改四态（补「洪峰抽样」）；`docs/agents-rules.md` 三处把不存在的 `ui/components.slint` 改为 `ui/components-*.slint`；`docs/arch/ui-interaction.md` 的 Slint 清单补 `settings-dialog` / `settings-state` 两项（39 → 41）并按实测更新 11 处行数；`docs/architecture.md` 与 README 的「两个开关」口径统一为三个；规则地图 R9 与 `scripts/check-version.sh` 头部注释由「三处同步」改为「四处同步（含 Cargo.lock）」。
+
 ## [0.7.17] - 2026-11-16
 
 ### 变更
@@ -451,7 +468,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...HEAD
+[0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17
 [0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14

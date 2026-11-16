@@ -55,7 +55,7 @@ use crate::slint_gen::MainWindow;
 use crate::ui_state::AppState;
 
 fn main() {
-    // 命令行参数：--version / -V / --help 在此直接退出，不初始化 Slint、
+    // 命令行参数：--version / -V / --help / --status 在此直接退出，不初始化 Slint、
     // 不连 Docker、不设置 xdg app_id；未知参数按正常启动 GUI 处理。
     match cli::parse_args(std::env::args().skip(1)) {
         cli::CliAction::Version => {
@@ -64,6 +64,16 @@ fn main() {
         }
         cli::CliAction::Help => {
             print!("{}", cli::help_text());
+            return;
+        }
+        // 只读查询：不建锁、不碰窗口，退出码 0=已有实例在跑 / 1=没在跑（脚本可据此判断）
+        cli::CliAction::Status => {
+            if single_instance::is_running() {
+                println!("docker-panel: running");
+            } else {
+                println!("docker-panel: not running");
+                std::process::exit(1);
+            }
             return;
         }
         cli::CliAction::Run => {}
@@ -96,6 +106,14 @@ fn main() {
     // AppState::new() 返回 (Arc<Mutex<AppState>>, Receiver<Msg>)；
     // Receiver 交给 consumer 线程独占，绝不进 Mutex（防死锁关键）。
     let (state, rx) = AppState::new();
+
+    // 首屏数据：**尽早**发出去，与窗口创建重叠。
+    // 它只需要 `tx` 与 tokio handle，不依赖窗口 / UI 线程；消息先进 mpsc 队列，
+    // consumer 线程稍后才启动，队列照常缓冲不会丢。
+    // 实测（同二进制交替各 5 次，首个非空容器行模型写入时刻）：放在 `MainWindow::new()`
+    // 之后是 153–164ms（中位 154ms），提前到此处是 30–41ms（中位 33ms）——省掉的是
+    // 窗口创建与首屏准备期间对 Docker 冷连接的纯等待。
+    bootstrap::spawn_initial_load(&state);
 
     let ui = MainWindow::new().expect("create window");
 
@@ -133,8 +151,6 @@ fn main() {
     // 后台定时任务：6s stats 采样、30s 卷占用（列表本身由事件驱动刷新）
     bootstrap::spawn_stats_interval(&state);
     bootstrap::spawn_disk_usage_interval(&state);
-    // 首屏数据
-    bootstrap::spawn_initial_load(&state);
     // 自动更新：启动 10s 后检查一次，之后每 6h 轮询（24h 节流）
     update::spawn_scheduler(&state);
 

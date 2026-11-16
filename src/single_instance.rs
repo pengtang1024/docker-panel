@@ -1,13 +1,32 @@
 //! 单实例保障：同一用户只允许跑一个 docker-panel GUI 实例。
 //!
-//! 互斥对象是一个 Unix domain socket：`$XDG_RUNTIME_DIR/docker-panel-<user>.sock`，
-//! `XDG_RUNTIME_DIR` 缺失/为空时回退 `/tmp`（仍带用户名后缀，避免多用户互撞）。
+//! 互斥是**两道锁**，权威的是不落盘的那一道：
+//!   1. 抽象命名空间 socket（`@docker-panel-<16hex>`，名字由锁路径哈希而来）：只在内核
+//!      命名空间里占个名字，没有文件、外部删不掉，进程退出时内核自动回收。
+//!   2. 文件系统 socket（`/run/user/<uid>/docker-panel-<uid>.sock`）：沿用既有语义，
+//!      既是「请把已有窗口提到前台」的 IPC 通道，也让 `ls` / `ss` 看得见锁。
 //!
-//! 为什么用 socket 而不是 flock 锁文件：
-//!   1. `bind` 本身就有「路径已存在即失败」的互斥语义，不需要额外依赖；
-//!   2. 同一个 socket 顺带就是「请把已有窗口提到前台」的 IPC 通道；
-//!   3. 进程被 SIGKILL / panic=abort 后残留的 socket 文件 `connect` 会失败
-//!      （ECONNREFUSED），据此判陈旧并自动清理 —— 不存在需要人工删除的残留锁。
+//! # 为什么权威锁必须不落盘（2026-11-16 的真实事故）
+//!
+//! 本机曾同时出现 **8 个** docker-panel 窗口：锁没坏，是**锁文件被外部删掉了**。
+//! 那 8 个进程的可执行文件是 A/B 基准脚本拷出来的副本（`bin-old` / `bin-new`），脚本每轮
+//! 先 `rm -f` 掉 socket 再起新进程，而正在跑的老进程既不察觉、也不知道自己已经不再是
+//! 「唯一实例」，于是每个新进程都能 `bind` 成功。文件锁的互斥完全建立在「那个文件还在」
+//! 之上，任何能写该目录的进程都能把它删掉、把互斥关掉 —— 这是机制性缺陷，不是 bug。
+//! 抽象 socket 没有文件可删，从机制上封死这条路（也因此不需要「定时 stat 自愈」轮询）。
+//!
+//! # 锁路径为什么按 uid 派生、不读 `XDG_RUNTIME_DIR`
+//!
+//! 从桌面、终端、systemd 启动时 `XDG_RUNTIME_DIR` 可能不同、甚至缺失（旧实现缺失时退到
+//! /tmp，连目录都换了）→ 两套路径互不冲突，照样多开。改成 `/run/user/<uid>`（不可用 /
+//! 不可写时退系统临时目录），同一用户在任何启动路径下算出的锁都相同。
+//!
+//! # 抽象锁为什么不进 raise 线程
+//!
+//! listener 一旦移交给线程，guard 释放后仍有 fd 引用它 → 抽象名不释放 → 自动重启
+//! （`release_then` 拉起新进程）时新进程判「已运行」后退出、旧进程也在退出 → 应用直接
+//! 消失（0.7.12–0.7.14 修过的老缺陷）。所以抽象锁**只由 guard 持有**，raise IPC 继续走
+//! 文件 socket（零改动、零空闲开销）。
 //!
 //! # 窗口前置的能力边界（**只能是尽力而为**）
 //!
@@ -35,8 +54,9 @@
 //! 属重型依赖，且仍受合成器策略约束）。当前刻意不引入 xdotool / zbus /
 //! 原生 wayland-client 等外部手段 —— 它们在无会话 / 不同合成器下只会带来新的失败模式。
 
-use std::io::{Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::io::{ErrorKind, Read, Write};
+use std::os::linux::net::SocketAddrExt;
+use std::os::unix::net::{SocketAddr, UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
 /// 获取结果：拿到锁（主实例）/ 已有实例在跑。
@@ -48,7 +68,12 @@ pub enum Acquire {
 /// 主实例持有的锁；`Drop` 时删除 socket 文件（正常退出不留残留）。
 pub struct InstanceGuard {
     path: PathBuf,
+    /// 文件系统 socket：raise IPC 通道 + 可见的锁文件（可能已移交 raise 线程）
     listener: Option<UnixListener>,
+    /// 抽象命名空间互斥锁：不落盘、删不掉，**只由本结构体持有**。
+    /// 只为了持有而持有——读它没有任何意义，锁的生命周期就是本结构体的生命周期。
+    #[expect(dead_code, reason = "仅持有抽象锁，Drop 时由内核回收")]
+    exclusive: UnixListener,
 }
 
 impl InstanceGuard {
@@ -81,13 +106,14 @@ impl Drop for InstanceGuard {
         // listener 先于文件删除释放（字段顺序：path 在前，这里显式丢弃监听）
         self.listener.take();
         let _ = std::fs::remove_file(&self.path);
+        // `exclusive` 在本体执行完后随结构体销毁 → 抽象名由内核立即回收
     }
 }
 
 /// 先释放锁、再拉起新实例（更新安装后重启的唯一正确顺序）。
 ///
-/// `launch` 里 spawn 的新进程启动时会调用 `acquire()`：如果旧进程还持有 socket，
-/// 新进程会连上旧 listener → 判为 `AlreadyRunning` 后退出，而旧进程此时也在退出
+/// `launch` 里 spawn 的新进程启动时会调用 `acquire()`：如果旧进程还持有锁，
+/// 新进程会判为 `AlreadyRunning` 后退出，而旧进程此时也在退出
 /// → 应用直接消失（0.7.12–0.7.14 的自动重启缺陷）。所以顺序不能反过来。
 ///
 /// 只调用一次、不重试：锁被别的实例长期持有时新进程会立刻退出，不会堆积进程。
@@ -98,29 +124,77 @@ pub fn release_then<T>(guard: Option<InstanceGuard>, launch: impl FnOnce() -> T)
 
 /// 用默认路径获取锁（主实例 / 已运行 / IO 错误）。
 pub fn acquire() -> std::io::Result<Acquire> {
-    acquire_in(&default_path())
+    let primary = default_path();
+    // 升级过渡期：旧二进制（≤0.7.17）只认 `docker-panel-<user>.sock` 那道文件锁。
+    // 它还在跑时必须认出来，否则新旧同时启动会出现两个窗口。
+    if let Some(legacy) = legacy_running(&primary) {
+        request_raise(&legacy);
+        return Ok(Acquire::AlreadyRunning);
+    }
+    match acquire_in(&primary) {
+        Ok(acquired) => Ok(acquired),
+        // 运行目录不可写（极少见）时退回系统临时目录，而不是放任多开
+        Err(e) if e.kind() == ErrorKind::PermissionDenied => {
+            acquire_in(&std::env::temp_dir().join(lock_name()))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// 是否已有实例在跑（`--status` 用；零副作用，不建锁、不打扰运行中的实例）。
+pub fn is_running() -> bool {
+    is_running_in(&default_path())
+}
+
+/// 指定路径查询是否已有实例（单测用）。
+///
+/// 判定依据是**能不能绑上抽象锁**：能绑上说明没人在跑（随即释放），再去探一眼旧版本
+/// 的文件锁；绑不上（AddrInUse）说明有实例持有。刻意不 `connect` 抽象 listener ——
+/// 它不 accept 连接，探一次就会在 backlog 里留一条永不释放的连接。
+pub fn is_running_in(path: &Path) -> bool {
+    match bind_exclusive(path) {
+        Ok(listener) => {
+            drop(listener);
+            UnixStream::connect(path).is_ok()
+        }
+        Err(e) if e.kind() == ErrorKind::AddrInUse => true,
+        Err(_) => UnixStream::connect(path).is_ok(),
+    }
 }
 
 /// 指定路径获取锁（单测用）。
 ///
 /// 语义：
-///   - `bind` 成功 → Primary；
-///   - `bind` 报已存在 → 尝试连接：连得上说明对方活着（AlreadyRunning，并已发出
-///     raise 请求）；连不上说明是崩溃残留 → 删掉重绑。
+///   - 抽象锁绑不上（AddrInUse）→ 已有实例；
+///   - 抽象锁绑上、文件锁 `bind` 报已存在 → 尝试连接：连得上说明对方活着（AlreadyRunning，
+///     并已发出 raise 请求，同时释放刚拿到的抽象锁）；连不上说明是崩溃残留 → 删掉重绑。
 pub fn acquire_in(path: &Path) -> std::io::Result<Acquire> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
+    // 1) 权威互斥：抽象命名空间 socket（不落盘 → 外部 rm 无法绕过）
+    let mut exclusive = Some(match bind_exclusive(path) {
+        Ok(listener) => listener,
+        Err(e) if e.kind() == ErrorKind::AddrInUse => {
+            request_raise(path);
+            return Ok(Acquire::AlreadyRunning);
+        }
+        Err(e) => return Err(e),
+    });
+    // 2) 文件系统 socket：raise 通道 + 可见性（顺便挡住只认路径锁的旧版本）
     for _ in 0..2 {
         match UnixListener::bind(path) {
             Ok(listener) => {
+                let exclusive = exclusive.take().expect("exclusive lock bound above");
                 return Ok(Acquire::Primary(InstanceGuard {
                     path: path.to_path_buf(),
                     listener: Some(listener),
-                }))
+                    exclusive,
+                }));
             }
-            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            Err(e) if e.kind() == ErrorKind::AddrInUse => {
                 if request_raise(path) {
+                    // 有活着的实例占着文件锁 → 放弃抽象锁（随作用域销毁）后按已运行返回
                     return Ok(Acquire::AlreadyRunning);
                 }
                 // 陈旧 socket / 普通文件残留：没有监听者，清理后重试一次
@@ -145,21 +219,84 @@ fn request_raise(path: &Path) -> bool {
     }
 }
 
-/// `$XDG_RUNTIME_DIR/docker-panel-<user>.sock`，缺失时用系统临时目录。
+/// 绑定抽象命名空间的互斥锁。
+fn bind_exclusive(path: &Path) -> std::io::Result<UnixListener> {
+    let addr = exclusive_addr(path)?;
+    UnixListener::bind_addr(&addr)
+}
+
+/// 抽象名对**完整路径**取 FNV-1a：与锁路径一一对应（单测各用独立临时目录时互不抢占），
+/// 生产路径本身已含 uid，因此天然按用户隔离。抽象名上限 107 字节，这里只有 29 字节。
+fn exclusive_addr(path: &Path) -> std::io::Result<SocketAddr> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in path.as_os_str().as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    SocketAddr::from_abstract_name(format!("docker-panel-{hash:016x}").as_bytes())
+}
+
+/// `/run/user/<uid>/docker-panel-<uid>.sock`；目录不可用时落系统临时目录。
 fn default_path() -> PathBuf {
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    lock_dir().join(lock_name())
+}
+
+/// 锁目录**只按 uid 派生**，不读 `XDG_RUNTIME_DIR`（理由见文件头）。
+fn lock_dir() -> PathBuf {
+    if let Some(uid) = current_uid() {
+        let run = PathBuf::from(format!("/run/user/{uid}"));
+        if run.is_dir() {
+            return run;
+        }
+    }
+    std::env::temp_dir()
+}
+
+fn lock_name() -> String {
+    match current_uid() {
+        Some(uid) => format!("docker-panel-{uid}.sock"),
+        None => format!("docker-panel-{}.sock", sanitized_user()),
+    }
+}
+
+/// 当前 uid：直接解析 `/proc/self/status` 的 `Uid:` 行（不为了一个数字引入 libc 依赖）。
+fn current_uid() -> Option<u32> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|l| l.starts_with("Uid:"))?;
+    line["Uid:".len()..].split_whitespace().next()?.parse().ok()
+}
+
+/// 用户名清洗（仅用于旧版本锁路径与 uid 不可得时的兜底命名）。
+fn sanitized_user() -> String {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
-        .unwrap_or_else(|_| "default".into());
+        .unwrap_or_default();
     let user: String = user
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect();
-    let user = if user.is_empty() { "default" } else { &user };
-    dir.join(format!("docker-panel-{user}.sock"))
+    if user.is_empty() {
+        "default".into()
+    } else {
+        user
+    }
+}
+
+/// ≤0.7.17 的锁路径（`docker-panel-<user>.sock`）里有没有活着的监听者。
+fn legacy_running(primary: &Path) -> Option<PathBuf> {
+    let name = format!("docker-panel-{}.sock", sanitized_user());
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = primary.parent() {
+        dirs.push(dir.to_path_buf());
+    }
+    let tmp = std::env::temp_dir();
+    if !dirs.contains(&tmp) {
+        dirs.push(tmp);
+    }
+    dirs.into_iter()
+        .map(|dir| dir.join(&name))
+        .find(|path| path != primary && UnixStream::connect(path).is_ok())
 }
 
 #[cfg(test)]
@@ -183,22 +320,25 @@ mod tests {
         }
     }
 
+    fn primary(path: &Path) -> InstanceGuard {
+        match acquire_in(path).expect("acquire") {
+            Acquire::Primary(g) => g,
+            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
+        }
+    }
+
     #[test]
     fn acquire_primary_succeeds() {
         let path = temp_path("primary");
-        let acquired = acquire_in(&path).expect("acquire");
-        match acquired {
-            Acquire::Primary(_) => assert!(path.exists(), "socket 文件应已创建"),
-            Acquire::AlreadyRunning => panic!("首次获取不应判定为已运行"),
-        }
+        let _guard = primary(&path);
+        assert!(path.exists(), "socket 文件应已创建");
         cleanup(&path);
     }
 
     #[test]
     fn second_acquire_reports_already_running() {
         let path = temp_path("second");
-        let first = acquire_in(&path).expect("first");
-        assert!(matches!(first, Acquire::Primary(_)));
+        let first = primary(&path);
         let second = acquire_in(&path).expect("second");
         assert!(
             matches!(second, Acquire::AlreadyRunning),
@@ -211,10 +351,7 @@ mod tests {
     #[test]
     fn raise_request_reaches_listener() {
         let path = temp_path("raise");
-        let mut first = match acquire_in(&path).expect("first") {
-            Acquire::Primary(g) => g,
-            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
-        };
+        let mut first = primary(&path);
         let (tx, rx) = std::sync::mpsc::channel();
         first.spawn_raise_listener(move || {
             let _ = tx.send(());
@@ -237,7 +374,7 @@ mod tests {
     #[test]
     fn release_allows_reacquire() {
         let path = temp_path("release");
-        let first = acquire_in(&path).expect("first");
+        let first = primary(&path);
         drop(first);
         assert!(!path.exists(), "Drop 后应删除 socket 文件");
         let again = acquire_in(&path).expect("again");
@@ -248,10 +385,7 @@ mod tests {
     #[test]
     fn launch_after_release_gets_lock() {
         let path = temp_path("launch");
-        let guard = match acquire_in(&path).expect("first") {
-            Acquire::Primary(g) => g,
-            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
-        };
+        let guard = primary(&path);
         // 模拟「旧进程释放锁 → launcher 拉起新进程」：闭包里的 acquire 必须成功
         let acquired = release_then(Some(guard), || acquire_in(&path).expect("reacquire"));
         assert!(
@@ -264,11 +398,9 @@ mod tests {
     #[test]
     fn release_with_raise_listener_allows_reacquire() {
         let path = temp_path("raise-release");
-        let mut guard = match acquire_in(&path).expect("first") {
-            Acquire::Primary(g) => g,
-            Acquire::AlreadyRunning => panic!("首个实例应拿到锁"),
-        };
-        // 生产路径：listener 已移交 raise 线程，Drop 只剩 remove_file
+        let mut guard = primary(&path);
+        // 生产路径：文件 socket 已移交 raise 线程，Drop 只剩 remove_file；
+        // 抽象锁仍在 guard 里，必须在 Drop 时释放，否则新实例抢不到锁。
         guard.spawn_raise_listener(|| {});
         let acquired = release_then(Some(guard), || acquire_in(&path).expect("reacquire"));
         assert!(
@@ -281,10 +413,7 @@ mod tests {
     #[test]
     fn launch_while_lock_held_fails_fast() {
         let path = temp_path("held");
-        let holder = match acquire_in(&path).expect("holder") {
-            Acquire::Primary(g) => g,
-            Acquire::AlreadyRunning => panic!("holder 应拿到锁"),
-        };
+        let holder = primary(&path);
         // 锁一直没释放：只尝试一次，拿到 AlreadyRunning 就结束（没有重试循环）
         let mut attempts = 0;
         let acquired = release_then(None, || {
@@ -294,6 +423,46 @@ mod tests {
         assert!(matches!(acquired, Acquire::AlreadyRunning));
         assert_eq!(attempts, 1, "锁未释放时只尝试一次，不堆积进程");
         drop(holder);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn deleted_socket_file_still_blocks_second_instance() {
+        // 2026-11-16 事故的复现：外部把锁文件删掉后，旧实现里任何新进程都能 bind 成功
+        let path = temp_path("deleted");
+        let first = primary(&path);
+        std::fs::remove_file(&path).expect("删掉锁文件");
+        assert!(!path.exists());
+
+        let second = acquire_in(&path).expect("second");
+        assert!(
+            matches!(second, Acquire::AlreadyRunning),
+            "锁文件被删掉后仍必须判为已运行（抽象锁不落盘）"
+        );
+        drop(second);
+        drop(first);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn deleted_socket_file_still_visible_to_status() {
+        let path = temp_path("deleted-status");
+        let first = primary(&path);
+        std::fs::remove_file(&path).expect("删掉锁文件");
+        assert!(is_running_in(&path), "--status 也要能看见删掉文件的实例");
+        drop(first);
+        assert!(!is_running_in(&path), "实例退出后 --status 必须转 false");
+        cleanup(&path);
+    }
+
+    #[test]
+    fn status_reports_live_instance() {
+        let path = temp_path("status");
+        assert!(!is_running_in(&path), "空目录里不该有实例");
+        let guard = primary(&path);
+        assert!(is_running_in(&path), "拿锁后 --status 必须为真");
+        drop(guard);
+        assert!(!is_running_in(&path), "释放后 --status 必须为假");
         cleanup(&path);
     }
 
@@ -321,5 +490,22 @@ mod tests {
         let acquired = acquire_in(&path).expect("acquire over file");
         assert!(matches!(acquired, Acquire::Primary(_)));
         cleanup(&path);
+    }
+
+    #[test]
+    fn default_path_is_uid_derived_and_ignores_xdg_runtime_dir() {
+        let expected = match current_uid() {
+            Some(uid) => format!("docker-panel-{uid}.sock"),
+            None => format!("docker-panel-{}.sock", sanitized_user()),
+        };
+        // 关键回归：旧实现跟随 XDG_RUNTIME_DIR，桌面与终端两套路径 → 互不冲突 → 多开。
+        // 这里伪造一个不同的 XDG_RUNTIME_DIR，锁文件名与所在父目录都不许跟着变。
+        std::env::set_var("XDG_RUNTIME_DIR", "/nonexistent/dp-fake-xdg");
+        let path = default_path();
+        assert_eq!(
+            path.file_name().and_then(|s| s.to_str()),
+            Some(expected.as_str())
+        );
+        assert!(!path.to_string_lossy().contains("dp-fake-xdg"));
     }
 }

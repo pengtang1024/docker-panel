@@ -62,25 +62,25 @@ models.slint struct               Rust consumer 构造
 ### Slint 文件清单速查
 
 <details>
-<summary><b>完整 Slint 文件清单（39 项：行数 / 职责 / import 谁）</b></summary>
+<summary><b>完整 Slint 文件清单（41 项：行数 / 职责 / import 谁）</b></summary>
 
 | 文件 | 行数 | 职责 | import 谁 |
 |------|------|------|-----------|
 | `app.slint` | 316 | MainWindow + global-shortcuts FocusScope + 布局组装 + M3 色板接线 | theme / material-theme / top-bar / main-area / foot-bar / drawer / overlays / models / app-actions / update-state / ui-state |
-| `app-actions.slint` | 64 | AppActions global：UI → Rust 回调声明（含分组操作 + 自动更新） | 无 |
-| `overlays.slint` | 152 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取/清理/更新弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs / update-dialog / update-state |
+| `app-actions.slint` | 68 | AppActions global：UI → Rust 回调声明（含分组操作 + 自动更新） | 无 |
+| `overlays.slint` | 184 | 窗口级浮层：排序菜单 / 卡片与分组菜单 / 拉取/清理/更新弹窗 / 全局 TipLayer（声明在内容之后 → 最上层） | theme / components-* / menu-layers / dialogs / update-dialog / update-state |
 | `theme.slint` | 97 | 浅/深双主题语义色 + 字号/间距令牌，theme_mode 三态（`is_dark` 为 out，供 material-theme 消费） | 无 |
-| `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（53 个角色全覆盖） | theme / @material |
+| `material-theme.slint` | 89 | M3 色板映射：Theme.* → MaterialScheme（49 个角色全覆盖） | theme / @material |
 | `models.slint` | 105 | ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary | 无 |
 | `top-bar.slint` | 196 | TopBar（搜索框 + 5 按钮 + focus_search + 更新徽标） | theme / components-align / components-interact / update-state / ui-state |
 | `sub-bar.slint` | 194 | 状态筛选 chips + 排序 + 4 视图 tabs | theme / components-* / models / ui-state |
 | `main-area.slint` | 125 | 主列表工作区：SubBar + BatchBar + ListArea（含分组操作回调冒泡） | theme / sub-bar / batch-bar / list-area / ui-state |
 | `list-area.slint` | 167 | 资源列表区：容器视图走台账，镜像/网络/卷走表格列表 + 空状态 + 背景点击层 | theme / ledger / image-list / network-list / volume-list / skel / components-* / ui-state |
-| `ledger.slint` | 270 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-tree-row / ledger-band / ledger-cols / models / components-* |
-| `ledger-row.slint` | 218 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
+| `ledger.slint` | 290 | 容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行 | theme / ledger-row / ledger-tree-row / ledger-band / ledger-cols / models / components-* |
+| `ledger-row.slint` | 226 | 台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作 | theme / ledger-cols / models / components-* |
 | `ledger-band.slint` | 116 | 台账概览带：4 个计数 + CPU 占用 TOP4 | theme / components-chip |
 | `ledger-cols.slint` | 24 | 台账列宽契约 global（表头与行共用同一组列宽） | 无 |
-| `ledger-tree-row.slint` | 240 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
+| `ledger-tree-row.slint` | 249 | 台账内联树分组带 delegate（项目带 / 服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏，列结构镜像 ledger-row） | theme / ledger-cols / models / components-* |
 | `image-list.slint` | 160 | 镜像表格列表（`inherits TableShell`）：repo:tag · 大小 · 创建时间 + 行内 play/more | theme / components-list / components-interact / models / @material |
 | `network-list.slint` | 104 | 网络表格列表（`inherits TableShell`）：名称 · driver · 子网 | theme / components-list / models / @material |
 | `volume-list.slint` | 96 | 卷表格列表（`inherits TableShell`）：名称 · 大小 · 挂载点 | theme / components-list / models / @material |
@@ -90,16 +90,18 @@ models.slint struct               Rust consumer 构造
 | `batch-bar.slint` | 39 | 批量操作浮动栏 | theme / components-* / ui-state |
 | `drawer.slint` | 204 | 右侧抽屉三 Tab（详情/日志/环境；`log_only` = 分组合并日志只展示日志面板） | theme / drawer-detail-row / drawer-log-row / components-* / @material（ScrollView+ListView） |
 | `drawer-detail-row.slint` | 152 | 详情/环境行（kv / 代码盒 / 挂载 chip） | theme |
-| `drawer-log-row.slint` | 35 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
+| `drawer-log-row.slint` | 38 | 日志行 delegate（虚拟化 ListView 的一行 = 一条日志） | theme / components-align / models |
 | `dialogs.slint` | 190 | PullDialog / CleanupDialog | theme / components-* |
-| `update-dialog.slint` | 191 | 自动更新弹窗：版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启 | theme / components-* / @material（ScrollView） / update-state |
-| `update-state.slint` | 20 | 自动更新 UI 状态 global（供 TopBar / UpdateDialog / Rust 共享） | 无 |
+| `settings-dialog.slint` | 139 | 设置弹窗：外观三选 + 自动更新三开关（check / install / restart） | theme / components-* / settings-state |
+| `settings-state.slint` | 7 | 设置弹窗开关 global（Rust 单写入方） | 无 |
+| `update-dialog.slint` | 160 | 自动更新弹窗：版本对比 / 更新说明 / 进度 / 安装与重启 | theme / components-* / @material（ScrollView） / update-state |
+| `update-state.slint` | 21 | 自动更新 UI 状态 global（供 TopBar / UpdateDialog / Rust 共享） | 无 |
 | `ui-state.slint` | 58 | 显示态 global（连接/采样状态 + 计数汇总 + 行模型 + 资源列表排序，Rust 单写入方） | models |
 | `menu-layers.slint` | 161 | 排序菜单 + 行「···」菜单（容器/镜像/网络/卷）+ 分组菜单（kind=4：停止全部 / 重启全部 / 合并日志 / 删除全部） | theme / models |
-| `components-interact.slint` | 342 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
-| `components-nav.slint` | 151 | 导航/视图切换类组件 | theme |
+| `components-interact.slint` | 352 | IconBtn / StateArea / TouchArea / Dropdown 等 | theme |
+| `components-nav.slint` | 153 | 导航/视图切换类组件 | theme |
 | `components-form.slint` | 102 | 输入/复选框等表单组件 | theme |
-| `components-chip.slint` | 92 | Chip / MonoChip / MicroBar 等数据展示组件 | theme |
+| `components-chip.slint` | 94 | Chip / MonoChip / MicroBar 等数据展示组件 | theme |
 | `components-align.slint` | 42 | VCenterText / CenterText 对齐组件 | theme |
 | `components-state.slint` | 49 | StateArea 等状态层 | theme |
 | `components-empty.slint` | 35 | 空态组件 | theme |

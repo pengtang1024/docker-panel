@@ -7,7 +7,7 @@
 //! - 详情字段格式化见 detail_fmt.rs；consumer 泵见 consumer.rs
 
 use std::collections::{BTreeSet, HashMap};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -81,8 +81,8 @@ pub struct AppState {
 
     /// 列表刷新是否已有任务在跑：Docker 慢时避免叠加新任务
     pub refresh_inflight: Arc<AtomicBool>,
-    /// 刷新期间又来的请求（事件触发 / 手动刷新）：本轮结束立刻补跑一次
-    pub refresh_dirty: Arc<AtomicBool>,
+    /// 刷新期间又来的请求（事件触发 / 手动刷新）：按资源种类记账，本轮结束立刻补跑
+    pub refresh_dirty: Arc<AtomicU8>,
     pub container_query: String,
     pub image_query: String,
 
@@ -202,7 +202,7 @@ impl AppState {
             networks: Vec::new(),
             volumes: Vec::new(),
             refresh_inflight: Arc::new(AtomicBool::new(false)),
-            refresh_dirty: Arc::new(AtomicBool::new(false)),
+            refresh_dirty: Arc::new(AtomicU8::new(0)),
             container_query: query.clone(),
             image_query: query,
             detail: None,
@@ -289,11 +289,17 @@ impl AppState {
     /// 4 个调用（会耗尽 tokio 工作线程，数据看起来"冻住"）；脏标记让
     /// 事件触发的刷新不丢——本轮结束后立刻补跑一次。
     pub fn refresh(&mut self) {
+        self.refresh_kinds(refresh::Kinds::ALL);
+    }
+
+    /// 只刷新指定资源（事件驱动路径用：容器启停不必重拉镜像 / 网络 / 卷）。
+    pub fn refresh_kinds(&mut self, kinds: refresh::Kinds) {
         refresh::spawn(
             &self.rt,
             self.tx.clone(),
             self.refresh_inflight.clone(),
             self.refresh_dirty.clone(),
+            kinds,
         );
     }
 

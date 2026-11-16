@@ -100,7 +100,9 @@ scripts/check-version.sh            # 比较三处版本 + CHANGELOG 段落 + �
 GitHub 由 tag 触发的流水线自动发布；**Gitee 没有 CI，必须手工补一次**，否则会出现「GitHub 有新版本、Gitee 停在上一个版本」，用户点 Gitee 下载链接就是 404。
 
 ```bash
-# 1. 先把 tag 推到 Gitee（tag 不推则 Gitee 无法建 Release）
+# 1. 推分支与 tag 到 Gitee（tag 不推则 Gitee 无法建 Release；
+#    master 漏推会让 Gitee 的 release 分支合并与 CI 的 version.json 提交缺席）
+git push gitee master develop
 git push gitee refs/tags/X.Y.Z
 
 # 2. 把 GitHub Release 同步成 Gitee Release（幂等，可重复执行）

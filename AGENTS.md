@@ -321,7 +321,7 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 **发布不是「推了 tag 就完事」**，两件必做的事（漏了就是线上事故，2026-11-16 已经踩过）：
 
-1. **Gitee 侧必须补齐**：Gitee 没有 CI，tag 与 Release 都要手工同步 —— `git push gitee refs/tags/X.Y.Z` + `scripts/sync-gitee-release.py X.Y.Z`（幂等，回读核对资产名）。两平台是**并列的正式发布渠道**，不是主从/镜像关系。
+1. **Gitee 侧必须补齐**：Gitee 没有 CI，分支、tag 与 Release 都要手工同步 —— `git push gitee master develop` + `git push gitee refs/tags/X.Y.Z` + `scripts/sync-gitee-release.py X.Y.Z`（幂等，回读核对资产名）。两平台是**并列的正式发布渠道**，不是主从/镜像关系。
 2. **护栏自检**：`scripts/check-release-guards.sh`（加 `GH_TOKEN` 连仓库设置一起核对：immutable 开关、两个 ruleset、流水线的 draft → 发布顺序）。
 3. **发布产物不可变**：仓库开启了 GitHub immutable releases，**已发布的 Release 资产不可增删改，tag 不可再生**。流水线已按「建 draft → 上传 8 个资产 → 校验齐全 → `draft=false` 发布」实装（`.github/workflows/release.yml`），**不要改回一步到位的 `draft: false` + `files:`**。发了错的版本只能发 patch 版本，**禁止删已发布的 Release 重发**（删掉会让该 tag 名永久不可重建，只能等 GitHub Support）。处置对照表见 [docs/git-flow.md](docs/git-flow.md) 的「发布产物不可变：出了错怎么办」。
 

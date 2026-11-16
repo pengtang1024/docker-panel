@@ -223,13 +223,13 @@ cargo check --all-targets
 
 ## 7. 架构概览
 
-**三线程架构**：主线程（Slint 事件循环）+ consumer 线程（消息泵 + `invoke_from_event_loop`）+ tokio runtime（bollard async）。列表刷新由 Docker `/events` 事件驱动（`event_watch::spawn` 常驻订阅 + 噪声黑名单过滤 + 400ms 合并 + 断流退避重连，连接建立补一次全量刷新，空闲零请求，**无定时兜底轮询**）；定时任务只剩 6s stats / 30s 磁盘占用 / 主题监听，仍走 tokio interval（软件渲染器下 Slint Timer 不触发）。
+**三线程架构**：主线程（Slint 事件循环）+ consumer 线程（消息泵 + `invoke_from_event_loop`）+ tokio runtime（bollard async）。列表刷新由 Docker `/events` 事件驱动（`event_watch::spawn` 常驻订阅 + 噪声黑名单过滤 + 400ms 合并 + 断流退避重连，连接建立补一次全量刷新，空闲零请求，**无定时兜底轮询**）；定时任务只剩 2s stats / 30s 磁盘占用 / 主题监听，仍走 tokio interval（软件渲染器下 Slint Timer 不触发）。
 
 ```text
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
 │ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ docker /events 订阅 │
-│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
+│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 2s stats interval   │
 │ 窗口关闭 → shutdown   │ 按 120ms 窗口合并 UI 更新  │       │ spawn 异步任务      │
 │   flag                │ 只重建变化区域（日志/列表）│◀──────│ bollard API 调用    │
 │                        │ drop(s) ──────────────────lock rel│ tx.send(Msg)        │
@@ -315,7 +315,7 @@ docker-panel/
 │   ├── consumer.rs         # consumer 线程：分批 drain + 120ms UI 节流 + 变化区域重建（列表刷新由 event_watch 事件驱动）
 │   ├── event_watch.rs      # Docker /events 订阅：噪声黑名单过滤 + 400ms 合并 + 断流退避重连（列表刷新唯一来源；连接建立补一次全量刷新，空闲零请求）
 │   ├── consumer/throttle.rs # UI 节流窗口（常规 120ms / 纯日志 250ms，从 consumer.rs 拆出）
-│   ├── bootstrap.rs        # 6s stats 采样 interval + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
+│   ├── bootstrap.rs        # 2s stats 采样 interval（分 8 片投递） + 首屏四列表加载 + inspect 首容器 + 守护进程版本查询（独立任务）
 │   ├── models.rs           # Msg(+StatsBatch/LogBatch/DockerVersion/UpdateCheckDone/UpdateProgress/UpdateDone) / ContainerInfo / ImageInfo / ContainerDetail / ResourceSort 等
 │   ├── models/update.rs    # 自动更新类型：UpdateInfo / InstallPlan / UnsupportedReason（models 层，避免反向依赖）
 │   ├── ui_state.rs         # AppState 骨架 + 四列表刷新（去重/超时）+ cleanup_counts + persist

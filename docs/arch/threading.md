@@ -12,7 +12,7 @@
 主线程 (ui.run() 阻塞)          consumer 线程                  tokio runtime (多线程)
 ┌──────────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
 │ UI 回调（搜索/排序/    │       │ recv_timeout(≤100ms) 循环 │       │ docker /events 订阅 │
-│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 6s stats interval   │
+│  操作/快捷键）──lock─▶│ 分批 drain（≤2048 条/批） │       │ 2s stats interval   │
 │ 窗口关闭 → shutdown   │ pending.merge 聚合        │       │ 30s 磁盘占用 interval│
 │   flag                │ 120ms 节流 apply          │◀──────│ bollard API 调用    │
 │                        │ 只重建变化区域 → drop lock│       │ tx.send(Msg)        │
@@ -111,7 +111,7 @@ invoke_from_event_loop(move || {
 | 任务 | 触发 / 频率 | 纪律 |
 |------|-------------|------|
 | 列表刷新 | `event_watch::spawn` 常驻订阅 Docker `/events` | **只有事件这一个来源**：`type` 过滤 container/image/network/volume，动作过滤用**噪声黑名单**（只忽略 `health_status` / `exec_*` / `attach` / `detach`，未知动作宁可多刷一次也不漏刷）；收到非噪声事件即锁内 `s.refresh_kinds(kinds_of(&ev))`——**按事件类型只刷那一路**（`Kinds` 位掩码；容器事件只拉 `/containers/json`，实测 18ms vs 全量 77.7ms，镜像的「被引用容器数」改用新容器列表在应用侧本地重算，网络/卷只在自身事件或全量刷新时拉；连接建立 / 手动刷新 / prune 兜底仍走 `Kinds::ALL` 四路并发），结果走 `tx.send(Msg::*)`→ 400ms 合并窗口**双沿**：窗口内首事件立即刷新（动作反馈快），后续事件只记账、到期补刷一次（`Debouncer`，只丢不补会漏掉窗口尾部的状态变化）；断流按 1s→30s 指数退避重连、永不放弃，重连后**补一次全量刷新**（连接建立那一刻的状态才是真相）；空闲时零请求。**没有定时兜底轮询**：曾用 3s（`size=1` 容器列表 ≈70ms + 镜像列表 ≈96ms，每分钟吃掉 dockerd ≈3.3s），15s 兜底也一起删掉了——兜底只会把「事件漏刷 / 过滤写错 / 代理不支持长连接」这类 bug 藏成「最多慢 N 秒」。`refresh_kinds()` 带 in-flight 去重（上一轮未完成只把种类并进 `refresh_dirty` 掩码、本轮结束按掩码补跑，不丢事件触发的刷新，也不会在慢 Docker 下叠多个调用） |
-| 6s stats 采样 | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats，且**一律 `one_shot(true)`**（不带 pre 帧、不等 1–2s 双采样，整轮 2.6–3ms）。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（仅首屏那一轮走双采样，之后靠本地 prev 做 6s 窗口差值，见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
+| 2s stats 采样（一轮拆 8 片投递） | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats，且**一律 `one_shot(true)`**（不带 pre 帧、不等 1–2s 双采样，整轮 2.6–3ms）。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（仅首屏那一轮走双采样，之后靠本地 prev 做「上一次采样」窗口差值，见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
 | 30s 磁盘占用 | `bootstrap::spawn_disk_usage_interval` | `/system/df?type=volume` 与 `?type=container` 并行采样，低频单独跑。容器可写层占用只从这里来（列表接口不带 `size=1`：遍历文件系统 + 删除中的容器会 404），列表刷新后用 `AppState::apply_container_sizes` 从缓存补回 |
 | 自动更新 | `update::spawn_scheduler` | 启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs` |
 | UI 回调与 tick | 主线程 | 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI（Slint 线程安全模型：只有主线程可以修改 Model） |
@@ -130,7 +130,7 @@ invoke_from_event_loop(move || {
 | `Networks(Result<Vec<NetworkInfo>>)` | `/events` / 手动刷新 / 操作完成 | 替换网络列表（网络视图） |
 | `Volumes(Result<Vec<VolumeInfo>>)` | `/events` / 手动刷新 / 操作完成 | 替换卷列表（卷视图） |
 | **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（与首屏四列表并行，慢/失败不拖列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到为占位符 `—`，不伪造版本号） |
-| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，容器行数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
+| **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 2s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（一轮拆 8 片、片内整批：同片容器同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
 | `PullDone(Result<String>)` | pull_image 结束 | 关弹窗；列表交给 `image/pull` 事件（不刷新） |
 | `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本；列表交给 `/events`（不刷新） |
@@ -317,7 +317,7 @@ ui.on_xxx_requested(move || {
 | 模块 | 职责边界 |
 |------|----------|
 | `main.rs` | 纯组装：i18n → AppState → MainWindow → 各模块启动 → `ui.run()` → 优雅退出，不写业务 |
-| `consumer.rs` | 独占 Receiver + 分批 drain/节流 apply 两阶段泵；列表刷新由独立的 `event_watch.rs` 发起，6s stats、30s 磁盘占用与首屏加载在 `bootstrap.rs` |
+| `consumer.rs` | 独占 Receiver + 分批 drain/节流 apply 两阶段泵；列表刷新由独立的 `event_watch.rs` 发起，2s stats、30s 磁盘占用与首屏加载在 `bootstrap.rs` |
 | `detail_fmt/` | 详情字段格式化；`ui_state.rs` 只管状态变更与后台任务 |
 | `ui_update.rs` | 只做 Msg 聚合：`DrainResult` + 有上限 `drain_messages` + 单条 `apply_msg`，保持日志洪峰防护逻辑独立 |
 | `ui_state.rs` | 只做状态与后台任务：刷新去重/超时、follow 建流、清理计数、配置持久化 |
@@ -348,7 +348,7 @@ python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾�
 | 空闲 CPU（60s，**UI 线程** schedstat 精确值） | **0.198%**（118.8ms/60s，24 行可见）；同样空闲但过滤成 0 行可见时 **0.035%**（21.2ms/60s） |
 | RSS | 启动 48–51MB → 约 100s 后稳定在 54MB（**不是泄漏**，是有界热身后趋平） |
 | 线程数 | 33–35（tokio 阻塞池按需伸缩，不单调增长） |
-| 6s stats 整轮 | `one_shot` 前 2.03s，后 2.6–3ms |
+| stats 整轮 | `one_shot` 前 2.03s，后 2.6–3ms |
 | 30s `/system/df` 整轮 | 39–160ms（守护进程侧为主，应用 CPU 0–10ms） |
 | 进程 → 窗口创建 | 25–34ms |
 | 进程 → 首屏容器行 | **30–41ms（中位 33ms）**；同样代码但首屏请求放在 `MainWindow::new()` 之后是 153–164ms（中位 154ms），再之前的 `join!` 全到齐再推是 181–209ms |
@@ -366,7 +366,7 @@ read b < <(cut -d' ' -f1 /proc/$PID/task/$PID/schedstat)
 echo "UI 线程 $(( (b-a)/1000000 ))ms / 60s"
 ```
 
-结论：24 行可见 118.8ms/60s、0 行可见 21.2ms/60s → **约 83% 的空闲开销是「行真的变了 → 重绘那几行」**（每 6s 一轮约 1.6ms/24 行），剩下 0.035% 是底栏/概览带的固定重绘。同时量了事件风暴（6 次 `docker restart` 共 62s）**0.225%**，与空闲同量级——8ms 档位没有把 UI 线程变成忙等。想再往下只剩「降采样频率」（6s→10s 约再省 40%，CPU% 最多晚 4s），那是产品取舍，不是代码效率。
+结论：24 行可见 118.8ms/60s、0 行可见 21.2ms/60s → **约 83% 的空闲开销是「行真的变了 → 重绘那几行」**（每轮约 1.6ms/24 行），剩下 0.035% 是底栏/概览带的固定重绘。同时量了事件风暴（6 次 `docker restart` 共 62s）**0.225%**，与空闲同量级——8ms 档位没有把 UI 线程变成忙等。想再往下只剩「降采样频率」（6s→10s 约再省 40%，CPU% 最多晚 4s），那是产品取舍，不是代码效率。
 
 apply 这一段单独量（临时基准，`container_row` ×200 轮取均值 + `render::containers` 的差量同步两条路径：全等走比对、全变走 `set_row_data`）。**结论是数据管线已经到地板**：一次 6s stats 应用在 23 容器下只消耗 17µs，折算 0.0003% CPU。空闲 CPU 那 0.20–0.33% 基本不是它——是 Slint 软件渲染器在每次 apply 后按脏区重绘整窗（23 行的百分比文字 + 微条 + 概览带 + 底栏合计会同时变），要再往下压只能减少重绘面积或降采样频率，那是 UI 行为取舍，不是代码效率问题。同一轮还量了「名称排序比较器零分配化」：`to_lowercase` 4.2ms vs `chars().flat_map(char::to_lowercase)` 6.1ms（200 项 ×200 次排序），更慢，**不要改**。
 

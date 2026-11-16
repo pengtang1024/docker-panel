@@ -35,6 +35,18 @@ pub fn download_and_install(
     cache: &Path,
     progress: &mut dyn FnMut(i32, String),
 ) -> Result<(), String> {
+    install_with(info, exe, cache, progress, &verify_signed_artifact)
+}
+
+/// 安装主体。`verify` 是「安装前必须通过的验签关口」，生产路径永远是
+/// `verify_signed_artifact`（内置公钥 + 清单哈希）；单测注入替代实现以避免联网。
+fn install_with(
+    info: &UpdateInfo,
+    exe: &Path,
+    cache: &Path,
+    progress: &mut dyn FnMut(i32, String),
+    verify: &dyn Fn(&UpdateInfo, &Path, &str) -> Result<(), String>,
+) -> Result<(), String> {
     if info.plan.kind == InstallKind::Unsupported {
         return Err(i18n::t(
             info.plan
@@ -89,8 +101,12 @@ pub fn download_and_install(
 
     progress(100, i18n::t("Installing update..."));
     let result = match info.plan.kind {
-        InstallKind::Deb => install_deb(&target),
-        InstallKind::Binary => install_binary(&target, exe),
+        // 静默路径：验签 → 原子自替换。全程不需要任何特权，也就不需要授权。
+        InstallKind::Binary => {
+            verify(info, &target, &asset.name).and_then(|_| install_binary(&target, exe))
+        }
+        // 系统级安装目录不可写时才走到这里：一次升级一次 polkit 授权。
+        InstallKind::Deb => verify(info, &target, &asset.name).and_then(|_| install_deb(&target)),
         InstallKind::Unsupported => Err(i18n::t("Automatic install is not supported")),
     };
 
@@ -205,6 +221,42 @@ fn dir_writable(dir: &Path) -> bool {
     }
 }
 
+/// 已安装的 docker-panel 版本（非 dpkg 管理 / 未安装返回 `None`）。
+///
+/// 用来避免「已经装好了还反复下载、反复授权」：清单版本 ≤ 已装版本时
+/// 只提示「重启生效」，不再走安装路径（见 `update::build_info`）。
+pub fn installed_deb_version() -> Option<String> {
+    let out = Command::new("dpkg-query")
+        .args(["-W", "-f=${Version}", "docker-panel"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!version.is_empty()).then_some(version)
+}
+
+/// 用内置公钥验签清单，再断言「刚下载的文件」就是清单声明的那个包。
+///
+/// 这一步不需要特权：验不过就不装 —— 被中间人换掉的下载包进不了安装步骤
+/// （清单签名见 `docs/arch/update-manifest.md`）。
+fn verify_signed_artifact(info: &UpdateInfo, file: &Path, name: &str) -> Result<(), String> {
+    let (text, _signature) = crate::update::discover::fetch_signed_manifest()?;
+    let manifest = crate::update::manifest::parse_manifest(&text)
+        .map_err(|_| i18n::t("Update manifest is malformed"))?;
+    if manifest.version != info.version {
+        return Err(i18n::t("Update manifest does not match the release"));
+    }
+    let actual = download::sha256_file(file)?;
+    crate::update::manifest::assert_asset_sha(&manifest, name, &actual)
+        .map_err(|_| i18n::t("Update manifest does not match the package"))
+}
+
+/// 安装 deb：`pkexec dpkg -i`（验签由调用方在此之前完成）。
+///
+/// 写 `/usr` 必然要 root，也就会弹一次授权；**静默更新只对用户级目录成立**
+/// （见 `install_binary`），这条路径只在安装目录不可写时才会被选中。
 fn install_deb(deb: &Path) -> Result<(), String> {
     let out = Command::new("pkexec")
         .arg("dpkg")
@@ -251,10 +303,24 @@ fn install_binary(downloaded: &Path, exe: &Path) -> Result<(), String> {
     fs::set_permissions(&tmp, perm)
         .map_err(|e| i18n::trf("Failed to set binary permissions: {0}", &[&e.to_string()]))?;
 
-    fs::rename(&tmp, exe).map_err(|e| {
+    // 只保留最新版本：旧二进制留一份 `<exe>.previous`（新版本起不来时可手工还原），
+    // 更早的那份直接覆盖 —— 不在磁盘上堆版本历史。
+    let previous = exe.with_extension("previous");
+    let _ = fs::remove_file(&previous);
+    fs::rename(exe, &previous).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         i18n::trf("Failed to replace binary: {0}", &[&e.to_string()])
-    })
+    })?;
+    if let Err(e) = fs::rename(&tmp, exe) {
+        // 新二进制装不上就把旧的换回去，别留一个没有可执行文件的安装目录
+        let _ = fs::rename(&previous, exe);
+        let _ = fs::remove_file(&tmp);
+        return Err(i18n::trf(
+            "Failed to replace binary: {0}",
+            &[&e.to_string()],
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(not(unix))]

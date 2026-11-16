@@ -158,6 +158,49 @@ fn port_short_labels(c: &ContainerInfo) -> String {
 /// → 「组条 = 成员条之和」严格成立（否则组条会比成员条之和还短，父子反向失真）。
 pub const MIN_BAR_RATIO: f64 = 0.02;
 
+/// CPU% 显示死区（百分点）：新值与已显示值相差不到这么多就不改模型。
+///
+/// 存在的理由：`render::containers` 的差量同步以「行不变」为跳过条件，而 Slint 软件渲染器
+/// **按行标脏**——一行里任何一个字段变了，整条 30px 通栏都要重画。CPU% 每轮都在抖动
+/// （24 行 × 每 6s 一次 ≈ 每轮全屏重绘，实测约 6ms/轮），把「抖动小于 1 个显示单位」的
+/// 变化挡在模型之外，重绘次数直接跟着降下来，而用户看到的数字精度仍然是 0.1%。
+const CPU_HYSTERESIS_PP: f64 = 0.5;
+
+/// 内存显示死区：取「当前用量的 2%」与「配额的 1%」中**更小**的那个。
+///
+/// 只看配额会出大问题：8G 配额的容器配额 1% 是 80MB，而它实际只用 13MB —— 死区比用量还大，
+/// 首帧从 0 出发就永远显示 `0B`（实测踩过）。取两者更小值 = 「小容器按自身量级过滤、
+/// 大容器不因配额过大而失敏」。
+const MEM_HYSTERESIS_RATIO: f64 = 0.02;
+
+/// 内存死区的配额上限比例（见 [`MEM_HYSTERESIS_RATIO`]）。
+const MEM_HYSTERESIS_QUOTA_RATIO: f64 = 0.01;
+
+/// CPU% 死区：变化不足 [`CPU_HYSTERESIS_PP`] 就保留旧显示值。
+pub(crate) fn hyst_cpu(old: f64, new: f64) -> f64 {
+    // 首次拿到真实值（旧值为 0）必须写进去，否则死区会把「从 0 起步」的值一直压在 0
+    if old == 0.0 || (new - old).abs() >= CPU_HYSTERESIS_PP {
+        new
+    } else {
+        old
+    }
+}
+
+/// 内存死区：变化不足配额的 [`MEM_HYSTERESIS_RATIO`] 就保留旧显示值。
+pub(crate) fn hyst_mem(old: u64, new: u64, limit: u64) -> u64 {
+    if old == 0 {
+        return new; // 同上：首帧从 0 起步时必须落值，否则小容器永远显示 0B
+    }
+    let by_usage = (old as f64 * MEM_HYSTERESIS_RATIO) as u64;
+    let by_quota = (limit as f64 * MEM_HYSTERESIS_QUOTA_RATIO) as u64;
+    let tol = by_usage.min(by_quota).max(1);
+    if old.abs_diff(new) >= tol {
+        new
+    } else {
+        old
+    }
+}
+
 /// 微条比例：docker 口径 + 最小可见补偿（0 → 0，不画条）
 pub fn bar_ratio(value: f64) -> f64 {
     if value > 0.0 {
@@ -244,6 +287,41 @@ mod tests {
             disk_used,
             ..Default::default()
         }
+    }
+
+    /// 抖动小于死区的 CPU% 不写模型：这是「减少按行标脏重绘」的唯一开关，
+    /// 阈值一旦被改小/删掉，24 行 × 每 6s 就会变成每轮全屏重绘。
+    #[test]
+    fn cpu_hysteresis_holds_small_jitter() {
+        assert_eq!(hyst_cpu(10.0, 10.4), 10.0, "0.4pp 抖动应保留旧值");
+        assert_eq!(hyst_cpu(10.0, 10.5), 10.5, "达到阈值应更新");
+        assert_eq!(hyst_cpu(10.0, 9.5), 9.5, "下行同样按绝对值判断");
+        assert_eq!(hyst_cpu(0.0, 0.0), 0.0);
+        // 首帧从 0 起步必须落值：否则慢容器（0.3%）永远显示 0.0%
+        assert_eq!(hyst_cpu(0.0, 0.3), 0.3);
+    }
+
+    /// 内存死区按**配额**的 1% 计：1G 配额 ≈ 10MB，几百 MB 与几 GB 的容器过滤程度一致。
+    #[test]
+    fn mem_hysteresis_scales_with_limit() {
+        let gb = 1024 * 1024 * 1024u64;
+        // 500M 用量、1G 配额：死区取 min(用量的 2% = 10M, 配额的 1% = 10M) = 10M
+        assert_eq!(hyst_mem(500 << 20, 505 << 20, gb), 500 << 20);
+        assert_eq!(hyst_mem(500 << 20, 520 << 20, gb), 520 << 20);
+        // 首帧从 0 起步必须落值：否则 13MB 用量在 8G 配额下永远显示 0B（真踩过）
+        let eight_gb = 8 * gb;
+        assert_eq!(hyst_mem(0, 13 << 20, eight_gb), 13 << 20);
+        // 小容器按自身量级过滤，不受超大配额拖累
+        assert_eq!(
+            hyst_mem(13 << 20, (13 << 20) + (100 << 10), eight_gb),
+            13 << 20
+        );
+        assert_eq!(
+            hyst_mem(13 << 20, (13 << 20) + (1 << 20), eight_gb),
+            (13 << 20) + (1 << 20)
+        );
+        // 配额未知（0）时退化成更敏感的一侧，不会把值钉死
+        assert_eq!(hyst_mem(100, 103, 0), 103);
     }
 
     /// 「磁盘」列显示的是 disk_used → 排序键必须同源，

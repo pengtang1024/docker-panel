@@ -1,6 +1,6 @@
 [package]
 name = "docker-panel"
-version = "0.7.18"
+version = "0.7.19"
 edition = "2021"
 rust-version = "1.99"
 description = "极简 Docker Engine 桌面管理面板（Rust + Slint，纯软件渲染，单二进制）"
@@ -31,6 +31,9 @@ arboard = { version = "3", default-features = false, features = ["wayland-data-c
 
 # 更新包完整性校验（checksums.txt）；HTTP 走系统 curl，不引入 TLS crate
 sha2 = "0.10"
+
+# 更新清单 Ed25519 验签（App 与特权助手 docker-panel-update 共用 src/signature.rs）
+ed25519-dalek = "2"
 
 [build-dependencies]
 slint-build = "1.18.1"

@@ -33,6 +33,18 @@ pub(crate) fn curl_get(
     timeout_secs: u64,
     headers: &[(&str, &str)],
 ) -> Result<String, String> {
+    let bytes = curl_get_bytes(url, timeout_secs, headers, 2 * 1024 * 1024)?;
+    String::from_utf8(bytes)
+        .map_err(|e| i18n::trf("Malformed update response: {0}", &[&e.to_string()]))
+}
+
+/// 拉取二进制内容（更新清单的 detached signature 只有 64 字节，但保持通用）。
+pub(crate) fn curl_get_bytes(
+    url: &str,
+    timeout_secs: u64,
+    headers: &[(&str, &str)],
+    max_bytes: usize,
+) -> Result<Vec<u8>, String> {
     if !command_exists("curl") {
         return Err(i18n::t(
             "curl is required to check for updates, please install curl",
@@ -45,7 +57,7 @@ pub(crate) fn curl_get(
         .arg("--max-time")
         .arg(timeout_secs.to_string())
         .arg("--max-filesize")
-        .arg("2097152")
+        .arg(max_bytes.to_string())
         .arg("-A")
         .arg(USER_AGENT);
     for (k, v) in headers {
@@ -60,8 +72,10 @@ pub(crate) fn curl_get(
         let stderr = String::from_utf8_lossy(&out.stderr).to_string();
         return Err(curl_error("Update check", out.status.code(), &stderr));
     }
-    String::from_utf8(out.stdout)
-        .map_err(|e| i18n::trf("Malformed update response: {0}", &[&e.to_string()]))
+    if out.stdout.len() > max_bytes {
+        return Err(i18n::t("Update response is too large"));
+    }
+    Ok(out.stdout)
 }
 
 /// curl 失败 → 用户可读的文案。`action` 是 msgid（Update check / Update download）。

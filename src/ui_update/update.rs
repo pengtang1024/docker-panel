@@ -30,8 +30,18 @@ impl AppState {
                             self.persist();
                         }
                         let was_available = self.update.update_available;
-                        self.update.update_available = newer && !self.update.update_restart_needed;
                         self.update.update_info = Some(info.clone());
+                        // 已经装好、只差重启：标记待重启，不再提示「可更新」，
+                        // 也不再让用户点安装（点了也只会被助手以「已安装」拒绝）。
+                        if info.already_installed {
+                            self.update.update_restart_needed = true;
+                            self.update.update_status = crate::i18n::trf(
+                                "Version {0} is already installed, restart to apply",
+                                &[&info.version],
+                            );
+                        }
+                        self.update.update_available =
+                            newer && !self.update.update_restart_needed && !info.already_installed;
                         // 任何一次成功检查都清掉旧状态（含“已有任务在运行”的占位提示）
                         self.update.update_status.clear();
                         // 启动检查发现新版本：只提示一次，不弹窗

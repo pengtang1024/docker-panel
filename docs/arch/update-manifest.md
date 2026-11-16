@@ -19,7 +19,7 @@
 | 4 | [客户端改动点](#4-客户端改动点文件级) | 文件级落点清单 |
 | 5 | [三级回退链](#5-三级回退链) | 三个来源的优劣与实测结果 |
 | 6 | [失败与降级行为](#6-失败与降级行为) | 每种失败会不会打扰用户 |
-| 7 | [安全边界](#7-安全边界) | 三条收紧规则与「为什么不引入签名」 |
+| 7 | [安全边界](#7-安全边界) | Ed25519 签名信任链、三条收紧规则与验签失败后的处置 |
 | 8 | [文档与版本号同步影响](#8-文档与版本号同步影响) | 为什么 `version.json` 不算版本源 |
 | 9 | [不建议做](#9-不建议做) | 12 条已经想清楚不做的事 |
 | 10 | [风险与回归点](#10-风险与回归点) | 风险 → 影响 → 缓解 |
@@ -190,18 +190,29 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 
 ## 7. 安全边界
 
-现状：只有 Release 内 `checksums.txt` 的 SHA-256，**无代码签名**；上游 Release 被篡改无法防御（AGENTS.md「当前已知限制」已记录）。
+现状（0.7.19 起）：清单有 **Ed25519 detached 签名** `version.json.sig`，公钥内置在 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEY_HEX`，私钥只存在 CI secret `UPDATE_SIGNING_KEY` 与维护者本机。
 
-新增的篡改面 = 清单本身：攻击者若能改清单，可改 `version`（诱导升级/降级）、`mandatory`（诱导强制）与 `sha256`（诱导接受任意包）。
-因此清单**必须**按下面三条收紧，否则 CDN 被劫持等于远程代码执行：
+信任链是「内置公钥 → 签名清单 → 清单声明的包 SHA-256 → 实际下载的包」，任一环不符即拒绝安装（fail closed）：
 
-1. **`version` 只用于比较**，不用于拼任何可执行路径之外的语义；`channel` / `schema` 不认识就丢弃。
-2. **`download_url` 不来自清单**，由 `version` + `name` 派生，域名与路径前缀写死在客户端代码里。
-3. **`sha256` 以 `checksums.txt` 为准**：清单的 `sha256` 只能做交叉核对；`checksums.txt` 仍从同一 Release 的 assets 取（现有 `install.rs` 逻辑不变），两者不一致即拒绝安装。
+| 环节 | 实现 | 失败时 |
+| --- | --- | --- |
+| 取签名 | `discover::fetch_signed_manifest()` 从 Release 资产与 jsDelivr 两个地址各取 `version.json` + `version.json.sig`，**只返回验签通过的那份原文** | 两个源都验不过 → `Update manifest signature is not verifiable: …` |
+| 验签 | `signature::verify_manifest_signature()`（`ed25519-dalek`，签名固定 64 字节，清单上限 256 KiB） | 空 / 超限 / 长度不对 / 公钥坏 / 验签失败一律拒绝 |
+| 版本一致 | 清单 `version` 必须等于本次发现的版本 | `Update manifest does not match the release` |
+| 包哈希 | `sha256_file(下载文件)` 与清单 `assets.*.sha256` 比对，并与 `checksums.txt` 交叉核对 | `Update manifest does not match the package` / `does not match checksums.txt` |
 
-清单与「什么」绑定才有意义：**与 `checksums.txt` 同源**（同一次 Release 上传、同一批资产）。
-若把清单提交到 `master` 供 jsDelivr 读，它就与 Release 是**两个可独立修改的渠道** → 这正是不能把它当信任根的原因。
-本期**不**引入 minisign / 自建签名（不在方案范围内），也不新增其它信任锚。
+签名解决了「清单能不能被改」：CDN 被劫持、`master` 上的 `version.json` 被改，都过不了验签。因此清单现在可以当作**版本号与资产哈希的信任源**，但仍然遵守下面三条收紧规则（签名只保证「是维护者说的」，不保证「说的内容适用于本机」）：
+
+1. **`version` 只用于比较**；`channel` / `schema` 不认识就丢弃（`schema` 必须为 1，否则视为 malformed）。
+2. **资产 URL 不来自清单**，由 `version` + 资产名派生，域名与路径前缀写死在客户端代码里。
+3. **`sha256` 双来源**：清单值与 `checksums.txt` 必须一致才安装；`checksums.txt` 仍从同一 Release 的 assets 取。
+
+安装路径与权限的关系（这是「装好之后升级不再弹框」的全部原因）：
+
+- **静默路径 = 用户级自替换**：可执行文件所在目录可写 → 验签通过后把新二进制 `rename` 进同目录（旧文件留 `<exe>.previous`），**不需要任何特权**。
+- 目录不可写（系统级 `/usr/bin`）→ 退回 `pkexec dpkg -i`，每次升级一次 polkit 授权；这是写系统目录的权限边界，代码里不做绕过。
+
+deb 本身仍**没有 dpkg/debsig 签名**，直接从 Release 页下载手工安装时只有 HTTPS + `checksums.txt` 两道校验。
 
 ## 8. 文档与版本号同步影响
 
@@ -212,7 +223,7 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 ## 9. 不建议做
 
 1. 把 jsDelivr 当**唯一**来源（12h 陈旧 + 单点）。
-2. 把 `version.json` 当信任根，或在清单里放 `download_url`。
+2. 在清单里放 `download_url`（URL 永远由 `version` + 资产名派生）。
 3. 用 `data.jsdelivr.com` 的 `resolved` 接口做版本发现（实测 `version: null`）。
 4. 用 CDN 的 tag 端点做「最新版」探测（必须先知道 tag；tag 端点只是「已知版本取内容」）。
 5. 用 `releases/latest/download/*` 的 **302** 判断资产是否存在（不存在的资产也 302）。

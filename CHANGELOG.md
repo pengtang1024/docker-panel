@@ -6,7 +6,22 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
-## [Unreleased]
+## [0.7.19] - 2026-11-17
+
+### 新增
+
+- **自动更新改走「用户级自替换 + 签名清单」，装好之后升级不再需要授权**：0.7.18 及之前以 `pkexec dpkg -i` 安装 deb，polkit 默认每次都要求授权，等于「每个小版本弹一次框」。现在：① 可执行文件所在目录可写时（推荐装在 `~/.local/bin`）由 App 自己完成更新——`version.json.sig` Ed25519 验签 → 复核 SHA-256 → 同目录临时文件 `rename` **原子自替换**，旧二进制留一份 `<exe>.previous` 供手工回滚，**全程零 root、零授权**；② 发布流水线用私钥给 `version.json` 签名并随 Release 发布 `version.json.sig`（公钥内置在 `src/signature.rs`，私钥只存在 CI secret `UPDATE_SIGNING_KEY` 与维护者本机，签名前核对「私钥派生公钥 == 内置公钥」，签错钥匙直接发版失败）；③ 系统级 deb 安装（`/usr/bin` 不可写）仍需 `pkexec dpkg -i`，每次升级一次授权——这是写系统目录的权限边界，不做任何绕过。更新缓存按版本单目录、装完删除，**只保留最新版本**。
+- **`scripts/sign-manifest.sh`**：本机应急签名工具（与 CI 同一套 openssl 参数），会先核对公钥指纹与 `src/signature.rs` 一致再签，签完立刻回验。
+
+### 性能
+
+- **给 CPU% / 内存加显示死区，空闲重绘大幅下降**：`StatsBatch` 写模型前先过死区——CPU% 变化不足 0.5pp、内存变化不足 `min(用量 2%, 配额 1%)` 就保留旧显示值（`src/ui_rows/containers.rs` 的 `hyst_cpu` / `hyst_mem`，在 `src/ui_update.rs` 应用）。行数据不变 → 差量同步跳过 → 该轮不产生脏区、不产帧，而 Slint 软件渲染器是按行标脏整条重画的。同一二进制交替 A/B（各 60s，`/proc/<pid>/task/<pid>/schedstat` 量 UI 主线程）：**旧 0.206% / 0.197% → 新 0.086% / 0.076%**（≈ −58%）。⚠️ 旧值为 0 时必须直接落值——首版按配额算死区把「13MB 用量 / 8G 配额」的小容器钉在 `0B`，已修并复测。代价是数字比真实值钝半个显示单位（肉眼不可辨），排序键与抽屉共用同一显示值、口径一致。
+- **stats 采样仍为 6s 整批投递（评估过更快周期与拆片，实测成本不可接受，已回退）**：把周期压到 2s、以及把一轮采样拆成多片投递（片间留间隔、每片只让 1/N 的行变脏）都实现并实测过，结论写进 `AGENTS.md` #34 与 `docs/arch/threading.md` §5 保留备查——**每次 apply 有约 6ms 固定重绘成本**（软件渲染器按行标脏 + 布局），所以周期减半约使成本翻倍（实测 6s 单批 **0.19%** → 2s 单批 **0.52%**），拆 8 片则接近乘 8（**2.3%**），而拆片**只摊平重绘节奏、不提高单行数据新鲜度**。因此最终保持 6s 单批 + `STATS_STALE_ROUNDS = 3`（6s × 3 = 18s）不变；要更快的数据新鲜度只能牺牲 CPU，属产品取舍。
+
+### 修复
+
+- **已经装好的版本不再反复下载、反复弹授权**：清单版本 ≤ dpkg 记录的已装版本时，只提示「版本 X 已安装，重启后生效」并把顶栏徽标转为待重启，不再进入下载/安装路径（此前每个新进程都可能重新下载 5.5MB 的 deb 并再弹一次授权）。
+- **更新清单验签失败即拒绝安装（fail closed）**：清单、签名、deb 三者哈希必须闭环一致；缺签名、签名长度不对、公钥不匹配、清单被改写，一律拒绝并给出原因，不再退回「只校验 checksums.txt」的旧路径。
 
 ## [0.7.18] - 2026-11-16
 
@@ -468,7 +483,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...HEAD
+[0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17
 [0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15

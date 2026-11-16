@@ -21,6 +21,11 @@ use crate::ui_state::{SharedState, DISK_USAGE_INTERVAL};
 ///
 /// ⚠️ 首轮**不**跳过：启动即采一轮，容器列表尚未到达时 ids 为空 → 空轮次无副作用。
 /// 真正的首次有效采样由 `spawn_initial_load` 在拿到容器列表后立刻补一轮（见该函数）。
+/// 周期固定 6s、整轮一次投递。CPU% / 内存靠「两次采样求差」，所以数字最多滞后 6s；
+/// 更快的周期试过（2s）会按周期数成倍放大重绘成本，拆片投递同样乘成本，实测数据见
+/// `AGENTS.md` #34：6s 单批 0.19% → 2s 单批 0.52% → 2s 拆 8 片 2.3%。
+const STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6);
+
 pub fn spawn_stats_interval(state: &SharedState) {
     let state_s = state.clone();
     let rt_h = {
@@ -31,7 +36,7 @@ pub fn spawn_stats_interval(state: &SharedState) {
         s.rt.handle().clone()
     };
     rt_h.spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(6));
+        let mut tick = tokio::time::interval(STATS_INTERVAL);
         let mut stale = StaleTracker::new(STATS_STALE_ROUNDS);
         loop {
             tick.tick().await;
@@ -49,7 +54,9 @@ pub fn spawn_stats_interval(state: &SharedState) {
                         .collect(),
                 )
             };
-            // 整轮采样打包成一条消息：逐容器单发会让卡片数值分批阶梯跳动
+            // 整轮一次投递：一次 apply 有约 6ms 固定重绘成本，把一轮拆成多片投递只会
+            // 把重绘次数按片数乘上去（实测 6s 单批 0.19% / 2s 单批 0.52% /
+            // 2s 八片 2.3%），既不提高单行新鲜度也更费 CPU。
             let batch = crate::docker::sample_all(&ids, true).await;
             let got_sample = !batch.is_empty();
             if got_sample {

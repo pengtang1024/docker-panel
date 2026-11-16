@@ -56,6 +56,14 @@ if [ "$has_unreleased_body" -gt 0 ]; then
   fail=1
 fi
 
+# ---- 核对 Cargo.lock 里的本包版本（漏改会让 CI 的 --locked 直接失败）----
+lock_ver=$(awk '/^name = "docker-panel"$/{f=1;next} f&&/^version = /{gsub(/[",]/,"");sub(/^version = /,"");print;exit}' Cargo.lock)
+echo "Cargo.lock 版本       : ${lock_ver:-<未找到>}"
+if [ "$lock_ver" != "$cargo_ver" ]; then
+  echo "✗ Cargo.lock 里的 docker-panel 版本($lock_ver) 与 Cargo.toml($cargo_ver) 不一致 —— 跑一次 cargo build 让它同步" >&2
+  fail=1
+fi
+
 # ---- 可选：核对最新 tag ----
 if [ "${1:-}" = "--tag" ]; then
   latest_tag=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)

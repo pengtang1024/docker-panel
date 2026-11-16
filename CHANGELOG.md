@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-## [0.7.16] - 2026-11-16
+## [0.7.17] - 2026-11-16
 
 ### 变更
 
@@ -452,7 +452,7 @@
 - 200ms 后台轮询循环。
 
 [Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
-[0.7.16]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.16
+[0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17
 [0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14
 [0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13

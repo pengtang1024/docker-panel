@@ -84,9 +84,10 @@ done
 
 # --- 5. 补传并发布 ---------------------------------------------------------------
 say "5/6 补传签名并发布"
+# 用 `gh release upload` 而不是裸 assets 接口：它对草稿 Release 的二进制上传
+# 走 uploads 端点并自行处理重定向，裸接口在这个仓库上会 404。
 for name in version.json.sig checksums.txt.sig; do
-  gh api --method POST -H "Content-Type: application/octet-stream" \
-    "repos/$repo/releases/$rel_id/assets?name=$name" --input "$work/$name" > /dev/null
+  gh release upload "$version" "$work/$name" --repo "$repo" --clobber > /dev/null
   echo "已上传 $name"
 done
 

@@ -190,7 +190,7 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 
 ## 7. 安全边界
 
-现状（0.8.0 起）：清单有 **Ed25519 detached 签名** `version.json.sig`，`checksums.txt` 也有同钥签名 `checksums.txt.sig`；公钥列内置在 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX`（**有序列表，支持轮换**）。
+现状（0.8.0 起）：清单有 **Ed25519 detached 签名** `version.json.sig`，`checksums.txt` 也有同钥签名 `checksums.txt.sig`；公钥清单是仓库里的 `packaging/release-signing.pub`（base64 行、**有序列表、支持轮换**），应用（`src/signature.rs`）与验签启动器（`launcher/`）编译期读**同一个文件**。
 
 **私钥不进入 CI**。流水线只构建草稿 Release（8 个构建产物）并校验齐全，然后停下：
 
@@ -204,7 +204,7 @@ tag 推送 → CI 建草稿（draft=true，用户不可见）
 
 理由：私钥一旦进 secret，构建机、依赖、Action 任一环被攻破都能签出**能通过校验**的更新包——那等于把「谁能发布」交给 CI 供应链。现在 CI 被攻破最多能改草稿，改不出签名，草稿也发不出去（发布要签名脚本，签名要本机私钥）。
 
-轮换：新公钥**加到列表最前**，旧公钥保留到所有在用版本升级完毕再删。验签时逐个尝试，任一通过即接受，因此换钥不需要先发过渡版本；删旧钥必须等旧版本全部淘汰（旧版本只认自己那份列表）。
+轮换：新公钥**追加到列表末尾**（保持已发布版本能验新包），旧公钥保留到所有在用版本升级完毕再删。验签时逐个尝试，任一通过即接受，因此换钥不需要先发过渡版本；删旧钥必须等旧版本全部淘汰（旧版本只认自己那份列表）。
 
 信任链是「内置公钥 → 签名清单 → 清单声明的包 SHA-256 → 实际下载的包」，任一环不符即拒绝安装（fail closed）：
 
@@ -221,10 +221,33 @@ tag 推送 → CI 建草稿（draft=true，用户不可见）
 2. **资产 URL 不来自清单**，由 `version` + 资产名派生，域名与路径前缀写死在客户端代码里。
 3. **`sha256` 双来源**：清单值与 `checksums.txt` 必须一致才安装；`checksums.txt` 仍从同一 Release 的 assets 取。
 
-安装路径与权限的关系（这是「装好之后升级不再弹框」的全部原因）：
+安装路径与权限的关系（这是「装好之后升级不再弹框」的全部原因）。分两种安装形态：
 
-- **静默路径 = 用户级自替换**：可执行文件所在目录可写 → 验签通过后把新二进制 `rename` 进同目录（旧文件留 `<exe>.previous`），**不需要任何特权**。
-- 目录不可写（系统级 `/usr/bin`）→ 退回 `pkexec dpkg -i`，每次升级一次 polkit 授权；这是写系统目录的权限边界，代码里不做绕过。
+**A. 用户自己装的二进制（`~/.local/bin/docker-panel`）——同目录自替换**
+
+- 验签通过 → 新二进制 `rename` 进同目录，旧文件留 `<exe>.previous`（只保留最新版本），**零 root、零授权**。
+
+**B. deb 安装（`/usr/bin/docker-panel` 是启动器）——用户副本 + 原子切链**
+
+```
+/usr/bin/docker-panel                     启动器（root:root 0755，非 setuid、无 capabilities）
+/usr/lib/docker-panel/seed/docker-panel   deb 自带种子运行体（root 所有、组/其他不可写）
+/usr/lib/docker-panel/seed/version        种子版本
+
+~/.local/opt/docker-panel/
+├── current -> versions/<version>         软链，切换即生效
+└── versions/<version>/
+    ├── docker-panel                      运行体，0755
+    ├── version                           版本号
+    ├── checksums.txt                     与 Release 逐字节一致
+    └── checksums.txt.sig                 Ed25519 签名（base64）
+```
+
+- 应用发现自己在种子布局里跑（`exe` 在 `/usr/lib/docker-panel/seed/`）→ 更新**落到版本目录**：先建 `.staging-<pid>` 写齐四件 → 整目录 rename 进 `versions/<version>` → 原子替换 `current` 软链；装完由启动器重启。
+- 启动器候选排序「版本高的优先、同版本用户副本优先」，逐个校验：**用户副本必须验签**（`checksums.txt.sig` → 清单里 `docker-panel` 行 sha256 → 对 `O_PATH` 打开的 inode 算哈希 → 用同一个 fd `execveat(fd, "", …, AT_EMPTY_PATH)`，校验与执行是同一个 inode，没有 TOCTOU 窗口）；**种子按属主信任**（root 所有且组/其他不可写）。
+- 为什么种子不走签名：`checksums.txt.sig` 要到发布前离线签名时才存在，而 deb 是 CI 构建的，签名打不进包里；种子的信任来源是 dpkg（要改它得先拿到 root）。
+- 任何一步失败都**不降级执行**该候选，而是换下一个；全坏就明确报错退出（不会跑一个「验不过但能用」的版本）。
+- 目录不可写且不是种子布局（极少见）→ 退回 `pkexec dpkg -i`，每次升级一次 polkit 授权；这是写系统目录的权限边界，代码里不做绕过。
 
 deb 本身仍**没有 dpkg/debsig 签名**；但从 0.8.0 起 Release 提供 `checksums.txt.sig`，手工下载的用户可以离线复核：
 
@@ -233,12 +256,12 @@ openssl pkeyutl -verify -pubin -inkey <公钥.pem> -rawin \
   -in checksums.txt -sigfile checksums.txt.sig
 ```
 
-公钥从 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX` 取（发布说明里也公布指纹）。
+公钥从 `packaging/release-signing.pub` 取（base64 行；发布说明里也公布 hex 指纹）。
 
 ## 8. 文档与版本号同步影响
 
 - **版本号仍只有四处手写同步**（`Cargo.toml` / `packaging/debian/control` / `Cargo.lock` / `CHANGELOG.md`），`version.json` **不是**其中之一：它的 `version` 由 `GITHUB_REF_NAME` 派生，无需人工同步，`scripts/check-version.sh` 也**不检查**它。
-- 本轮已同步：本文件（状态改为「已实施」+ 补实测值）、`AGENTS.md` 模块地图（`update/` 增 `discover` / `manifest`）与「当前已知限制」的「更新包无代码签名」条目、`docs/architecture.md` 的模块树与依赖表、`src/update/{mod,github}.rs` 模块注释、`CHANGELOG.md` 的 `[Unreleased]`。
+- 本轮已同步：本文件（补启动器布局与种子信任模型）、`AGENTS.md` 模块地图（`update/` 增 `discover` / `manifest`）与「当前已知限制」的「更新包无代码签名」条目、`docs/architecture.md` 的模块树与依赖表、`src/update/{mod,github}.rs` 模块注释、`CHANGELOG.md` 的 `[Unreleased]`。
 - `docs/git-flow.md` 的发布流程**已变更**：CI 只产草稿，签名与发布是本机第二步（`scripts/sign-release.sh`），见该文件「发版流程」。
 
 ## 9. 不建议做

@@ -88,7 +88,7 @@ scripts/verify-release.sh 0.1.1   # 独立复核签名、哈希、资产数量
 scripts/check-release-guards.sh
 ```
 
-> **为什么签名不在 CI**：私钥进 secret 就等于把「谁能发布更新」交给 CI 供应链。现在流水线只产草稿（用户看不到），签名与发布都必须在本机、用离线私钥完成；CI 被攻破最多改草稿，签不出能通过客户端校验的清单（`src/signature.rs` 内置公钥，验不过一律 fail closed）。
+> **为什么签名不在 CI**：私钥进 secret 就等于把「谁能发布更新」交给 CI 供应链。现在流水线只产草稿（用户看不到），签名与发布都必须在本机、用离线私钥完成；CI 被攻破最多改草稿，签不出能通过客户端校验的清单（`packaging/release-signing.pub` 内置公钥清单，验不过一律 fail closed）。
 
 `git flow release finish` 会询问 tag 说明，直接回车使用默认的 `release: vX.Y.Z` 即可。
 

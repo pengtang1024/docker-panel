@@ -6,7 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
-## [Unreleased]
+## [0.8.0] - 2026-11-17
+
+### 新增
+
+- **deb 安装也能静默升级：`/usr/bin/docker-panel` 变成验签启动器，运行体挪到用户目录**。此前只有装在 `~/.local/bin` 的用户能免授权升级，deb（`/usr/bin`）用户每次升级都要 `pkexec` 弹一次授权。现在：① deb 里的 `/usr/bin/docker-panel` 是**启动器**（root 所有、非 setuid、无 capabilities），真正的运行体放在 `/usr/lib/docker-panel/seed/`；② 更新落到 `~/.local/opt/docker-panel/versions/<version>/`（运行体 + `version` + `checksums.txt` + `checksums.txt.sig`），再原子替换 `current` 软链；③ 启动器在「用户副本」与「deb 种子」之间挑**版本更高且通过校验**的那份 `execveat` 起来——用户副本必须验签（`checksums.txt` 签名 + 运行体 SHA-256），种子按 dpkg 的 root 属主信任（它的签名要到发布前才生成，打不进 deb）。任何一步不过都回落到种子，不会跑半个新版本。
+- **`packaging/release-signing.pub`：公钥清单成为唯一信任锚**（base64 行、支持轮换），应用（`src/signature.rs`）与启动器（`launcher/`）编译期读同一个文件，不再各存一份十六进制常量。
 
 ### 安全
 
@@ -505,7 +510,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...HEAD
+[0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...HEAD
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17

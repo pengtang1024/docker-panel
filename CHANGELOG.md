@@ -15,6 +15,9 @@
 
 ### 变更
 
+- 事件驱动的列表刷新按事件类型收窄：容器启停只拉 `/containers/json`（实测 18.0ms，此前四路并发 77.7ms），镜像的「被引用容器数」改用新容器列表在应用侧本地重算（`Msg::Containers` / `Msg::Images` 处理时回填），网络与卷只在自身事件或全量刷新时拉取；刷新去重的脏标记从 bool 改为 `Kinds` 位掩码，部分刷新与补跑可以共存（`src/ui_state/refresh.rs`）
+
+
 - **版本号同步口径在全部文档里统一为「四处（含 Cargo.lock）」**：此前 `CONTRIBUTING.md` 的文档同步表、`docs/agents-rules.md` 的 R9 与 packaging 行、`docs/git-flow.md` 的流程注释与「四个位置」表（缺 `Cargo.lock` 行）、`docs/arch/update-manifest.md` §8 仍写「三处/三同步」，与已经核对第四处的 `scripts/check-version.sh` 自相矛盾——漏改 `Cargo.lock` 会让 CI 的 `--locked` 直接失败（0.7.16 就是这么炸的）。
 
 - **修正 12 组文档与实现不一致（含 3 处指向不存在的 API / 路径）**：`AGENTS.md` 把 `slint_build::compile` 写成真实调用的 `compile_with_config` + `with_bundled_translations`、把已不存在的 `detail-log-panel.slint` 改为 `drawer.slint`、M3 色板角色数 `53 → 49`（`material_schemes.slint` 的 `MaterialScheme` 实测 49 个字段）、`update-dialog` 不再声称有开关（三个开关只在设置弹窗）；`docs/arch/threading.md` 的消息表把 `PullDone` / `ActionDone` 改回「不刷新、交给 `/events`」（只有 `CleanupDone` 保留 `refresh_now` 兜底）、`LogStreamEnded` 补「全部流都退出」条件、日志状态提示三态改四态（补「洪峰抽样」）；`docs/agents-rules.md` 三处把不存在的 `ui/components.slint` 改为 `ui/components-*.slint`；`docs/arch/ui-interaction.md` 的 Slint 清单补 `settings-dialog` / `settings-state` 两项（39 → 41）并按实测更新 11 处行数；`docs/architecture.md` 与 README 的「两个开关」口径统一为三个；规则地图 R9 与 `scripts/check-version.sh` 头部注释由「三处同步」改为「四处同步（含 Cargo.lock）」。

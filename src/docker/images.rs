@@ -63,13 +63,17 @@ pub async fn list_images_raw() -> Result<Vec<ImageInfo>, String> {
 ///
 /// 匹配规则：优先按 `image_id` 精确匹配（`sha256:` 前缀可选），
 /// 匹配不到再按「镜像名:tag」字符串兜底 —— UI 靠它给「未使用镜像」打黄色高亮。
+/// 用容器列表回填镜像的「被引用容器数」，返回是否有计数发生变化。
+///
+/// 容器事件只刷容器单路时，走这里本地重算引用数，省掉一次 `/images/json`。
 pub fn attach_container_refs(
     images: &mut [ImageInfo],
     containers: &[crate::models::ContainerInfo],
-) {
+) -> bool {
     if images.is_empty() {
-        return;
+        return false;
     }
+    let mut changed = false;
     // 镜像名:tag → 引用该名字的容器数（image_id 匹配不到时的兜底）
     let mut by_name: HashMap<&str, i64> = HashMap::new();
     for c in containers {
@@ -84,7 +88,7 @@ pub fn attach_container_refs(
                 !cid.is_empty() && (c.image_id == img.id || cid == short)
             })
             .count() as i64;
-        img.containers = if by_id > 0 {
+        let next = if by_id > 0 {
             by_id
         } else {
             img.tags
@@ -96,7 +100,12 @@ pub fn attach_container_refs(
                 })
                 .sum()
         };
+        if img.containers != next {
+            img.containers = next;
+            changed = true;
+        }
     }
+    changed
 }
 
 /// 单个镜像的层数（`RootFS.Layers.len()`）

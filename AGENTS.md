@@ -297,16 +297,6 @@ cargo check --all-targets
 
 > 工具链：`rust-toolchain.toml` 统一 stable 通道（含 `rustfmt` / `clippy`）；`Cargo.toml` 的 `rust-version = "1.99"` 是最低支持版本；CI 固定 `1.99.1`（quality 流水线跑 fmt / clippy / test，release 流水线用同一版本构建）。
 
-## target/ 清理
-
-Rust 不自动清理编译缓存，`target/` 可能膨胀到 10G+。推荐工具链：
-
-```bash
-cargo clean                       # 全清（最快释放空间）
-cargo clean --release             # 只清 release（保留 debug 增量）
-cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep）
-```
-
 ## 发版流程
 
 严格走 Git Flow，详见 [docs/git-flow.md](docs/git-flow.md)。三个位置必须同步版本号：
@@ -317,11 +307,17 @@ cargo sweep --time 7              # 细粒度清理（已全局装 cargo-sweep�
 
 收尾用 `scripts/check-version.sh --tag` 一键核对三处是否一致（版本号 / CHANGELOG 段落 / 底部链接 / 最新 tag）。
 
-**发布不是「推了 tag 就完事」**，两件必做的事（漏了就是线上事故，2026-11-16 已经踩过）：
+**发版是一条流水线，默认一次做完，不需要每次问用户**（2026-11-16 用户要求：「提交，推送，发版，更新，这个流程不要我每次来提醒」）：
 
-1. **Gitee 侧必须补齐**：Gitee 没有 CI，分支、tag 与 Release 都要手工同步 —— `git push gitee master develop` + `git push gitee refs/tags/X.Y.Z` + `scripts/sync-gitee-release.py X.Y.Z`（幂等，回读核对资产名）。两平台是**并列的正式发布渠道**，不是主从/镜像关系。
-2. **护栏自检**：`scripts/check-release-guards.sh`（加 `GH_TOKEN` 连仓库设置一起核对：immutable 开关、两个 ruleset、流水线的 draft → 发布顺序）。
-3. **发布产物不可变**：仓库开启了 GitHub immutable releases，**已发布的 Release 资产不可增删改，tag 不可再生**。流水线已按「建 draft → 上传 8 个资产 → 校验齐全 → `draft=false` 发布」实装（`.github/workflows/release.yml`），**不要改回一步到位的 `draft: false` + `files:`**。发了错的版本只能发 patch 版本，**禁止删已发布的 Release 重发**（删掉会让该 tag 名永久不可重建，只能等 GitHub Support）。处置对照表见 [docs/git-flow.md](docs/git-flow.md) 的「发布产物不可变：出了错怎么办」。
+1. 精确 `git add` → 按逻辑分组提交 → 推 `develop` 到**两个平台**；
+2. 要发版时三处版本号同步 → `chore(release): X.Y.Z` → 合入 `master` 打 tag → 分别 `git push <p> master` 与 `git push <p> refs/tags/X.Y.Z`（tag 单独推，多 ref 一次推会吞掉 tag 事件）；
+3. 等 GitHub Action 走完 draft → 上传 → 校验 → 发布，再 `scripts/sync-gitee-release.py X.Y.Z` 补 Gitee（无 CI，分支/tag/Release 都要手工同步；两平台并列，不是主从）；
+4. 动过 `assets/screenshots/` 就逐张 purge jsDelivr，否则 Wiki 继续返回旧图；
+5. 收尾 `scripts/check-release-guards.sh` + `scripts/check-version.sh`，把两平台状态与下载链接回报用户。
+
+**发布产物不可变**：immutable releases 下已发布 Release 的资产不可增删改、tag 不可再生。流水线必须保持「draft → 上传 8 个资产 → 校验齐全 → `draft=false`」，**不要改回一步到位的 `draft: false` + `files:`**；发了错只能发 patch 版本，**禁止删已发布 Release 重发**（会让 tag 名永久不可重建）。处置表见 [docs/git-flow.md](docs/git-flow.md)。
+
+**只有上面「破坏性操作」四类要先问用户**（删 release / 改写历史 / 强推主干 / 改保护规则），其余自行完成。
 
 ## 文档同步规范
 

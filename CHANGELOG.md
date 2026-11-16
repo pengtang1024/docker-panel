@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.16] - 2026-11-16
+
 ### 变更
 
 - **日志热路径与首屏冷启动纳入可复现基线**：`src/docker/log_batch.rs` 新增 `bench_log_pipeline`（`--ignored`，正常段 71ns/行、回放段 23ns/行、抽样 0.2ns/行），`docs/arch/threading.md` §5 基线表补该行并记录「首屏 77ms 冷启动属架构边界」的两个被否掉的预热实验（`/_ping` 预热、提前构造客户端）。
@@ -450,6 +452,7 @@
 - 200ms 后台轮询循环。
 
 [Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
+[0.7.16]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.16
 [0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14
 [0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13

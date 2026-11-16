@@ -6,6 +6,28 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [Unreleased]
+
+### 安全
+
+- **签名私钥不再进入 CI：流水线只产草稿，签名与发布由维护者离线完成**。0.7.19 把私钥放进
+  GitHub Actions secret，等于把「谁能发布更新」交给 CI 供应链——构建机、依赖、Action 任何一环
+  被攻破都能签出**能通过客户端校验**的更新包。现在：CI 只构建草稿 Release（8 个构建产物）并
+  校验齐全，然后停下（草稿对用户不可见）；维护者在本机跑 `scripts/sign-release.sh <version>`
+  离线签名 `version.json` 与 `checksums.txt`、补传两个 `.sig`、才 `draft=false` 发布并同步
+  `master` 的清单。CI 被攻破最多改草稿，签不出能过校验的清单。
+- **内置公钥改为可轮换列表**（`src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX`）：验签逐个尝试，
+  任一通过即接受，因此换钥不必先发过渡版本；坏条目跳过而不拖垮整条链（单测覆盖）。
+- **`checksums.txt` 也签名**（`checksums.txt.sig`）：手工下载 deb 的用户可以不信任 HTTPS，
+  用 `openssl pkeyutl -verify` 直接复核校验和清单。
+
+### 新增
+
+- `scripts/sign-release.sh`：离线签名 → 补传 → 发布 → 同步 `master` 清单 → 刷 jsDelivr。
+- `scripts/verify-release.sh`：独立复核（签名、哈希、资产数量），只需公钥。
+- `scripts/check-release-guards.sh`：新增护栏——`release.yml` 里不得出现私钥或签名动作，
+  发布动作只允许出现在签名脚本里。
+
 ## [0.7.19] - 2026-11-17
 
 ### 新增

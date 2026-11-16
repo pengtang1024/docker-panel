@@ -190,14 +190,28 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 
 ## 7. 安全边界
 
-现状（0.7.19 起）：清单有 **Ed25519 detached 签名** `version.json.sig`，公钥内置在 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEY_HEX`，私钥只存在 CI secret `UPDATE_SIGNING_KEY` 与维护者本机。
+现状（0.8.0 起）：清单有 **Ed25519 detached 签名** `version.json.sig`，`checksums.txt` 也有同钥签名 `checksums.txt.sig`；公钥列内置在 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX`（**有序列表，支持轮换**）。
+
+**私钥不进入 CI**。流水线只构建草稿 Release（8 个构建产物）并校验齐全，然后停下：
+
+```
+tag 推送 → CI 建草稿（draft=true，用户不可见）
+        → 维护者本机 scripts/sign-release.sh <version>
+            离线签 version.json + checksums.txt → 补传 2 个 .sig → draft=false 发布
+            → 提交 version.json + .sig 到 master → 刷 jsDelivr
+        → scripts/sync-gitee-release.py <version> 对齐 Gitee
+```
+
+理由：私钥一旦进 secret，构建机、依赖、Action 任一环被攻破都能签出**能通过校验**的更新包——那等于把「谁能发布」交给 CI 供应链。现在 CI 被攻破最多能改草稿，改不出签名，草稿也发不出去（发布要签名脚本，签名要本机私钥）。
+
+轮换：新公钥**加到列表最前**，旧公钥保留到所有在用版本升级完毕再删。验签时逐个尝试，任一通过即接受，因此换钥不需要先发过渡版本；删旧钥必须等旧版本全部淘汰（旧版本只认自己那份列表）。
 
 信任链是「内置公钥 → 签名清单 → 清单声明的包 SHA-256 → 实际下载的包」，任一环不符即拒绝安装（fail closed）：
 
 | 环节 | 实现 | 失败时 |
 | --- | --- | --- |
 | 取签名 | `discover::fetch_signed_manifest()` 从 Release 资产与 jsDelivr 两个地址各取 `version.json` + `version.json.sig`，**只返回验签通过的那份原文** | 两个源都验不过 → `Update manifest signature is not verifiable: …` |
-| 验签 | `signature::verify_manifest_signature()`（`ed25519-dalek`，签名固定 64 字节，清单上限 256 KiB） | 空 / 超限 / 长度不对 / 公钥坏 / 验签失败一律拒绝 |
+| 验签 | `signature::verify_manifest_signature()`（`ed25519-dalek`，签名固定 64 字节，清单上限 256 KiB；**逐个尝试内置公钥列表**，坏条目跳过） | 空 / 超限 / 长度不对 / 全部公钥坏 / 验签失败一律拒绝 |
 | 版本一致 | 清单 `version` 必须等于本次发现的版本 | `Update manifest does not match the release` |
 | 包哈希 | `sha256_file(下载文件)` 与清单 `assets.*.sha256` 比对，并与 `checksums.txt` 交叉核对 | `Update manifest does not match the package` / `does not match checksums.txt` |
 
@@ -212,13 +226,20 @@ purge 只影响备源时效：主源 `releases/latest/download/version.json` 发
 - **静默路径 = 用户级自替换**：可执行文件所在目录可写 → 验签通过后把新二进制 `rename` 进同目录（旧文件留 `<exe>.previous`），**不需要任何特权**。
 - 目录不可写（系统级 `/usr/bin`）→ 退回 `pkexec dpkg -i`，每次升级一次 polkit 授权；这是写系统目录的权限边界，代码里不做绕过。
 
-deb 本身仍**没有 dpkg/debsig 签名**，直接从 Release 页下载手工安装时只有 HTTPS + `checksums.txt` 两道校验。
+deb 本身仍**没有 dpkg/debsig 签名**；但从 0.8.0 起 Release 提供 `checksums.txt.sig`，手工下载的用户可以离线复核：
+
+```bash
+openssl pkeyutl -verify -pubin -inkey <公钥.pem> -rawin \
+  -in checksums.txt -sigfile checksums.txt.sig
+```
+
+公钥从 `src/signature.rs` 的 `MANIFEST_PUBLIC_KEYS_HEX` 取（发布说明里也公布指纹）。
 
 ## 8. 文档与版本号同步影响
 
 - **版本号仍只有四处手写同步**（`Cargo.toml` / `packaging/debian/control` / `Cargo.lock` / `CHANGELOG.md`），`version.json` **不是**其中之一：它的 `version` 由 `GITHUB_REF_NAME` 派生，无需人工同步，`scripts/check-version.sh` 也**不检查**它。
 - 本轮已同步：本文件（状态改为「已实施」+ 补实测值）、`AGENTS.md` 模块地图（`update/` 增 `discover` / `manifest`）与「当前已知限制」的「更新包无代码签名」条目、`docs/architecture.md` 的模块树与依赖表、`src/update/{mod,github}.rs` 模块注释、`CHANGELOG.md` 的 `[Unreleased]`。
-- `docs/git-flow.md` 的发布流程不变（清单由 CI 生成，不进入人工发版清单）。
+- `docs/git-flow.md` 的发布流程**已变更**：CI 只产草稿，签名与发布是本机第二步（`scripts/sign-release.sh`），见该文件「发版流程」。
 
 ## 9. 不建议做
 

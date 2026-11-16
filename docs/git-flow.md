@@ -76,7 +76,19 @@ git flow release finish 0.1.1
 # 5. 推送（tag 必须单独推：一次多 ref push 会吞掉 tag 事件，流水线不触发）
 git push origin master develop
 git push origin refs/tags/0.1.1
+
+# 6. 等 CI 跑完：它只建**草稿** Release 并校验 8 个构建产物，不签名、不发布
+gh run watch   # 或 gh run list --workflow=release.yml --limit 1
+
+# 7. 本机离线签名并发布（0.8.0 起；私钥不在 CI，只有这一步能让 Release 对外可见）
+scripts/sign-release.sh 0.1.1     # 签 version.json + checksums.txt → 补传 .sig → 发布
+                                  # → 同步 master 的清单 → 刷 jsDelivr
+scripts/sync-gitee-release.py 0.1.1
+scripts/verify-release.sh 0.1.1   # 独立复核签名、哈希、资产数量
+scripts/check-release-guards.sh
 ```
+
+> **为什么签名不在 CI**：私钥进 secret 就等于把「谁能发布更新」交给 CI 供应链。现在流水线只产草稿（用户看不到），签名与发布都必须在本机、用离线私钥完成；CI 被攻破最多改草稿，签不出能通过客户端校验的清单（`src/signature.rs` 内置公钥，验不过一律 fail closed）。
 
 `git flow release finish` 会询问 tag 说明，直接回车使用默认的 `release: vX.Y.Z` 即可。
 
@@ -152,7 +164,7 @@ sha256sum /tmp/x.deb
 
 **删已发布的 Release 会导致该 tag 名永久不可重建**：GitHub 会记录 `tag_name was used by an immutable release`，之后任何创建同名 ref 的路径都返回 422，仓库层面的 immutable 开关关掉也不解除，只能等 GitHub Support 清除记录（2026-11-16 的 0.4.3–0.7.14 就是这么丢的）。
 
-流水线已按此顺序实装（`.github/workflows/release.yml`）：**建 draft → 上传 8 个资产 → 校验齐全 → `draft=false` 发布**。不要改回 `draft: false` + `files:` 的一步到位写法，那在 immutable 下必失败，而且失败时 Release 已经对外可见。
+流水线已按此顺序实装：**建 draft → 上传 8 个构建资产 → 校验齐全 → （本机）补传 2 个签名资产 → `draft=false` 发布**。前半段在 `.github/workflows/release.yml`（不含私钥、不做发布），后半段在 `scripts/sign-release.sh`。不要改回 `draft: false` + `files:` 的一步到位写法，那在 immutable 下必失败，而且失败时 Release 已经对外可见。
 
 ## 4. 线上紧急修复
 

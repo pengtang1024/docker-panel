@@ -953,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "docker-panel"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "docker-panel-launcher"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",

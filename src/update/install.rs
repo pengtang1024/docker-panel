@@ -176,6 +176,46 @@ fn current_exe_path() -> Result<PathBuf, String> {
 /// 更新重启的拉起延时：给旧进程留出退出时间，避免新旧窗口短暂并存。
 const RELAUNCH_DELAY_SECS: u64 = 2;
 
+/// 自替换时旧二进制被改名成的备份后缀（见 `install_binary`）。
+const PREVIOUS_SUFFIX: &str = ".previous";
+
+/// 把「正在运行的旧副本路径」规范化成「安装路径」。
+///
+/// `install_binary` 的顺序是：旧 exe → `<exe>.previous`，再把新二进制 rename 到 `<exe>`。
+/// 替换完成后，旧进程的 `/proc/self/exe` 已经指向 `.previous` 那个 inode；如果重启直接
+/// exec 它，重启出来的还是**旧版本**（文件是新的、跑的是旧的）。所以这里剥掉后缀，
+/// 重启一律指向正式路径。
+fn canonical_install_path(exe: &Path) -> PathBuf {
+    let name = exe.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    match name.strip_suffix(PREVIOUS_SUFFIX) {
+        Some(stripped) if !stripped.is_empty() => exe.with_file_name(stripped),
+        _ => exe.to_path_buf(),
+    }
+}
+
+/// 启动自愈：如果本进程是从 `.previous` 旧副本跑起来的（0.8.0 的升级重启缺陷），
+/// 在正式路径已经是另一份文件时拉起它并让当前进程退出。
+///
+/// 返回 `true` 表示已经安排重启、调用方应立即返回。
+pub fn relaunch_into_canonical() -> bool {
+    let Ok(current) = std::env::current_exe() else {
+        return false;
+    };
+    let canonical = canonical_install_path(&current);
+    if canonical == current || !canonical.is_file() {
+        return false;
+    }
+    // 直接 exec 换镜像：此时还没拿单实例锁，不存在「子进程抢不到锁」的竞态，
+    // 也不会短暂出现两个实例。
+    use std::os::unix::process::CommandExt as _;
+    let err = Command::new(&canonical).exec();
+    eprintln!(
+        "docker-panel: 切换到正式安装路径 {} 失败：{err}",
+        canonical.display()
+    );
+    false
+}
+
 /// 由独立短命进程延时拉起当前可执行文件（更新安装完成后由 `main` 调用）。
 ///
 /// **调用前必须已释放单实例锁**（见 `single_instance::release_then`）：新进程启动时
@@ -187,7 +227,9 @@ pub fn restart_detached() -> Result<(), String> {
     // 启动器布局（deb 种子 / 用户副本）：重启必须再走启动器，它才会挑到刚装的那一版。
     // 直接 exec 当前 exe 会回到旧路径（种子或 `(deleted)` 的旧 inode）。
     let root = runtime_root();
-    let exe = if managed::managed_install(&current_exe_path()?, &root) {
+    // 自替换后 /proc/self/exe 指向 `.previous`，必须换成正式安装路径，否则重启出来的是旧版本。
+    let exe = canonical_install_path(&current_exe_path()?);
+    let exe = if managed::managed_install(&exe, &root) {
         let launcher = launcher_path();
         if !launcher.is_file() {
             return Err(i18n::trf(
@@ -197,7 +239,7 @@ pub fn restart_detached() -> Result<(), String> {
         }
         launcher
     } else {
-        current_exe_path()?
+        exe
     };
     launcher_command(&exe, RELAUNCH_DELAY_SECS)
         .spawn()
@@ -386,6 +428,32 @@ fn install_binary(_downloaded: &Path, _exe: &Path) -> Result<(), String> {
     Err(i18n::t(
         "Automatic install is not supported on this platform",
     ))
+}
+
+#[cfg(test)]
+mod canonical_tests {
+    use super::*;
+
+    #[test]
+    fn strips_previous_suffix() {
+        assert_eq!(
+            canonical_install_path(Path::new("/home/u/.local/bin/docker-panel.previous")),
+            PathBuf::from("/home/u/.local/bin/docker-panel")
+        );
+    }
+
+    #[test]
+    fn keeps_regular_paths() {
+        assert_eq!(
+            canonical_install_path(Path::new("/home/u/.local/bin/docker-panel")),
+            PathBuf::from("/home/u/.local/bin/docker-panel")
+        );
+        // 目录名里带 previous 不算后缀
+        assert_eq!(
+            canonical_install_path(Path::new("/opt/previous/docker-panel")),
+            PathBuf::from("/opt/previous/docker-panel")
+        );
+    }
 }
 
 #[cfg(test)]

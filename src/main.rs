@@ -80,6 +80,12 @@ fn main() {
         cli::CliAction::Run => {}
     }
 
+    // 自愈：如果是从 `.previous` 旧副本跑起来的（自替换重启的已知缺陷），
+    // 在正式路径可用时切过去。放在拿单实例锁之前，新进程才能顺利拿到锁。
+    if update::install::relaunch_into_canonical() {
+        return;
+    }
+
     // 单实例：同一用户只允许一个 GUI 实例。
     // 时机铁律：--version / --help 必须在上面的 cli 分支里就返回，
     // 不能被单实例挡住（看版本号不该要求先关掉正在跑的窗口）。

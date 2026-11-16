@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.18] - 2026-11-16
+
 ### 修复
 
 - **单实例锁改为「抽象 socket + 文件 socket」两道锁，锁文件被外部删除也不再允许多开**：此前互斥完全建立在「锁文件还在」之上——`rm -f` 掉 `/run/user/1000/docker-panel-pt.sock` 后任何新进程都能 bind 成功，2026-11-16 本机因此同时跑出 **8 个**窗口（性能基准脚本每轮删锁文件再起新实例）。现在权威锁是**抽象命名空间 socket**（`@docker-panel-<16hex>`，名字取自锁路径的 FNV-1a 哈希）：不落盘、外部删不掉、进程退出由内核回收；文件 socket 只保留前置请求（raise）与可见性，路径改为按 uid 派生 `/run/user/<uid>/docker-panel-<uid>.sock`（**不再读 `XDG_RUNTIME_DIR`**——桌面与终端启动时该变量可能不同或缺失，两套路径互不冲突同样会多开）。新增 `--status`（退出码 0=在跑 / 1=没跑），与 `--version` / `--help` 一样在拿锁之前处理。
@@ -466,7 +468,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...HEAD
+[0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17
 [0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14

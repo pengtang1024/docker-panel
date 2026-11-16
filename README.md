@@ -146,7 +146,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 
 ### 4.1 Debian / Ubuntu（deb 包）
 
-从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`：
+从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `docker-panel_<版本>_amd64.deb`（0.7.15 及以后）：
 
 ```bash
 sudo dpkg -i docker-panel_<版本>_amd64.deb
@@ -162,6 +162,9 @@ deb 安装的版本可直接在应用内更新：顶栏「盒子」图标 → �
 
 > [!TIP]
 > 下载页每个 Release 都附带 `checksums.txt`，安装前可以先校验：`sha256sum -c checksums.txt --ignore-missing`。
+
+> [!NOTE]
+> **历史版本（0.4.3 – 0.7.14）暂时从 [Gitee Releases](https://gitee.com/pengtang1024/docker-panel/releases) 下载。** 两个平台的资产名与 `checksums.txt` 完全一致；GitHub 侧这些版本因 immutable releases 的 tag 记录限制正在恢复中，恢复后本节会更新。
 
 ### 4.2 从源码构建
 

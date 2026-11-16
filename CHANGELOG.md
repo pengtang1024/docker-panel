@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **0.7.15 补齐到 Gitee 正式发布**：tag 与 Release（8 个资产，与 GitHub 逐字节一致，`checksums.txt` 校验通过）此前只在 GitHub 侧，两平台口径不一致；现已同步。同步脚本为 `.tmp-wiki/sync_release_one.py`（单版本、幂等、上传后回读核对资产名）。
+- **历史版本（0.4.3 – 0.7.14）的下载入口临时指向 Gitee**：GitHub 侧这些 Release 与 tag 受 immutable releases 的 tag 记录限制暂不可重建（详见 `docs/troubleshooting.md` 的下载排障一节），恢复前 README 与 Wiki Install 明确指到 Gitee，避免用户点进 404。
+
 ## [0.7.15] - 2026-11-16
 
 ### 新增

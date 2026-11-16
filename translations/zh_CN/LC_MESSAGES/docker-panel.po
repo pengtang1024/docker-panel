@@ -843,3 +843,9 @@ msgstr "版本 {0} 已安装，重启后生效"
 
 msgid "Using the package already downloaded"
 msgstr "使用已下载的更新包"
+
+msgid "Check now"
+msgstr "立即检查"
+
+msgid "Checking for updates…"
+msgstr "正在检查更新…"

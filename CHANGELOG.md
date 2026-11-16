@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.7.15] - 2026-11-16
+
 ### 新增
 
 - **发布流水线自动 purge jsDelivr 清单缓存**：`@master/version.json` 的分支端点带 `s-maxage=43200`（12h 边沿缓存），上一步提交清单后最长 12h 才能被备源读到。Release 流水线在「提交更新清单到 master」之后紧跟一步调用 jsDelivr 官方 purge 接口（免 token、免 secret），回读 CDN 确认已是本版；该步骤 `continue-on-error` + 内部只 `::warning`，**刷新失败不阻断发版**，退回 12h 陈旧。只刷清单：资产直链在 `github.com/.../releases/download/...`，不经过 jsDelivr，无可刷对象。
@@ -432,7 +434,8 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...HEAD
+[0.7.15]: https://github.com/pengtang1024/docker-panel/compare/0.7.14...0.7.15
 [0.7.14]: https://github.com/pengtang1024/docker-panel/compare/0.7.13...0.7.14
 [0.7.13]: https://github.com/pengtang1024/docker-panel/compare/0.7.12...0.7.13
 [0.7.12]: https://github.com/pengtang1024/docker-panel/compare/0.7.11...0.7.12

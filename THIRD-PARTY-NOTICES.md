@@ -31,7 +31,7 @@
 | 许可证 | 组件（版本） | 全文 |
 |--------|--------------|------|
 | **Apache-2.0** | `bollard` 0.21.1（Docker API）、`bollard-stubs` 1.53.1-rc.29.3.1、`winit` 0.30.13、`ab_glyph` 0.2.32、`ab_glyph_rasterizer` 0.1.10、`owned_ttf_parser` 0.25.1、`gethostname` 1.1.0、`unicode-linebreak` 0.1.5 | [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt) |
-| **BSD-3-Clause** | `tiny-skia` 0.11.4 / 0.12.0、`tiny-skia-path` 0.11.4 / 0.12.0 | [`licenses/BSD-3-Clause.txt`](licenses/BSD-3-Clause.txt) |
+| **BSD-3-Clause** | `tiny-skia` 0.11.4 / 0.12.0、`tiny-skia-path` 0.11.4 / 0.12.0、`curve25519-dalek` 4.1.3、`subtle` 2.6.1（更新清单 Ed25519 验签） | [`licenses/BSD-3-Clause.txt`](licenses/BSD-3-Clause.txt) |
 | **BSD-2-Clause** | `arrayref` 0.3.9 | [`licenses/BSD-2-Clause.txt`](licenses/BSD-2-Clause.txt) |
 | **ISC** | `libloading` 0.8.9 | [`licenses/ISC.txt`](licenses/ISC.txt) |
 | **Zlib** | `foldhash` 0.1.5 / 0.2.0、`slotmap` 1.1.1、`zlib-rs` 0.6.8 | [`licenses/Zlib.txt`](licenses/Zlib.txt) |
@@ -42,7 +42,7 @@
 | 上游表达式 | 代表组件 | 本项目选择 |
 |------------|----------|------------|
 | `MIT OR Apache-2.0` | `tokio` 1.53.3、`hyper` 1.12.0、`futures` 0.3.34、`serde` 1.0.229、`zbus` 5.19.0、`image` 0.25.10、`usvg` / `resvg` 0.48.1、`parley` 0.11.1、`swash` 0.2.10、`wayland-*` 0.31.x、`x11rb` 0.13.2、`sha2` 0.10.9、`digest` 0.10.7、`block-buffer` 0.10.4、`crypto-common` 0.1.7、`generic-array` 0.14.7、`typenum` 1.20.1、`cpufeatures` 0.2.17 等 222 个 | MIT |
-| `Apache-2.0 OR MIT` | `indexmap` 2.14.2、`pin-project` 1.1.13、`polling` 3.11.0 等 40 个 | MIT |
+| `Apache-2.0 OR MIT` | `indexmap` 2.14.2、`pin-project` 1.1.13、`polling` 3.11.0、`ed25519-dalek` 2.2.0、`ed25519` 2.2.3、`signature` 2.2.0、`zeroize` 1.9.1、`fiat-crypto` 0.2.9、`rand_core` 0.6.4 等 46 个 | MIT |
 | `Unlicense OR MIT` | `memchr` 2.8.3、`byteorder-lite` 0.1.0 | MIT |
 | `CC0-1.0 OR Apache-2.0` | `imgref` 1.12.3 | Apache-2.0（规避 CC0 的 OSI 认定问题） |
 | `0BSD OR MIT OR Apache-2.0` | `adler2` 2.0.1 | MIT |
@@ -77,4 +77,4 @@ Linux 目标实测：345 个 normal 依赖，其中静态链入的 copyleft 选�
 
 ---
 
-最后更新：随 Cargo.lock 复核（当前版本 0.7.14；依赖清单如有变动请同步本文件）
+最后更新：随 Cargo.lock 复核（当前版本 0.7.19；依赖清单如有变动请同步本文件）

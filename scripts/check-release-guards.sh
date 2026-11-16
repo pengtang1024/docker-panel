@@ -30,7 +30,7 @@ if awk '/softprops\/action-gh-release/,/^      - name:/' "$wf" | grep -q 'draft:
 else
   ok "action-gh-release 未使用 draft: false"
 fi
-for f in docker-panel checksums.txt version.json LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
+for f in docker-panel checksums.txt version.json version.json.sig LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
   grep -q -- "$f" "$wf" || bad "发布资产清单缺少 $f"
 done
 grep -q 'docker-panel_\${tag}_amd64.deb' "$wf" && ok "发布资产清单含 deb" || bad "发布资产清单缺少 deb"

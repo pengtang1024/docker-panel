@@ -98,4 +98,7 @@ pub struct UpdateInfo {
     pub plan: InstallPlan,
     /// 来源是静态清单时保留原始声明，安装阶段用它做一致性断言。
     pub manifest: Option<UpdateManifest>,
+    /// 清单版本**已经装在本机**（dpkg 版本 ≥ 清单版本）：只需重启生效，
+    /// 不再下载、也不再走安装路径（避免每次检查都重下一遍 deb、重弹一次授权）。
+    pub already_installed: bool,
 }

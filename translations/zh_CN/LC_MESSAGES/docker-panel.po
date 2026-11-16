@@ -825,3 +825,18 @@ msgstr "磁盘 = 镜像 + 可写层 + 挂载卷（这个容器占了多少）。
 
 msgid "Update manifest does not match checksums.txt"
 msgstr "更新清单与校验文件 checksums.txt 不一致，已拒绝安装"
+
+msgid "Update manifest is malformed"
+msgstr "更新清单格式错误，已拒绝安装"
+
+msgid "Update manifest does not match the release"
+msgstr "更新清单与本次发布不匹配，已拒绝安装"
+
+msgid "Update manifest does not match the package"
+msgstr "更新清单与实际安装包不匹配，已拒绝安装"
+
+msgid "Update manifest signature is not verifiable: {0}"
+msgstr "更新清单签名无法验证：{0}"
+
+msgid "Version {0} is already installed, restart to apply"
+msgstr "版本 {0} 已安装，重启后生效"

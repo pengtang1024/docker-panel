@@ -122,7 +122,8 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 - 启动 10s 后检查 GitHub Releases（24h 节流，可在设置页关闭）；顶栏「盒子」图标发现新版本时显示徽标点
 - 更新弹窗展示当前 / 最新版本与 Release 更新说明（Markdown / HTML 已清洗为纯文本），支持一键下载、SHA-256 校验、安装
 - 默认全自动：检测到新版本后自动下载安装，安装成功自动重启（可在设置页逐项关闭）
-- deb 安装（`dpkg-query` 命中 `docker-panel`）走 `pkexec dpkg -i`；裸二进制安装走同目录临时文件 + `rename` 原子替换
+- **静默自替换（推荐方式）**：可执行文件所在目录可写时（例如装在 `~/.local/bin`），更新由 App 自己完成——`version.json.sig` 验签 → 复核 SHA-256 → 同目录临时文件 `rename` 原子替换，旧二进制留一份 `<exe>.previous` 供手工回滚。**全程不需要 root，也就不需要任何授权**；自动重启后即新版本
+- 系统级 deb 安装（`/usr/bin` 不可写）走 `pkexec dpkg -i`：写 `/usr` 必然要 root，因此这类安装**每次升级仍需一次 polkit 授权**（这是权限边界，不是可以绕过的设计细节）
 - 开发构建 / 非 Linux / 无匹配资产 / 安装目录不可写时只展示原因并引导到下载页，**不执行半途安装**
 - 「启动时检查更新」「自动下载并安装更新」「安装后自动重启」三个开关持久化到 `config.json`，默认开启
 
@@ -138,7 +139,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 |------|------|
 | **操作系统** | **Linux**（当前唯一验证与支持的平台）。源码为 Rust + Slint 纯软件渲染，理论上可交叉编译到 macOS / Windows，但未验证；自动更新与 deb 安装仅支持 Linux |
 | **Docker** | 本机已安装并运行 Docker，默认通过 unix socket `/var/run/docker.sock` 连接；`DOCKER_HOST=unix://...` 可指定其它本机 socket（**不读取 tcp / ssh 远程地址**） |
-| **运行时依赖** | 自动更新检查需要系统 `curl`；deb 自动安装还需要 `pkexec`（polkit 授权框） |
+| **运行时依赖** | 自动更新检查需要系统 `curl`；静默自替换不需要任何特权；只有系统级 deb 安装才需要 `pkexec` + polkit |
 | **构建** | Rust stable（edition 2021；MSRV **1.99**，仓库内 `rust-toolchain.toml` 固定 stable 通道） |
 | **图形** | 纯软件渲染，**不需要** GPU / Vulkan / OpenGL，deb 包不依赖 `libgl1`；Linux 桌面会话下运行（Wayland 下会设置 xdg app_id 以便面板坞识别） |
 
@@ -158,7 +159,15 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 sudo usermod -aG docker $USER
 ```
 
-deb 安装的版本可直接在应用内更新：顶栏「盒子」图标 → 检查更新 → 立即更新，授权 `pkexec` 后调用 `dpkg -i` 安装新包；裸二进制版本则在安装目录可写时自替换。
+**推荐用户级安装**（更新免授权）：把二进制放到自己的目录，之后的每次升级都由 App 静默自替换——
+
+```bash
+install -Dm 0755 docker-panel ~/.local/bin/docker-panel
+install -Dm 0644 packaging/docker-panel.desktop ~/.local/share/applications/docker-panel.desktop
+sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/docker-panel|" ~/.local/share/applications/docker-panel.desktop
+```
+
+桌面启动器优先读 `~/.local/share/applications`，所以面板坞会启动这一份。顶栏「盒子」图标 → 检查更新 → 立即更新：清单用 Ed25519 签名（公钥内置在 `src/signature.rs`），验签与 SHA-256 都通过才会写入磁盘。系统级 deb 安装（`/usr/bin`）在应用内升级时仍需 `pkexec` 授权一次。
 
 > [!TIP]
 > 下载页每个 Release 都附带 `checksums.txt`，安装前可以先校验：`sha256sum -c checksums.txt --ignore-missing`。
@@ -218,8 +227,9 @@ cargo check --all-targets
 | 容器停止后不自动重连日志流 | 需重新切到日志 Tab；合并日志中某个成员停掉只会结束它自己那一路流 |
 | `DOCKER_HOST` 仅识别 `unix://` 路径 | 不支持 tcp / ssh 远程连接 |
 | 自动更新只支持 Linux 的 deb / 裸二进制 | 开发构建与其它平台只提示新版本并打开下载页 |
-| 更新包没有代码签名 | 只依赖 HTTPS 与同一 Release 的 `checksums.txt`（SHA-256）校验 |
-| 自动安装 deb 需要桌面 polkit 授权代理 | 无 polkit 的环境只能手动下载安装 |
+| deb 包本身没有 dpkg 签名（`debsig-verify`） | 但更新清单有 Ed25519 签名（`version.json.sig`，公钥内置在 `src/signature.rs`），助手只装「签名清单声明且 SHA-256 匹配」的包；直接下载 deb 手工安装时仍只有 HTTPS + `checksums.txt` |
+| 清单签名无法离线复核时无从判断真假 | 用 `openssl pkeyutl -verify -pubin -inkey <公钥> -rawin -in version.json -sigfile version.json.sig`（公钥可从 `src/signature.rs` 导出）；失败即证明清单或签名被改写 |
+| 系统级 deb 安装无法静默升级 | 写 `/usr` 需要 root，每次升级都要 polkit 授权一次；装到用户目录（`~/.local/bin`）才能静默自替换 |
 
 ## 7. 架构概览
 
@@ -347,7 +357,8 @@ docker-panel/
 │   ├── callbacks_sort.rs       # 三个资源列表的表头排序回调（各自独立的状态 + 持久化）
 │   ├── callbacks_update.rs     # 自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 三个配置开关
 │   ├── callbacks_settings.rs   # 设置弹窗：开关弹窗 / 显式设置主题（0=跟随系统 1=浅色 2=深色）
-│   ├── update/                 # 自动更新：mod（任务编排 + 调度）/ discover（三级回退：静态清单 → jsDelivr @master → api.github.com）/ manifest（清单解析 + 资产派生 + 一致性断言）/ github（API 兜底）/ version（版本比较）/ markdown（说明清洗）/ install（下载 + SHA-256 + 安装）
+│   ├── update/                 # 自动更新：mod（任务编排 + 调度）/ discover（三级回退：静态清单 → jsDelivr @master → api.github.com，并取 `version.json.sig` 验签）/ manifest（清单解析 + 资产派生 + 一致性断言）/ github（API 兜底 + 带字节上限的 curl）/ version（版本比较）/ markdown（说明清洗）/ install（验签 + 下载 + SHA-256 + 原子自替换 / deb 走 pkexec）
+│   ├── signature.rs        # 更新清单 Ed25519 验签（公钥内置，安装前在应用进程内完成）
 │   └── docker/
 │       ├── mod.rs          # connect() + with_timeout（10s 调用上限）+ pub use 重导出
 │       ├── containers.rs   # list / start / stop / restart / remove

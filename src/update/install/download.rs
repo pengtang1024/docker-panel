@@ -13,17 +13,41 @@ use sha2::{Digest, Sha256};
 use crate::i18n;
 use crate::update::UpdateAsset;
 
-/// 更新缓存目录：`$XDG_CACHE_HOME/docker-panel/updates/<version>-<pid>`（多实例隔离）。
+/// 更新缓存目录：`$XDG_CACHE_HOME/docker-panel/updates/<version>`。
+///
+/// **只保留最新版本**：进入这个目录前先把同级的其它版本目录删掉，装完再整目录删除，
+/// 缓存里不会堆积历史安装包（与 tune 的更新目录同一口径）。
 pub fn cache_dir(version: &str) -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
+    let dir = cache_root().join(version);
+    prune_older_versions(&dir);
+    dir
+}
+
+fn cache_root() -> PathBuf {
+    std::env::var_os("XDG_CACHE_HOME")
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
-        .unwrap_or_else(std::env::temp_dir);
-    // 每个进程独立目录：多实例同时检查/下载时不会互相覆盖同一版本文件
-    base.join("docker-panel")
+        .unwrap_or_else(std::env::temp_dir)
+        .join("docker-panel")
         .join("updates")
-        .join(format!("{version}-{}", std::process::id()))
+}
+
+/// 删掉 `keep` 之外的所有版本目录（含旧的 `<version>-<pid>` 命名）。
+fn prune_older_versions(keep: &Path) {
+    let Some(parent) = keep.parent() else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == keep || !path.is_dir() {
+            continue;
+        }
+        let _ = fs::remove_dir_all(&path);
+    }
 }
 
 pub(super) fn asset_file_name(name: &str) -> String {

@@ -32,9 +32,15 @@ fn file_url(path: &Path) -> String {
 }
 
 #[cfg(unix)]
+/// 单测用验签关口：真实实现要联网取签名清单，这里只验证安装流程本身。
+fn accept(_info: &UpdateInfo, _file: &Path, _name: &str) -> Result<(), String> {
+    Ok(())
+}
+
 fn binary_info(source: &Path) -> UpdateInfo {
     let size = fs::metadata(source).unwrap().len();
     UpdateInfo {
+        already_installed: false,
         version: "9.9.9".into(),
         notes: String::new(),
         page_url: String::new(),
@@ -105,11 +111,39 @@ fn installs_verified_binary() {
 
     let mut steps = 0;
     let mut progress = |_p: i32, _t: String| steps += 1;
-    download_and_install(&info, &exe, &cache, &mut progress).unwrap();
+    install_with(&info, &exe, &cache, &mut progress, &accept).unwrap();
 
     assert_eq!(fs::read(&exe).unwrap(), b"new-binary");
     assert!(!cache.exists(), "成功安装后应清理缓存");
     assert!(steps > 0, "至少应上报一次进度");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// 验签失败必须**在写盘之前**中止：可执行文件保持原样，缓存清掉。
+#[test]
+#[cfg(unix)]
+fn verification_failure_leaves_exe_untouched() {
+    let dir = temp_dir("unsigned");
+    let new_bin = dir.join("docker-panel.new");
+    fs::write(&new_bin, b"new-binary").unwrap();
+    let hash = download::sha256_file(&new_bin).unwrap();
+    fs::write(dir.join("checksums.txt"), format!("{hash}  docker-panel\n")).unwrap();
+
+    let exe = dir.join("docker-panel");
+    fs::write(&exe, b"old-binary").unwrap();
+    let info = binary_info(&new_bin);
+    let cache = dir.join("cache");
+
+    let reject = |_i: &UpdateInfo, _f: &Path, _n: &str| Err("sig bad".to_string());
+    let mut progress = |_p: i32, _t: String| {};
+    let err = install_with(&info, &exe, &cache, &mut progress, &reject).unwrap_err();
+    assert!(err.contains("sig bad"));
+    assert_eq!(
+        fs::read(&exe).unwrap(),
+        b"old-binary",
+        "验签失败不得改动可执行文件"
+    );
+    assert!(!cache.exists(), "失败后也要清理缓存");
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -131,7 +165,7 @@ fn rejects_checksum_mismatch_without_touching_exe() {
     let cache = dir.join("cache");
 
     let mut progress = |_p: i32, _t: String| {};
-    let err = download_and_install(&info, &exe, &cache, &mut progress).unwrap_err();
+    let err = install_with(&info, &exe, &cache, &mut progress, &accept).unwrap_err();
     assert!(err.contains("checksum"), "{err}");
     assert_eq!(fs::read(&exe).unwrap(), b"old-binary");
     let _ = fs::remove_dir_all(&dir);
@@ -163,7 +197,7 @@ fn rejects_manifest_mismatch_without_touching_exe() {
     let cache = dir.join("cache");
 
     let mut progress = |_p: i32, _t: String| {};
-    let err = download_and_install(&info, &exe, &cache, &mut progress).unwrap_err();
+    let err = install_with(&info, &exe, &cache, &mut progress, &accept).unwrap_err();
     assert!(err.contains("manifest"), "{err}");
     assert_eq!(fs::read(&exe).unwrap(), b"old-binary");
     let _ = fs::remove_dir_all(&dir);

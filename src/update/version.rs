@@ -75,6 +75,21 @@ pub fn plan_install(assets: &[UpdateAsset], env: &InstallEnv) -> InstallPlan {
         return unsupported(UnsupportedReason::Platform);
     }
 
+    // 静默更新优先：可执行文件所在目录可写时一律走「自替换二进制」——
+    // 不需要 root、不需要授权，这是唯一能做到「装好之后升级不再打扰」的路径。
+    if env.exe_dir_writable {
+        return match select_asset(assets, InstallKind::Binary, env.arch) {
+            Some(asset) if has_checksums(assets) => InstallPlan {
+                kind: InstallKind::Binary,
+                asset: Some(asset),
+                reason: None,
+            },
+            Some(_) => unsupported(UnsupportedReason::NoChecksums),
+            None => unsupported(UnsupportedReason::NoBinary),
+        };
+    }
+
+    // 目录不可写（典型是系统级 /usr/bin 安装）：只能走 deb，一次升级一次授权。
     if env.dpkg_managed {
         if !env.pkexec_available {
             return unsupported(UnsupportedReason::NoPkexec);
@@ -90,18 +105,7 @@ pub fn plan_install(assets: &[UpdateAsset], env: &InstallEnv) -> InstallPlan {
         };
     }
 
-    if !env.exe_dir_writable {
-        return unsupported(UnsupportedReason::NotWritable);
-    }
-    match select_asset(assets, InstallKind::Binary, env.arch) {
-        Some(asset) if has_checksums(assets) => InstallPlan {
-            kind: InstallKind::Binary,
-            asset: Some(asset),
-            reason: None,
-        },
-        Some(_) => unsupported(UnsupportedReason::NoChecksums),
-        None => unsupported(UnsupportedReason::NoBinary),
-    }
+    unsupported(UnsupportedReason::NotWritable)
 }
 
 fn has_checksums(assets: &[UpdateAsset]) -> bool {
@@ -274,6 +278,23 @@ mod tests {
         let p = plan_install(&assets, &env());
         assert_eq!(p.kind, InstallKind::Deb);
         assert_eq!(p.asset.unwrap().name, "docker-panel_0.6.0_amd64.deb");
+    }
+
+    /// 目录可写时哪怕系统里也有 dpkg 包，也要走静默自替换：
+    /// 这是「装好之后升级不再弹框」的唯一路径。
+    #[test]
+    fn plan_prefers_silent_binary_when_dir_writable() {
+        let assets = vec![
+            asset("docker-panel_0.6.0_amd64.deb"),
+            asset("docker-panel"),
+            asset("checksums.txt"),
+        ];
+        let mut e = env();
+        e.dpkg_managed = true;
+        e.exe_dir_writable = true;
+        let p = plan_install(&assets, &e);
+        assert_eq!(p.kind, InstallKind::Binary);
+        assert_eq!(p.asset.unwrap().name, "docker-panel");
     }
 
     #[test]

@@ -107,6 +107,37 @@ jobs:
           python3 -m json.tool version.json > /dev/null
           cat version.json
 
+      - name: 签名更新清单
+        # 私钥只存在仓库 secret（UPDATE_SIGNING_KEY，base64 编码的 PEM），
+        # 二进制里只有公钥（src/signature.rs）；签名与清单同批上传，
+        # 客户端凭它判断「这份清单确实由项目维护者签发」。
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
+            echo "::error::缺少 secret UPDATE_SIGNING_KEY，无法签名更新清单"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/update-signing-key.pem"
+          printf '%s' "$UPDATE_SIGNING_KEY" | base64 -d > "$key"
+          chmod 600 "$key"
+          openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/update-signing-pub.pem" 2>/dev/null
+          # 防「签错钥匙」：私钥派生出的公钥必须与二进制里内置的一致，
+          # 否则发出去的版本永远装不上自己的更新。
+          derived="$(openssl pkey -pubin -in "$RUNNER_TEMP/update-signing-pub.pem" -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')"
+          if ! grep -q "$derived" src/signature.rs; then
+            echo "::error::签名私钥与 src/signature.rs 内置公钥不匹配（派生公钥 $derived）"
+            exit 1
+          fi
+          openssl pkeyutl -sign -inkey "$key" -rawin -in version.json -out version.json.sig
+          size="$(stat -c%s version.json.sig)"
+          [ "$size" = "64" ] || { echo "::error::签名长度 ${size} 字节（期望 64）"; exit 1; }
+          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/update-signing-pub.pem" \
+            -rawin -in version.json -sigfile version.json.sig
+          rm -f "$key"
+          echo "更新清单已签名（公钥指纹 $derived）"
+
       - name: 提取版本更新日志
         run: |
           version="${{ steps.ver.outputs.version }}"
@@ -132,7 +163,7 @@ jobs:
 
       # ⚠️ immutable releases：**已发布**的 Release 一律拒绝补传资产
       # （422 Cannot upload assets to an immutable release）。所以顺序必须是
-      # 「建 draft → 上传 8 个资产 → 再 draft=false」，一步到位（draft: false + files）
+      # 「建 draft → 上传 9 个资产 → 再 draft=false」，一步到位（draft: false + files）
       # 在开启 immutable 的仓库里必失败，且失败时 Release 已经对外可见、无法补救。
       - name: 创建草稿 Release 并上传资产
         id: release
@@ -150,6 +181,7 @@ jobs:
             target/release/docker-panel
             checksums.txt
             version.json
+            version.json.sig
             LICENSE
             LICENSING.md
             THIRD-PARTY-NOTICES.md
@@ -172,7 +204,7 @@ jobs:
           count="$(printf '%s' "$assets" | wc -w)"
           echo "draft 资产（${count}）：${assets}"
           for f in docker-panel_${tag}_amd64.deb docker-panel checksums.txt version.json \
-                   LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
+                   version.json.sig LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
             case " $assets " in
               *" $f "*) ;;
               *) echo "::error::draft Release 缺少资产 $f，放弃发布"; exit 1 ;;
@@ -198,18 +230,20 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # 先留一份发布产物：reset 到 master 时同名文件可能被旧版本覆盖
           cp version.json "$RUNNER_TEMP/version.json.release"
+          cp version.json.sig "$RUNNER_TEMP/version.json.sig.release"
           for attempt in 1 2 3; do
             # 每次从远端最新 master 起步；若期间别人推了新提交，下一次循环直接以最新 master
             # 为基线重建提交，清单内容始终以本次 release 产物为准（覆盖式，不做合并）。
             git fetch --depth=1 origin master
             git reset --hard FETCH_HEAD
             cp "$RUNNER_TEMP/version.json.release" version.json
-            git add -- version.json
+            cp "$RUNNER_TEMP/version.json.sig.release" version.json.sig
+            git add -- version.json version.json.sig
             if git diff --cached --quiet; then
               echo "master 上的 version.json 已是 ${version}，无需提交"
               exit 0
             fi
-            git commit -m "chore(update): 同步 ${version} 更新清单到 master [skip ci]"
+            git commit -m "chore(update): 同步 ${version} 更新清单与签名到 master [skip ci]"
             if git push origin HEAD:master; then
               echo "已将 version.json 提交到 master（jsDelivr 最长 12h 缓存后生效）"
               exit 0
@@ -232,6 +266,8 @@ jobs:
           version="${{ steps.ver.outputs.version }}"
           cdn="https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
           purge="https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
+          # 备源至少要有签名文件，否则走 CDN 的客户端会因验签失败而拒绝安装
+          curl -fsS --max-time 20 "https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json.sig" >/dev/null 2>&1 || true
           for attempt in 1 2 3; do
             out="$(curl -fsS --max-time 20 "$purge" 2>/dev/null || true)"
             status="$(printf '%s' "$out" \

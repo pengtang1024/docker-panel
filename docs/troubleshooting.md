@@ -184,6 +184,10 @@ curl -sIL https://api.github.com/repos/pengtang1024/docker-panel/releases/latest
 | `Release checksums.txt is missing` | Release 缺校验文件 | 手动下载，**不要装没有校验文件的包** |
 | `Release checksums.txt does not contain this asset` | 校验文件里没有该资产条目 | 同上，建议报告 |
 | `Update manifest does not match checksums.txt` | 清单与 Release 校验文件冲突，**客户端 fail closed 拒绝安装** | 属安全设计；手动下载并核对 |
+| `Update manifest signature is not verifiable: <详情>` | 清单签名缺失 / 被改写 / 与内置公钥不匹配（`version.json.sig` 下载失败或内容不对） | 属安全设计，**不要绕过**：先确认网络没被代理改写，再用 `openssl pkeyutl -verify` 配 `src/signature.rs` 里的公钥离线复验；持续出现请报告 |
+| `Update manifest is malformed` / `does not match the release` / `does not match the package` | 签名清单结构错、版本对不上、或清单声明的 SHA-256 与实际 deb 不符 | 同上，fail closed；不要用「跳过校验」的方式安装 |
+| `Version X is already installed, restart to apply` | 清单版本已经装在系统里（dpkg 记录 ≥ 清单版本），只需重启应用 | 重启即可；不会再重复下载与授权 |
+| `Package installation failed: <输出>` | `pkexec dpkg -i` 失败（依赖冲突 / 授权被拒 / 无 polkit） | 按提示核对；也可手动 `sudo dpkg -i` 装下载好的 deb |
 | `Update checksum mismatch` | 下载产物与声明的 SHA-256 不符 | 删除缓存重下；反复不符请报告 |
 | `Automatic install is not supported` | 开发构建 / 非 Linux / 目录不可写 | 手动 `sudo dpkg -i` |
 | `Failed to locate install directory` | 找不到当前可执行文件所在目录 | 从固定路径启动，或手动安装 |
@@ -196,7 +200,7 @@ curl -sIL https://api.github.com/repos/pengtang1024/docker-panel/releases/latest
 
 ### pkexec 授权框不弹 / 弹了但点取消
 
-deb 自动安装走 `pkexec dpkg -i`，**依赖桌面环境的 polkit 授权代理**。
+**装在用户目录（推荐）时不需要任何授权**：目录可写 → App 验签后自替换（见上一节）。只有系统级 deb 安装（`/usr/bin`，不可写）才走 `pkexec dpkg -i`，**依赖桌面环境的 polkit 授权代理**。
 
 ```bash
 which pkexec                  # 没有就装
@@ -244,8 +248,17 @@ sudo dpkg -i docker-panel_<版本>_amd64.deb
 
 `checksums.txt` 每行格式为 `<64 位 SHA-256>  <文件名>`。Gitee Release 与 GitHub Release 的资产名一致，可互为备份（国内建议 Gitee）。
 
+```bash
+# 0.7.19 起清单本身带 Ed25519 签名：先验签，再按清单里的哈希核对 deb
+openssl pkeyutl -verify -pubin -inkey panel-pub.pem -rawin \
+  -in version.json -sigfile version.json.sig
+# → signature verified: version 0.7.19 deb sha256 360ac7370e40
+```
+
+`version.json` 的 `assets.deb.sha256` 必须与 `checksums.txt` 里该 deb 的哈希一致，两者不一致说明产物被改过。
+
 > [!WARNING]
-> **如实告知**：更新包**没有代码签名**，只依赖 HTTPS + 同一 Release 的 `checksums.txt`。校验通过只证明下载内容与 Release 页声明一致，不能证明上游未被攻破。详见 [SECURITY.md](../SECURITY.md)。
+> **如实告知**：deb **本身没有 dpkg / debsig 签名**；0.7.19 起由 `version.json` 的 Ed25519 签名把「版本号 + 资产哈希」绑到发布私钥上，应用内更新只安装「签名清单声明且哈希匹配」的包。手工从 Release 页下载安装（`sudo dpkg -i`）仍只有 HTTPS + `checksums.txt` 这两道，无法证明上游未被攻破。详见 [SECURITY.md](../SECURITY.md)。
 
 ## 5. 日志面板
 

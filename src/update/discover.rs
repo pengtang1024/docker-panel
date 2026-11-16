@@ -7,13 +7,22 @@
 //! 上一级「可解析且结构合法」即停；只有请求失败 / JSON 非法 / 结构不认识才进下一级。
 //! 阻塞调用，调用方必须放在 `spawn_blocking` 里。
 
+use crate::i18n;
 use crate::models::update::UpdateManifest;
+use crate::signature;
 use crate::update::{github, manifest, version, CURRENT_VERSION};
 
 pub const MANIFEST_LATEST_URL: &str =
     "https://github.com/pengtang1024/docker-panel/releases/latest/download/version.json";
 pub const MANIFEST_CDN_URL: &str =
     "https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json";
+/// 上面两个清单的 detached Ed25519 签名（发布流水线生成，随 Release 发布）。
+pub const MANIFEST_SIG_LATEST_URL: &str =
+    "https://github.com/pengtang1024/docker-panel/releases/latest/download/version.json.sig";
+pub const MANIFEST_SIG_CDN_URL: &str =
+    "https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json.sig";
+/// detached signature 的固定长度（Ed25519 = 64 字节，留一点余量给空白）。
+const SIGNATURE_MAX_BYTES: usize = 1024;
 
 const FETCH_TIMEOUT_SECS: u64 = 20;
 
@@ -78,6 +87,56 @@ fn enrich_from_api(raw: &mut github::RawRelease, api_text: &str) {
     if !api.page_url.trim().is_empty() {
         raw.page_url = api.page_url;
     }
+}
+
+/// 取「已签名」的更新清单原文与 detached signature。
+///
+/// fail closed：两个源都拿不到**配对**的清单+签名、或验签不过，就返回错误，
+/// 调用方（`install`）必须放弃安装。清单原文必须逐字节保留——重新序列化会让
+/// 签名失效，所以这里返回 `String` 而不是解析后的结构体。
+pub fn fetch_signed_manifest() -> Result<(String, Vec<u8>), String> {
+    fetch_signed_manifest_with(&|url, max| {
+        github::curl_get_bytes(url, FETCH_TIMEOUT_SECS, &[], max)
+    })
+}
+
+/// 拉取「URL + 字节上限」的函数：生产环境是 `github::curl_get_bytes`，
+/// 单测注入桩函数。
+type BytesFetcher<'a> = &'a dyn Fn(&str, usize) -> Result<Vec<u8>, String>;
+
+fn fetch_signed_manifest_with(fetch: BytesFetcher<'_>) -> Result<(String, Vec<u8>), String> {
+    let mut last = String::new();
+    for (manifest_url, sig_url) in [
+        (MANIFEST_LATEST_URL, MANIFEST_SIG_LATEST_URL),
+        (MANIFEST_CDN_URL, MANIFEST_SIG_CDN_URL),
+    ] {
+        let fetched = (
+            fetch(manifest_url, signature::MANIFEST_MAX_BYTES),
+            fetch(sig_url, SIGNATURE_MAX_BYTES),
+        );
+        match fetched {
+            (Ok(manifest), Ok(sig)) => {
+                match signature::verify_manifest_signature(&manifest, &sig) {
+                    Ok(()) => match String::from_utf8(manifest) {
+                        Ok(text) => return Ok((text, sig)),
+                        Err(_) => last = "manifest is not UTF-8".to_string(),
+                    },
+                    Err(e) => {
+                        eprintln!("[update] manifest signature from {manifest_url} rejected: {e}");
+                        last = e;
+                    }
+                }
+            }
+            (Err(e), _) | (_, Err(e)) => {
+                eprintln!("[update] signed manifest source unavailable: {e}");
+                last = e;
+            }
+        }
+    }
+    Err(i18n::trf(
+        "Update manifest signature is not verifiable: {0}",
+        &[&last],
+    ))
 }
 
 #[cfg(test)]

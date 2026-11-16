@@ -151,7 +151,15 @@ pub fn spawn_check(state: &SharedState, manual: bool) -> bool {
                     crate::lock::poison("update::check");
                     auto_install
                 });
-            let auto = auto_now && !manual && newer && info.plan.installable();
+            // 只有「用户级二进制自替换」能真正静默：不需要 root，也就不需要授权。
+            // deb 安装（目录不可写）仍要用户点一次授权，不算自动安装。
+            let silent = info.plan.kind == InstallKind::Binary;
+            let auto = auto_now
+                && !manual
+                && newer
+                && info.plan.installable()
+                && !info.already_installed
+                && silent;
             let _ = tx_task.send(Msg::UpdateCheckDone(manual, auto, Ok(info.clone())));
             if auto {
                 install_and_report(&info, &tx_task);
@@ -275,6 +283,11 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
     let exe = std::env::current_exe().unwrap_or_default();
     let env = install::detect_env(&exe);
     let plan = version::plan_install(&raw.assets, &env);
+    // 「已经装好、只差重启」：dpkg 记录的版本 ≥ 清单版本。
+    // 自动安装闸门据此关掉，否则每个新进程都会重下一遍 deb、再弹一次授权。
+    let already_installed = install::installed_deb_version()
+        .map(|installed| !version::is_newer(&version, &installed))
+        .unwrap_or(false);
     Ok(UpdateInfo {
         version,
         notes: version::truncate_notes(&markdown::plain(&raw.notes), 8000),
@@ -282,6 +295,7 @@ fn build_info(raw: github::RawRelease) -> Result<UpdateInfo, String> {
         assets: raw.assets,
         plan,
         manifest: raw.manifest,
+        already_installed,
     })
 }
 

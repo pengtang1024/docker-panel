@@ -37,6 +37,7 @@ mod lock;
 mod log_status;
 mod models;
 mod render;
+mod signature;
 mod single_instance;
 mod slint_gen;
 mod stale;

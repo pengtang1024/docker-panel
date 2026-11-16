@@ -66,9 +66,10 @@ grep -q "\"version\": \"$version\"" "$work/version.json" \
 say "3/6 核对私钥指纹"
 openssl pkey -in "$key" -pubout -out "$work/pub.pem" 2>/dev/null
 fingerprint="$(openssl pkey -pubin -in "$work/pub.pem" -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')"
-grep -q "$fingerprint" "$repo_root/src/signature.rs" \
-  || { echo "私钥指纹 $fingerprint 不在 src/signature.rs 的 MANIFEST_PUBLIC_KEYS_HEX 里，拒绝签名" >&2; exit 1; }
-echo "公钥指纹 $fingerprint"
+pubkey_b64="$(openssl pkey -pubin -in "$work/pub.pem" -outform DER | tail -c 32 | base64 -w0)"
+grep -qF "$pubkey_b64" "$repo_root/packaging/release-signing.pub" \
+  || { echo "私钥指纹 $fingerprint 不在 packaging/release-signing.pub 里，拒绝签名" >&2; exit 1; }
+echo "公钥指纹 $fingerprint（base64 $pubkey_b64）"
 
 # --- 4. 签名 -------------------------------------------------------------------
 say "4/6 签名"

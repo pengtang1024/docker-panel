@@ -46,9 +46,11 @@ done
 say "2/4 验签"
 openssl pkey -pubin -in "$pubkey" -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n' > "$work/fingerprint"
 fingerprint="$(cat "$work/fingerprint")"
-grep -q "$fingerprint" "$repo_root/src/signature.rs" \
-  || { echo "公钥指纹 $fingerprint 不在 src/signature.rs 的可信列表里" >&2; exit 1; }
-echo "公钥指纹 $fingerprint（在 src/signature.rs 中）"
+# 公钥清单是仓库里的 packaging/release-signing.pub（base64 行），应用与启动器都从这里编译期读取。
+pubkey_b64="$(openssl pkey -pubin -in "$pubkey" -outform DER | tail -c 32 | base64 -w0)"
+grep -qF "$pubkey_b64" "$repo_root/packaging/release-signing.pub" \
+  || { echo "公钥 $pubkey_b64 不在 packaging/release-signing.pub 的可信列表里" >&2; exit 1; }
+echo "公钥 $pubkey_b64（hex $fingerprint，在 packaging/release-signing.pub 中）"
 
 for name in version.json checksums.txt; do
   openssl pkeyutl -verify -pubin -inkey "$pubkey" -rawin \

@@ -39,6 +39,11 @@ jobs:
       - name: cargo build --release
         run: cargo build --release --locked
 
+      - name: 构建验签启动器
+        # 启动器是 workspace 的另一个成员：在仓库根跑 `cargo build` 只会构建根包，
+        # 必须单独 -p 指定。它只依赖 base64 / ed25519-dalek / libc / sha2。
+        run: cargo build --release --locked -p docker-panel-launcher
+
       - name: 生成 deb 包
         run: |
           set -euo pipefail
@@ -46,9 +51,14 @@ jobs:
           stage=docker-panel_"$version"_amd64
           rm -rf "$stage"
           install -d "$stage/DEBIAN" "$stage/usr/bin" \
+            "$stage/usr/lib/docker-panel/seed" \
             "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps" \
             "$stage/usr/share/doc/docker-panel"
-          install -m 0755 target/release/docker-panel "$stage/usr/bin/docker-panel"
+          # /usr/bin/docker-panel 是启动器（root 所有、非 setuid、无 capabilities）；
+          # 真运行体放 /usr/lib/docker-panel/seed/，启动器在种子与用户副本间挑最高版本。
+          install -m 0755 target/release/docker-panel-launcher "$stage/usr/bin/docker-panel"
+          install -m 0755 target/release/docker-panel "$stage/usr/lib/docker-panel/seed/docker-panel"
+          printf '%s\n' "$version" > "$stage/usr/lib/docker-panel/seed/version"
           install -m 0644 packaging/docker-panel.desktop "$stage/usr/share/applications/docker-panel.desktop"
           install -m 0644 packaging/docker-panel.svg "$stage/usr/share/icons/hicolor/scalable/apps/docker-panel.svg"
           install -m 0644 packaging/debian/copyright "$stage/usr/share/doc/docker-panel/copyright"

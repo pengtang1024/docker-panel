@@ -105,19 +105,19 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 
 ## 2. 环境变量
 
-**结论**：只有 `DOCKER_HOST` 影响连接，且只认 `unix://`；其余变量只决定配置/锁路径与界面语言。
+**结论**：只有 `DOCKER_HOST` 影响连接，且只认 `unix://`；其余变量只决定配置路径与界面语言（单实例锁路径按 uid 派生，不再跟随环境变量）。
 
 | 变量 | 作用 | 回落 / 边界 |
 |------|------|-------------|
 | `DOCKER_HOST` | 指定 Docker socket 路径 | **只识别 `unix://` 路径**，默认 `/var/run/docker.sock`；`tcp://` / `http://` / `ssh://` 不会被读取，设置后仍连本机默认 socket。见 [故障排查](troubleshooting.md) |
 | `XDG_CONFIG_HOME` | 配置文件根目录 | 缺失或为空回退 `$HOME/.config`，完整路径见「路径」 |
-| `XDG_RUNTIME_DIR` | 单实例锁目录 | 锁文件 `$XDG_RUNTIME_DIR/docker-panel-<user>.sock`；缺失或为空回退 `/tmp`，仍带用户名后缀避免多用户互撞 |
+| `XDG_RUNTIME_DIR` | **不再影响单实例锁路径** | 锁文件按 uid 派生：`/run/user/<uid>/docker-panel-<uid>.sock`（该目录不存在时回退 `/tmp`）。此前跟随此变量，桌面与终端启动时取值不同会各拿一把锁，导致多开 |
 | `LANG` / `LC_ALL` / `LC_MESSAGES` | 界面语言检测 | `zh*` → 简体中文（zh_CN）；其它一律回落英文 msgid 源串。优先级 `LC_ALL` > `LC_MESSAGES` > `LANG`（`src/i18n.rs:84-102`） |
-| `WAYLAND_DISPLAY` | 桌面坞图标匹配 | 仅当该变量存在时调用 `slint::set_xdg_app_id("docker-panel")`，让坞正确匹配应用图标（`src/main.rs:108-112`） |
+| `WAYLAND_DISPLAY` | 桌面坞图标匹配 | 仅当该变量存在时调用 `slint::set_xdg_app_id("docker-panel")`，让坞正确匹配应用图标（`src/main.rs:126-130`） |
 
 ## 3. 命令行参数
 
-**结论**：`--version` / `--help` 在拿单实例锁之前处理，已有实例在跑也照常可用；其余任何参数都按正常启动 GUI 处理。
+**结论**：`--version` / `--help` / `--status` 在拿单实例锁之前处理，已有实例在跑也照常可用；其余任何参数都按正常启动 GUI 处理。
 
 用法：`docker-panel [选项]`（`src/cli.rs`）。
 
@@ -125,9 +125,10 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 |------|------|-------------|
 | `--version` / `-V` | 打印 `docker-panel <version>` 后退出 | **在拿单实例锁之前处理**，已有实例在运行时照常可用；不初始化 Slint、不连 Docker |
 | `--help` | 打印帮助（含「用法: `docker-panel [选项]`」）后退出 | 同样在拿锁之前处理 |
+| `--status` | 打印 `docker-panel: running` 后退出 0；未在运行时打印 `docker-panel: not running` 后退出 1 | 同样在拿锁之前处理（只探测，不抢占锁）；适合脚本判断是否已有实例 |
 | 其余任何参数（含未知参数） | 一律按「正常启动 GUI」处理 | 桌面入口可能带额外参数，报错退出会破坏启动；第一个被识别的参数决定动作 |
 
-不带参数直接启动图形界面。`--version` 可用于确认二进制版本，不会被单实例锁挡住。
+不带参数直接启动图形界面。`--version` 可用于确认二进制版本、`--status` 可用于脚本判断是否已有实例在跑，三者都不会被单实例锁挡住。
 
 ## 4. 全局快捷键
 
@@ -157,7 +158,7 @@ rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/docker-panel/config.json"
 | 自动安装 | `auto_install` 开启时，检查到新版本即下载 + SHA-256 校验 + 安装 |
 | 自动重启 | `auto_restart` 开启且安装成功后，**3s 倒计时**（让「正在自动重启…」文案上屏）→ 退出事件循环 → **退出流程先释放单实例锁，再由独立短命 launcher 延时 2s `exec` 新二进制** |
 
-> 重启的顺序是硬要求：**先释放锁、后拉起新进程**。反过来（0.7.12–0.7.14 的写法）新进程启动时会连上旧 listener、判为「已在运行」后退出，旧进程随后也退出 —— 应用直接消失，用户必须手动再开一次。现在顺序由代码结构保证：`src/ui_update/update.rs:100-102` 只负责 3s 后 `quit_event_loop()`，拉起动作放在 `src/main.rs:166-186` 的退出流程里，经 `single_instance::release_then`（`src/single_instance.rs:94-97`，先 `drop(guard)` 再调用回调）执行 `update::install::restart_detached`（`src/update/install.rs:152-158`，`sh -c 'sleep N; exec <exe>'`，路径作为位置参数传入、不做字符串拼接）。launcher 只 `sleep` 一次不重试：锁被其它实例长期持有时新进程立刻退出，不会堆积进程。手动「重启应用」按钮走同一条路径。
+> 重启的顺序是硬要求：**先释放锁、后拉起新进程**。反过来（0.7.12–0.7.14 的写法）新进程启动时会连上旧 listener、判为「已在运行」后退出，旧进程随后也退出 —— 应用直接消失，用户必须手动再开一次。现在顺序由代码结构保证：`src/ui_update/update.rs:100-102` 只负责 3s 后 `quit_event_loop()`，拉起动作放在 `src/main.rs:195-204` 的退出流程里，经 `single_instance::release_then`（`src/single_instance.rs:120-123`，先 `drop(guard)` 再调用回调）执行 `update::install::restart_detached`（`src/update/install.rs:152-158`，`sh -c 'sleep N; exec <exe>'`，路径作为位置参数传入、不做字符串拼接）。launcher 只 `sleep` 一次不重试：锁被其它实例长期持有时新进程立刻退出，不会堆积进程。手动「重启应用」按钮走同一条路径。
 
 三个开关默认开启，可在设置页（顶栏齿轮）或更新弹窗逐项关闭，关闭后持久化到 `config.json` 对应字段：`check_updates` / `auto_install` / `auto_restart`。调度常量见 `src/update/mod.rs:29-34`（`CHECK_INTERVAL_SECS` / `SCHEDULER_TICK_SECS` / `STARTUP_DELAY_SECS`）、3s 倒计时见 `src/ui_update/update.rs:11` 与 `:100-102`、launcher 延时见 `src/update/install.rs:143`。校验边界与三级回退见 [更新清单与 CDN 分发](arch/update-manifest.md)，失败处理见 [故障排查](troubleshooting.md)。
 

@@ -302,9 +302,9 @@ docker-panel/
 │   ├── components-*.slint  # 原子组件库按职能拆分：interact / nav / form / chip / align / state / empty / feedback / dialog
 │
 ├── src/                    # Rust 层（所有 ≤ 300 行）
-│   ├── main.rs             # 组装入口：CLI 参数（--version/-V/--help）→ 单实例锁 → i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
-│   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help；未知参数照常启动 GUI
-│   ├── single_instance.rs  # 单实例锁（Unix socket 互斥 + raise IPC；陈旧锁自动清理，Drop 时释放）
+│   ├── main.rs             # 组装入口：CLI 参数（--version/-V/--help/--status）→ 单实例锁 → i18n → AppState → MainWindow → consumer/bootstrap 启动 → ui.run() → 优雅退出
+│   ├── cli.rs              # 命令行参数解析（纯函数 + 单测）：--version / -V / --help / --status；未知参数照常启动 GUI
+│   ├── single_instance.rs  # 单实例锁（抽象 socket 互斥 + 文件 socket raise IPC；锁文件被删仍拦截，陈旧锁自动清理，Drop 时释放）
 │   ├── slint_gen.rs        # slint::include_modules!() 集中入口
 │   ├── stale.rs            # 采样过期判定：连续多轮无样本 → 边沿触发的状态位（stats 3 轮 / df 2 轮）
 │   ├── i18n.rs             # locale 检测（zh*→zh_CN）+ Rust 侧 t()/trf()/trfp() + slint_language()

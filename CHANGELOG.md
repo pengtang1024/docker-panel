@@ -6,6 +6,15 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.8.1] - 2026-11-17
+
+### 修复
+
+- **自替换后重启会跑回旧版本**：旧 exe 被改名成 `<exe>.previous` 后，`/proc/self/exe` 指向的是那份备份，
+  重启直接 exec 它就等于把旧版本重新拉起来（文件是新的、跑的是旧的）。现在重启一律指向正式安装路径。
+- **启动自愈**：如果进程确实是从 `.previous` 旧副本跑起来的，启动时自动切到正式路径再退出，
+  不用手动重启第二次。
+
 ## [0.8.0] - 2026-11-17
 
 ### 新增
@@ -510,8 +519,9 @@
 - assets/MaterialIcons-Regular.ttf（Slint software-renderer-systemfonts 用系统字体）。
 - 200ms 后台轮询循环。
 
+[0.8.1]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...HEAD
+[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...HEAD
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18
 [0.7.17]: https://github.com/pengtang1024/docker-panel/compare/0.7.15...0.7.17

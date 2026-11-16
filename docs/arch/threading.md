@@ -350,7 +350,7 @@ python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾�
 | 6s stats 整轮 | `one_shot` 前 2.03s，后 2.6–3ms |
 | 30s `/system/df` 整轮 | 39–160ms（守护进程侧为主，应用 CPU 0–10ms） |
 | 进程 → 窗口创建 | 25–34ms |
-| 进程 → 首屏容器行 | 153–172ms（中位 159ms；旧的 `join!` 全到齐再推是 181–209ms） |
+| 进程 → 首屏容器行 | **30–41ms（中位 33ms）**；同样代码但首屏请求放在 `MainWindow::new()` 之后是 153–164ms（中位 154ms），再之前的 `join!` 全到齐再推是 181–209ms |
 | 进程 → 首屏镜像行 | 273–292ms（镜像最慢一路，让容器行先上屏） |
 | 四列表并发一轮（`bootstrap join` / 每次刷新） | 143–165ms（`/images/json` 92ms 为最慢一路，`/containers/json` 34ms、网络 8ms、卷 8ms） |
 | apply（Rust 侧：行构建 + 模型同步） | 23 行 12µs + 5µs ≈ **17µs/轮**；200 行 86µs + 48µs ≈ 134µs |
@@ -360,7 +360,9 @@ apply 这一段单独量（临时基准，`container_row` ×200 轮取均值 + `
 
 日志热路径单独量，跑 `cargo test --release bench_log_pipeline -- --ignored --nocapture`（`src/docker/log_batch.rs` 的 `bench` 模块，只覆盖应用侧每行成本，不含 Docker 流读取与 UI 行模型同步）。它只在改 `log_ts` / `log_batch` 热路径时才需要复测——按 76k 行/s 的真实码率折算，71ns/行 ≈ 每 1.3 万行消耗 1ms CPU，不是瓶颈。
 
-**首屏那 77ms 的冷启动开销不要去「预热」**：同一条 `/containers/json` 进程内首次请求 73–99ms、curl 热态 33–35ms，差额是连接建立 + 首个请求的固定成本。试过两种预热都被数据否掉：窗口创建前发 `/_ping`（`DP_PREFETCH` 实验，首帧 157ms vs 159ms，无差异），以及提前构造 `docker::connect()`（实测 0.0ms，bollard 客户端是惰性构造）——前者还因为共享 `Arc<Transport>` 的 keep-alive 串行而抢占同一条连接。**要省这 40ms 只能让首屏请求更早发出，而 `ui.run()` 之前投递的 `invoke_from_event_loop` 会被 winit 丢弃**（见 `AGENTS.md` 的焦点引导坑条），所以这是架构边界，不是可调参数。
+**首屏请求要尽早发出，但要区分「请求」与「UI 写入」**：`ui.run()` 之前投递的 `invoke_from_event_loop` 会被 winit 丢弃（见 `AGENTS.md` 的焦点引导坑条），所以 **UI 写入**确实被这条边界卡住；而 **Docker 请求**不受影响——`bootstrap::spawn_initial_load` 只需要 `tx` 与 tokio handle，消息先进 mpsc 队列（consumer 线程稍后才启动，队列照常缓冲），因此它被放在 `AppState::new()` 之后、`MainWindow::new()` 之前，让 Docker 冷连接（首个请求 73–99ms）与窗口创建（25–34ms）重叠。实测首个非空容器行模型写入从 154ms 降到 33ms（同二进制交替各 5 次）。
+
+两个「预热」方向仍然被数据否掉，别再走：窗口创建前发 `/_ping`（`DP_PREFETCH` 实验，157ms vs 159ms 无差异），以及提前构造 `docker::connect()`（实测 0.0ms，bollard 客户端是惰性构造）——前者还会因为共享 `Arc<Transport>` 的 keep-alive 串行而抢占唯一那条连接。
 
 测的时候这几点必须对齐，否则数字全是假的：
 

@@ -15,6 +15,7 @@
 
 ### 变更
 
+- **启动即发首屏请求**：`bootstrap::spawn_initial_load` 从 `MainWindow::new()` 之后移到 `AppState::new()` 之后，让 Docker 冷连接（首个请求 73–99ms）与窗口创建（25–34ms）重叠——它只需要 `tx` 与 tokio handle，消息先进 mpsc 队列由稍后启动的 consumer 线程消费，UI 写入时机不变。首个非空容器行模型的写入从 153–164ms（中位 154ms）降到 30–41ms（中位 33ms）。
 - 事件驱动的列表刷新按事件类型收窄：容器启停只拉 `/containers/json`（实测 18.0ms，此前四路并发 77.7ms），镜像的「被引用容器数」改用新容器列表在应用侧本地重算（`Msg::Containers` / `Msg::Images` 处理时回填），网络与卷只在自身事件或全量刷新时拉取；刷新去重的脏标记从 bool 改为 `Kinds` 位掩码，部分刷新与补跑可以共存（`src/ui_state/refresh.rs`）
 
 

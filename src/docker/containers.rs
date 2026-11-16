@@ -84,6 +84,7 @@ pub async fn list_containers(all: bool) -> Result<Vec<ContainerInfo>, String> {
                 mem_usage: 0,
                 mem_limit: 0,
                 size_rw: 0,
+                disk_used: 0,
                 net_rx: 0,
                 net_tx: 0,
                 compose_project,

@@ -5,7 +5,7 @@
 //!
 //! 口径与容器行保持一致：
 //!   - CPU / 内存只累加**运行中**成员（停止的容器没有实时占用，行上显示 "—"）
-//!   - 磁盘累加**全部**成员（可写层占用是累计值，停止后依然成立）
+//!   - 磁盘累加**全部**成员（disk_used = 镜像 + 可写层 + 卷，是累计值，停止后依然成立）
 //!
 //! 微条口径 = **docker stats 口径**（见 `containers::container_row`）：
 //!   - CPU：相对**单核**的百分比（100% = 占满一核）
@@ -47,7 +47,7 @@ impl GroupTotals {
                 t.cpu_ratio += bar_ratio(c.cpu_percent / 100.0);
                 t.mem_ratio += bar_ratio(crate::ui_rows::containers::mem_ratio(c));
             }
-            t.disk += c.size_rw;
+            t.disk += c.disk_used;
         }
         t
     }

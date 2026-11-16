@@ -224,6 +224,14 @@ sudo dpkg -r docker-panel        # 先卸载旧版
 sudo dpkg -i docker-panel_<版本>_amd64.deb
 ```
 
+### Release 下载 404 / tag 不存在
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 0.7.15 及以后的版本打不开 | 版本号写错，或该 Release 尚未发布 | 在 [Releases 列表](https://github.com/pengtang1024/docker-panel/releases) 里挑实际存在的版本 |
+| **0.4.3 – 0.7.14 的 GitHub 链接 404** | 这些 Release 与 tag 在 GitHub 侧因 immutable releases 的 tag 记录限制暂不可重建 | 改从 [Gitee Releases](https://gitee.com/pengtang1024/docker-panel/releases) 下载；资产名与 `checksums.txt` 与 GitHub 完全一致 |
+| 0.4.2 及更早 | 缺少第三方许可文件与 Slint 署名，已按许可要求下架 | 不提供下载；变更记录仍在 [CHANGELOG](../CHANGELOG.md) |
+
 ### 手动安装与校验
 
 ```bash

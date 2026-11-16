@@ -230,3 +230,79 @@ mod tests {
         assert_eq!(kept, 100);
     }
 }
+
+/// 日志热路径基线（`cargo test --release bench_log_pipeline -- --ignored --nocapture`）
+///
+/// 只覆盖**应用侧每行的可测成本**：剥前缀、拼前缀、入批、抽样判定。
+/// 不含 Docker 流读取与解码、也不含 UI 行模型同步（那两块要真容器才能测）。
+/// 改 `log_ts` / `log_batch` 的热路径前后跑一遍，看 ns/行 是否退化。
+#[cfg(test)]
+mod bench {
+    use super::*;
+
+    const N: usize = 2_000_000;
+
+    fn bench<F: FnMut(usize)>(name: &str, mut f: F) {
+        let t = std::time::Instant::now();
+        for i in 0..N {
+            f(i);
+        }
+        let el = t.elapsed();
+        let ns = el.as_secs_f64() * 1e9 / N as f64;
+        let per_sec = N as f64 / el.as_secs_f64();
+        println!(
+            "[bench-logs] {name}: {ns:.1} ns/行, {:.1} 万行/s 单线程",
+            per_sec / 10_000.0
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn bench_log_pipeline() {
+        // 1) 正常段：带时间戳前缀，只切空格、不解析
+        let lines: Vec<String> = (0..1024)
+            .map(|i| format!("2026-11-16T06:00:{:02}.123456789Z payload line {i}", i % 60))
+            .collect();
+        let mut batch: Vec<String> = Vec::with_capacity(LOG_BATCH_MAX);
+        let (tx, rx) = std::sync::mpsc::channel::<Msg>();
+        std::mem::forget(rx);
+        let backlog = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let mut delivered = 0u64;
+        let mut notified = false;
+        let mut sink = LogSink {
+            tx: &tx,
+            epoch: 1,
+            lines: &mut delivered,
+            backlog: &backlog,
+            notify_recovered: false,
+            notified_recovered: &mut notified,
+        };
+        let mut cursor: Option<crate::docker::log_ts::LogCursor> = None;
+        let mut last_token = String::new();
+        bench("正常段剥前缀+入批", |i| {
+            let raw = &lines[i % lines.len()];
+            let (text, token) = crate::docker::log_ts::split_prefix(raw);
+            if let Some(t) = token {
+                last_token.clear();
+                last_token.push_str(t);
+            }
+            batch.push(format_line("[demo]", text));
+            if batch.len() >= LOG_BATCH_MAX {
+                flush_normal(&mut sink, &mut batch, &mut cursor, &mut last_token);
+            }
+        });
+
+        // 2) 回放段：每行都要完整解析 RFC3339Nano 并比较
+        let cursor_ts = cursor;
+        bench("回放段逐行解析+过滤", |i| {
+            let raw = &lines[i % lines.len()];
+            std::hint::black_box(crate::docker::log_ts::classify_line(raw, cursor_ts));
+        });
+
+        // 3) 抽样判定（积压 0 → 每行都要判一次）
+        let mut sampling = Sampling::new();
+        bench("抽样判定", |_| {
+            std::hint::black_box(sampling.keep());
+        });
+    }
+}

@@ -259,9 +259,18 @@ impl AppState {
     pub fn apply_container_sizes(&mut self) {
         let sizes = &self.container_sizes;
         let volumes = &self.volume_sizes;
+        let image_bytes: HashMap<&str, u64> = self
+            .images
+            .iter()
+            .map(|i| (i.id.as_str(), i.size.max(0) as u64))
+            .collect();
         for c in &mut self.containers {
             let mounted: u64 = c.volumes.iter().filter_map(|v| volumes.get(v)).sum();
-            c.size_rw = sizes.get(&c.id).copied().unwrap_or(0) + mounted;
+            // size_rw 保持「可写层」本义（/system/df?type=container 的原值）；
+            // 台账显示与排序用 disk_used = 镜像 + 可写层 + 挂载卷
+            c.size_rw = sizes.get(&c.id).copied().unwrap_or(0);
+            let image = image_bytes.get(c.image_id.as_str()).copied().unwrap_or(0);
+            c.disk_used = image + c.size_rw + mounted;
         }
     }
 
@@ -373,10 +382,12 @@ mod tests {
         s.volume_sizes.insert("data".to_string(), 39_000);
         s.containers[0].volumes = vec!["data".to_string()];
         s.apply_container_sizes();
-        // 可写层 + 挂载卷
-        assert_eq!(s.containers[0].size_rw, 4096 + 39_000);
+        // size_rw 保持可写层本义；disk_used = 镜像（测试无镜像 → 0）+ 可写层 + 挂载卷
+        assert_eq!(s.containers[0].size_rw, 4096);
+        assert_eq!(s.containers[0].disk_used, 4096 + 39_000);
         // 没采到的容器归零，不残留上一轮数字
         assert_eq!(s.containers[1].size_rw, 0);
+        assert_eq!(s.containers[1].disk_used, 0);
     }
 
     #[test]

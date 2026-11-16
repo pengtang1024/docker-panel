@@ -171,7 +171,19 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         cpu_total += c.cpu_percent;
         mem_total += c.mem_usage;
     }
-    let disk_total: u64 = s.containers.iter().map(|c| c.size_rw).sum();
+    // 底栏「磁盘」= 镜像去重 + 容器可写层 + 挂载卷去重，与 `docker system df`
+    // 的 Images + Containers + Local Volumes 同口径（行里的 disk_used 含共享镜像，
+    // 逐行相加会把共享镜像重复计入，故合计不能简单求和）。
+    let mut disk_total: u64 = s.images.iter().map(|i| i.size.max(0) as u64).sum::<u64>()
+        + s.containers.iter().map(|c| c.size_rw).sum::<u64>();
+    let mut counted_vols: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for c in &s.containers {
+        for v in &c.volumes {
+            if counted_vols.insert(v.as_str()) {
+                disk_total += s.volume_sizes.get(v).copied().unwrap_or(0);
+            }
+        }
+    }
     // 镜像总占用（底栏「镜像大小」）：全部镜像 size 之和，与容器可写层互补
     let image_total: i64 = s.images.iter().map(|i| i.size).sum();
     // 行模型代际（per-list）：排序/筛选/搜索变更时回调会重建行并递增对应列表

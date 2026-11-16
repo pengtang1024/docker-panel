@@ -9,8 +9,8 @@ use std::time::Duration;
 use slint::ComponentHandle;
 
 use crate::docker::{
-    container_sizes, inspect_container, list_containers, list_images, list_networks, list_volumes,
-    volume_sizes, with_timeout,
+    attach_container_refs, container_sizes, inspect_container, list_containers, list_networks,
+    list_volumes, volume_sizes, with_timeout,
 };
 use crate::models::Msg;
 use crate::slint_gen::MainWindow;
@@ -50,7 +50,7 @@ pub fn spawn_stats_interval(state: &SharedState) {
                 )
             };
             // 整轮采样打包成一条消息：逐容器单发会让卡片数值分批阶梯跳动
-            let batch = crate::docker::sample_all(&ids).await;
+            let batch = crate::docker::sample_all(&ids, true).await;
             let got_sample = !batch.is_empty();
             if got_sample {
                 let _ = tx.send(Msg::StatsBatch(batch));
@@ -86,6 +86,7 @@ pub fn spawn_disk_usage_interval(state: &SharedState) {
                 };
                 s.tx.clone()
             };
+
             let (vols, conts) = futures::join!(
                 with_timeout(volume_sizes()),
                 with_timeout(container_sizes())
@@ -125,12 +126,16 @@ pub fn spawn_initial_load(state: &SharedState) {
     });
     rt.spawn(async move {
         let _ = crate::docker::connect();
-        let (c_res, i_res, n_res, v_res) = futures::join!(
-            with_timeout(list_containers(true)),
-            with_timeout(list_images()),
-            with_timeout(list_networks()),
-            with_timeout(list_volumes()),
-        );
+        // 首屏按「先容器、立刻上屏，再拉其余三路」的顺序走，理由有两个：
+        // 1. 容器行是首屏最要紧的内容：`/containers/json` 只要约 34ms，
+        //    而 `/images/json`（61 镜像）要 90–150ms——用 join! 等全到齐，
+        //    容器行就被镜像拖到 181–209ms 才上屏；
+        // 2. bollard 的 `Docker` 是共享的 `Arc<Transport>`，HTTP/1.1 keep-alive
+        //    同一连接上的请求是**串行**的，谁先发谁先拿连接。反过来让镜像先发
+        //    （例如四个 tokio task 各自 fire），容器行反而被拖到约 275ms。
+        // 镜像的「被几个容器引用」需要容器列表：这里直接用刚拿到的 `shared`，
+        // 不必为此再请求一次，也不必让容器行等镜像。
+        let c_res = with_timeout(list_containers(true)).await;
         let first_id = c_res
             .as_ref()
             .ok()
@@ -145,12 +150,23 @@ pub fn spawn_initial_load(state: &SharedState) {
                     .collect()
             })
             .unwrap_or_default();
+        let shared = c_res.clone().unwrap_or_default();
         let _ = tx.send(Msg::Containers(c_res));
+
+        let (i_raw, n_res, v_res) = futures::join!(
+            with_timeout(crate::docker::list_images_raw()),
+            with_timeout(list_networks()),
+            with_timeout(list_volumes()),
+        );
+        let i_res = i_raw.map(|mut imgs| {
+            attach_container_refs(&mut imgs, &shared);
+            imgs
+        });
         let _ = tx.send(Msg::Images(i_res));
         let _ = tx.send(Msg::Networks(n_res));
         let _ = tx.send(Msg::Volumes(v_res));
         // 首屏立即采样：运行中容器的 CPU / 内存 / 网络这一轮就有值
-        let batch = crate::docker::sample_all(&stats_ids).await;
+        let batch = crate::docker::sample_all(&stats_ids, false).await;
         if !batch.is_empty() {
             let _ = tx.send(Msg::StatsBatch(batch));
         }

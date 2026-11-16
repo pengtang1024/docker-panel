@@ -79,7 +79,7 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 | R6 | 冲突无条件优先架构/结构 + 自动记录 | 红线 | agents-rules.md §2.4 |
 | R7 | 锁纪律 / Receiver 独占 / spawn 走 handle | 红线 | 本文件 代码规范 #2-5 |
 | R8 | 文档同步触发表 | 流程 | agents-rules.md §6 |
-| R9 | 版本号三同步 | 流程 | docs/git-flow.md |
+| R9 | 版本号四处同步（含 Cargo.lock） | 流程 | docs/git-flow.md |
 | R10 | 命名 / 错误处理 / Slint 隔离等惯例 | 惯例 | 本文件 代码规范 #6-9 |
 
 全链路四阶段门禁（S1 需求解析 → S2 方案生成 → S3 代码输出 → S4 最终校验）检查单见 agents-rules.md §3，**任一阶段不达标不得进入下一阶段**。
@@ -97,7 +97,7 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 |------|----------|--------------|----------------------------------|
 | Rust | stable（MSRV **1.99**） | edition 2021 | `rust-toolchain.toml` 统一 stable 通道并带 `rustfmt` / `clippy`；`Cargo.toml` 的 `rust-version = "1.99"` 声明最低支持版本；CI（quality / release）用 `dtolnay/rust-toolchain@master` 固定 `1.99.1` 保证可复现 |
 | Slint | **1.18.1** | `backend-winit` + `renderer-software` + `software-renderer-systemfonts` + `compat-1-18` + `std` | ⚠️ **已验证：strict 模式（无 compat-1-2）编译通过**。版本特有 API 限制见下方「Slint 1.18 已验证的限制」 |
-| slint-build | **1.18.1** | build-dependency | `slint_build::compile("ui/app.slint")` |
+| slint-build | **1.18.1** | build-dependency | `slint_build::compile_with_config("ui/app.slint", config)` + `with_bundled_translations("translations")` |
 | Slint Material Components | **1.1.0** | 项目内 `material-1.1.0/`（MIT） | 通过 build.rs `with_library_paths` 配置 `@material`。**实际只用到 ScrollView / ListView**（drawer 日志 + 详情面板）+ **MaterialPalette 色板**；**未使用 Modal / Dialog 内置组件**——项目自己的 DialogShell 是手搓 `inherits Rectangle`（坑条见 Slint 限制表）。色板经 `ui/material-theme.slint` 映射到项目设计令牌 |
 | bollard | **0.21** | — | ⚠️ 版本特有类型坑见 [docs/arch/docker-bollard.md](docs/arch/docker-bollard.md)（唯一权威源） |
 | tokio | **1.x** | `rt-multi-thread` + `macros` + `time` + `sync` + `rt`（default-features = false） | `Runtime::handle()` clone 后才能 spawn；**不**用 `current_thread` |
@@ -118,7 +118,7 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 
 | 限制 | 实际行为 | 必须的替代方案 |
 |------|----------|----------------|
-| **TabWidget 没有 `current-tab` property** | 无法通过编程式方法切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代（本项目 `detail-log-panel.slint` 已用自绘 TabBar） |
+| **TabWidget 没有 `current-tab` property** | 无法通过编程式方法切换 Tab | 只能手动点 Tab；如需自动切，改成条件渲染 `if root.show_logs { LogPanel { ... } }` 替代（本项目 `drawer.slint` 已用自绘 TabBar） |
 | **ListView delegate 没有内置 MouseArea** | 直接点 delegate 的空白区域不会触发点击事件 | 行点击需要在 delegate 内部**手动声明 `callback` 属性** + 在 app.slint 注入实现 |
 | **delegate 不能直接 import AppActions global** | Slint 跨文件 global 可见性有坑，Rust 侧 glob import 兼容性问题 | delegate 只声明 `callback xxx(string);`，由 app.slint 的 ListView 循环里 `xxx => { AppActions.container_toggle(row.id); }` 注入实现 |
 | **TabWidget 子组件不继承 parent 尺寸** | Tab 容器不给子组件自动传 width/height | 实例化处**硬设** `width: 320px; height: 600px;` |
@@ -185,11 +185,11 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `ui/` | Slint 声明层（41 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，53 个角色全覆盖）**/ models / top-bar（含更新徽标 + 设置入口）/ sub-bar / **ui-state（显示态 global：连接/采样状态 + 计数汇总 + 行模型 + 资源列表排序，Rust 单写入方）**/ **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：`inherits TableShell`，只配列标签/列宽 + 30px 行 delegate）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 开关 / 重启）+ update-state（更新 UI 状态 global）** / **settings-dialog（设置弹窗：外观三选 + 自动更新三开关）+ settings-state（设置弹窗开关 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新/设置弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
+| `ui/` | Slint 声明层（41 文件按职责拆分）：app（MainWindow 唯一组装入口）/ app-actions（UI→Rust 回调 global）/ theme（设计令牌，三态主题 auto/light/dark）/ **material-theme（M3 色板映射：Theme.* → MaterialScheme，49 个角色全覆盖）**/ models / top-bar（含更新徽标 + 设置入口）/ sub-bar / **ui-state（显示态 global：连接/采样状态 + 计数汇总 + 行模型 + 资源列表排序，Rust 单写入方）**/ **main-area（主列表工作区：SubBar + BatchBar + ListArea）**/ **list-area（资源列表区：容器视图走台账，镜像/网络/卷走表格列表）**/ **ledger（容器台账区：列宽统一计算 + 表头 + 虚拟化行）**/ **ledger-row（30px 台账行 delegate）**/ **ledger-tree-row（28px 分组带 delegate：项目带 / 服务带，通栏 + 组内资源汇总 + 组操作按钮）**/ **ledger-band（概览带：4 计数 + CPU TOP4）**/ **ledger-cols（列宽契约 global，表头与行共用）**/ **{image,network,volume}-list（三个资源表格列表：`inherits TableShell`，只配列标签/列宽 + 30px 行 delegate）**/ **components-list（列表共用基件：ListCols 列宽契约 + ListHeadCell 表头单元格 + TableShell 表格外壳）**/ skel（骨架屏占位）/ foot-bar / batch-bar / drawer（`log_only` 模式承载分组合并日志）+ drawer-detail-row / **drawer-log-row（日志行 delegate，虚拟化 ListView 的一行 = 一条日志）** / dialogs（PullDialog/CleanupDialog，继承 DialogShell 基类）/ **update-dialog（自动更新弹窗：版本对比 / 说明 / 进度 / 重启）+ update-state（更新 UI 状态 global）** / **settings-dialog（设置弹窗：外观三选 + 自动更新三开关）+ settings-state（设置弹窗开关 global）** / menu-layers（浮动菜单层）/ **overlays（窗口级浮层：排序/卡片/分组菜单 + 拉取/清理/更新/设置弹窗 + TipLayer，声明在内容之后 → 最上层）**/ **components-dialog（DialogShell 基类，手搓 inherits Rectangle，坑条见 Slint 限制表）** / **components（原子组件库，9 个按职能拆分：interact 交互 / nav 导航 / form 表单 / chip 标签 / align 对齐 / state 状态 / empty 空态 / feedback 反馈 / dialog 弹窗基类）** |
 | `src/` | Rust 逻辑层：main（组装：CLI 参数 → 单实例锁 → i18n → AppState → MainWindow → ui.run()）/ **cli（命令行参数解析纯函数：`--version` / `-V` / `--help`，未知参数照常启动 GUI；`--version` 不初始化 Slint / 不连 Docker）** / **single_instance（单实例锁：Unix socket 互斥 + raise IPC，陈旧锁 connect 失败即自愈清理，Drop 释放）** / slint_gen（include_modules 唯一入口）/ i18n（含 `trfp` 复数翻译）/ config（持久化）/ consumer（分批 drain + UI 节流：常规 120ms / 纯日志 250ms，窗口判定在 `consumer/throttle.rs`）/ **event_watch（Docker `/events` 事件订阅：列表即时性的唯一来源——噪声黑名单过滤 + 400ms 合并 + 断流退避重连 + **连接建立即补一次全量刷新**（`ping` 判定 false→true 跃迁，含首次成功，见规范 #32）；空闲时零请求）** / bootstrap（stats/磁盘占用（`/system/df`：容器可写层 + 卷）/首屏（含独立的守护进程版本查询）/主题监听）/ **stale（采样过期判定 `StaleTracker`：连续 N 轮无样本才判过期，只在跃迁时上报，见规范 #36）** / models（含 `ResourceSort` 资源列表排序状态 + `models/update` 自动更新类型）/ ui_state（AppState + 刷新去重/超时 + `cleanup_counts` + `compose_collapsed`；日志面板状态拆到 `ui_state/log`（14 字段），自动更新拆到 `ui_state/update`）/ **ui_state/follow_state（日志跟随状态机：单容器 / 分组合并日志建流、Clear、幂等）** / **ui_state/log_sync（日志窗口裁剪 + UI 行模型同步账 `LogSyncPlan`）**/ **ui_state/config_io（AppState ↔ config.json 读写）**/ follow_runtime（日志流运行时：建流（单流 / 分组合并多流共享取消信号）/退避重连/探针判定/保活降级）/ log_status（日志流提示文案唯一定义处，4 条 i18n key：重连中 / 已恢复 / 已停止 / 洪峰抽样）/ **update/{mod（任务编排 + 调度 + UI 快照）,discover（更新发现三级回退：`releases/latest/download/version.json` → jsDelivr `@master` → `api.github.com`；清单命中且确有新版本时 best-effort 补更新说明）,manifest（清单解析 / 资产 URL 派生 / 与 checksums.txt 的一致性断言，纯函数）,github（curl + JSON，第 3 级兜底）,version（版本/资产/checksums 纯逻辑）,markdown（Release 说明 Markdown/HTML → 纯文本）,install（环境探测 + 下载 + SHA-256 + deb/二进制安装，校验源只认 checksums.txt）}** / render（CachedModel 差量同步 + 日志行模型 Append/Reset）/ **ui_update（有上限 drain + Msg 聚合；`ui_update/drain.rs` = `DrainResult` + `UiFlag` 位掩码，声明宏是唯一声明源——字段清单 / `has_ui_changes` / `logs_only` / `merge` / 一致性测试全部生成；消息分片 `ui_update/{df,log,update}.rs`）** / ui_apply（抽屉/列表灌入 + `clear_log_panel` / `clear_log_status` / `status_toast`）/ batch / callbacks{,_container,_drawer,_image,_netvol,_compose,_sort,_update,_settings} / detail_fmt/{container,image,netvol}（详情格式化）/ ui_rows/{containers（台账行：筛选/排序/归一化比例）,ledger（概览带 + 台账入口）,compose_tree（台账内联树行：项目带/服务带 + 容器行）,group_totals（分组资源汇总：组内成员之和）,images,netvol（含排序）,sort（三个资源列表共用的「过滤→排序→映射」骨架）}（行构建）/ docker/{mod,containers,images,logs,log_batch（行批投递：前缀拼接 + 每批解析最后一行推游标 + **洪峰抽样泄压阀 `Sampling`**）,log_ts（时间戳游标：RFC3339Nano 解析/剥前缀/纳秒过滤/回放缓冲）,log_types,stats,netvol,image_details,container_detail,system（cleanup prune + `/version` 守护进程版本查询）,raw_http（裸 HTTP：bollard 未建模的接口）} |
 | `translations/` | gettext zh_CN（编译期嵌入二进制，`build.rs` 通过 `with_bundled_translations` 打） |
 | `docs/` | architecture.md（总纲：技术栈/模块地图/文件规范）+ arch/（threading · ui-interaction · list-layout · docker-bollard · update-manifest）· agents-rules.md（规则配置层）· git-flow.md（发版规范）· **style-guide.md（文档排版唯一规范）** · **configuration.md（config.json 15 字段全表）** · **troubleshooting.md（按症状排查）** · **translations.md（翻译机制与新增语言）**；根目录另有 CONTRIBUTING / SECURITY / SUPPORT / CODE_OF_CONDUCT 与 `.github/` 模板 |
-| `packaging/` | debian/control（版本三同步之一）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
+| `packaging/` | debian/control（版本同步之一；`Cargo.lock` 由 `check-version.sh` 自动核对）+ **debian/copyright（DEP-5 许可清单）** + desktop 入口 + svg 图标 |
 | 根 | Cargo.toml（依赖 & release profile & `license = "MIT"` & `rust-version = "1.99"`）/ **rust-toolchain.toml（stable 通道 + rustfmt / clippy）** / **deny.toml（cargo-deny 许可证 allow-list）** / build.rs（slint_build 编译 UI + bundled translations）/ CHANGELOG.md / **LICENSE（自有 MIT）/ LICENSING.md（Slint 许可选择）/ THIRD-PARTY-NOTICES.md + licenses/（第三方通知）** / material-1.1.0（Slint Material，MIT） |
 
 ## 线程模型（三线程架构，已实现优雅退出）
@@ -280,12 +280,8 @@ Slint MCP 已降级为**调试数据暴露**通道：只在需要读元素树 / 
 ## 构建命令
 
 ```bash
-# 开发调试
-cargo run
-
-# 发布构建（体积最小化 profile）
-cargo build --release
-./target/release/docker-panel
+cargo run                 # 开发调试
+cargo build --release     # 发布构建（体积最小化 profile）
 
 # 截图验收：agkit shot --app docker-panel（见顶部「硬约束：UI 验证统一走 agkit 截图」）
 
@@ -306,8 +302,6 @@ cargo check --all-targets
 3. `CHANGELOG.md` 新增版本段落（`[Unreleased]` 改写为 `## [X.Y.Z]` + 底部链接；**hotfix 同样要写**）
 4. `Cargo.lock` 里 `name = "docker-panel"` 的 `version`（跑一次 `cargo build` 自动写；漏了 CI 的 `--locked` 直接失败）
 
-收尾用 `scripts/check-version.sh --tag` 一键核对四处是否一致（版本号 / CHANGELOG 段落 / 底部链接 / Cargo.lock / 最新 tag）。
-
 **发版是一条流水线，默认一次做完，不需要每次问用户**（2026-11-16 用户要求：「提交，推送，发版，更新，这个流程不要我每次来提醒」）：
 
 1. 精确 `git add` → 按逻辑分组提交 → 推 `develop` 到**两个平台**；
@@ -318,7 +312,7 @@ cargo check --all-targets
 
 **发布产物不可变**：immutable releases 下已发布 Release 的资产不可增删改、tag 不可再生。流水线必须保持「draft → 上传 8 个资产 → 校验齐全 → `draft=false`」，**不要改回一步到位的 `draft: false` + `files:`**；发了错只能发 patch 版本，**禁止删已发布 Release 重发**（会让 tag 名永久不可重建）。处置表见 [docs/git-flow.md](docs/git-flow.md)。
 
-**只有上面「破坏性操作」四类要先问用户**（删 release / 改写历史 / 强推主干 / 改保护规则），其余自行完成。
+**除顶部「破坏性操作」四类外，其余自行完成。**
 
 ## 文档同步规范
 

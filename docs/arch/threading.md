@@ -132,13 +132,13 @@ invoke_from_event_loop(move || {
 | **`DockerVersion(Result<String>)`** | 启动时独立任务查询 `/version`（与首屏四列表并行，慢/失败不拖列表） | 写入 `DrainResult.docker_version`（底栏版本文案：`v{版本}`；取不到为占位符 `—`，不伪造版本号） |
 | **`StatsBatch(Vec<(String, ContainerStatsSnapshot)>)`** | 6s stats interval + 首屏加载补采一轮 | 写入 `stats_prev` 双采样缓冲 → CPU%/内存/网络列（整轮打包成一条消息，容器行数值同帧更新）；本地无 prev 时用 `precpu_stats` 兜底，首帧即真实 CPU% |
 | `PullProgress(String)` | `pull_image` 进度回调闭包 | 状态文本更新 |
-| `PullDone(Result<String>)` | pull_image 结束 | 关弹窗 + 标记立即刷新 |
-| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本 + 标记立即刷新 |
-| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记立即刷新 |
+| `PullDone(Result<String>)` | pull_image 结束 | 关弹窗；列表交给 `image/pull` 事件（不刷新） |
+| `ActionDone(desc, Result)` | 启停重启删除操作 | 状态文本；列表交给 `/events`（不刷新） |
+| `CleanupDone(Result)` | cleanup prune 完成 | 状态文本 + 标记 `refresh_now`（prune 兜底） |
 | **`ContainerDetail(Result<ContainerDetail>)`** | `inspect_container` → 详情面板 | 替换 `AppState.detail` → Drawer 详情 Tab |
 | **`LogBatch(u64, Vec<String>)`** | `follow_logs` Stream | `(stream_epoch, 行列表)`；不匹配当前流则丢弃 → 推入 `AppState.log.logs`（窗口 ≤2000 行）→ 追加到 UI 行模型 |
-| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch 时清空 `follow_id` 并释放 cancel sender，允许下次重新建流 |
-| **`LogStreamStatus(u64, String)`** | follow_runtime 判定结局 | 仅当前 stream_epoch 时写入 `log_status`（日志面板工具栏状态位）；文案见 `src/log_status.rs`（重连中 / 已恢复 / 已停止） |
+| `LogStreamEnded(u64)` | follow_logs 任务结束 | 仅当前 stream_epoch **且全部流都退出**（`follow_is_alive()` 为 false）时清空 `follow_id` / `follow_targets` / `follow_active` 并释放 cancel sender，允许下次重新建流 |
+| **`LogStreamStatus(u64, String)`** | follow_runtime 判定结局 | 仅当前 stream_epoch 时写入 `log_status`（日志面板工具栏状态位）；文案见 `src/log_status.rs`（重连中 / 已恢复 / 已停止 / 洪峰抽样，共 4 条） |
 | `ImageDetail(Result<ImageDetail>)` | `inspect_image` → 镜像详情 | 替换 `AppState.image_detail` → 镜像抽屉 |
 | `ImageLayers(Vec<(String, usize)>)` | 镜像层数批量回填 | 更新 `image_layers` 缓存 |
 | `VolumeSizes(HashMap<String, u64>)` | 30s `/system/df` | 更新卷磁盘占用列 |
@@ -210,7 +210,7 @@ rt_handle.spawn(async move {
 
 `AppState.log.follow_cancel` 持有 `watch::Sender`；切换容器时 `clear_logs()` drop sender，旧流的 `cancel.changed()` 立即返回 Err 并退出。工具条 Clear 走 `clear_log_buffer()`：有活动流时递增 log_epoch、drop 旧 sender，并以 `tail=0` 重启；无活动流时只清缓冲并递增 log_epoch。仅当确有缓冲或有活动流时把 `history_done` 置 true；空缓冲且无流时保留 false，切回日志 Tab 仍可用 tail=200 补拉启动日志。重新选中容器会重置 history_done。
 
-流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流时清空 `follow_id` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。空历史或首流失败时 `history_done` 仍为 false，会再次以 `tail=200` 重试。
+流自然结束（容器停止/Docker 异常）时任务发送 `Msg::LogStreamEnded(epoch)`；consumer 仅在 stream_epoch 仍为当前流**且全部流都退出**（`follow_is_alive()` 为 false；分组合并日志有 N 条流）时清空 `follow_id` / `follow_targets` / `follow_active` 并释放 sender。缓冲仍保留，下一次切到日志 Tab 以 `tail=0` 续流，不重放历史。空历史或首流失败时 `history_done` 仍为 false，会再次以 `tail=200` 重试。
 
 **日志流自愈**（`src/follow_runtime.rs`，从 `AppState` 拆出以满足 R2 行数约束）：`follow_logs` 返回 `LogStreamOutcome { end, lines, notified_recovered }`；**容器是否还活着由探针判定**——`probe_container` → `ContainerReach { Running, Stopped, Gone, Unreachable }`（`src/docker/container_detail.rs`），`classify_end(end, reach)` 据此得出 `FollowAction`：
 

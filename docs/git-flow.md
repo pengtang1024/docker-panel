@@ -94,7 +94,7 @@ git push origin refs/tags/0.1.1
 核对命令：
 
 ```bash
-scripts/check-version.sh            # 比较三处版本 + CHANGELOG 段落 + 当前 tag
+scripts/check-version.sh            # 比较四处版本（含 Cargo.lock）+ CHANGELOG 段落 + 当前 tag
 ```
 
 ### 发布之后：双平台补齐与核对

@@ -294,7 +294,7 @@ docker-panel/
 │   ├── drawer-detail-row.slint # 详情/环境行（kind 区分 kv / 代码盒 / 挂载 chip）
 │   ├── drawer-log-row.slint # 日志行 delegate（虚拟化 ListView 的一行 = 一条日志）
 │   ├── dialogs.slint       # PullDialog + CleanupDialog 弹窗
-│   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 两个开关 / 安装与重启）
+│   ├── update-dialog.slint # 自动更新弹窗（版本对比 / 更新说明 / 进度 / 安装与重启）
 │   ├── update-state.slint  # 自动更新 UI 状态 global（顶栏 / 弹窗 / Rust 共享）
 │   ├── settings-dialog.slint # 设置弹窗（外观三选 + 自动更新三个开关）
 │   ├── settings-state.slint # 设置弹窗开关 global

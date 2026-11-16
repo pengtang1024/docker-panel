@@ -12,6 +12,10 @@
 
 - **发版流水线的「发布」步骤按 release id 定位草稿，而不是按 tag 查**：`GET /releases/tags/{tag}` 对**草稿**返回 404（草稿发布前不按 tag 索引），0.7.17 的发版因此在「发布 Release（draft → published）并自检」这一步失败，草稿与 8 个资产都建好了却没能自动发布，只能手工 `PATCH draft=false`。现在草稿步骤带 `id: release`，资产校验与发布都用 `steps.release.outputs.id`（`/releases/{id}/assets`），发布成功后才改用 `releases/tags/{tag}` 回读断言 `draft=false`。
 
+### 变更
+
+- **修正 12 组文档与实现不一致（含 3 处指向不存在的 API / 路径）**：`AGENTS.md` 把 `slint_build::compile` 写成真实调用的 `compile_with_config` + `with_bundled_translations`、把已不存在的 `detail-log-panel.slint` 改为 `drawer.slint`、M3 色板角色数 `53 → 49`（`material_schemes.slint` 的 `MaterialScheme` 实测 49 个字段）、`update-dialog` 不再声称有开关（三个开关只在设置弹窗）；`docs/arch/threading.md` 的消息表把 `PullDone` / `ActionDone` 改回「不刷新、交给 `/events`」（只有 `CleanupDone` 保留 `refresh_now` 兜底）、`LogStreamEnded` 补「全部流都退出」条件、日志状态提示三态改四态（补「洪峰抽样」）；`docs/agents-rules.md` 三处把不存在的 `ui/components.slint` 改为 `ui/components-*.slint`；`docs/arch/ui-interaction.md` 的 Slint 清单补 `settings-dialog` / `settings-state` 两项（39 → 41）并按实测更新 11 处行数；`docs/architecture.md` 与 README 的「两个开关」口径统一为三个；规则地图 R9 与 `scripts/check-version.sh` 头部注释由「三处同步」改为「四处同步（含 Cargo.lock）」。
+
 ## [0.7.17] - 2026-11-16
 
 ### 变更

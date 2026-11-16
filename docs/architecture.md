@@ -94,7 +94,7 @@ docker-panel/
 │   ├── callbacks_netvol.rs    网络/卷选中与删除（AppActions global）
 │   ├── callbacks_compose.rs   台账内联树回调（分组展开 / 收起 + 组操作：启动/停止/重启/删除/合并日志；compose_collapsed 的唯一写入方）
 │   ├── callbacks_sort.rs      三个资源列表的表头排序回调（各自独立状态 + 持久化）
-│   ├── callbacks_update.rs    自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 两个配置开关
+│   ├── callbacks_update.rs    自动更新回调：检查 / 安装 / 打开下载页 / 重启 / 三个配置开关
 │   │
 │   ├── update/
 │   │   ├── mod.rs             任务编排 + 启动调度（24h 节流）+ Msg 投递 + UI 视图快照
@@ -128,11 +128,12 @@ docker-panel/
     ├── overlays.slint         窗口级浮层：排序菜单 / 卡片与分组菜单 / 弹窗 / 全局 TipLayer（声明在内容之后 → 最上层）
     ├── app-actions.slint      AppActions global：UI → Rust 的唯一回调入口
     ├── theme.slint            浅/深双套色板（31 个颜色令牌）+ theme_mode 三态（is_dark 为 out）
-    ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（53 角色全覆盖）
+    ├── material-theme.slint   M3 色板映射：Theme.* → MaterialScheme（49 角色全覆盖）
     ├── models.slint           ContainerRow / ImageRow / NetworkRow / VolumeRow / DetailPair / LogRow / LedgerSummary struct
     ├── top-bar.slint          TopBar：logo + 连接状态 + 搜索框 + 主题/刷新/清理/更新/拉取按钮
     ├── sub-bar.slint          SubBar：筛选 chips + 排序 + 4 视图 tabs（chips/排序/多选仅容器视图）
     ├── list-area.slint        资源列表区：容器视图走台账，镜像/网络/卷走表格列表（含空状态 + 背景点击层）
+    ├── main-area.slint        主列表工作区：SubBar + BatchBar + ListArea 组装（视图切换的唯一入口）
     ├── ledger.slint           容器台账区：列宽统一计算 + 表头（可点击排序）+ @material ListView 虚拟化行
     ├── ledger-row.slint       台账行 delegate（30px）：状态轨 / 勾选框 / 微条 / 行内操作
     ├── ledger-tree-row.slint  台账内联树分组带 delegate（项目带/服务带：箭头 + 色点 + 计数 + 组内资源汇总 + 组操作按钮，通栏）

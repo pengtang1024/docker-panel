@@ -25,7 +25,7 @@
 | R6 | 冲突时架构/结构无条件优先 + 自动记录 | 红线 | §2.4 + §5 冲突记录表 | 本文件 §2.4 |
 | R7 | 锁纪律 / Receiver 独占 / spawn 走 handle | 红线 | code review | AGENTS.md 代码规范 #2-5 |
 | R8 | 文档同步触发表 | 流程 | §6 | 本文件 §6 |
-| R9 | 版本号三同步 | 流程 | 发版检查单 | docs/git-flow.md |
+| R9 | 版本号四处同步（含 Cargo.lock） | 流程 | 发版检查单 | docs/git-flow.md |
 | R10 | 命名 / 错误处理 / Slint 隔离等惯例 | 惯例 | code review | AGENTS.md 代码规范 #6-9 |
 
 ## 2. 红线约束
@@ -142,7 +142,7 @@ R3 / R4 / R5 作为硬性约束覆盖从需求解析到最终校验的完整链�
 | `README.md` | 人类读者的项目概览：功能特性、项目结构树、架构概览、安装使用、依赖表 | — 概览型，内容来自 AGENTS + architecture.md 精简版 |
 | `docs/git-flow.md` | Git Flow 分支与发版规范 | — 只在发版流程变更时更新 |
 | `CHANGELOG.md` | 版本变更记录，按 Keep a Changelog 格式 | ✅ 发版时必须更新 |
-| `packaging/debian/control` | 版本号（与 Cargo.toml 同步） | ✅ 发版三同步之一 |
+| `packaging/debian/control` | 版本号（与 Cargo.toml 同步） | ✅ 发版四处同步之一（`Cargo.lock` 由 `check-version.sh` 自动核对） |
 
 **Wiki（两份独立 git 仓库，内容须保持一致）**：
 

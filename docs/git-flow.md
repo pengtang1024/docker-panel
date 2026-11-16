@@ -58,13 +58,14 @@ cargo build --release --locked
 # 1. 从 develop 切出发布分支
 git flow release start 0.1.1
 
-# 2. 同步版本号 + 写版本更新日志（三处必须一致，缺一不可）
+# 2. 同步版本号 + 写版本更新日志（四处必须一致，缺一不可）
 #    a) Cargo.toml 的 version 字段
 #    b) packaging/debian/control 的 Version 字段
 #    c) CHANGELOG.md：把 [Unreleased] 段落改写成 ## [X.Y.Z] - YYYY-MM-DD，
 #       并在底部链接区补一行 [X.Y.Z]: .../releases/tag/X.Y.Z
 #    c) 最容易漏 —— 漏了就出现「有 tag、没更新日志」的断档版本。
-#       改完用 scripts/check-version.sh 核一遍三处是否一致。
+#    d) Cargo.lock 里 name = "docker-panel" 的 version（跑一次 cargo build 自动写）
+#       改完用 scripts/check-version.sh 核一遍四处是否一致。
 
 # 3. 提交发版准备改动
 git commit -am "chore: 发版 0.1.1"
@@ -88,6 +89,7 @@ git push origin refs/tags/0.1.1
 | `Cargo.toml` | `version` | 改成 `X.Y.Z` |
 | `packaging/debian/control` | `Version` | 改成 `X.Y.Z` |
 | `CHANGELOG.md` | `## [X.Y.Z]` 段落与底部链接 | `[Unreleased]` 段落**改写**为 `## [X.Y.Z] - YYYY-MM-DD`（内容按 新增/变更/修复/移除 分类），底部链接区补 `[X.Y.Z]: .../releases/tag/X.Y.Z` |
+| `Cargo.lock` | `name = "docker-panel"` 的 `version` | 改完 `Cargo.toml` 后跑一次 `cargo build`（或 `cargo update -p docker-panel`）自动写；**不要手改** |
 
 漏掉任何一处都会导致 deb 包里的版本号与实际不符，或更新日志断档。
 
@@ -155,7 +157,7 @@ sha256sum /tmp/x.deb
 ## 4. 线上紧急修复
 
 hotfix 同样产出补丁版本，**同样要写版本更新日志**——热修不是"偷偷发个补丁"，
-`CHANGELOG.md` 必须新增 `[X.Y.Z]` 段落，版本号三处同步不能省。
+`CHANGELOG.md` 必须新增 `[X.Y.Z]` 段落，版本号四处同步不能省（含 `Cargo.lock`）。
 
 ```bash
 # 1. 从 master 切出热修分支
@@ -164,7 +166,7 @@ git flow hotfix start 0.1.2
 # 2. 修复并提交
 git commit -am "fix: ..."
 
-# 3. 同步版本号 + 写版本更新日志（三处，与发版流程同）
+# 3. 同步版本号 + 写版本更新日志（四处，与发版流程同）
 #    a) Cargo.toml: version = "0.1.2"
 #    b) packaging/debian/control: Version: 0.1.2
 #    c) CHANGELOG.md: 新增 ## [0.1.2] - YYYY-MM-DD 段落 + 底部链接
@@ -244,7 +246,7 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | Release 页面没有更新日志（只有一行 Full Changelog） | 流水线只用了 `generate_release_notes` | 用 `body_path` 传 `scripts/release-notes.sh` 抽出的 CHANGELOG 段落 |
 | CI 在 `cargo build` 处失败且报 fontconfig 缺失 | apt 列表缺 `libfontconfig1-dev` | 见上文「CI 的系统依赖」 |
 | Release 页面没有更新日志 / CHANGELOG 断档 | 漏改 `[Unreleased]` 段落 | 发版与 hotfix 都要把 `[Unreleased]` 改写为 `## [X.Y.Z]` 并补底部链接 |
-| deb 包版本号不对 | 只改了 Cargo.toml | 三处版本号一起改（`scripts/check-version.sh` 可一键核对） |
+| deb 包版本号不对 | 只改了 Cargo.toml | 四处版本号一起改（含 `Cargo.lock`；`scripts/check-version.sh` 可一键核对） |
 | 推了 tag 但流水线没触发，重推后却跑出**两个** run，第二个报 `Cannot delete asset from an immutable release` | 第一次 run 已发布 Release 并把它设为 immutable；重推 tag 又触发一次 run，它想先删同名旧资产 → 被 immutable 拒绝 | 第二个 run 失败**不影响结果**（Release 与资产已由第一个 run 生成好）；排查时先确认 `gh release list` 里有没有该版本，再决定要不要重推。推 tag 前先 `git push origin refs/tags/X.Y.Z`，若 `gh run list` 查不到，等 1~2 分钟再重推（重推会留下两条流水线记录） |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |
 

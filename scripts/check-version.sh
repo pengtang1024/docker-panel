@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 
 fail=0
 
-# ---- 读取三处版本 ----
+# ---- 读取四处版本 ----
 cargo_ver=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 deb_ver=$(sed -n 's/^Version: \(.*\)$/\1/p' packaging/debian/control | head -1)
 changelog_ver=$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md \
@@ -82,4 +82,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "✓ 版本三同步一致"
+echo "✓ 版本四处同步一致"

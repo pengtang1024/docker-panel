@@ -55,7 +55,7 @@
 
 ```text
 docker-panel/
-├── Cargo.toml                依赖：slint 1.18.1 / bollard 0.21 / tokio / futures / sha2
+├── Cargo.toml                依赖：slint 1.18.1 / bollard 0.21 / tokio / futures / sha2；workspace 成员 `launcher`
 ├── rust-toolchain.toml       stable 通道 + rustfmt / clippy（本地统一；CI 另钉 1.99.1）
 ├── build.rs                  slint_build::compile_with_config + with_bundled_translations("translations")
 │
@@ -102,7 +102,8 @@ docker-panel/
 │   │   ├── manifest.rs        清单解析 / 资产 URL 派生 / 与 checksums.txt 一致性断言（纯逻辑 + 单测）
 │   │   ├── github.rs          GitHub Releases API（第 3 级兜底；系统 curl + JSON 解析，阻塞）
 │   │   ├── version.rs         版本比较 / 资产选择 / checksums 解析（纯逻辑 + 单测）
-│   │   ├── install.rs         环境探测 / 安装方式判定 / deb（pkexec）与裸二进制替换
+│   │   ├── install.rs         环境探测 / 安装方式判定 / 验签 / 原子安装与自替换（deb 的 pkexec 仅兜底）
+│   │   ├── install/managed.rs  启动器布局：versions/<v>/ + current 软链（零 root 安装）
 │   │   └── install/download.rs 缓存目录 / curl 下载 / SHA-256 校验
 │   │
 │   └── docker/
@@ -119,6 +120,12 @@ docker-panel/
 │       ├── image_details.rs   inspect_image → ImageDetail
 │       ├── container_detail.rs inspect_container + probe_container（存活性探针）
 │       └── system.rs          cleanup prune + version（`/version` 守护进程版本，取不到由上层显示 `—`）
+│
+├── launcher/                  deb 内的 /usr/bin/docker-panel 验签启动器（独立 workspace 成员）
+│   ├── src/main.rs            候选（用户副本 / deb 种子）+ 版本排序 + --print-target
+│   ├── src/verify.rs          用户副本验签（checksums.txt + .sig + 运行体 sha256）/ 种子按 root 属主信任
+│   ├── src/exec.rs            execveat(O_PATH fd)：校验与执行同一 inode
+│   └── src/version.rs         版本解析与比较
 │
 ├── translations/
 │   └── zh_CN/LC_MESSAGES/docker-panel.po   gettext 翻译（编译期嵌入）
@@ -174,7 +181,7 @@ main.rs
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
   ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（status_toast）
-  ├── update/        → discover（三级回退）+ manifest（清单纯逻辑）+ github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
+  ├── update/        → discover（三级回退 + `version.json.sig` 验签）+ manifest（清单纯逻辑 + `checksums.txt.sig`）+ signature（内置公钥清单）+ github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 
 ui/*.slint           app.slint 是唯一组装入口，import 其余子文件；

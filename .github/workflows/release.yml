@@ -39,6 +39,11 @@ jobs:
       - name: cargo build --release
         run: cargo build --release --locked
 
+      - name: 构建验签启动器
+        # 启动器是 workspace 的另一个成员：在仓库根跑 `cargo build` 只会构建根包，
+        # 必须单独 -p 指定。它只依赖 base64 / ed25519-dalek / libc / sha2。
+        run: cargo build --release --locked -p docker-panel-launcher
+
       - name: 生成 deb 包
         run: |
           set -euo pipefail
@@ -46,9 +51,14 @@ jobs:
           stage=docker-panel_"$version"_amd64
           rm -rf "$stage"
           install -d "$stage/DEBIAN" "$stage/usr/bin" \
+            "$stage/usr/lib/docker-panel/seed" \
             "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps" \
             "$stage/usr/share/doc/docker-panel"
-          install -m 0755 target/release/docker-panel "$stage/usr/bin/docker-panel"
+          # /usr/bin/docker-panel 是启动器（root 所有、非 setuid、无 capabilities）；
+          # 真运行体放 /usr/lib/docker-panel/seed/，启动器在种子与用户副本间挑最高版本。
+          install -m 0755 target/release/docker-panel-launcher "$stage/usr/bin/docker-panel"
+          install -m 0755 target/release/docker-panel "$stage/usr/lib/docker-panel/seed/docker-panel"
+          printf '%s\n' "$version" > "$stage/usr/lib/docker-panel/seed/version"
           install -m 0644 packaging/docker-panel.desktop "$stage/usr/share/applications/docker-panel.desktop"
           install -m 0644 packaging/docker-panel.svg "$stage/usr/share/icons/hicolor/scalable/apps/docker-panel.svg"
           install -m 0644 packaging/debian/copyright "$stage/usr/share/doc/docker-panel/copyright"
@@ -107,37 +117,6 @@ jobs:
           python3 -m json.tool version.json > /dev/null
           cat version.json
 
-      - name: 签名更新清单
-        # 私钥只存在仓库 secret（UPDATE_SIGNING_KEY，base64 编码的 PEM），
-        # 二进制里只有公钥（src/signature.rs）；签名与清单同批上传，
-        # 客户端凭它判断「这份清单确实由项目维护者签发」。
-        env:
-          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
-            echo "::error::缺少 secret UPDATE_SIGNING_KEY，无法签名更新清单"
-            exit 1
-          fi
-          key="$RUNNER_TEMP/update-signing-key.pem"
-          printf '%s' "$UPDATE_SIGNING_KEY" | base64 -d > "$key"
-          chmod 600 "$key"
-          openssl pkey -in "$key" -pubout -out "$RUNNER_TEMP/update-signing-pub.pem" 2>/dev/null
-          # 防「签错钥匙」：私钥派生出的公钥必须与二进制里内置的一致，
-          # 否则发出去的版本永远装不上自己的更新。
-          derived="$(openssl pkey -pubin -in "$RUNNER_TEMP/update-signing-pub.pem" -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')"
-          if ! grep -q "$derived" src/signature.rs; then
-            echo "::error::签名私钥与 src/signature.rs 内置公钥不匹配（派生公钥 $derived）"
-            exit 1
-          fi
-          openssl pkeyutl -sign -inkey "$key" -rawin -in version.json -out version.json.sig
-          size="$(stat -c%s version.json.sig)"
-          [ "$size" = "64" ] || { echo "::error::签名长度 ${size} 字节（期望 64）"; exit 1; }
-          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/update-signing-pub.pem" \
-            -rawin -in version.json -sigfile version.json.sig
-          rm -f "$key"
-          echo "更新清单已签名（公钥指纹 $derived）"
-
       - name: 提取版本更新日志
         run: |
           version="${{ steps.ver.outputs.version }}"
@@ -163,7 +142,8 @@ jobs:
 
       # ⚠️ immutable releases：**已发布**的 Release 一律拒绝补传资产
       # （422 Cannot upload assets to an immutable release）。所以顺序必须是
-      # 「建 draft → 上传 9 个资产 → 再 draft=false」，一步到位（draft: false + files）
+      # 「建 draft → 上传 8 个资产 → 维护者离线签名补齐 2 个 .sig → 再 draft=false」，
+      # 一步到位（draft: false + files）
       # 在开启 immutable 的仓库里必失败，且失败时 Release 已经对外可见、无法补救。
       - name: 创建草稿 Release 并上传资产
         id: release
@@ -181,13 +161,12 @@ jobs:
             target/release/docker-panel
             checksums.txt
             version.json
-            version.json.sig
             LICENSE
             LICENSING.md
             THIRD-PARTY-NOTICES.md
             licenses.tar.gz
 
-      - name: 发布 Release（draft → published）并自检
+      - name: 校验草稿资产齐全（不发布，等维护者离线签名）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -196,99 +175,25 @@ jobs:
           rel_id="${{ steps.release.outputs.id }}"
           # 草稿在发布前**不按 tag 索引**：`GET /releases/tags/{tag}` 对 draft 返回 404
           # （0.7.17 就是这样在 CI 里失败、只能手工 PATCH 发布的）。所以定位草稿只能用
-          # 上一步 action 输出的 release id，发布成功后才改用 tag 回读。
+          # 上一步 action 输出的 release id。
           [ -n "$rel_id" ] || { echo "::error::拿不到草稿 Release id"; exit 1; }
-          # 资产不全就不发布：半截 Release 比没有更糟（用户下到 404 的资产链接，
+          # 资产不全就不进入签名阶段：半截 Release 比没有更糟（用户下到 404 的资产链接，
           # 而 immutable 下补传又被拒 → 只能发新版本补救）。
           assets="$(gh api "repos/${{ github.repository }}/releases/${rel_id}/assets" --jq '.[].name' | sort | tr '\n' ' ')"
           count="$(printf '%s' "$assets" | wc -w)"
           echo "draft 资产（${count}）：${assets}"
           for f in docker-panel_${tag}_amd64.deb docker-panel checksums.txt version.json \
-                   version.json.sig LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
+                   LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
             case " $assets " in
               *" $f "*) ;;
-              *) echo "::error::draft Release 缺少资产 $f，放弃发布"; exit 1 ;;
+              *) echo "::error::draft Release 缺少资产 $f，拒绝继续"; exit 1 ;;
             esac
           done
-          gh api -X PATCH "repos/${{ github.repository }}/releases/${rel_id}" -F draft=false >/dev/null
-          # 回读确认真的发布了（不是 draft），并记录 immutable 状态供排查
-          api="repos/${{ github.repository }}/releases/tags/${tag}"
-          read -r draft immutable <<<"$(gh api "$api" --jq '[.draft, .immutable] | @tsv' | tr '\t' ' ')"
-          echo "已发布 ${tag}：draft=${draft} immutable=${immutable}"
-          [ "$draft" = "false" ] || { echo "::error::Release ${tag} 仍是 draft"; exit 1; }
-
-      # 第二级备源（jsDelivr `@master/version.json`）要求仓库里真的有这份文件。
-      # 顺序保证：只有上一步「发布 Release（draft → published）」成功（资产已全部上传且已发布）才会走到这里，
-      # 因此提交到 master 的清单一定指向已存在的 Release 与资产（见 docs/arch/update-manifest.md §3）。
-      # 只提交 version.json：构建产物都是未跟踪文件，这里只点名它；
-      # [skip ci] 让 push 到 master 不再触发 Quality / License（Release 只由 tag 触发）。
-      - name: 提交更新清单到 master（jsDelivr 备源）
-        run: |
-          set -euo pipefail
-          version="${{ steps.ver.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # 先留一份发布产物：reset 到 master 时同名文件可能被旧版本覆盖
-          cp version.json "$RUNNER_TEMP/version.json.release"
-          cp version.json.sig "$RUNNER_TEMP/version.json.sig.release"
-          for attempt in 1 2 3; do
-            # 每次从远端最新 master 起步；若期间别人推了新提交，下一次循环直接以最新 master
-            # 为基线重建提交，清单内容始终以本次 release 产物为准（覆盖式，不做合并）。
-            git fetch --depth=1 origin master
-            git reset --hard FETCH_HEAD
-            cp "$RUNNER_TEMP/version.json.release" version.json
-            cp "$RUNNER_TEMP/version.json.sig.release" version.json.sig
-            git add -- version.json version.json.sig
-            if git diff --cached --quiet; then
-              echo "master 上的 version.json 已是 ${version}，无需提交"
-              exit 0
-            fi
-            git commit -m "chore(update): 同步 ${version} 更新清单与签名到 master [skip ci]"
-            if git push origin HEAD:master; then
-              echo "已将 version.json 提交到 master（jsDelivr 最长 12h 缓存后生效）"
-              exit 0
-            fi
-            echo "::warning::master 在本地提交后又有新提交，第 ${attempt} 次重试"
-            sleep 5
-          done
-          echo "::error::连续 3 次未能把 version.json 提交到 master"
-          exit 1
-
-      # jsDelivr 分支端点带 s-maxage=43200（12h 边沿缓存），不主动清理的话备源最长 12h 才看到新清单。
-      # 用官方 purge 接口去缓存：无需 token / secret，purge 后 CDN 会重新回源 GitHub raw。
-      # 这一步只影响备源时效，失败不该阻断发版 → continue-on-error，且内部失败也只 ::warning。
-      # 只刷清单文件：purge 接口只能清 jsDelivr 自己缓存的路径，而 deb / 裸二进制 / checksums.txt
-      # 都在 github.com 的 release-assets 上，不经过 jsDelivr（其缓存由 GitHub 负责，无从 purge）。
-      - name: 刷新 jsDelivr 清单缓存
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          version="${{ steps.ver.outputs.version }}"
-          cdn="https://cdn.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
-          purge="https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json"
-          # 备源至少要有签名文件，否则走 CDN 的客户端会因验签失败而拒绝安装
-          curl -fsS --max-time 20 "https://purge.jsdelivr.net/gh/pengtang1024/docker-panel@master/version.json.sig" >/dev/null 2>&1 || true
-          for attempt in 1 2 3; do
-            out="$(curl -fsS --max-time 20 "$purge" 2>/dev/null || true)"
-            status="$(printf '%s' "$out" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' 2>/dev/null || true)"
-            if [ "$status" = "finished" ]; then
-              echo "purge 已受理（第 ${attempt} 次）"
-              break
-            fi
-            echo "::warning::purge 第 ${attempt} 次未完成：$(printf '%s' "$out" | head -c 200)"
-            sleep 5
-          done
-          # 只做提示、不做断言：purge 传播有秒级延迟，陈旧一会儿不算失败
-          for attempt in 1 2 3; do
-            body="$(curl -fsS --max-time 20 "$cdn" 2>/dev/null || true)"
-            if printf '%s' "$body" | grep -q "\"version\": \"$version\""; then
-              echo "jsDelivr 已返回 ${version}"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::warning::jsDelivr 仍返回旧清单（CDN 传播延迟），主源与 API 兜底不受影响"
+          # 私钥不在 CI：流水线到此为止，Release 保持 draft（对用户不可见）。
+          # 维护者在本机跑 `scripts/sign-release.sh <version>`：离线签名 → 补传
+          # version.json.sig / checksums.txt.sig → 发布 → 同步 master → 刷 jsDelivr。
+          echo "✅ 草稿 ${tag} 已就绪（${count} 个资产，尚未发布）"
+          echo "👉 下一步：scripts/sign-release.sh ${tag}"
 
       # 历史版本（流水线修好之前发的）页面只有一行 "**Full Changelog**: ..."，
       # 这里用 CHANGELOG.md 的段落回填。immutable release 改不了就跳过，不影响本次发布。

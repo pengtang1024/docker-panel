@@ -41,7 +41,7 @@
 
 | 上游表达式 | 代表组件 | 本项目选择 |
 |------------|----------|------------|
-| `MIT OR Apache-2.0` | `tokio` 1.53.3、`hyper` 1.12.0、`futures` 0.3.34、`serde` 1.0.229、`zbus` 5.19.0、`image` 0.25.10、`usvg` / `resvg` 0.48.1、`parley` 0.11.1、`swash` 0.2.10、`wayland-*` 0.31.x、`x11rb` 0.13.2、`sha2` 0.10.9、`digest` 0.10.7、`block-buffer` 0.10.4、`crypto-common` 0.1.7、`generic-array` 0.14.7、`typenum` 1.20.1、`cpufeatures` 0.2.17 等 222 个 | MIT |
+| `MIT OR Apache-2.0` | `tokio` 1.53.3、`hyper` 1.12.0、`futures` 0.3.34、`serde` 1.0.229、`zbus` 5.19.0、`image` 0.25.10、`usvg` / `resvg` 0.48.1、`parley` 0.11.1、`swash` 0.2.10、`wayland-*` 0.31.x、`x11rb` 0.13.2、`sha2` 0.10.9、`digest` 0.10.7、`block-buffer` 0.10.4、`crypto-common` 0.1.7、`generic-array` 0.14.7、`typenum` 1.20.1、`cpufeatures` 0.2.17、`base64` 0.22.1（清单/签名 base64 编解码）、`libc` 0.2.190（启动器 exec 参数）等 224 个 | MIT |
 | `Apache-2.0 OR MIT` | `indexmap` 2.14.2、`pin-project` 1.1.13、`polling` 3.11.0、`ed25519-dalek` 2.2.0、`ed25519` 2.2.3、`signature` 2.2.0、`zeroize` 1.9.1、`fiat-crypto` 0.2.9、`rand_core` 0.6.4 等 46 个 | MIT |
 | `Unlicense OR MIT` | `memchr` 2.8.3、`byteorder-lite` 0.1.0 | MIT |
 | `CC0-1.0 OR Apache-2.0` | `imgref` 1.12.3 | Apache-2.0（规避 CC0 的 OSI 认定问题） |
@@ -77,4 +77,4 @@ Linux 目标实测：345 个 normal 依赖，其中静态链入的 copyleft 选�
 
 ---
 
-最后更新：随 Cargo.lock 复核（当前版本 0.7.19；依赖清单如有变动请同步本文件）
+最后更新：随 Cargo.lock 复核（当前版本 0.8.0；新增 `launcher/` 的 `base64` / `libc` 直接依赖；依赖清单如有变动请同步本文件）

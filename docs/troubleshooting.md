@@ -184,7 +184,7 @@ curl -sIL https://api.github.com/repos/pengtang1024/docker-panel/releases/latest
 | `Release checksums.txt is missing` | Release 缺校验文件 | 手动下载，**不要装没有校验文件的包** |
 | `Release checksums.txt does not contain this asset` | 校验文件里没有该资产条目 | 同上，建议报告 |
 | `Update manifest does not match checksums.txt` | 清单与 Release 校验文件冲突，**客户端 fail closed 拒绝安装** | 属安全设计；手动下载并核对 |
-| `Update manifest signature is not verifiable: <详情>` | 清单签名缺失 / 被改写 / 与内置公钥不匹配（`version.json.sig` 下载失败或内容不对） | 属安全设计，**不要绕过**：先确认网络没被代理改写，再用 `openssl pkeyutl -verify` 配 `src/signature.rs` 里的公钥离线复验；持续出现请报告 |
+| `Update manifest signature is not verifiable: <详情>` | 清单签名缺失 / 被改写 / 与内置公钥不匹配（`version.json.sig` 下载失败或内容不对） | 属安全设计，**不要绕过**：先确认网络没被代理改写，再用 `openssl pkeyutl -verify` 配 `packaging/release-signing.pub` 里的公钥离线复验；持续出现请报告 |
 | `Update manifest is malformed` / `does not match the release` / `does not match the package` | 签名清单结构错、版本对不上、或清单声明的 SHA-256 与实际 deb 不符 | 同上，fail closed；不要用「跳过校验」的方式安装 |
 | `Version X is already installed, restart to apply` | 清单版本已经装在系统里（dpkg 记录 ≥ 清单版本），只需重启应用 | 重启即可；不会再重复下载与授权 |
 | `Package installation failed: <输出>` | `pkexec dpkg -i` 失败（依赖冲突 / 授权被拒 / 无 polkit） | 按提示核对；也可手动 `sudo dpkg -i` 装下载好的 deb |

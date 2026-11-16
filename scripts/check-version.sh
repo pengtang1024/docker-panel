@@ -64,6 +64,29 @@ if [ "$lock_ver" != "$cargo_ver" ]; then
   fail=1
 fi
 
+# ---- 启动器（workspace 成员）版本必须与主包一致：它随同一个 deb 发布 ----
+launcher_ver=$(sed -n 's/^version = "\(.*\)"$/\1/p' launcher/Cargo.toml | head -1)
+lock_launcher=$(awk '/^name = "docker-panel-launcher"$/{f=1;next} f&&/^version = /{gsub(/[",]/,"");sub(/^version = /,"");print;exit}' Cargo.lock)
+echo "launcher/Cargo.toml   : ${launcher_ver:-<未找到>}"
+if [ "$launcher_ver" != "$cargo_ver" ]; then
+  echo "✗ launcher/Cargo.toml($launcher_ver) 与 Cargo.toml($cargo_ver) 不一致（启动器随同一个 deb 发布）" >&2
+  fail=1
+fi
+if [ "$lock_launcher" != "$cargo_ver" ]; then
+  echo "✗ Cargo.lock 里的 docker-panel-launcher 版本($lock_launcher) 与 $cargo_ver 不一致 —— 跑一次 cargo build 让它同步" >&2
+  fail=1
+fi
+
+# ---- 签名公钥清单必须存在且至少一把钥 ----
+keys_file=packaging/release-signing.pub
+if [ ! -f "$keys_file" ]; then
+  echo "✗ 缺少 $keys_file（应用与启动器的唯一信任锚）" >&2
+  fail=1
+elif [ "$(grep -cEv '^[[:space:]]*(#|$)' "$keys_file")" -eq 0 ]; then
+  echo "✗ $keys_file 里没有任何公钥" >&2
+  fail=1
+fi
+
 # ---- 可选：核对最新 tag ----
 if [ "${1:-}" = "--tag" ]; then
   latest_tag=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)

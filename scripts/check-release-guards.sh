@@ -16,24 +16,35 @@ fail=0
 ok()   { printf '  ✓ %s\n' "$1"; }
 bad()  { printf '  ✗ %s\n' "$1"; fail=1; }
 
-echo "== 1. 流水线：发布顺序必须是 draft → 上传 → 发布 =="
+echo "== 1. 流水线：CI 只建草稿，签名与发布在维护者本机 =="
 wf=.github/workflows/release.yml
+signer=scripts/sign-release.sh
 if grep -q 'draft: true' "$wf"; then ok "action-gh-release 使用 draft: true"; else bad "release.yml 里没有 draft: true（会被 immutable 拒绝上传）"; fi
-if grep -q 'gh api -X PATCH .*releases/\${rel_id}" -F draft=false' "$wf"; then
-  ok "发布走 gh api -X PATCH draft=false"
-else
-  bad "找不到「校验资产后再 draft=false」的发布步骤"
-fi
 # 一步到位写法：action 里同时出现 draft: false 与 files: → immutable 下必失败
 if awk '/softprops\/action-gh-release/,/^      - name:/' "$wf" | grep -q 'draft: false'; then
   bad "action-gh-release 里出现 draft: false（不要一步到位发布）"
 else
   ok "action-gh-release 未使用 draft: false"
 fi
-for f in docker-panel checksums.txt version.json version.json.sig LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
-  grep -q -- "$f" "$wf" || bad "发布资产清单缺少 $f"
+# 私钥不进 CI：流水线里不能出现签名私钥或 openssl 签名，签名必须在本机脚本里
+if grep -qE 'UPDATE_SIGNING_KEY|pkeyutl -sign' "$wf"; then
+  bad "release.yml 里出现签名私钥/签名动作（私钥不得进入 CI）"
+else
+  ok "release.yml 不持有签名私钥"
+fi
+if [ -f "$signer" ] && grep -q -- 'draft=false' "$signer"; then
+  ok "发布动作在 scripts/sign-release.sh（离线签名后 draft=false）"
+else
+  bad "找不到 scripts/sign-release.sh 或它没有 draft=false 发布步骤"
+fi
+# 资产齐全断言：CI 校验 8 个构建产物，签名脚本校验补传后的 10 个
+for f in docker-panel checksums.txt version.json LICENSE LICENSING.md THIRD-PARTY-NOTICES.md licenses.tar.gz; do
+  grep -q -- "$f" "$wf" || bad "CI 资产清单缺少 $f"
 done
-grep -q 'docker-panel_\${tag}_amd64.deb' "$wf" && ok "发布资产清单含 deb" || bad "发布资产清单缺少 deb"
+grep -q 'docker-panel_\${tag}_amd64.deb' "$wf" && ok "CI 资产清单含 deb" || bad "CI 资产清单缺少 deb"
+for f in version.json.sig checksums.txt.sig; do
+  grep -q -- "$f" "$signer" || bad "sign-release.sh 没有补传 $f"
+done
 
 echo "== 2. 发版文档：双平台补齐与不可变处置必须写清 =="
 grep -q 'sync-gitee-release' docs/git-flow.md && ok "git-flow 记录了 Gitee 同步步骤" || bad "docs/git-flow.md 缺 Gitee 同步步骤"

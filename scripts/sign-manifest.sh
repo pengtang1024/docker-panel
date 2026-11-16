@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 给更新清单生成 detached Ed25519 签名（version.json.sig）。
+# 给更新清单生成 detached Ed25519 签名（version.json.sig）——单文件版本。
 #
-# CI（.github/workflows/release.yml）用 secret `UPDATE_SIGNING_KEY` 完成同一件事；
-# 这个脚本用于维护者本机复核签名链、或流水线不可用时的应急发布。
+# 正式发版走 `scripts/sign-release.sh <version>`（签名 + 补传 + 发布 + 同步 master）；
+# 本脚本只做「对一个本地清单文件签名」，用于复核签名链、手工补签或排障。
 #
 # 用法：
 #   scripts/sign-manifest.sh [version.json]
@@ -10,7 +10,7 @@
 #
 # 私钥查找顺序：$DOCKER_PANEL_SIGNING_KEY → ~/.config/docker-panel/signing/update-signing-key.pem
 # 产出：与清单同目录的 version.json.sig（64 字节），并把公钥指纹打印出来
-#       与 src/signature.rs 的 MANIFEST_PUBLIC_KEY_HEX 核对。
+#       与 src/signature.rs 的 MANIFEST_PUBLIC_KEYS_HEX 核对。
 set -euo pipefail
 
 manifest="${1:-version.json}"

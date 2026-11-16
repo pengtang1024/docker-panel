@@ -79,7 +79,9 @@ git push origin refs/tags/0.1.1
 
 `git flow release finish` 会询问 tag 说明，直接回车使用默认的 `release: vX.Y.Z` 即可。
 
-### 版本号同步的三个位置
+### 版本号同步的四个位置
+
+> 第四处是 `Cargo.lock`：它记录本包自身的 `version`，改 `Cargo.toml` 后必须再跑一次 `cargo build`（或 `cargo update -p docker-panel`）让它同步。**漏掉它在本地毫无症状，但 CI 用 `cargo build --release --locked`，会直接报 `cannot update the lock file … because --locked was passed`（0.7.16 就这么炸过一次）。** `scripts/check-version.sh` 已把这一项纳入核对。
 
 | 文件 | 字段 | 改法 |
 |------|------|------|

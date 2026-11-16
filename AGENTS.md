@@ -299,18 +299,19 @@ cargo check --all-targets
 
 ## 发版流程
 
-严格走 Git Flow，详见 [docs/git-flow.md](docs/git-flow.md)。三个位置必须同步版本号：
+严格走 Git Flow，详见 [docs/git-flow.md](docs/git-flow.md)。四个位置必须同步版本号：
 
 1. `Cargo.toml` 的 `version`
 2. `packaging/debian/control` 的 `Version`
 3. `CHANGELOG.md` 新增版本段落（`[Unreleased]` 改写为 `## [X.Y.Z]` + 底部链接；**hotfix 同样要写**）
+4. `Cargo.lock` 里 `name = "docker-panel"` 的 `version`（跑一次 `cargo build` 自动写；漏了 CI 的 `--locked` 直接失败）
 
-收尾用 `scripts/check-version.sh --tag` 一键核对三处是否一致（版本号 / CHANGELOG 段落 / 底部链接 / 最新 tag）。
+收尾用 `scripts/check-version.sh --tag` 一键核对四处是否一致（版本号 / CHANGELOG 段落 / 底部链接 / Cargo.lock / 最新 tag）。
 
 **发版是一条流水线，默认一次做完，不需要每次问用户**（2026-11-16 用户要求：「提交，推送，发版，更新，这个流程不要我每次来提醒」）：
 
 1. 精确 `git add` → 按逻辑分组提交 → 推 `develop` 到**两个平台**；
-2. 要发版时三处版本号同步 → `chore(release): X.Y.Z` → 合入 `master` 打 tag → 分别 `git push <p> master` 与 `git push <p> refs/tags/X.Y.Z`（tag 单独推，多 ref 一次推会吞掉 tag 事件）；
+2. 要发版时四处版本号同步（含 Cargo.lock） → `chore(release): X.Y.Z` → 合入 `master` 打 tag → 分别 `git push <p> master` 与 `git push <p> refs/tags/X.Y.Z`（tag 单独推，多 ref 一次推会吞掉 tag 事件）；
 3. 等 GitHub Action 走完 draft → 上传 → 校验 → 发布，再 `scripts/sync-gitee-release.py X.Y.Z` 补 Gitee（无 CI，分支/tag/Release 都要手工同步；两平台并列，不是主从）；
 4. 动过 `assets/screenshots/` 就逐张 purge jsDelivr，否则 Wiki 继续返回旧图；
 5. 收尾 `scripts/check-release-guards.sh` + `scripts/check-version.sh`，把两平台状态与下载链接回报用户。

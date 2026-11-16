@@ -10,6 +10,7 @@ use std::sync::mpsc;
 
 use crate::docker::compute_cpu_delta;
 use crate::models::Msg;
+use crate::ui_rows::{hyst_cpu, hyst_mem};
 use crate::ui_state::AppState;
 
 mod df;
@@ -82,8 +83,10 @@ impl AppState {
                     self.stats_prev.insert(id.clone(), curr);
                     if let Some(&i) = idx.get(id.as_str()) {
                         let c = &mut self.containers[i];
-                        c.cpu_percent = cpu;
-                        c.mem_usage = curr.mem_usage;
+                        // 显示死区：抖动小于阈值的更新不写模型，避免每轮把整屏行标脏重绘。
+                        // 排序键与抽屉共用这两个显示值，所以口径一致（见 AGENTS.md #28）。
+                        c.cpu_percent = hyst_cpu(c.cpu_percent, cpu);
+                        c.mem_usage = hyst_mem(c.mem_usage, curr.mem_usage, curr.mem_limit);
                         c.mem_limit = curr.mem_limit;
                         c.net_rx = curr.net_rx;
                         c.net_tx = curr.net_tx;

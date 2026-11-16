@@ -45,7 +45,9 @@ pub use containers::{
     list_containers, remove_container, restart_container, start_container, stop_container,
 };
 pub use image_details::inspect_image;
-pub use images::{image_layer_count, list_images, pull_image, remove_image};
+pub use images::{
+    attach_container_refs, image_layer_count, list_images_raw, pull_image, remove_image,
+};
 pub use log_types::{
     retry_delay, LogStreamEnd, IDLE_RETRY_DELAY, KEEPALIVE_INTERVAL, LOG_IDLE_TIMEOUT,
 };

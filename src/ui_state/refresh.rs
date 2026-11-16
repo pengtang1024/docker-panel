@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 
-use crate::docker::{list_containers, list_images, list_networks, list_volumes};
+use crate::docker::{list_containers, list_networks, list_volumes};
 use crate::models::Msg;
 
 /// 刷新去重的所有权闸门
@@ -77,12 +77,18 @@ pub fn spawn(
     }
     rt.spawn(async move {
         loop {
-            let (c_res, i_res, n_res, v_res) = futures::join!(
+            let (c_res, i_raw, n_res, v_res) = futures::join!(
                 crate::docker::with_timeout(list_containers(true)),
-                crate::docker::with_timeout(list_images()),
+                crate::docker::with_timeout(crate::docker::list_images_raw()),
                 crate::docker::with_timeout(list_networks()),
                 crate::docker::with_timeout(list_volumes()),
             );
+            // 镜像的「关联容器数」用本轮已经拿到的容器列表算，
+            // 不再在 list_images 内部重复拉一遍 /containers/json（省一次 30ms 请求）
+            let i_res = i_raw.map(|mut imgs| {
+                crate::docker::attach_container_refs(&mut imgs, c_res.as_deref().unwrap_or(&[]));
+                imgs
+            });
             let _ = tx.send(Msg::Containers(c_res));
             let _ = tx.send(Msg::Images(i_res));
             let _ = tx.send(Msg::Networks(n_res));

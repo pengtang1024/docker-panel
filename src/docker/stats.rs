@@ -49,9 +49,15 @@ impl ContainerStatsSnapshot {
     }
 }
 
-pub async fn fetch_stats(id: &str) -> Result<ContainerStatsSnapshot, String> {
+/// `one_shot = true` 时不带 `precpu` 帧：守护进程立刻返回单帧，**不等待 1s 双采样**，
+/// 省掉每轮 2s 的空等；CPU% 用本地上一轮的 `stats_prev` 做差值（6s 窗口，与之前同精度）。
+/// 首次采样（`one_shot = false`）仍走双采样，好让首帧就有真实 CPU%。
+pub async fn fetch_stats(id: &str, one_shot: bool) -> Result<ContainerStatsSnapshot, String> {
     let docker = connect()?;
-    let opts = StatsOptionsBuilder::default().stream(false).build();
+    let opts = StatsOptionsBuilder::default()
+        .stream(false)
+        .one_shot(one_shot)
+        .build();
     let resp = docker
         .stats(id, Some(opts))
         .next()
@@ -87,11 +93,11 @@ pub async fn fetch_stats(id: &str) -> Result<ContainerStatsSnapshot, String> {
 /// 并发采样一批容器的 stats（失败的容器跳过）
 ///
 /// 整轮采样打包成一条消息发出：逐容器单发会让 UI 数值分批阶梯跳动。
-pub async fn sample_all(ids: &[String]) -> Vec<(String, ContainerStatsSnapshot)> {
+pub async fn sample_all(ids: &[String], one_shot: bool) -> Vec<(String, ContainerStatsSnapshot)> {
     let futs: Vec<_> = ids
         .iter()
         .map(|id| async move {
-            with_timeout(fetch_stats(id))
+            with_timeout(fetch_stats(id, one_shot))
                 .await
                 .ok()
                 .map(|snap| (id.clone(), snap))

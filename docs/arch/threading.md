@@ -111,7 +111,7 @@ invoke_from_event_loop(move || {
 | 任务 | 触发 / 频率 | 纪律 |
 |------|-------------|------|
 | 列表刷新 | `event_watch::spawn` 常驻订阅 Docker `/events` | **只有事件这一个来源**：`type` 过滤 container/image/network/volume，动作过滤用**噪声黑名单**（只忽略 `health_status` / `exec_*` / `attach` / `detach`，未知动作宁可多刷一次也不漏刷）；收到非噪声事件即锁内 `s.refresh()`（并发刷新四类资源，结果走 `tx.send(Msg::*)`）→ 400ms 合并窗口让突发启停只刷一遍；断流按 1s→30s 指数退避重连、永不放弃，重连后**补一次全量刷新**（连接建立那一刻的状态才是真相）；空闲时零请求。**没有定时兜底轮询**：曾用 3s（`size=1` 容器列表 ≈70ms + 镜像列表 ≈96ms，每分钟吃掉 dockerd ≈3.3s），15s 兜底也一起删掉了——兜底只会把「事件漏刷 / 过滤写错 / 代理不支持长连接」这类 bug 藏成「最多慢 N 秒」。`refresh()` 带 in-flight 去重（上一轮未完成只置 `refresh_dirty`、本轮结束补跑一次，不丢事件触发的刷新，也不会在慢 Docker 下叠 4 个调用） |
-| 6s stats 采样 | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
+| 6s stats 采样 | `bootstrap::spawn_stats_interval` | join_all 拉所有 running 容器 stats，且**一律 `one_shot(true)`**（不带 pre 帧、不等 1–2s 双采样，整轮 2.6–3ms）。**首轮不跳过**，且**首屏拿到容器列表后立刻补采一轮**（`spawn_initial_load`）→ 启动后约 1s 就有 CPU / 内存 / 网络，而不是等 6s + 6s；同一函数独立 spawn 一次 `/version` 查询（`Msg::DockerVersion`），慢或失败都不阻塞首屏四列表。CPU% 靠差值计算，本地无 prev（进程刚起 / 首次采样）时**用 Docker 同帧返回的 `precpu_stats` 兜底**（仅首屏那一轮走双采样，之后靠本地 prev 做 6s 窗口差值，见 [docker-bollard.md](docker-bollard.md)）→ 首帧即真实 CPU%，不会先显示一轮 0.0% |
 | 30s 磁盘占用 | `bootstrap::spawn_disk_usage_interval` | `/system/df?type=volume` 与 `?type=container` 并行采样，低频单独跑。容器可写层占用只从这里来（列表接口不带 `size=1`：遍历文件系统 + 删除中的容器会 404），列表刷新后用 `AppState::apply_container_sizes` 从缓存补回 |
 | 自动更新 | `update::spawn_scheduler` | 启动 10s 后检查一次，之后每 6h 醒来判断是否满 24h。`spawn_check` / `spawn_install` 内的网络（系统 `curl`）、`pkexec`、文件 IO 全部放 `tokio::task::spawn_blocking`；进度按 1% 节流发 `Msg::UpdateProgress`；检查与安装共用 `AppState.update.update_busy` 互斥，重复点击不会叠加任务。安装前的 dpkg / 目录可写 / pkexec 判定与下载后的 SHA-256 校验见 `src/update/install.rs` |
 | UI 回调与 tick | 主线程 | 本身**不**碰 Slint Model——只发任务/改 state，consumer 统一调用 `invoke_from_event_loop` 更新 UI（Slint 线程安全模型：只有主线程可以修改 Model） |
@@ -331,3 +331,32 @@ ui.on_xxx_requested(move || {
 | ◀ 上一页 | 文档地图 | 下一页 ▶ |
 |----------|----------|----------|
 | [架构总纲](../architecture.md) | [README 文档导航](../../README.md#文档地图) | [UI 层架构](ui-interaction.md) |
+
+## 5. 空闲基线怎么测
+
+改任何「常驻开销」相关代码前后，用同一个脚本拿到可比数字：
+
+```bash
+python3 scripts/bench-idle.py 240     # 每 10s 采样 RSS / 线程数，末尾给 MB/min 斜率
+```
+
+口径与当前基线（v0.7.15，23 容器，窗口 1280×720 可见）：
+
+| 指标 | 实测 |
+|------|------|
+| 空闲 CPU（1s 分辨率平均） | 0.20% – 0.33% |
+| RSS | 启动 48–51MB → 约 100s 后稳定在 54MB（**不是泄漏**，是有界热身后趋平） |
+| 线程数 | 33–35（tokio 阻塞池按需伸缩，不单调增长） |
+| 6s stats 整轮 | `one_shot` 前 2.03s，后 2.6–3ms |
+| 30s `/system/df` 整轮 | 39–160ms（守护进程侧为主，应用 CPU 0–10ms） |
+| 进程 → 窗口创建 | 25–34ms |
+| 进程 → 首屏容器行 | 153–172ms（中位 159ms；旧的 `join!` 全到齐再推是 181–209ms） |
+| 进程 → 首屏镜像行 | 273–292ms（镜像最慢一路，让容器行先上屏） |
+| 四列表并发一轮（`bootstrap join` / 每次刷新） | 143–165ms（`/images/json` 92ms 为最慢一路，`/containers/json` 34ms、网络 8ms、卷 8ms） |
+| 日志热路径（每行） | 正常段 71ns/行（剥前缀+拼前缀+入批，≈1400 万行/s 单线程）；回放段 23ns/行；抽样判定 0.2ns/行 |
+
+日志热路径单独量，跑 `cargo test --release bench_log_pipeline -- --ignored --nocapture`（`src/docker/log_batch.rs` 的 `bench` 模块，只覆盖应用侧每行成本，不含 Docker 流读取与 UI 行模型同步）。它只在改 `log_ts` / `log_batch` 热路径时才需要复测——按 76k 行/s 的真实码率折算，71ns/行 ≈ 每 1.3 万行消耗 1ms CPU，不是瓶颈。
+
+**首屏那 77ms 的冷启动开销不要去「预热」**：同一条 `/containers/json` 进程内首次请求 73–99ms、curl 热态 33–35ms，差额是连接建立 + 首个请求的固定成本。试过两种预热都被数据否掉：窗口创建前发 `/_ping`（`DP_PREFETCH` 实验，首帧 157ms vs 159ms，无差异），以及提前构造 `docker::connect()`（实测 0.0ms，bollard 客户端是惰性构造）——前者还因为共享 `Arc<Transport>` 的 keep-alive 串行而抢占同一条连接。**要省这 40ms 只能让首屏请求更早发出，而 `ui.run()` 之前投递的 `invoke_from_event_loop` 会被 winit 丢弃**（见 `AGENTS.md` 的焦点引导坑条），所以这是架构边界，不是可调参数。
+
+测的时候三点必须对齐：release 构建、`WAYLAND_DISPLAY` 可用、无其它实例占单实例锁（否则启动即退出，采样全是 0）。

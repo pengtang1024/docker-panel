@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **发版流水线的「发布」步骤按 release id 定位草稿，而不是按 tag 查**：`GET /releases/tags/{tag}` 对**草稿**返回 404（草稿发布前不按 tag 索引），0.7.17 的发版因此在「发布 Release（draft → published）并自检」这一步失败，草稿与 8 个资产都建好了却没能自动发布，只能手工 `PATCH draft=false`。现在草稿步骤带 `id: release`，资产校验与发布都用 `steps.release.outputs.id`（`/releases/{id}/assets`），发布成功后才改用 `releases/tags/{tag}` 回读断言 `draft=false`。
+
 ## [0.7.17] - 2026-11-16
 
 ### 变更

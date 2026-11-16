@@ -30,13 +30,13 @@
 > [!WARNING]
 > 把 Receiver 放进 Mutex，consumer 阻塞 `recv()` 时就会持有锁 → 主线程任何 `state.lock()`（UI 回调、interval tick）全部卡死。这是本项目唯一需要防的死锁来源。
 
-### 分批 drain + 120ms 节流（consumer.rs）
+### 分批 drain + 分档节流（consumer.rs）
 
 日志洪峰下，「每条 Msg 一次 invoke + 重建全部列表」会把 UI 线程压死，也会因长时间持锁饿死点击回调；当前实现分三层防护。
 
 ```rust
 // Phase 1 — 锁外等待，锁内分批消费
-// 有 pending 时只睡到 120ms 节流窗口结束（最多 100ms，保证 shutdown 可观测）
+// 有 pending 时只睡到本批节流窗口结束（最多 100ms，保证 shutdown 可观测）
 let wait = poll_timeout(pending.has_ui_changes(), last_apply.elapsed());
 let first = rx.recv_timeout(wait)?;
 loop {
@@ -49,7 +49,7 @@ loop {
     if !pending.has_more || last_apply.elapsed() >= UI_MIN_INTERVAL { break; }
 }
 
-// Phase 2 — 每 120ms 最多应用一次 UI
+// Phase 2 — 按批分档节流：不含日志 8ms / 日志混批 120ms / 纯日志 250ms
 if pending.has_ui_changes() && last_apply.elapsed() >= UI_MIN_INTERVAL {
     apply_ui(&state, &ui, &mut pending);
 }

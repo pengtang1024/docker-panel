@@ -15,10 +15,9 @@
 
 ### 变更
 
+- **UI 节流窗口按批分档**：不含日志的批 8ms 上屏（列表 / 抽屉 / 状态栏），日志混批 120ms，纯日志 250ms。此前统一 120ms，镜像 / 网络 / 卷经常要等满一个窗口才出现（实测「数据已到 → 上屏」在 0.2 / 106 / 120ms 之间跳变），现在降到 1ms 内；日志洪峰防护不变。
 - **启动即发首屏请求**：`bootstrap::spawn_initial_load` 从 `MainWindow::new()` 之后移到 `AppState::new()` 之后，让 Docker 冷连接（首个请求 73–99ms）与窗口创建（25–34ms）重叠——它只需要 `tx` 与 tokio handle，消息先进 mpsc 队列由稍后启动的 consumer 线程消费，UI 写入时机不变。首个非空容器行模型的写入从 153–164ms（中位 154ms）降到 30–41ms（中位 33ms）。
 - 事件驱动的列表刷新按事件类型收窄：容器启停只拉 `/containers/json`（实测 18.0ms，此前四路并发 77.7ms），镜像的「被引用容器数」改用新容器列表在应用侧本地重算（`Msg::Containers` / `Msg::Images` 处理时回填），网络与卷只在自身事件或全量刷新时拉取；刷新去重的脏标记从 bool 改为 `Kinds` 位掩码，部分刷新与补跑可以共存（`src/ui_state/refresh.rs`）
-
-
 - **版本号同步口径在全部文档里统一为「四处（含 Cargo.lock）」**：此前 `CONTRIBUTING.md` 的文档同步表、`docs/agents-rules.md` 的 R9 与 packaging 行、`docs/git-flow.md` 的流程注释与「四个位置」表（缺 `Cargo.lock` 行）、`docs/arch/update-manifest.md` §8 仍写「三处/三同步」，与已经核对第四处的 `scripts/check-version.sh` 自相矛盾——漏改 `Cargo.lock` 会让 CI 的 `--locked` 直接失败（0.7.16 就是这么炸的）。
 
 - **修正 12 组文档与实现不一致（含 3 处指向不存在的 API / 路径）**：`AGENTS.md` 把 `slint_build::compile` 写成真实调用的 `compile_with_config` + `with_bundled_translations`、把已不存在的 `detail-log-panel.slint` 改为 `drawer.slint`、M3 色板角色数 `53 → 49`（`material_schemes.slint` 的 `MaterialScheme` 实测 49 个字段）、`update-dialog` 不再声称有开关（三个开关只在设置弹窗）；`docs/arch/threading.md` 的消息表把 `PullDone` / `ActionDone` 改回「不刷新、交给 `/events`」（只有 `CleanupDone` 保留 `refresh_now` 兜底）、`LogStreamEnded` 补「全部流都退出」条件、日志状态提示三态改四态（补「洪峰抽样」）；`docs/agents-rules.md` 三处把不存在的 `ui/components.slint` 改为 `ui/components-*.slint`；`docs/arch/ui-interaction.md` 的 Slint 清单补 `settings-dialog` / `settings-state` 两项（39 → 41）并按实测更新 11 处行数；`docs/architecture.md` 与 README 的「两个开关」口径统一为三个；规则地图 R9 与 `scripts/check-version.sh` 头部注释由「三处同步」改为「四处同步（含 Cargo.lock）」。

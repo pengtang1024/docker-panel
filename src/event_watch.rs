@@ -114,9 +114,31 @@ async fn watch(state: &SharedState, conn: &mut ConnState) -> WatchEnd {
     filters.insert("type", vec!["container", "image", "network", "volume"]);
     let opts = EventsOptionsBuilder::new().filters(&filters).build();
     let mut stream = docker.events(Some(opts));
-    let mut last: Option<Instant> = None;
+    let mut db = Debouncer::default();
 
-    while let Some(item) = stream.next().await {
+    loop {
+        // 有被合并窗压住的事件时，同时等「新事件」与「窗口到期」，谁先到算谁：
+        // 到期必须补刷一次，否则窗口尾部那些事件改变的状态会一直缺席到下次事件。
+        let item = match db.deadline() {
+            Some(deadline) => {
+                let sleep = tokio::time::sleep_until(tokio::time::Instant::from_std(deadline));
+                tokio::pin!(sleep);
+                tokio::select! {
+                    item = stream.next() => item,
+                    _ = &mut sleep => {
+                        db.on_flushed(Instant::now());
+                        if !shutdown(state) {
+                            if let Some(mut s) = crate::lock::acquire(state, "event_watch") {
+                                s.refresh();
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
+            None => stream.next().await,
+        };
+        let Some(item) = item else { break };
         if shutdown(state) {
             return WatchEnd::Shutdown;
         }
@@ -128,16 +150,58 @@ async fn watch(state: &SharedState, conn: &mut ConnState) -> WatchEnd {
                 return WatchEnd::Ended;
             }
         }
-        // 合并窗口内的后续事件直接吞掉（流照常读，不阻塞）
-        if last.is_some_and(|t| t.elapsed() < DEBOUNCE) {
-            continue;
-        }
-        last = Some(Instant::now());
-        if let Some(mut s) = crate::lock::acquire(state, "event_watch") {
-            s.refresh();
+        if db.on_event(Instant::now()) {
+            if let Some(mut s) = crate::lock::acquire(state, "event_watch") {
+                s.refresh();
+            }
         }
     }
     WatchEnd::Ended
+}
+
+/// 事件合并窗口的状态机：窗口内首事件立即刷新（leading edge，动作反馈要快），
+/// 窗口内后续事件**记账**而不是丢弃 —— 窗口到期由事件循环补刷一次（trailing edge）。
+///
+/// 曾经只丢不补：`start` 之后 400ms 内到达的 `stop` 会被吞掉，列表和真实状态
+/// 一直不一致到下一个事件为止（同一窗口里只有「最后一次变化」是真相）。
+#[derive(Default)]
+struct Debouncer {
+    /// 上一次触发刷新（或窗口到期）的时刻。
+    last: Option<Instant>,
+    /// 窗口内是否有被压住的事件（有 → 到期要补刷）。
+    pending: bool,
+}
+
+impl Debouncer {
+    /// 收到一个非噪声事件：true = 立刻刷新，false = 已被窗口吸收、等到期。
+    fn on_event(&mut self, now: Instant) -> bool {
+        match self.last {
+            Some(t) if now.duration_since(t) < DEBOUNCE => {
+                self.pending = true;
+                false
+            }
+            _ => {
+                self.last = Some(now);
+                self.pending = false;
+                true
+            }
+        }
+    }
+
+    /// 有待补刷时返回窗口到期的时刻（事件循环据此 `select!` 一个定时器）。
+    fn deadline(&self) -> Option<Instant> {
+        if self.pending {
+            self.last.map(|t| t + DEBOUNCE)
+        } else {
+            None
+        }
+    }
+
+    /// 窗口到期、补刷完成：从这一刻重新开窗。
+    fn on_flushed(&mut self, now: Instant) {
+        self.last = Some(now);
+        self.pending = false;
+    }
 }
 
 /// 高频且不改变列表可见状态的事件：健康检查（每次探针都发）与 exec / attach 生命周期。
@@ -181,6 +245,48 @@ fn backoff(attempt: u32) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 窗口内首事件立即刷新：动作反馈要快（领先沿）。
+    #[test]
+    fn first_event_refreshes_immediately() {
+        let mut d = Debouncer::default();
+        let t0 = Instant::now();
+        assert!(d.on_event(t0));
+        assert_eq!(d.deadline(), None, "没有待补刷事件时不应排定时器");
+    }
+
+    /// 窗口内后续事件必须记账并排出到期定时器 —— 这是曾经丢了刷新的场景：
+    /// `start` 后 400ms 内的 `stop` 若被吞掉，列表会一直停在 running。
+    #[test]
+    fn suppressed_event_schedules_trailing_flush() {
+        let mut d = Debouncer::default();
+        let t0 = Instant::now();
+        assert!(d.on_event(t0));
+        assert!(
+            !d.on_event(t0 + Duration::from_millis(100)),
+            "窗口内应被吸收"
+        );
+        assert_eq!(d.deadline(), Some(t0 + DEBOUNCE), "必须排到期补刷");
+        assert!(!d.on_event(t0 + Duration::from_millis(300)));
+        assert_eq!(d.deadline(), Some(t0 + DEBOUNCE), "多处事件共用同一窗口");
+
+        d.on_flushed(t0 + DEBOUNCE);
+        assert_eq!(d.deadline(), None, "补刷后窗口重置");
+        assert!(
+            d.on_event(t0 + DEBOUNCE + DEBOUNCE),
+            "补刷后从该刻重新开窗，窗口外的下一个事件立即刷新"
+        );
+    }
+
+    /// 窗口外的第一个事件立即刷新，不需要等定时器。
+    #[test]
+    fn event_after_window_refreshes_immediately() {
+        let mut d = Debouncer::default();
+        let t0 = Instant::now();
+        assert!(d.on_event(t0));
+        assert!(d.on_event(t0 + DEBOUNCE));
+        assert_eq!(d.deadline(), None);
+    }
 
     fn ev(typ: EventMessageTypeEnum, action: &str) -> EventMessage {
         EventMessage {

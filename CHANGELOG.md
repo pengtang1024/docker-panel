@@ -10,6 +10,7 @@
 
 ### 修复
 
+- **事件合并窗口改为双沿（leading + trailing），窗口尾部的事件不再被吞**：原来 400ms 窗口内的后续事件直接 `continue` 丢弃，`start` 之后 400ms 内到达的 `stop` 会被吞掉，列表会一直停在 running 直到下一个事件为止。现在窗口内的事件由 `Debouncer` 记账，事件循环用 `select!` 同时等「新事件」与「窗口到期」，到期补刷一次；首事件仍然立即刷新（动作反馈不变慢）。代价上界是每个突发窗口多一轮刷新（实测一轮约 70ms 墙钟、应用侧 CPU 0–10ms，空闲仍零请求）。
 - **发版流水线的「发布」步骤按 release id 定位草稿，而不是按 tag 查**：`GET /releases/tags/{tag}` 对**草稿**返回 404（草稿发布前不按 tag 索引），0.7.17 的发版因此在「发布 Release（draft → published）并自检」这一步失败，草稿与 8 个资产都建好了却没能自动发布，只能手工 `PATCH draft=false`。现在草稿步骤带 `id: release`，资产校验与发布都用 `steps.release.outputs.id`（`/releases/{id}/assets`），发布成功后才改用 `releases/tags/{tag}` 回读断言 `draft=false`。
 
 ### 变更

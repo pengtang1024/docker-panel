@@ -89,7 +89,7 @@ pub fn bind_update(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                     .unwrap_or_else(|| crate::update::RELEASES_PAGE.to_string())
             };
             if let Err(e) = crate::update::install::open_url(&url) {
-                crate::ui_apply::status_toast(&ui, &s, &e);
+                crate::ui_apply::toast(&ui, &s, &e);
             }
         });
     }

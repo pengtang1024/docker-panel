@@ -27,14 +27,14 @@ pub fn bind_image_actions(ui: &MainWindow, state: &SharedState) {
         });
     }
 
-    // 镜像卡片「运行」→ 状态栏提示（按原型：不真启动容器）
+    // 镜像卡片「运行」→ 浮层提示（按原型：不真启动容器）
     {
         let ui_a = ui.as_weak();
+        let s = state.clone();
         actions.on_image_run(move |row_id: SharedString| {
             let name = row_id.to_string();
             let Some(ui) = ui_a.upgrade() else { return };
-            ui.global::<UiState>()
-                .set_status_text(SharedString::from(trf("Run {0}", &[&name]).as_str()));
+            crate::ui_apply::toast(&ui, &s, &trf("Run {0}", &[&name]));
         });
     }
 

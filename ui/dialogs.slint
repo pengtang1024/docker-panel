@@ -133,9 +133,17 @@ export component CleanupDialog inherits DialogShell {
     in-out property <string> cnt_dangling: "";
     in-out property <string> cnt_unused_net: "";
     in-out property <string> cnt_unused_vol: "";
+    /// 清理结果（逐项汇总，多行）：非空即切到结果视图，弹窗**保持打开**。
+    /// 结果留在触发它的弹窗里，不写底部状态栏（底栏只放稳定状态）。
+    in-out property <string> result: "";
+    /// 清理进行中：提交按钮禁用，文案切 "Cleaning..."
+    in-out property <bool> busy: false;
+    /// 校验提示（如一个类型都没勾）：警告色，不关弹窗、不发请求
+    in-out property <string> hint: "";
     callback submit(bool, bool, bool, bool);
 
-    card_height: 420px;
+    // 结果视图只有几行文本，不需要勾选列表那么高：卡片收矮，避免一大片空白。
+    card_height: root.result != "" ? 280px : 420px;
 
     VerticalLayout {
         width: 100%; height: 100%; spacing: 0px;
@@ -151,7 +159,11 @@ export component CleanupDialog inherits DialogShell {
                 VerticalLayout {
                     horizontal-stretch: 1; spacing: 3px; alignment: start;
                     VCenterText { text: @tr("Cleanup Resources"); font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink; }
-                    VCenterText { text: @tr("Select resource types to clean up"); font-size: Theme.fs; color: Theme.ink_2; }
+                    VCenterText {
+                        text: root.result != "" ? @tr("Cleanup finished") : @tr("Select resource types to clean up");
+                        font-size: Theme.fs;
+                        color: Theme.ink_2;
+                    }
                 }
             }
         }
@@ -163,12 +175,31 @@ export component CleanupDialog inherits DialogShell {
                 width: 100%; height: 100%; spacing: 0px;
                 padding-left: 20px; padding-right: 20px;
                 padding-top: 16px; padding-bottom: 16px;
-                VerticalLayout {
+                // 结果视图：替换勾选列表（逐项「删除 N 个，释放 X」多行文本）
+                if root.result != "" : VerticalLayout {
+                    width: 100%; spacing: Theme.s3; alignment: start;
+                    VCenterText { text: @tr("Cleanup result"); font-size: Theme.fs_sm; font-weight: 700; color: Theme.ink_3; }
+                    Text {
+                        width: 100%;
+                        text: root.result;
+                        font-size: Theme.fs;
+                        font-family: Theme.mono;
+                        color: Theme.ink_2;
+                        wrap: word-wrap;
+                    }
+                }
+                if root.result == "" : VerticalLayout {
                     width: 100%; spacing: Theme.s3; alignment: start;
                     CleanItem { label: @tr("Stopped Containers"); desc: @tr("Remove all stopped containers"); cnt: root.cnt_stopped; checked <=> root.stopped; }
                     CleanItem { label: @tr("Dangling Images"); desc: @tr("Remove unused image layers"); cnt: root.cnt_dangling; checked <=> root.dangling; }
                     CleanItem { label: @tr("Unused Networks"); desc: @tr("Remove networks not in use"); cnt: root.cnt_unused_net; checked <=> root.unused_net; }
                     CleanItem { label: @tr("Unused Volumes"); desc: @tr("Remove volumes not in use"); cnt: root.cnt_unused_vol; checked <=> root.unused_vol; }
+                    VCenterText {
+                        text: root.hint;
+                        visible: root.hint != "";
+                        font-size: Theme.fs_sm;
+                        color: Theme.warn;
+                    }
                 }
             }
         }
@@ -182,8 +213,14 @@ export component CleanupDialog inherits DialogShell {
                 padding-left: 20px; padding-right: 20px;
                 padding-top: 14px; padding-bottom: 14px;
                 Rectangle { horizontal-stretch: 1; }
-                TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
-                TextButton { label: @tr("Cleanup"); filled: true; clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); } }
+                if root.result != "" : TextButton { label: @tr("Close"); filled: true; clicked => { root.close(); } }
+                if root.result == "" : TextButton { label: @tr("Cancel"); clicked => { root.close(); } }
+                if root.result == "" : TextButton {
+                    label: root.busy ? @tr("Cleaning...") : @tr("Cleanup");
+                    filled: true;
+                    enabled: root.busy == false;
+                    clicked => { root.submit(root.stopped, root.dangling, root.unused_net, root.unused_vol); }
+                }
             }
         }
     }

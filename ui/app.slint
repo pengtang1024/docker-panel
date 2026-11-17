@@ -111,6 +111,10 @@ export component MainWindow inherits Window {
     in-out property <string> cleanup_cnt_dangling: "";
     in-out property <string> cleanup_cnt_unused_net: "";
     in-out property <string> cleanup_cnt_unused_vol: "";
+    // 清理结果 / 进行中 / 校验提示：结果留在清理弹窗里显示，不进底栏
+    in-out property <string> cleanup_result: "";
+    in-out property <bool> cleanup_busy: false;
+    in-out property <string> cleanup_hint: "";
 
     // —— 全局快捷键（capture 阶段拦截：必须是所有可聚焦元素的祖先，
     //    否则捕获路径不含此 FocusScope，搜索框聚焦时收不到组合键）——
@@ -279,6 +283,9 @@ export component MainWindow inherits Window {
         cleanup_cnt_dangling <=> root.cleanup_cnt_dangling;
         cleanup_cnt_unused_net <=> root.cleanup_cnt_unused_net;
         cleanup_cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
+        cleanup_result <=> root.cleanup_result;
+        cleanup_busy <=> root.cleanup_busy;
+        cleanup_hint <=> root.cleanup_hint;
         sort_pick(f) => { AppActions.set_sort(f); }
         card_stop(id) => { AppActions.container_toggle(id); }
         card_logs(id) => { AppActions.container_logs(id); }

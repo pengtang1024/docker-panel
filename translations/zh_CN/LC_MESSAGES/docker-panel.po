@@ -195,6 +195,9 @@ msgstr "清理资源"
 msgid "Select resource types to clean up"
 msgstr "选择要清理的资源类型"
 
+msgid "Cleanup finished"
+msgstr "清理完成"
+
 msgid "Stopped Containers"
 msgstr "已停止的容器"
 
@@ -221,6 +224,12 @@ msgstr "删除未被使用的卷"
 
 msgid "Cleanup"
 msgstr "清理"
+
+msgid "Cleanup result"
+msgstr "清理结果"
+
+msgid "Cleaning..."
+msgstr "清理中…"
 
 # ===== Rust 动态：状态栏 =====
 msgid "Ready"

@@ -15,6 +15,8 @@ import { Tip, CardMenu } from "components-align.slint";
 import { TipLayer } from "components-interact.slint";
 import { SortMenu, CardMenuLayer } from "menu-layers.slint";
 import { PullDialog, CleanupDialog } from "dialogs.slint";
+import { ToastLayer } from "components-feedback.slint";
+import { UiState } from "ui-state.slint";
 import { UpdateDialog } from "update-dialog.slint";
 import { SettingsDialog } from "settings-dialog.slint";
 import { UpdateState } from "update-state.slint";
@@ -43,6 +45,9 @@ export component Overlays inherits Rectangle {
     in-out property <string> cleanup_cnt_dangling: "";
     in-out property <string> cleanup_cnt_unused_net: "";
     in-out property <string> cleanup_cnt_unused_vol: "";
+    in-out property <string> cleanup_result: "";
+    in-out property <bool> cleanup_busy: false;
+    in-out property <string> cleanup_hint: "";
     callback sort_pick(int);
     // 卡片「···」菜单（容器 / 镜像 / 网络 / 卷）
     callback card_stop(string);
@@ -141,6 +146,9 @@ export component Overlays inherits Rectangle {
         cnt_dangling <=> root.cleanup_cnt_dangling;
         cnt_unused_net <=> root.cleanup_cnt_unused_net;
         cnt_unused_vol <=> root.cleanup_cnt_unused_vol;
+        result <=> root.cleanup_result;
+        busy <=> root.cleanup_busy;
+        hint <=> root.cleanup_hint;
         close => { root.cleanup_close(); }
         submit(a,b,c,d) => { root.cleanup_submit(a,b,c,d); }
     }
@@ -180,5 +188,13 @@ export component Overlays inherits Rectangle {
         flip: Tip.ay - self.height - 12px < Theme.s1;
         x: Math.max(Theme.s1, Math.min(root.width - self.width - Theme.s1, Tip.ax - self.width / 2));
         y: self.flip ? Tip.ay + Tip.btn_h + 4px : Math.max(Theme.s1, Tip.ay - self.height - 12px);
+    }
+
+    // 操作反馈浮层：右下角、底栏上方，绝对定位、不参与布局。
+    // 显示时长由 Rust 侧（ui_apply::toast，2.5s）控制；底栏不再承载任何操作文本。
+    ToastLayer {
+        text: UiState.toast_text;
+        x: Math.max(Theme.s4, root.width - self.width - Theme.s4);
+        y: root.height - Theme.foot_h - self.height - Theme.s3;
     }
 }

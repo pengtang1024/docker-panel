@@ -73,8 +73,11 @@ export component FootBar inherits Rectangle {
 
         Rectangle { width: 6px; height: 6px; border-radius: 3px; background: UiState.docker_ok ? Theme.ok : Theme.stop;}
         Rectangle { width: Theme.s2; }
+        // 状态位只报**稳定状态**：连接正常 = 就绪，否则 = 已断开。
+        // 操作结果（清理逐项结果 / 拉取进度 / 失败原因）不得写进底栏——多行文本会把
+        // 后面的 OvItem 挤出去；它们要么待在所属弹窗里，要么走右下角浮层 toast。
         VCenterText {
-            text: UiState.status_text;
+            text: UiState.docker_ok ? @tr("Ready") : @tr("Disconnected");
             font-size: Theme.fs_xs;
             color: Theme.ink_3;
         }

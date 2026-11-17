@@ -7,7 +7,7 @@ use crate::models::ContainerInfo;
 use crate::ui_state::SelKind;
 
 #[test]
-fn log_stream_status_sets_status_text() {
+fn log_stream_status_stays_out_of_bar() {
     let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
     let tx = s.tx.clone();
@@ -15,7 +15,9 @@ fn log_stream_status_sets_status_text() {
         .unwrap();
     let res = s.drain_messages(&rx, None, 10);
     assert_eq!(res.log_status.as_deref(), Some("日志流中断"));
-    assert!(res.status_text.is_none(), "日志流提示不应占用状态栏");
+    assert!(res.toast_text.is_none(), "日志流提示不走浮层 toast");
+    assert!(res.pull_status.is_none());
+    assert!(res.cleanup_result.is_none());
 
     // 旧 epoch 的提示必须被丢弃，避免落到新容器
     s.log.stream_epoch = 5;
@@ -133,6 +135,58 @@ fn operation_refresh_relies_on_events_except_cleanup() {
 }
 
 #[test]
+fn feedback_goes_to_its_own_channel_never_the_bottom_bar() {
+    let (state, rx) = AppState::new_test();
+    let mut s = state.lock().unwrap();
+    let tx = s.tx.clone();
+
+    // 1) 操作成功：不产生任何提示（行状态由 /events 刷新后可见）
+    tx.send(Msg::ActionDone("Container stopped".into(), Ok("ok".into())))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(res.toast_text.is_none(), "成功操作不该弹提示");
+    assert!(!res.is_set(UiFlag::Toast));
+    assert!(res.pull_status.is_none() && res.cleanup_result.is_none());
+
+    // 2) 操作失败：浮层 toast（2.5s 自动消失），底栏不接收
+    tx.send(Msg::ActionDone(
+        "Failed to stop".into(),
+        Err("cannot connect".into()),
+    ))
+    .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(res.toast_text.is_some(), "失败必须有可见反馈");
+    assert!(res.is_set(UiFlag::Toast));
+
+    // 3) 拉取进度 / 失败：只写拉取弹窗的状态行，弹窗保持打开
+    tx.send(Msg::PullProgress("Downloading 42%".into()))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(res.pull_status.as_deref(), Some("Downloading 42%"));
+    assert!(res.toast_text.is_none(), "拉取进度不该占用浮层");
+
+    tx.send(Msg::PullDone(Err("no such image".into()))).unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert!(res.pull_status.is_some());
+    assert!(res.is_set(UiFlag::ResetPullBusy));
+    assert!(!res.is_set(UiFlag::ClosePull), "失败必须让弹窗留着看原因");
+
+    // 4) 清理结果：回到清理弹窗的结果视图，不弹 toast
+    tx.send(Msg::CleanupDone(Ok("Stopped containers: 2 removed".into())))
+        .unwrap();
+    let res = s.drain_messages(&rx, None, 10);
+    assert_eq!(
+        res.cleanup_result.as_deref(),
+        Some("Stopped containers: 2 removed")
+    );
+    assert!(res.toast_text.is_none(), "清理结果待在自己的弹窗里");
+    assert!(
+        !res.is_set(UiFlag::Toast),
+        "清理结果不触发浮层（否则同一件事提示两遍）"
+    );
+}
+
+#[test]
 fn list_refresh_errors_do_not_mark_rows_changed() {
     let (state, rx) = AppState::new_test();
     let mut s = state.lock().unwrap();
@@ -239,7 +293,7 @@ fn stale_processing_is_not_a_ui_change() {
     res.mark(UiFlag::LogsChanged);
     assert!(res.has_ui_changes());
     res = DrainResult::default();
-    res.status_text = Some("x".into());
+    res.toast_text = Some("x".into());
     assert!(res.has_ui_changes());
 }
 

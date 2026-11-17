@@ -3,7 +3,7 @@
 use slint::{ComponentHandle, SharedString};
 
 use crate::docker;
-use crate::i18n::{t, trf};
+use crate::i18n::trf;
 use crate::models::Msg;
 use crate::slint_gen::*;
 use crate::ui_state::{SelKind, SharedState};
@@ -16,9 +16,11 @@ pub fn bind_container_actions(ui: &MainWindow, state: &SharedState) {
         let s = state.clone();
         actions.on_container_toggle(move |row_id: SharedString| {
             let id = row_id.to_string();
-            let Some(ui) = ui_a.upgrade() else { return };
-            ui.global::<UiState>()
-                .set_status_text(SharedString::from(t("Toggling container...").as_str()));
+            if ui_a.upgrade().is_none() {
+                return;
+            }
+            // 不再写「正在切换容器…」：底栏只显示稳定连接状态，
+            // 且启停结果本来就由 /events 刷新的行状态可见（规范 #16）。
 
             let is_running = {
                 let Ok(st) = s.lock() else {

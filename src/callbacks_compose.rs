@@ -104,7 +104,7 @@ pub fn bind(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 .map(|m| (m.id, format!("[{}]", m.name)))
                 .collect();
             if targets.is_empty() {
-                crate::ui_apply::status_toast(&ui, &s, &t("No running containers in this group"));
+                crate::ui_apply::toast(&ui, &s, &t("No running containers in this group"));
                 return;
             }
             let label = group_label(&key);

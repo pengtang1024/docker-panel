@@ -10,8 +10,8 @@ use crate::slint_gen::{ContainerRow, LedgerSummary, MainWindow, UiState};
 use crate::ui_state::SharedState;
 use slint::{ComponentHandle, SharedString};
 
-/// 操作结果提示的停留时长：到期后状态栏恢复 "Ready"（toast 语义）
-pub const TOAST_DURATION: Duration = Duration::from_secs(2);
+/// 浮层提示的停留时长：到期后清空 `UiState.toast_text`（不写底栏）
+pub const TOAST_DURATION: Duration = Duration::from_millis(2500);
 
 /// 把抽屉内容灌入 Drawer（行列表走 render 缓存模型，避免重建 Repeater）
 pub fn apply_drawer(ui: &MainWindow, d: &DrawerData) {
@@ -86,14 +86,14 @@ pub fn clear_log_status(ui: &MainWindow) {
     ui.set_log_status(SharedString::from(""));
 }
 
-/// 状态栏 toast：写入操作结果，`TOAST_DURATION` 后自动恢复 "Ready"。
+/// 浮层提示：写入操作结果，`TOAST_DURATION` 后自动清空。
 ///
-/// 与 consumer 的 toast 语义一致，但用于「回调直接写状态栏」的场景
-/// （复制日志 / 清空日志 / 复制字段值）—— 这些动作不走 Msg 通道，
-/// 状态文本会一直停在结果上，看起来像卡住。
-pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
+/// 与 consumer 的 toast 语义一致，用于「回调直接写 UI」的场景
+/// （复制日志 / 清空日志 / 复制字段值 / 分组内无运行成员）—— 这些动作不走
+/// Msg 通道。**不写底栏**：底栏只显示稳定连接状态，操作文本一律走右下角浮层。
+pub fn toast(ui: &MainWindow, state: &SharedState, text: &str) {
     ui.global::<UiState>()
-        .set_status_text(SharedString::from(text));
+        .set_toast_text(SharedString::from(text));
     let rt = {
         let Ok(s) = state.lock() else {
             crate::lock::poison("ui_apply");
@@ -108,9 +108,9 @@ pub fn status_toast(ui: &MainWindow, state: &SharedState, text: &str) {
         slint::invoke_from_event_loop(move || {
             let Some(ui) = ui_w.upgrade() else { return };
             // 期间被别的消息改过（如新的操作结果 / 错误）就不覆盖
-            if ui.global::<UiState>().get_status_text().as_str() == owned {
+            if ui.global::<UiState>().get_toast_text().as_str() == owned {
                 ui.global::<UiState>()
-                    .set_status_text(SharedString::from(crate::i18n::t("Ready")));
+                    .set_toast_text(SharedString::from(""));
             }
         })
         .ok();

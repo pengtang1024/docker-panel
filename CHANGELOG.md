@@ -6,7 +6,7 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
-## [Unreleased]
+## [0.8.3] - 2026-11-17
 
 ### 修复
 
@@ -557,6 +557,7 @@
 [0.8.1]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
 [Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...HEAD
+[0.8.3]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...0.8.3
 [0.8.2]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...0.8.2
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19
 [0.7.18]: https://github.com/pengtang1024/docker-panel/compare/0.7.17...0.7.18

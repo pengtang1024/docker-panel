@@ -85,7 +85,7 @@ docker-panel/
 │   ├── ui_update.rs           DrainResult + 有上限 drain_messages + Msg → 变化区域聚合（日志洪峰防护）
 │   ├── ui_update/drain.rs     DrainResult：UiFlag 位掩码 + 声明宏生成 has_ui_changes / logs_only / merge
 │   ├── ui_update/update.rs    自动更新消息 → AppState / DrainResult（从 ui_update 拆出）
-│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / status_toast
+│   ├── ui_apply.rs            apply_drawer / refresh_lists_now（搜索排序即时重建）+ clear_log_panel / clear_log_status / toast
 │   │
 │   ├── callbacks.rs           回调绑定中枢 + restore_config（含启动焦点引导 boot_tick）
 │   ├── callbacks_container.rs 容器启停/重启/删除/logs/inspect（AppActions global）
@@ -180,7 +180,7 @@ main.rs
   ├── ui_apply.rs    → slint_gen (MainWindow) + detail_fmt::DrawerData + render + ui_state::SharedState
   ├── callbacks.rs   → slint_gen + ui_state::SharedState + docker + config
   ├── callbacks_container.rs / callbacks_image.rs → 同 callbacks.rs
-  ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（status_toast）
+  ├── callbacks_update.rs → update（spawn_check / spawn_install）+ ui_apply（toast / 浮层提示）
   ├── update/        → discover（三级回退 + `version.json.sig` 验签）+ manifest（清单纯逻辑 + `checksums.txt.sig`）+ signature（内置公钥清单）+ github（curl）+ version（纯逻辑）+ install（阻塞 IO）+ models::Msg + i18n
   └── docker/        → 纯 async 层，不反依赖任何上层模块
 

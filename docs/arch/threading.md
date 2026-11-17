@@ -226,7 +226,7 @@ rt_handle.spawn(async move {
 
 连续失败预算 `MAX_RETRY_ATTEMPTS = 8` 耗尽后转 30s 低频保活（`KEEPALIVE_INTERVAL`），**永不放弃跟随**——旧实现会静默停止，用户看到日志停在半截却毫无提示。退避等待可被取消；重连沿用同一 stream epoch，期间不新建流。重连时若本流已推送过日志则改用 `tail=0`（只接续新行），否则沿用原 tail，避免重放历史造成重复行。
 
-**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受操作 toast 的 2s「就绪」定时器影响；带 epoch 过滤，旧流的提示不会落到新容器。文案唯一定义处是 `src/log_status.rs` 的 4 条 i18n key 常量（`NOTICE_INTERRUPTED` / `NOTICE_RECOVERED` / `NOTICE_STOPPED` / `NOTICE_SAMPLED`，见规范 #14 四态）：
+**UI 反馈**：日志流状态走**独立通道** `Msg::LogStreamStatus(epoch, text)`，写入日志面板工具栏的状态位（`ui/app.slint` 的 `log_status` → `Drawer.log_status`），不占用底部状态栏，也不受浮层 toast（2.5s 自动清空）影响；带 epoch 过滤，旧流的提示不会落到新容器。文案唯一定义处是 `src/log_status.rs` 的 4 条 i18n key 常量（`NOTICE_INTERRUPTED` / `NOTICE_RECOVERED` / `NOTICE_STOPPED` / `NOTICE_SAMPLED`，见规范 #14 四态）：
 
 | 提示 | 触发时机 |
 |---|---|

@@ -346,7 +346,7 @@ docker-panel/
 │   ├── ui_update/df.rs     # /system/df 结果 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_update/log.rs    # 日志批 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
 │   ├── ui_update/update.rs # 自动更新消息 → AppState / DrainResult（从 ui_update 拆出，满足 R2）
-│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / status_toast
+│   ├── ui_apply.rs         # apply_drawer / refresh_lists_now / clear_log_panel / clear_log_status / toast
 │   ├── batch.rs            # BatchState 多选状态
 │   ├── callbacks.rs        # 回调绑定中枢 + restore_config
 │   ├── callbacks_container.rs  # AppActions container_* 回调

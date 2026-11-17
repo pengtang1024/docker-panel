@@ -3,10 +3,15 @@
 // 状态全部由 Rust 侧写入：checking / busy / available / progress / status …
 // 本文件只负责展示与把用户动作通过 callback 交回 overlays → AppActions。
 //
+// 卡高随状态收放，避免内容不足时留死空隙：
+//   busy → 420 / 有新版未重启 → 540 / 检查中 → 300 / 其余 → 320
+//
 // ⚠️ Slint 1.18 DialogShell 约束：子类写完整 Header + Body + Footer，
 //    三段都必须显式占满垂直空间（Body vertical-stretch: 1）。
+// ⚠️ visible:false 仍占布局空间（官方文档明确）→ 条件显隐一律用 `if`
+//    条件渲染，`visible:` 只会藏画面、留空档。
 import { Theme } from "theme.slint";
-import { VCenterText } from "components-align.slint";
+import { VCenterText, CenterText } from "components-align.slint";
 import { TextButton, ProgressBar } from "components-interact.slint";
 import { DialogShell } from "components-dialog.slint";
 import { ScrollView } from "@material";
@@ -30,7 +35,10 @@ export component UpdateDialog inherits DialogShell {
     callback restart();
 
     card_width: 560px;
-    card_height: 420px;
+    card_height: root.busy ? 420px
+        : (root.available && root.restart_needed == false) ? 540px
+        : root.checking ? 300px
+        : 320px;
 
     VerticalLayout {
         width: 100%; height: 100%; spacing: 0px;
@@ -49,11 +57,12 @@ export component UpdateDialog inherits DialogShell {
                         text: @tr("Software Update");
                         font-size: Theme.fs_lg; font-weight: 700; color: Theme.ink;
                     }
+                    // 副标题只讲结论；版本对比移到正文行
                     VCenterText {
                         text: root.restart_needed
                             ? @tr("Updated to {0}", root.latest)
                             : root.available
-                                ? @tr("Current {0} · Latest {1}", root.current, root.latest)
+                                ? @tr("Update available")
                                 : @tr("Current {0}", root.current);
                         font-size: Theme.fs; color: Theme.ink_2;
                     }
@@ -69,7 +78,38 @@ export component UpdateDialog inherits DialogShell {
                 padding-left: 20px; padding-right: 20px;
                 padding-top: 14px; padding-bottom: 12px;
                 VerticalLayout {
-                    width: 100%; spacing: Theme.s2; alignment: start;
+                    width: 100%; spacing: Theme.s2;
+
+                    // 版本对比行：旧号（弱化）→ 新号（等宽加大加粗），两端铺满行宽。
+                    // stretch:0 保证空间紧张时压缩的是说明区，版本行保持内容高。
+                    if root.available && root.restart_needed == false : HorizontalLayout {
+                        vertical-stretch: 0;
+                        alignment: space-between;
+                        cross-axis-alignment: center;
+                        VCenterText {
+                            text: root.current;
+                            font-size: Theme.fs; font-family: Theme.mono; color: Theme.ink_3;
+                        }
+                        VCenterText {
+                            text: "→";
+                            font-size: Theme.fs; font-family: Theme.mono; color: Theme.ink_3;
+                        }
+                        VCenterText {
+                            text: root.latest;
+                            font-size: Theme.fs_lg; font-weight: 700;
+                            font-family: Theme.mono; color: Theme.ink;
+                        }
+                    }
+
+                    // 检查中：居中占位替代说明框（静态、无动画）；
+                    // 同时状态行在下方按 checking 隐藏，避免与 Rust 写入的
+                    // "Checking for updates..." status 双份文案。
+                    if root.checking : CenterText {
+                        text: @tr("Checking for updates…");
+                        font-size: Theme.fs_sm; color: Theme.ink_3;
+                        preferred-height: 100%;
+                        vertical-stretch: 1;
+                    }
 
                     // 更新说明（按纯文本展示；超出高度可滚动）
                     //
@@ -79,44 +119,65 @@ export component UpdateDialog inherits DialogShell {
                     //    不滚动的内容做居中（x = (视口-内容)/2，负值）→ 首字符左半
                     //    被视口裁掉（「已是最新版本。」的「已」只剩半截）。
                     //    必须显式绑定 visible_width（= flickable.width）。
-                    sv := ScrollView {
+                    //    纵向同理且更糟：Flickable 不给非布局子元素自然高度，
+                    //    长文本会从中间开始渲染、尾部被裁。三处必须同时成立：
+                    //    ① Text 显式 `height: self.preferred-height`（撑满自然高）；
+                    //    ② content_height 回填该高度（否则滚动条 maximum 为 0）；
+                    //    ③ 外层 Body 的 VerticalLayout **不能写 alignment** ——
+                    //       `alignment: start` 会把多余空间留在末尾，ScrollView 只拿到
+                    //       min-height（130px ≈ 8 行）→ 视觉上"只显示 8 行 + 下方空白"。
+                    if root.checking == false : sv := ScrollView {
                         vertical-stretch: 1;
                         min-height: 130px;
                         vertical-scrollbar-policy: as-needed;
                         horizontal-scrollbar-policy: always-off;
                         content_width: self.visible_width;
+                        content_height: tv.height;
                         mouse_drag_pan_enabled: false;
-                        Text {
+                        tv := Text {
                             width: sv.visible_width;
-                            text: root.checking ? ""
-                                : (root.available || root.restart_needed)
-                                    ? (root.notes == "" ? @tr("No release notes.") : root.notes)
-                                    : root.status != "" ? ""
-                                    : @tr("You're up to date.");
+                            height: self.preferred-height;
+                            vertical-alignment: top;
+                            text: (root.available || root.restart_needed)
+                                ? (root.notes == "" ? @tr("No release notes.") : root.notes)
+                                : root.status != "" ? ""
+                                : @tr("You're up to date.");
                             wrap: word-wrap;
                             color: Theme.ink_2;
                             font-size: Theme.fs_sm;
                         }
                     }
 
-                    ProgressBar {
+                    if root.busy || root.progress > 0 : ProgressBar {
                         value: root.progress / 100.0;
-                        visible: root.busy || root.progress > 0;
                     }
-                    VCenterText {
+
+                    // 灰色状态行：检查中隐藏（占位文案已表达「检查中」）
+                    if root.status != "" && root.checking == false : VCenterText {
                         text: root.status;
                         font-size: Theme.fs_sm;
                         color: Theme.ink_3;
                         wrap: word-wrap;
-                        visible: root.status != "";
                     }
-                    VCenterText {
-                        text: root.reason;
-                        font-size: Theme.fs_sm;
-                        color: Theme.warn;
-                        wrap: word-wrap;
-                        visible: root.reason != "" && root.installable == false
-                            && root.available;
+
+                    // reason = 装不了的原因（开发版 / 平台 / 无签名…）→ 警示块
+                    if root.reason != "" && root.installable == false && root.available : Rectangle {
+                        vertical-stretch: 0;
+                        border-radius: Theme.r_sm;
+                        background: Theme.warn.transparentize(0.90);
+                        border-width: 1px;
+                        border-color: Theme.warn;
+                        VerticalLayout {
+                            width: 100%;
+                            padding-left: 10px; padding-right: 10px;
+                            padding-top: 7px; padding-bottom: 7px;
+                            VCenterText {
+                                text: root.reason;
+                                font-size: Theme.fs_sm;
+                                color: Theme.warn;
+                                wrap: word-wrap;
+                            }
+                        }
                     }
                 }
             }
@@ -133,6 +194,12 @@ export component UpdateDialog inherits DialogShell {
                 alignment: start;
                 cross-axis-alignment: center;
 
+                // 左簇：重新检查 + 打开下载页（安装中 / 等重启时收起「检查」）
+                if root.busy == false && root.restart_needed == false : TextButton {
+                    label: @tr("Check now");
+                    ghost: true;
+                    clicked => { root.check_now(); }
+                }
                 TextButton {
                     label: @tr("Open release page");
                     ghost: true;
@@ -141,6 +208,7 @@ export component UpdateDialog inherits DialogShell {
                 Rectangle { horizontal-stretch: 1; }
                 TextButton {
                     label: @tr("Close");
+                    enabled: root.busy == false;
                     clicked => { root.close(); }
                 }
                 if root.restart_needed : TextButton {

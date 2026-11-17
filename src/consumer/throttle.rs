@@ -114,7 +114,7 @@ mod tests {
         d.docker_ok = Some(true);
         assert_eq!(apply_interval(&d), UI_MIN_INTERVAL);
         d.docker_ok = None;
-        d.status_text = Some("x".into());
+        d.toast_text = Some("x".into());
         assert_eq!(apply_interval(&d), UI_MIN_INTERVAL);
         // 没有日志变化（例如只有列表）走 8ms 窄窗口，不再白等一个 120ms 窗口
         let mut d2 = DrainResult::default();

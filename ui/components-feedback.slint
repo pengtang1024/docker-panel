@@ -1,30 +1,32 @@
-// components-feedback.slint — 反馈类组件（Snackbar toast）
+// components-feedback.slint — 反馈类组件（窗口浮层 toast）
 import { Theme } from "theme.slint";
-import { VCenterText } from "components-align.slint";
 
-// ============ Snackbar — 底部 toast 提示 ============
-// prototype.html 的 toast 函数：显示 2s 后恢复 Ready
-// 用法：Rust 侧设 status_text → 自动显示 + 定时恢复
-export component Snackbar inherits Rectangle {
-    in-out property <string> message: "";
-    in-out property <float> duration_ms: 2000.0;
-
-    visible: root.message != "";
-    height: 28px;
-    width: self.preferred-width + 32px;
-    border-radius: Theme.r_sm;
+// ============ ToastLayer — 浮层提示 ============
+// 操作反馈（失败原因 / 复制确认 / 更新通知）走这里，**不写底部状态栏**：
+// 底栏只显示稳定状态（就绪 / 已断开），否则多行文本会把底栏字段挤来挤去。
+//
+// 职责边界：
+//   - 外观与尺寸：本组件（按文本自然宽度收敛，超过 520px 省略号截断）
+//   - 位置：overlays.slint 下发（右下角、底栏上方，不参与布局）
+//   - 显示时长：Rust 侧 `ui_apply::toast` 定时清空 UiState.toast_text
+export component ToastLayer inherits Rectangle {
+    in property <string> text: "";
+    visible: root.text != "";
+    height: 30px;
+    // 文本自然宽度（no-wrap 下与赋值宽度无关，不会形成绑定环）+ 左右 padding
+    width: Math.min(520px, msg.preferred-width) + 28px;
+    border-radius: Theme.r_md;
     background: Theme.ink;
 
-    HorizontalLayout {
-        alignment: center;
-        width: 100%; height: 100%;
-        padding-left: 16px; padding-right: 16px;
-        alignment: center;
-        VCenterText {
-            text: root.message;
-            font-size: Theme.fs_sm;
-            font-weight: 500;
-            color: Theme.card;
-        }
+    msg := Text {
+        x: 14px;
+        y: (root.height - self.height) / 2;
+        width: root.width - 28px;
+        text: root.text;
+        font-size: Theme.fs_sm;
+        font-weight: 500;
+        color: Theme.card;
+        wrap: no-wrap;
+        overflow: elide;
     }
 }

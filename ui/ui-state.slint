@@ -18,7 +18,12 @@ export global UiState {
     in-out property <bool> disk_stale: false;
     /// Docker 守护进程版本（Rust 查询 /version 后写入；空串表示尚未取到，底栏显示占位符）
     in-out property <string> docker_version: "";
-    in-out property <string> status_text: @tr("Ready");
+    /// 浮层提示（操作失败原因 / 复制确认 / 更新通知）——**不占用底栏**。
+    ///
+    /// 底栏左侧只显示稳定状态（就绪 / 已断开），由 docker_ok 推导；操作文本一律走
+    /// 窗口右下角浮层（overlays.slint 的 ToastLayer），多行结果待在它自己的弹窗里。
+    /// 定时清除由 Rust 侧负责（`ui_apply::toast`：2.5s 后清空）。
+    in-out property <string> toast_text: "";
 
     // —— 列表工作区 ——
     /// 首次数据拉取期间显示骨架屏

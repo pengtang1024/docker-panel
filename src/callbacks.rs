@@ -122,6 +122,10 @@ fn bind_top_bar(ui: &MainWindow, actions: &AppActions, state: &SharedState) {
                 ui.set_cleanup_cnt_unused_net(SharedString::from(c.to_string().as_str()));
                 ui.set_cleanup_cnt_unused_vol(SharedString::from(d.to_string().as_str()));
             }
+            // 每次打开都是新的一次操作：清掉上次的结果 / busy / 校验提示
+            ui.set_cleanup_result(SharedString::from(""));
+            ui.set_cleanup_busy(false);
+            ui.set_cleanup_hint(SharedString::from(""));
             ui.set_cleanup_open(true);
         });
     }
@@ -247,10 +251,10 @@ fn bind_pull_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedState)
             let Some(ui) = ui_p.upgrade() else { return };
             let text = spec.to_string();
             if text.trim().is_empty() {
-                ui.global::<UiState>()
-                    .set_status_text(SharedString::from(crate::i18n::t(
-                        "Please enter an image name",
-                    )));
+                // 校验失败留在弹窗状态行里（弹窗保持打开），不写底栏
+                ui.set_pull_status(SharedString::from(crate::i18n::t(
+                    "Please enter an image name",
+                )));
                 return;
             }
             ui.set_pull_busy(true);
@@ -287,14 +291,17 @@ fn bind_cleanup_dialog(_ui: &MainWindow, actions: &AppActions, state: &SharedSta
         actions.on_cleanup_submit(
             move |stopped: bool, dangling: bool, unused_net: bool, unused_vol: bool| {
                 let Some(ui) = ui_c.upgrade() else { return };
-                ui.set_cleanup_open(false);
                 if !stopped && !dangling && !unused_net && !unused_vol {
-                    ui.global::<UiState>()
-                        .set_status_text(SharedString::from(crate::i18n::t(
-                            "Select at least one item",
-                        )));
+                    // 校验失败：弹窗不关，提示走弹窗内的警告行（不写底栏）
+                    ui.set_cleanup_hint(SharedString::from(crate::i18n::t(
+                        "Select at least one item",
+                    )));
                     return;
                 }
+                // 清理中：弹窗保持打开（结果要回到这里），按钮禁用、旧结果清空
+                ui.set_cleanup_busy(true);
+                ui.set_cleanup_hint(SharedString::from(""));
+                ui.set_cleanup_result(SharedString::from(""));
                 let (rt_handle, tx) = {
                     let Ok(st) = s.lock() else {
                         crate::lock::poison("callbacks");

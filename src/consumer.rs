@@ -270,9 +270,21 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(v) = res.disk_stale {
             ui.global::<UiState>().set_disk_stale(v);
         }
-        if let Some(ref text) = res.status_text {
+        // 拉取进度 / 失败原因留在拉取弹窗里
+        if let Some(ref text) = res.pull_status {
+            ui.set_pull_status(SharedString::from(text.as_str()));
+        }
+        // 清理结果回到触发它的弹窗：保持打开、切结果视图、解除 busy
+        if let Some(ref text) = res.cleanup_result {
+            ui.set_cleanup_open(true);
+            ui.set_cleanup_busy(false);
+            ui.set_cleanup_hint(SharedString::from(""));
+            ui.set_cleanup_result(SharedString::from(text.as_str()));
+        }
+        // 浮层提示（失败原因 / 复制确认 / 更新通知）：底栏不接收操作文本
+        if let Some(ref text) = res.toast_text {
             ui.global::<UiState>()
-                .set_status_text(SharedString::from(text.as_str()));
+                .set_toast_text(SharedString::from(text.as_str()));
         }
         if let Some(ref text) = res.log_status {
             ui.set_log_status(SharedString::from(text.as_str()));
@@ -305,8 +317,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
         if let Some(ref d) = drawer_data {
             crate::ui_apply::apply_drawer(&ui, d);
         }
-        // Toast auto-restore：操作结果 2s 后恢复 "Ready"
+        // 浮层 toast 自动消失：TOAST_DURATION 后清空。
+        // 文本比对在 UI 线程里做——期间若已有新提示到达，旧定时器不覆盖新内容。
         if res.is_set(UiFlag::Toast) {
+            let owned = res.toast_text.clone().unwrap_or_default();
             let rt_t = rt_h;
             let ui_weak_t = ui_w_for_toast;
             rt_t.spawn(async move {
@@ -315,8 +329,10 @@ fn apply_ui(state: &SharedState, ui_weak: &Weak<MainWindow>, pending: &mut Drain
                     let Some(ui) = ui_weak_t.upgrade() else {
                         return;
                     };
-                    ui.global::<UiState>()
-                        .set_status_text(SharedString::from(crate::i18n::t("Ready")));
+                    if ui.global::<UiState>().get_toast_text().as_str() == owned {
+                        ui.global::<UiState>()
+                            .set_toast_text(SharedString::from(""));
+                    }
                 })
                 .ok();
             });

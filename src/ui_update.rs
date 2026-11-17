@@ -211,11 +211,12 @@ impl AppState {
             Msg::LogStreamEnded(epoch) => self.on_log_stream_ended(epoch),
             Msg::LogStreamStatus(epoch, text) => self.on_log_stream_status(epoch, text, res),
             Msg::ActionDone(desc, r) => {
-                res.status_text = Some(match r {
-                    Ok(_) => crate::i18n::t(&desc),
-                    Err(e) => format!("{}: {e}", crate::i18n::t(&desc)),
-                });
-                res.mark(UiFlag::Toast);
+                // 成功不提示：列表会立刻反映新状态（/events），底栏也不再承载操作文本；
+                // 失败必须可见——否则点了没反应像卡死。浮层 toast 2.5s 后自动消失。
+                if let Err(e) = r {
+                    res.toast_text = Some(format!("{}: {e}", crate::i18n::t(&desc)));
+                    res.mark(UiFlag::Toast);
+                }
                 // 不再 refresh_now：容器/镜像/网络/卷的增删启停都会发 /events
                 // （实测 create/start/stop/die/destroy、network/volume 的
                 // create/destroy、image 的 tag/untag/pull 都有），event_watch
@@ -224,15 +225,15 @@ impl AppState {
                 // 操作失败不会有事件，但失败意味着列表没变，也不需要刷。
             }
             Msg::PullProgress(p) => {
-                res.status_text = Some(p);
+                // 进度留在拉取弹窗里（弹窗自带进度条 + 状态行），不写底栏
+                res.pull_status = Some(p);
             }
             Msg::PullDone(r) => {
                 let ok = r.is_ok();
-                res.status_text = Some(match r {
+                res.pull_status = Some(match r {
                     Ok(succ) => succ,
                     Err(e) => crate::i18n::trf("Pull failed: {0}", &[&e]),
                 });
-                res.mark(UiFlag::Toast);
                 res.mark(UiFlag::ResetPullBusy);
                 if ok {
                     res.mark(UiFlag::ClosePull);
@@ -240,11 +241,12 @@ impl AppState {
                 // 同上：`image/pull` 事件已实测存在，交给 event_watch 刷新
             }
             Msg::CleanupDone(r) => {
-                res.status_text = Some(match r {
+                // 逐项结果回到触发它的清理弹窗（多行），不写底栏：
+                // 弹窗保持打开、切到结果视图，用户能逐行看清删了什么
+                res.cleanup_result = Some(match r {
                     Ok(succ) => succ,
                     Err(e) => crate::i18n::trf("Cleanup failed: {0}", &[&e]),
                 });
-                res.mark(UiFlag::Toast);
                 // prune 的事件支持按守护进程版本而异（本机 29.x 有
                 // container/prune，旧版本没有）→ 保留立即刷新兜底。
                 // 清理是低频的用户显式操作，多一轮刷新可接受。

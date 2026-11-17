@@ -195,7 +195,7 @@ drain_result! {
         DrawerChanged = 4;
         /// 日志行列表变化
         LogsChanged = 5;
-        /// 本批出现过操作结果 toast（2s 后恢复 Ready）
+        /// 本批出现过浮层 toast（`TOAST_DURATION` 后自动清除）
         Toast = 6;
         /// 关闭拉取弹窗
         ClosePull = 7;
@@ -216,8 +216,15 @@ drain_result! {
         /// 连通性**只**由列表刷新结果决定：操作类消息（启停/拉取/清理）无论成败都不置位，
         /// 否则失败场景会被 `Some(true)` 掩盖，红点显示不出来。
         docker_ok: bool;
-        /// 需要写入 status_text 的文本（toast / pull 进度）
-        status_text: String;
+        /// 浮层 toast 文本（操作失败原因 / 复制确认 / 更新通知）。
+        ///
+        /// **不得**用于底栏：底栏左侧只显示稳定连接状态（由 docker_ok 推导），
+        /// 操作文本一律走右下角浮层，避免多行结果把底栏字段挤出去。
+        toast_text: String;
+        /// 拉取弹窗内的状态行（进度 / 失败原因）——弹窗自有展示位
+        pull_status: String;
+        /// 清理结果（逐项「删除 N 个，释放 X」汇总，多行）——写回清理弹窗的结果视图
+        cleanup_result: String;
         /// 日志流状态提示（重连中 / 已恢复 / 已停止）——独立通道，不覆盖状态栏
         log_status: String;
         /// Docker 守护进程版本文案（取不到时为占位符 `—`）

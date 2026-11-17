@@ -44,9 +44,9 @@ impl AppState {
                             newer && !self.update.update_restart_needed && !info.already_installed;
                         // 任何一次成功检查都清掉旧状态（含“已有任务在运行”的占位提示）
                         self.update.update_status.clear();
-                        // 启动检查发现新版本：只提示一次，不弹窗
+                        // 启动检查发现新版本：只提示一次，不弹窗（浮层 toast，不进底栏）
                         if !manual && newer && !auto_installing && !was_available {
-                            res.status_text = Some(crate::i18n::trf(
+                            res.toast_text = Some(crate::i18n::trf(
                                 "New version {0} available",
                                 &[&info.version],
                             ));
@@ -89,7 +89,8 @@ impl AppState {
                         } else {
                             self.update.update_status = msg.clone();
                         }
-                        res.status_text = Some(msg);
+                        // 安装结果同时进更新弹窗状态位与浮层 toast
+                        res.toast_text = Some(msg);
                         res.mark(UiFlag::Toast);
                     }
                     Err(e) => {

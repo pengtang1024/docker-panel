@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "version": "0.8.2",
-  "version_code": 8002,
+  "version": "0.8.3",
+  "version_code": 8003,
   "channel": "stable",
-  "released_at": "2026-11-16T19:17:16Z",
+  "released_at": "2026-11-17T00:50:32Z",
   "mandatory": false,
-  "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/0.8.2",
+  "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/0.8.3",
   "assets": {
-    "deb": { "name": "docker-panel_0.8.2_amd64.deb", "size": 5781824, "sha256": "54e75c8f161abf1c66377fdbcf993dcc8bc92968e2decd2c9069fccb402cd158" },
-    "binary": { "name": "docker-panel", "size": 13779784, "sha256": "929c415bd663a9e56bf89d0c5f34091a6e3e5b58ea3644a6fb3c1189048962ed" }
+    "deb": { "name": "docker-panel_0.8.3_amd64.deb", "size": 5808472, "sha256": "2d60f4040d3e949b6238adc124c5774c23a28fa6ed0576673c4d487972fb4062" },
+    "binary": { "name": "docker-panel", "size": 13889480, "sha256": "4fc722835036e44122eb5fe38d579353238662482f5b1d88b76ad2c225606cfb" }
   }
 }

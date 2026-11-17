@@ -18,6 +18,10 @@
   **结果视图**（弹窗保持打开、提交按钮在清理期间禁用并显示「清理中…」）；操作**成功不再提示**
   （行状态由 `/events` 刷新即时可见）。`DrainResult` 的载荷相应拆成
   `toast_text` / `pull_status` / `cleanup_result` 三个字段。
+- **更新弹窗的说明区只显示 8 行、尾部被裁**：Body 的 `VerticalLayout` 写了 `alignment: start`，
+  多余空间全留在末尾，说明区的 `ScrollView` 只拿到 `min-height`（130px ≈ 8 行）→ 长说明尾部
+  不可见、下方大片空白、也没有滚动条。去掉 alignment，配合文本自然高度与 `content_height`
+  回填，说明区现在按实际空间撑满并可滚动；顺带补上「立即检查」的译文。
 
 ## [0.8.2] - 2026-11-17
 

@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Cargo 依赖（含 workspace 成员 launcher）。每周一凌晨检查，避开工作时间。
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions 使用的 action 与可复用工作流。同一节奏，更新 PR 单独成组。
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(actions)"

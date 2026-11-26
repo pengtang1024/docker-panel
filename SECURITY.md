@@ -2,7 +2,7 @@
 
 > **一句话**：给「发现了安全问题想私下报」和「想确认某个行为到底算不算漏洞」的人看的一页——报告渠道、支持范围、以及哪些边界是已知且有意为之。
 
-**对应源码**：[src/update/install.rs](src/update/install.rs)（下载、SHA-256 校验与安装）、[src/update/discover.rs](src/update/discover.rs)（清单三级回退）、[src/single_instance.rs](src/single_instance.rs)（单实例锁）｜**相关页面**：[docs/arch/update-manifest.md](docs/arch/update-manifest.md)
+**对应源码**：[src/signature.rs](src/signature.rs)（Ed25519 验签）、[src/update/install.rs](src/update/install.rs)（下载、验签、SHA-256 校验与安装）、[src/update/discover.rs](src/update/discover.rs)（已签名清单获取与三级回退）、[launcher/src/verify.rs](launcher/src/verify.rs)（验签启动器）、[packaging/release-signing.pub](packaging/release-signing.pub)（公钥信任锚）、[src/single_instance.rs](src/single_instance.rs)（单实例锁）｜**相关页面**：[docs/arch/update-manifest.md](docs/arch/update-manifest.md)
 
 > [!IMPORTANT]
 > **运行本应用的账户等同于拥有 root 等价权限。** 应用直接与本机 Docker Engine 守护进程通信（`/var/run/docker.sock`），能启动、删除容器与镜像。理解这一点，是理解本项目安全模型的前提。
@@ -42,17 +42,22 @@
 
 **结论：这一节描述的是已知边界而不是待修漏洞——撞上下列行为符合预期，不需要报告。**
 
-### 更新包没有代码签名
+### 更新包有 Ed25519 代码签名，但私钥不进 CI
 
-自动更新只依赖两层保护，没有 GPG / minisign 签名，也没有独立的公钥信任链：
+从 0.8.0 起，更新链有独立的公钥信任锚：**Release 内的 `version.json` 与 `checksums.txt` 都带 Ed25519 detached 签名**（`version.json.sig` / `checksums.txt.sig`），公钥清单在仓库 [packaging/release-signing.pub](packaging/release-signing.pub)，由应用（`src/signature.rs`）与验签启动器（`launcher/src/verify.rs`）编译期内嵌同一个文件。签名只保护内容，不加密传输；HTTPS 仍负责传输加密。
 
-| 保护层 | 作用 |
-|--------|------|
-| HTTPS | 传输加密，覆盖静态清单与 Release 资产 |
-| 同一 Release 内的 `checksums.txt`（SHA-256） | 校验下载产物的完整性 |
+| 保护层 | 作用 | 源码依据 |
+|--------|------|----------|
+| `version.json.sig` 验签 | 用内置公钥验 `version.json` 原文，验不过就不进入安装 | `src/update/discover.rs:19-23,92-134`、`src/signature.rs:24,65-67,87-113` |
+| `checksums.txt.sig` 验签 | 同钥验校验和清单，启动器也用它把关用户目录里的运行体 | `src/update/install.rs:348-364`、`src/signature.rs:73-84`、`launcher/src/verify.rs:17-22` |
+| SHA-256 | 清单值必须与同一 Release 的 `checksums.txt` 一致，再校实际下载文件，不一致即拒绝 | `src/update/install.rs:67-79,102-113,336-346` |
+
+**信任链**：内置公钥 → 验签清单 → 清单声明的包 SHA-256（与 `checksums.txt` 双来源交叉核对）→ 实际下载的包；任一环不符即 fail closed。验签发生在安装之前、应用自己的进程里，验不过就不写盘、不改可执行文件（`src/signature.rs:1-7`）；启动器对用户副本还要再独立复核一遍，验证与执行用的是同一个已打开 inode，没有 TOCTOU 窗口（`launcher/src/verify.rs:1-5`）。
+
+**私钥不进入 CI**：流水线只建草稿 Release 并校验 8 个资产齐全，随后停下；维护者在本机用 `scripts/sign-release.sh <version>` 离线签名两个文件、补传 `.sig`、再 `draft=false` 发布（`.github/workflows/release.yml:150-196`、`scripts/sign-release.sh:74-105`）。CI 被攻破最多改草稿，签不出能通过校验的清单。
 
 > [!WARNING]
-> **上游 GitHub Release 本身被篡改时客户端无法防御。** 这是当前设计接受的已知风险，不是遗漏——签名与公钥信任链都不在现有实现里，报告这一点会被判定为设计边界。
+> **边界仍在**：签名私钥一旦泄露，攻击者就能签出通过校验的恶意包；deb 本身也没有 dpkg/debsig 签名（但 `checksums.txt.sig` 让手工下载可以离线复核，见下文）。报告「更新包没有代码签名」不再成立——应改为报告具体的签名实现缺陷（如验签绕过、公钥清单被篡改）。
 
 ### 更新发现的三级回退与 fail closed
 
@@ -64,8 +69,8 @@
 
 关键约束两条：
 
-- 清单**只用作版本号广播**。清单里刻意不提供 `download_url`，资产地址一律由版本号派生为 `releases/download/{version}/{asset}`，避免 CDN 成为可伪造的分发入口。
-- 完整性校验**只认** Release 内的 `checksums.txt`。清单声明的 sha256 与该文件冲突、或清单未声明某资产时，客户端 **fail closed，拒绝安装**。
+- 清单带 Ed25519 签名、可作为**版本号与资产哈希的信任源**，但刻意不提供 `download_url`——资产地址一律由版本号派生为 `releases/download/{version}/{asset}`，避免 CDN 成为可伪造的分发入口（`docs/arch/update-manifest.md:76-80`）。
+- SHA-256 **双来源**：清单值与同一 Release 的 `checksums.txt` 必须一致才安装；清单声明的 sha256 与该文件冲突、或清单未声明某资产时，客户端 **fail closed，拒绝安装**（`src/update/install.rs:67-79,336-346`）。
 
 ### 校验和格式与自助验证
 
@@ -82,7 +87,7 @@ a734c36c565be6dcf6a2da79dec2acd7a047a5c2ef11e2afc2118c56dac03584  docker-panel
 sha256sum -c checksums.txt
 ```
 
-看到 `OK` 再安装。校验通过只能证明「下载内容与 Releases 页声明的一致」，**不能证明上游未被攻破**。
+看到 `OK` 再安装。更进一步，把 `checksums.txt.sig` 也放在同一目录，用 `packaging/release-signing.pub` 里的公钥（base64 行，按 `docs/arch/update-manifest.md` §7 的 openssl 命令）验签，就能离线确认「校验和清单确实是维护者签发的」——这一步不依赖 GitHub 页面是否被攻破。
 
 ### 提权与安装
 
@@ -106,7 +111,7 @@ sha256sum -c checksums.txt
 | 删除操作无二次确认 | 容器删除带 `force=true`，不可恢复；批量删除前需自行确认选择范围 |
 | 单实例窗口前置在 GNOME Wayland 下不生效 | 合成器限制：激活令牌只能由焦点客户端创建，无 `XDG_ACTIVATION_TOKEN` 时无法抢焦点；应用只做到 `show()` + `request_redraw()` |
 | 日志窗口最多保留 2000 行 | 「复制日志」复制的是窗口内容，不是容器完整历史 |
-| 更新包无代码签名 | 见第 4 节「现有安全模型」 |
+| deb 本身没有 dpkg/debsig 签名 | 但 Release 有 `checksums.txt.sig`，可离线复核；见第 4 节 |
 | 镜像行 ▶ 尚未接入 `docker run` | 功能未实现，不是权限绕过 |
 
 ## 6. 相关文档

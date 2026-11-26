@@ -1,0 +1,861 @@
+# docker-panel German translation
+# 配置文件格式：gettext .po（编译期嵌入二进制，运行时按系统 locale 选择）
+# 维护规则：
+#   1. Slint 文件中新增 @tr("...") 后，在此文件追加同名 msgid 条目
+#   2. Rust 动态消息 msgid 为英文，占位符统一 {0}/{1}...，翻译保留占位符
+#   3. 无翻译的条目自动回落英文源串
+msgid ""
+msgstr ""
+"Project-Id-Version: docker-panel\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-17\n"
+"PO-Revision-Date: 2026-10-17\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# ===== 顶栏 =====
+msgid "Connecting..."
+msgstr "Verbinde..."
+
+msgid "Connected"
+msgstr "Verbunden"
+
+msgid "Disconnected"
+msgstr "Getrennt"
+
+msgid "Pull"
+msgstr "Pull"
+
+# 采样过期状态位（连续多轮拿不到 stats / 磁盘占用时显示，不弹窗）
+msgid "Live data may be stale"
+msgstr "Live-Daten könnten veraltet sein"
+
+msgid "Disk data may be stale"
+msgstr "Festplattendaten könnten veraltet sein"
+
+msgid "Live and disk data may be stale"
+msgstr "Live- und Festplattendaten könnten veraltet sein"
+
+# ===== 筛选栏 =====
+msgid "All"
+msgstr "Alle"
+
+msgid "Running"
+msgstr "Läuft"
+
+msgid "Stopped"
+msgstr "Gestoppt"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "CPU"
+msgstr "CPU"
+
+msgid "Memory"
+msgstr "Speicher"
+
+msgid "Disk"
+msgstr "Festplatte"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Containers"
+msgstr "Container"
+
+msgid "Images"
+msgstr "Images"
+
+msgid "Networks"
+msgstr "Netzwerke"
+
+msgid "Volumes"
+msgstr "Volumes"
+
+# ===== 台账（方向 A）=====
+msgid "Needs attention"
+msgstr "Braucht Aufmerksamkeit"
+
+msgid "CPU TOP"
+msgstr "CPU TOP"
+
+msgid "Project"
+msgstr "Projekt"
+
+# ===== 卡片 =====
+msgid "{0} in use"
+msgstr "{0} in Verwendung"
+
+msgid "{0} container"
+msgid_plural "{0} containers"
+msgstr[0] "{0} Container"
+msgstr[1] "{0} Container"
+
+msgid "CPU usage"
+msgstr "CPU-Auslastung"
+
+msgid "Memory usage"
+msgstr "Speichernutzung"
+
+msgid "Disk usage"
+msgstr "Festplattennutzung"
+
+msgid "Compose project"
+msgstr "Compose-Projekt"
+
+msgid "More"
+msgstr "Mehr"
+
+# ===== 底栏 =====
+msgid "Docker"
+msgstr "Docker"
+
+msgid "{0} containers · {1} images · {2} nets · {3} vols"
+msgstr "{0} Container · {1} Images · {2} Netzwerke · {3} Volumes"
+
+# ===== 批量栏 =====
+msgid "{0} selected"
+msgstr "{0} ausgewählt"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+# ===== 抽屉 =====
+msgid "Details"
+msgstr "Details"
+
+msgid "Logs"
+msgstr "Protokolle"
+
+msgid "Environment"
+msgstr "Umgebung"
+
+msgid "Overview"
+msgstr "Übersicht"
+
+msgid "Image"
+msgstr "Image"
+
+msgid "PID"
+msgstr "PID"
+
+msgid "Resources"
+msgstr "Ressourcen"
+
+msgid "Time"
+msgstr "Zeit"
+
+msgid "Created"
+msgstr "Erstellt"
+
+msgid "Started"
+msgstr "Gestartet"
+
+msgid "Restart Policy"
+msgstr "Neustartrichtlinie"
+
+msgid "Network"
+msgstr "Netzwerk"
+
+msgid "Mode"
+msgstr "Modus"
+
+msgid "Ports"
+msgstr "Ports"
+
+msgid "Environment Variables"
+msgstr "Umgebungsvariablen"
+
+msgid "Port Mappings"
+msgstr "Port-Zuordnungen"
+
+msgid "Mounts"
+msgstr "Mounts"
+
+# ===== 拉取对话框 =====
+msgid "Pull Image"
+msgstr "Image pullen"
+
+msgid "Enter image name, optional tag (default latest)"
+msgstr "Image-Name eingeben, Tag optional (Standard: latest)"
+
+msgid "Progress"
+msgstr "Fortschritt"
+
+msgid "Waiting to pull..."
+msgstr "Warten auf Pull..."
+
+# ===== 清理对话框 =====
+msgid "Cleanup Resources"
+msgstr "Ressourcen bereinigen"
+
+msgid "Select resource types to clean up"
+msgstr "Ressourcentypen zum Bereinigen auswählen"
+
+msgid "Cleanup finished"
+msgstr "Bereinigung abgeschlossen"
+
+msgid "Stopped Containers"
+msgstr "Gestoppte Container"
+
+msgid "Remove all stopped containers"
+msgstr "Alle gestoppten Container entfernen"
+
+msgid "Dangling Images"
+msgstr "Verwaiste Images"
+
+msgid "Remove unused image layers"
+msgstr "Nicht verwendete Image-Layer entfernen"
+
+msgid "Unused Networks"
+msgstr "Nicht verwendete Netzwerke"
+
+msgid "Remove networks not in use"
+msgstr "Nicht verwendete Netzwerke entfernen"
+
+msgid "Unused Volumes"
+msgstr "Nicht verwendete Volumes"
+
+msgid "Remove volumes not in use"
+msgstr "Nicht verwendete Volumes entfernen"
+
+msgid "Cleanup"
+msgstr "Bereinigen"
+
+msgid "Cleanup result"
+msgstr "Bereinigungsergebnis"
+
+msgid "Cleaning..."
+msgstr "Bereinige..."
+
+# ===== Rust 动态：状态栏 =====
+msgid "Ready"
+msgstr "Bereit"
+
+msgid "Docker API timeout"
+msgstr "Docker-API-Zeitüberschreitung"
+
+msgid "Log stream interrupted, reconnecting…"
+msgstr "Protokollstrom unterbrochen, erneuter Verbindungsversuch…"
+
+msgid "Log stream reconnected"
+msgstr "Protokollstrom wieder verbunden"
+
+msgid "Log stream stopped"
+msgstr "Protokollstrom beendet"
+
+msgid "Log flood: showing a sample, {0} lines omitted"
+msgstr "Protokollflut: Stichprobe angezeigt, {0} Zeilen ausgelassen"
+
+msgid "Loaded {0} containers"
+msgstr "{0} Container geladen"
+
+msgid "Container refresh failed: {0}"
+msgstr "Aktualisierung der Container fehlgeschlagen: {0}"
+
+msgid "Image refresh failed: {0}"
+msgstr "Aktualisierung der Images fehlgeschlagen: {0}"
+
+msgid "Pull failed: {0}"
+msgstr "Pull fehlgeschlagen: {0}"
+
+msgid "Cleanup failed: {0}"
+msgstr "Bereinigung fehlgeschlagen: {0}"
+
+msgid "Toggling container..."
+msgstr "Containerstatus wird geändert..."
+
+msgid "Container stopped"
+msgstr "Container gestoppt"
+
+msgid "Failed to stop"
+msgstr "Stoppen fehlgeschlagen"
+
+msgid "Container started"
+msgstr "Container gestartet"
+
+msgid "Failed to start"
+msgstr "Starten fehlgeschlagen"
+
+msgid "Container restarted"
+msgstr "Container neu gestartet"
+
+msgid "Failed to restart"
+msgstr "Neustart fehlgeschlagen"
+
+msgid "Container removed"
+msgstr "Container entfernt"
+
+msgid "Failed to remove"
+msgstr "Entfernen fehlgeschlagen"
+
+msgid "Start {0}"
+msgstr "{0} starten"
+
+msgid "Stop {0}"
+msgstr "{0} stoppen"
+
+msgid "Restart {0}"
+msgstr "{0} neu starten"
+
+msgid "Remove {0}"
+msgstr "{0} entfernen"
+
+msgid "Inspect {0}"
+msgstr "{0} untersuchen"
+
+msgid "Inspect image {0}"
+msgstr "Image {0} untersuchen"
+
+msgid "Image removed"
+msgstr "Image entfernt"
+
+msgid "Failed to remove image"
+msgstr "Entfernen des Images fehlgeschlagen"
+
+msgid "Please enter an image name"
+msgstr "Bitte Image-Namen eingeben"
+
+msgid "Select at least one item"
+msgstr "Mindestens ein Element auswählen"
+
+# ===== Rust 动态：Docker 层错误/结果 =====
+msgid "inspect container failed: {0}"
+msgstr "Untersuchung des Containers fehlgeschlagen: {0}"
+
+msgid "Stopped containers: removed {0}, freed {1}"
+msgstr "Gestoppte Container: {0} entfernt, {1} freigegeben"
+
+msgid "Dangling images: removed {0}, freed {1}"
+msgstr "Verwaiste Images: {0} entfernt, {1} freigegeben"
+
+msgid "Unused networks: removed {0}"
+msgstr "Nicht verwendete Netzwerke: {0} entfernt"
+
+msgid "Unused volumes: removed {0}, freed {1}"
+msgstr "Nicht verwendete Volumes: {0} entfernt, {1} freigegeben"
+
+msgid "Cleanup stopped containers failed: {0}"
+msgstr "Bereinigung gestoppter Container fehlgeschlagen: {0}"
+
+msgid "Cleanup dangling images failed: {0}"
+msgstr "Bereinigung verwaister Images fehlgeschlagen: {0}"
+
+msgid "Cleanup unused networks failed: {0}"
+msgstr "Bereinigung nicht verwendeter Netzwerke fehlgeschlagen: {0}"
+
+msgid "Cleanup unused volumes failed: {0}"
+msgstr "Bereinigung nicht verwendeter Volumes fehlgeschlagen: {0}"
+
+msgid "Nothing to clean up"
+msgstr "Nichts zu bereinigen"
+
+# ===== Rust 动态：Docker 层 =====
+msgid "Failed to connect to Docker: {0}"
+msgstr "Verbindung zu Docker fehlgeschlagen: {0}"
+
+msgid "Failed to fetch container list: {0}"
+msgstr "Containerliste konnte nicht abgerufen werden: {0}"
+
+msgid "Failed to fetch image list: {0}"
+msgstr "Imageliste konnte nicht abgerufen werden: {0}"
+
+msgid "Failed to start container: {0}"
+msgstr "Container konnte nicht gestartet werden: {0}"
+
+msgid "Failed to stop container: {0}"
+msgstr "Container konnte nicht gestoppt werden: {0}"
+
+msgid "Failed to restart container: {0}"
+msgstr "Container konnte nicht neu gestartet werden: {0}"
+
+msgid "Failed to remove container: {0}"
+msgstr "Container konnte nicht entfernt werden: {0}"
+
+msgid "Failed to remove image: {0}"
+msgstr "Image konnte nicht entfernt werden: {0}"
+
+msgid "Image {0} removed"
+msgstr "Image {0} entfernt"
+
+msgid "Please enter an image name, e.g. nginx:latest"
+msgstr "Bitte Image-Namen eingeben, z. B. nginx:latest"
+
+msgid "Failed to pull image: {0}"
+msgstr "Image konnte nicht gepullt werden: {0}"
+
+msgid "{0}:{1} pulled"
+msgstr "{0}:{1} gepullt"
+
+msgid "Failed to list networks: {0}"
+msgstr "Netzwerke konnten nicht aufgelistet werden: {0}"
+
+msgid "Failed to list volumes: {0}"
+msgstr "Volumes konnten nicht aufgelistet werden: {0}"
+
+msgid "Failed to read volume sizes: {0}"
+msgstr "Volume-Größen konnten nicht gelesen werden: {0}"
+
+msgid "Failed to read container sizes: {0}"
+msgstr "Container-Größen konnten nicht gelesen werden: {0}"
+
+msgid "Empty stats response"
+msgstr "Leere Statistik-Antwort"
+
+msgid "Failed to fetch stats: {0}"
+msgstr "Statistiken konnten nicht abgerufen werden: {0}"
+
+msgid "Image inspect failed ({0}): {1}"
+msgstr "Image-Untersuchung fehlgeschlagen ({0}): {1}"
+
+msgid "Theme"
+msgstr "Design"
+
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgid "Start"
+msgstr "Starten"
+
+msgid "Stop"
+msgstr "Stoppen"
+
+msgid "Restart"
+msgstr "Neustart"
+
+msgid "Remove"
+msgstr "Entfernen"
+
+msgid "Run"
+msgstr "Ausführen"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Follow logs"
+msgstr "Protokolle folgen"
+
+msgid "Copy logs"
+msgstr "Protokolle kopieren"
+
+msgid "Clear logs"
+msgstr "Protokolle löschen"
+
+msgid "Log is empty"
+msgstr "Protokolle leer"
+
+msgid "Copied {0} log lines"
+msgstr "{0} Protokollzeilen kopiert"
+
+msgid "Copy failed"
+msgstr "Kopieren fehlgeschlagen"
+
+msgid "Log cleared"
+msgstr "Protokolle gelöscht"
+
+# ===== 抽屉：网络 / 卷 / 镜像详情 =====
+msgid "Repo"
+msgstr "Repository"
+
+msgid "Size"
+msgstr "Größe"
+
+msgid "Layers"
+msgstr "Layer"
+
+msgid "Config"
+msgstr "Konfiguration"
+
+msgid "Entrypoint"
+msgstr "Einstiegspunkt"
+
+msgid "Command"
+msgstr "Befehl"
+
+msgid "Driver"
+msgstr "Treiber"
+
+msgid "Scope"
+msgstr "Geltungsbereich"
+
+msgid "Subnet"
+msgstr "Subnetz"
+
+msgid "Gateway"
+msgstr "Gateway"
+
+msgid "Mountpoint"
+msgstr "Mountpunkt"
+
+msgid "Restart Count"
+msgstr "Neustart-Anzahl"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "No ports"
+msgstr "Keine Ports"
+
+msgid "unlimited"
+msgstr "Unbegrenzt"
+
+msgid "{0} times"
+msgstr "{0} Mal"
+
+msgid "{0} layers"
+msgstr "{0} Layer"
+
+# ===== 卡片：网络 / 卷 / 空状态 =====
+msgid "Builtin"
+msgstr "Integriert"
+
+msgid "Anonymous volume"
+msgstr "Anonymes Volume"
+
+msgid "No matching containers"
+msgstr "Keine passenden Container"
+
+msgid "No matching images"
+msgstr "Keine passenden Images"
+
+msgid "No matching networks"
+msgstr "Keine passenden Netzwerke"
+
+msgid "No matching volumes"
+msgstr "Keine passenden Volumes"
+
+msgid "Pull new image or adjust search"
+msgstr "Neues Image pullen oder Suche anpassen"
+
+msgid "Try adjusting filters or keywords"
+msgstr "Filter oder Suchbegriffe anpassen"
+
+# ===== 顶栏 =====
+msgid "Search name, image..."
+msgstr "Name, Image suchen..."
+
+# ===== 相对时间 =====
+msgid "{0} minutes ago"
+msgstr "Vor {0} Minuten"
+
+msgid "{0} hours ago"
+msgstr "Vor {0} Stunden"
+
+msgid "{0} days ago"
+msgstr "Vor {0} Tagen"
+
+msgid "{0} weeks ago"
+msgstr "Vor {0} Wochen"
+
+msgid "{0} months ago"
+msgstr "Vor {0} Monaten"
+
+# ===== Rust 动态：网络 / 卷 / 镜像操作 =====
+msgid "Network removed"
+msgstr "Netzwerk entfernt"
+
+msgid "Volume removed"
+msgstr "Volume entfernt"
+
+msgid "Failed to remove network: {0}"
+msgstr "Netzwerk konnte nicht entfernt werden: {0}"
+
+msgid "Failed to remove volume: {0}"
+msgstr "Volume konnte nicht entfernt werden: {0}"
+
+msgid "Run {0}"
+msgstr "{0} ausführen"
+
+# ===== 分组操作（台账内联树的分组带按钮 / 菜单）=====
+msgid "Start all"
+msgstr "Alle starten"
+
+msgid "Stop all"
+msgstr "Alle stoppen"
+
+msgid "Restart all"
+msgstr "Alle neu starten"
+
+msgid "Remove all"
+msgstr "Alle entfernen"
+
+msgid "Merged logs"
+msgstr "Zusammengeführte Protokolle"
+
+msgid "Group actions"
+msgstr "Gruppenaktionen"
+
+msgid "No running containers in this group"
+msgstr "Keine laufenden Container in dieser Gruppe"
+
+msgid "{0} containers merged"
+msgstr "Protokolle von {0} Containern zusammengeführt"
+
+# ===== 自动更新 =====
+msgid "Update available"
+msgstr "Update verfügbar"
+
+msgid "Restart to apply update"
+msgstr "Neustart erforderlich, um das Update anzuwenden"
+
+msgid "Check for updates"
+msgstr "Nach Updates suchen"
+
+msgid "Software Update"
+msgstr "Software-Update"
+
+msgid "Current {0} · Latest {1}"
+msgstr "Aktuell {0} · Neueste {1}"
+
+msgid "Updated to {0}"
+msgstr "Aktualisiert auf {0}"
+
+msgid "Current {0}"
+msgstr "Aktuell {0}"
+
+msgid "No release notes."
+msgstr "Keine Versionshinweise."
+
+msgid "Check for updates on startup"
+msgstr "Beim Start nach Updates suchen"
+
+msgid "Download and install updates automatically"
+msgstr "Updates automatisch herunterladen und installieren"
+
+msgid "Open release page"
+msgstr "Download-Seite öffnen"
+
+msgid "Restart now"
+msgstr "Jetzt neu starten"
+
+msgid "Installing..."
+msgstr "Wird installiert..."
+
+msgid "Install update"
+msgstr "Update installieren"
+
+msgid "You're up to date."
+msgstr "Du bist auf dem neuesten Stand."
+
+msgid "{0} failed"
+msgstr "{0} fehlgeschlagen"
+
+msgid "{0} failed: {1}"
+msgstr "{0} fehlgeschlagen: {1}"
+
+msgid "{0} failed: cannot connect"
+msgstr "{0} fehlgeschlagen: keine Verbindung möglich"
+
+msgid "{0} failed: cannot resolve host"
+msgstr "{0} fehlgeschlagen: Host nicht auflösbar"
+
+msgid "{0} failed (curl exit code {1})"
+msgstr "{0} fehlgeschlagen (curl-Exitcode {1})"
+
+msgid "{0} failed: server returned an HTTP error"
+msgstr "{0} fehlgeschlagen: Server hat einen HTTP-Fehler zurückgegeben"
+
+msgid "Already up to date"
+msgstr "Bereits auf dem neuesten Stand"
+
+msgid "Automatic install is not supported"
+msgstr "Automatische Installation wird nicht unterstützt"
+
+msgid "Automatic install is not supported on this platform"
+msgstr "Automatische Installation wird auf dieser Plattform nicht unterstützt"
+
+msgid "Check for updates first"
+msgstr "Zuerst nach Updates suchen"
+
+msgid "Downloading update..."
+msgstr "Update wird heruntergeladen..."
+
+msgid "Downloading update... {0}%"
+msgstr "Update wird heruntergeladen... {0}%"
+
+msgid "Failed to create update cache: {0}"
+msgstr "Update-Cache konnte nicht erstellt werden: {0}"
+
+msgid "Failed to download update: {0}"
+msgstr "Update konnte nicht heruntergeladen werden: {0}"
+
+msgid "Failed to locate current executable: {0}"
+msgstr "Aktuelle ausführbare Datei konnte nicht gefunden werden: {0}"
+
+msgid "Failed to locate install directory"
+msgstr "Installationsverzeichnis konnte nicht gefunden werden"
+
+msgid "Failed to open browser: {0}"
+msgstr "Browser konnte nicht geöffnet werden: {0}"
+
+msgid "Failed to open update file: {0}"
+msgstr "Update-Datei konnte nicht geöffnet werden: {0}"
+
+msgid "Failed to read new binary: {0}"
+msgstr "Neue Binärdatei konnte nicht gelesen werden: {0}"
+
+msgid "Failed to read update file: {0}"
+msgstr "Update-Datei konnte nicht gelesen werden: {0}"
+
+msgid "Failed to replace binary: {0}"
+msgstr "Binärdatei konnte nicht ersetzt werden: {0}"
+
+msgid "Failed to restart application: {0}"
+msgstr "Anwendung konnte nicht neu gestartet werden: {0}"
+
+msgid "Failed to run curl: {0}"
+msgstr "curl konnte nicht ausgeführt werden: {0}"
+
+msgid "Failed to run pkexec: {0}"
+msgstr "pkexec konnte nicht ausgeführt werden: {0}"
+
+msgid "Failed to set binary permissions: {0}"
+msgstr "Berechtigungen der Binärdatei konnten nicht gesetzt werden: {0}"
+
+msgid "Failed to write new binary: {0}"
+msgstr "Neue Binärdatei konnte nicht geschrieben werden: {0}"
+
+msgid "Installing update..."
+msgstr "Update wird installiert..."
+
+msgid "Malformed update response: {0}"
+msgstr "Fehlerhafte Update-Antwort: {0}"
+
+msgid "Malformed update response: missing tag_name"
+msgstr "Fehlerhafte Update-Antwort: tag_name fehlt"
+
+msgid "No installable asset for this release"
+msgstr "Kein installierbarer Asset für dieses Release"
+
+msgid "Package installation failed: {0}"
+msgstr "Paketinstallation fehlgeschlagen: {0}"
+
+msgid "pkexec not found, please install the deb manually"
+msgstr "pkexec nicht gefunden, bitte deb-Paket manuell installieren"
+
+msgid "Preparing update..."
+msgstr "Update wird vorbereitet..."
+
+msgid "Release checksums.txt does not contain this asset"
+msgstr "checksums.txt des Releases enthält dieses Asset nicht"
+
+msgid "Release checksums.txt is missing"
+msgstr "checksums.txt des Releases fehlt"
+
+msgid "Unsupported release tag: {0}"
+msgstr "Nicht unterstütztes Release-Tag: {0}"
+
+msgid "Update checksum mismatch"
+msgstr "Update-Prüfsumme stimmt nicht überein"
+
+msgid "Update request timed out"
+msgstr "Update-Anfrage hat das Zeitlimit überschritten"
+
+msgid "Update response is too large"
+msgstr "Update-Antwort ist zu groß"
+
+msgid "Update task failed"
+msgstr "Update-Aufgabe fehlgeschlagen"
+
+msgid "Verifying update..."
+msgstr "Update wird überprüft..."
+
+msgid "Updated to {0}. Restart to apply"
+msgstr "Aktualisiert auf {0}. Neustart erforderlich"
+
+msgid "New version {0} available"
+msgstr "Neue Version {0} verfügbar"
+
+msgid "Checking for updates..."
+msgstr "Suche nach Updates..."
+
+msgid "An update task is already running"
+msgstr "Eine Update-Aufgabe läuft bereits"
+
+msgid "Update check"
+msgstr "Update-Prüfung"
+
+msgid "Update download"
+msgstr "Update-Download"
+
+msgid "Development builds do not install updates automatically"
+msgstr "Entwicklungs-Builds installieren keine Updates automatisch"
+
+msgid "pkexec is required to install the deb package"
+msgstr "pkexec ist erforderlich, um das deb-Paket zu installieren"
+
+msgid "No deb package is available for this architecture"
+msgstr "Für diese Architektur ist kein deb-Paket verfügbar"
+
+msgid "The release does not include a binary asset"
+msgstr "Das Release enthält keine ausführbare Datei"
+
+msgid "The release does not include checksums.txt"
+msgstr "Das Release enthält kein checksums.txt"
+
+msgid "The install directory is not writable, please use the download page"
+msgstr "Installationsverzeichnis ist nicht beschreibbar, bitte Download-Seite verwenden"
+
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgid "Appearance"
+msgstr "Erscheinungsbild"
+
+msgid "Follow system"
+msgstr "System folgen"
+
+msgid "Light"
+msgstr "Hell"
+
+msgid "Dark"
+msgstr "Dunkel"
+
+msgid "Updates"
+msgstr "Updates"
+
+msgid "Restart automatically after install"
+msgstr "Nach der Installation automatisch neu starten"
+
+msgid "Updates run in the background; installing the deb asks for system authorization once."
+msgstr "Updates laufen im Hintergrund; die Installation des deb-Pakets erfordert einmal eine Systemberechtigung."
+
+msgid "Update installed, restarting automatically..."
+msgstr "Update installiert, automatischer Neustart..."
+
+msgid "Images size"
+msgstr "Image-Größen"
+
+msgid "Disk = image + writable layer + mounted volumes (what this container occupies).\nImages shared by several containers are counted in each row; the footer total deduplicates them."
+msgstr "Festplatte = Image + beschreibbare Schicht + gemountete Volumes (was dieser Container belegt).\nVon mehreren Containern geteilte Images werden in jeder Zeile gezählt; die Summe in der Fußleiste zählt sie nur einmal."
+
+msgid "Update manifest does not match checksums.txt"
+msgstr "Update-Manifest stimmt nicht mit checksums.txt überein"
+
+msgid "Update manifest is malformed"
+msgstr "Update-Manifest ist fehlerhaft"
+
+msgid "Update manifest does not match the release"
+msgstr "Update-Manifest stimmt nicht mit dem Release überein"
+
+msgid "Update manifest does not match the package"
+msgstr "Update-Manifest stimmt nicht mit dem Paket überein"
+
+msgid "Update manifest signature is not verifiable: {0}"
+msgstr "Signatur des Update-Manifests kann nicht überprüft werden: {0}"
+
+msgid "Version {0} is already installed, restart to apply"
+msgstr "Version {0} ist bereits installiert, Neustart erforderlich"
+
+msgid "Using the package already downloaded"
+msgstr "Bereits heruntergeladenes Paket wird verwendet"
+
+msgid "Check now"
+msgstr "Jetzt prüfen"
+
+msgid "Checking for updates…"
+msgstr "Suche nach Updates…"

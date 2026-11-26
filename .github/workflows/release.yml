@@ -15,7 +15,7 @@ jobs:
     name: 打包并发布
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: 读取 tag 版本
         id: ver

@@ -6,6 +6,12 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.9.1] - 2026-11-26
+
+### 修复
+
+- **升级 sha2 0.11 / ed25519-dalek 3 / base64 0.23 等 6 项依赖**：应用与验签启动器同步升级并适配新 API；SHA-256 摘要改为逐字节格式化为小写十六进制字符串，兼容新版摘要类型不再支持旧 `{:x}` 格式化的变化。验签与哈希口径保持不变——更新包校验和、清单 Ed25519 签名的行为与升级前完全一致（PR #4）。
+
 ## [0.9.0] - 2026-11-26
 
 ### 新增
@@ -579,6 +585,7 @@
 
 [0.8.1]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
+[0.9.1]: https://github.com/pengtang1024/docker-panel/releases/tag/0.9.1
 [0.9.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.9.0
 [0.8.3]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...0.8.3
 [0.8.2]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...0.8.2

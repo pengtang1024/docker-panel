@@ -34,12 +34,12 @@ tokio = { version = "1", default-features = false, features = ["rt-multi-thread"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 
 # 更新包完整性校验（checksums.txt）；HTTP 走系统 curl，不引入 TLS crate
-sha2 = "0.10"
+sha2 = "0.11"
 
 # 更新清单 Ed25519 验签（App 与特权助手 docker-panel-update 共用 src/signature.rs）
-ed25519-dalek = "2"
+ed25519-dalek = "3"
 # 公钥清单是 base64 行（host + launcher 共用同一份文件）
-base64 = "0.22"
+base64 = "0.23"
 
 [build-dependencies]
 slint-build = "1.18.1"

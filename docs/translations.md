@@ -1,8 +1,8 @@
 # 翻译与 i18n
 
-> **一句话**：给要改界面文案、补翻译或新增语言的贡献者——界面文案全部走 gettext，当前只有简体中文，缺翻译自动回落英文 msgid。
+> **一句话**：给要改界面文案、补翻译或新增语言的贡献者——界面文案全部走 gettext，支持七语言（简体中文、英语、西班牙语、法语、德语、俄语、葡萄牙语），缺翻译自动回落英文 msgid；**禁止日语**。
 
-**对应源码**：`translations/zh_CN/LC_MESSAGES/docker-panel.po`、`src/i18n.rs`、`src/log_status.rs`、`build.rs`｜**相关页面**：[README](../README.md)（功能与已知限制）
+**对应源码**：`translations/<locale>/LC_MESSAGES/docker-panel.po`、`src/i18n.rs`、`src/log_status.rs`、`build.rs`｜**相关页面**：[README](../README.md)（功能与已知限制）
 
 ## 0. 本页导航
 
@@ -10,27 +10,36 @@
 
 | # | 章节 | 你会在这里找到 |
 |:--:|------|----------------|
-| 1 | [现状](#1-现状) | 语言、条目数、文件格式、编译方式 |
+| 1 | [现状](#1-现状) | 七语言清单、文件格式、编译方式 |
 | 2 | [工作原理](#2-工作原理) | Slint / Rust 两条读取路径与语言检测 |
 | 3 | [`.po` 文件结构](#3-po-文件结构) | 文件头、分区注释、条目写法 |
 | 4 | [维护规则](#4-维护规则) | 新增条目、占位符、缺失回落 |
 | 5 | [占位符与复数](#5-占位符与复数) | 三个 API 与单复数槽位 |
-| 6 | [新增一门语言](#6-新增一门语言) | 建目录、复制模板、需要改的代码 |
+| 6 | [新增一门语言](#6-新增一门语言) | 七语言清单、建目录、复数规则与禁止日语 |
 | 7 | [日志状态提示文案](#7-日志状态提示文案) | 4 条 i18n key 的唯一定义处 |
 | 8 | [Slint 已知限制](#8-slint-已知限制) | 翻译初始化的调用时机 |
 | 9 | [相关文档](#9-相关文档) | 上下游页面 |
 
 ## 1. 现状
 
-**结论**：只有**简体中文**一门翻译；英文不是单独的翻译文件，而是源码里的 msgid 源串本身，没有翻译的条目自动回落英文。
+**结论**：界面支持**七语言**；英文不是单独的翻译文件，而是源码里的 msgid 源串本身，没有翻译的条目自动回落英文。**硬约束：禁止日语——不建 `ja` / `jp` locale，不混入日文字符。**
+
+| # | 语言 | locale 目录 / 代码 | 翻译文件 | 复数规则（`Plural-Forms`） |
+|:--:|------|--------------------|----------|----------------------------|
+| 1 | 简体中文 | `zh_CN` | `translations/zh_CN/LC_MESSAGES/docker-panel.po`（264 msgid） | `nplurals=1; plural=0` |
+| 2 | 英语 | 无（msgid 源串） | 无 `.po` 文件，源串即译文 | `nplurals=2; plural=(n != 1)`（Slint 默认） |
+| 3 | 西班牙语 | `es_ES` | `translations/es_ES/LC_MESSAGES/docker-panel.po` | `nplurals=2; plural=(n != 1)` |
+| 4 | 法语 | `fr_FR` | `translations/fr_FR/LC_MESSAGES/docker-panel.po` | `nplurals=2; plural=(n > 1)` |
+| 5 | 德语 | `de_DE` | `translations/de_DE/LC_MESSAGES/docker-panel.po` | `nplurals=2; plural=(n != 1)` |
+| 6 | 俄语 | `ru_RU` | `translations/ru_RU/LC_MESSAGES/docker-panel.po` | `nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2)` |
+| 7 | 葡萄牙语 | `pt_PT` | `translations/pt_PT/LC_MESSAGES/docker-panel.po` | `nplurals=2; plural=(n != 1)` |
 
 | 项 | 值 |
 |----|-----|
-| 语言目录 | `translations/zh_CN/LC_MESSAGES/docker-panel.po` |
-| msgid 条目 | 264 条 |
-| 复数条目（`msgid_plural`） | 1 条 |
-| 文件格式 | gettext `.po`，UTF-8，`Plural-Forms: nplurals=1; plural=0` |
+| 文件格式 | gettext `.po`，UTF-8；文件头 `Language` 字段必须与目录名逐字一致 |
 | 编译方式 | **编译期嵌入二进制**（不读外部文件，运行时零 IO） |
+| 语言代码 | 目录名 = 文件头 `Language` = `slint::select_bundled_translation()` 实参；严格使用上表代码 |
+| 禁止语言 | **日语**：仓库中不得出现 `translations/ja*` / `translations/jp*`，也不得在 `.po` 里混入日文字符 |
 
 ## 2. 工作原理
 
@@ -39,11 +48,11 @@
 | 路径 | 做法 |
 |------|------|
 | **Slint 侧** | `build.rs` 调 `slint_build::CompilerConfiguration::new().with_bundled_translations("translations")`，把 `.po` 编译进二进制；Slint 的 `@tr("...")` 属性按当前语言查出译文 |
-| **Rust 侧** | `src/i18n.rs` 用 `include_str!("../translations/zh_CN/LC_MESSAGES/docker-panel.po")` 读同一文件，启动时解析成 `HashMap<msgid, msgstr>`，运行时按需查表（零额外依赖，不引入 gettext 运行时库） |
+| **Rust 侧** | `build.rs` 扫描上表六个 locale 的 `.po`（存在才嵌入，缺失用空串占位），生成 `OUT_DIR/i18n_catalogs.rs`；`src/i18n.rs` 据此把译文解析成 `HashMap<msgid, msgstr>`，运行时按需查表（零额外依赖，不引入 gettext 运行时库） |
 
-语言检测顺序（`src/i18n.rs::detect_lang`）：`LC_ALL` → `LC_MESSAGES` → `LANG`，取第一个非空值；**以 `zh` 开头**启用简体中文，其它一律回落英文源串。
+语言检测顺序（`src/i18n.rs::locale_from_env`）：`LC_ALL` → `LC_MESSAGES` → `LANG`，取第一个非空值；`C` / `POSIX` / 空值视为英文。`detect_locale()` 去掉 `.编码` / `@修饰符`、把 `-` 归一为 `_`，先精确匹配六个 locale（大小写不敏感），再按语言部分匹配（如 `es_MX.UTF-8` → `es_ES`、`pt_BR` → `pt_PT`）；未支持语言（**含日语 ja/jp**）与缺译文一律回落英文。
 
-`i18n::slint_language()` 只在中文时返回 `Some("zh_CN")`，其它语言返回 `None`（Slint 使用 msgid 原串）。
+`i18n::slint_language()` 返回当前生效的 locale（如 `Some("fr_FR")`），英文返回 `None`（Slint 使用 msgid 原串）。`main.rs` 在 `MainWindow::new()` **之后**调用 `slint::select_bundled_translation(lang)`；Slint 按目录名精确匹配 locale，选不到时这里会打印错误并继续用 msgid 英文，不会崩溃。
 
 ## 3. `.po` 文件结构
 
@@ -76,7 +85,7 @@ msgstr "已连接"
 
 | 规则 | 要求 |
 |------|------|
-| Slint 新增文案 | 文件中新增 `@tr("...")` 后，**必须**在此文件追加同名 `msgid` 条目；否则该文案没有中文译文 |
+| Slint 新增文案 | 文件中新增 `@tr("...")` 后，**必须**在**全部六个** `.po` 文件追加同名 `msgid` 条目；否则该语言回落英文 |
 | Rust 动态消息 | msgid 用英文，占位符统一写成 `{0}` / `{1}`…，**译文必须原样保留占位符** |
 | 未翻译条目 | 自动回落英文源串（所以「缺失」不会崩溃，只会显示英文） |
 
@@ -90,35 +99,40 @@ msgstr "已连接"
 | `i18n::trf(msgid, args)` | 带占位符 | msgid `"Removed {0}"`，`trf("Removed {0}", &[&name])` |
 | `i18n::trfp(singular, plural, n, args)` | 复数 | 按 `n` 与 `.po` 的 `Plural-Forms` 选单复数形式 |
 
-Slint 侧的复数用 `@tr("...")` 的复数语法（单数 | 复数 + `%n`）。**中文 `nplurals=1`**，复数与单数译文相同；新增语言若有多个复数形式，需相应修改该语言的 `Plural-Forms` 并补齐 `msgstr[0]` / `msgstr[1]` 等槽位。
+Slint 侧的复数用 `@tr("...")` 的复数语法（单数 | 复数 + `%n`），按各 `.po` 的 `Plural-Forms` 选择槽位。Rust 侧 `trfp` 按下表选择 `msgstr[n]`：**简体中文**固定 `msgstr[0]`；**英语 / 西语 / 德语 / 葡语** `n != 1` 选 `msgstr[1]`；**法语** `n > 1` 选 `msgstr[1]`（0 和 1 均用单数）；**俄语**三态：`n%10==1 && n%100!=11` → `[0]`，`n%10∈[2,4] && n%100∉[12,14]` → `[1]`，其余 → `[2]`。每个复数条目必须补齐该语言声明的全部槽位，缺槽位时退回第一个译文；占位符原样保留。
 
 > [!IMPORTANT]
 > 占位符是唯一不能"意译"的东西：译文里少一个 `{0}` 会直接丢参数，多一个则会显示字面量。
 
-## 6. 新增一门语言
+## 6. 七语言清单与新增一门语言
 
-**结论**：复制目录与模板即可，`build.rs` 不用改；但 `src/i18n.rs` 目前硬编码 zh_CN，必须同步扩展。
+**结论**：当前七语言为简体中文（`zh_CN`）、英语（`msgid` 源串，**不建 `en` 文件**）、西班牙语（`es_ES`）、法语（`fr_FR`）、德语（`de_DE`）、俄语（`ru_RU`）、葡萄牙语（`pt_PT`）；**硬约束：禁止日语——不建 `ja` / `jp` locale，不混入日文字符**。
 
-以新增 `de`（德语）为例：
+**语种代码铁律**：目录名 `translations/<locale>/LC_MESSAGES/docker-panel.po`、`.po` 头的 `Language` 字段、`slint::select_bundled_translation()` 实参三者必须**逐字一致**，严格使用上表代码（下划线形式，与 `zh_CN` 同风格）。
+
+### 6.1 新语言落地步骤
+
+以 `de_DE`（德语）为例：
 
 ```bash
-# 1. 建目录（目录名用 POSIX locale 的 language_COUNTRY 或 language 形式）
-mkdir -p translations/de/LC_MESSAGES
+# 1. 建目录（目录名 = 上表的 locale 代码，禁止 ja / jp）
+mkdir -p translations/de_DE/LC_MESSAGES
 
-# 2. 复制现有文件作为模板
-cp translations/zh_CN/LC_MESSAGES/docker-panel.po translations/de/LC_MESSAGES/docker-panel.po
+# 2. 复制简体中文模板，逐条翻译 msgstr（保留 msgid / 占位符原样）
+cp translations/zh_CN/LC_MESSAGES/docker-panel.po \
+   translations/de_DE/LC_MESSAGES/docker-panel.po
 
-# 3. 改头部 Language 字段，逐条替换 msgstr
-#    "Language: de\n"
+# 3. 改头部字段：Language: de_DE，Plural-Forms: nplurals=2; plural=(n != 1);
+#    复数条目补齐 msgstr[0]（单数）/ msgstr[1]（复数），禁止混入日文字符
 ```
 
 | 改动点 | 结论 |
 |--------|------|
-| `build.rs` | **无需改动**。`with_bundled_translations("translations")` 会扫描整个目录，新语言目录自动纳入 Slint 侧 |
-| `src/i18n.rs` | **需要改动**——这是当前实现的真实限制：`const ZH_PO: &str = include_str!("../translations/zh_CN/LC_MESSAGES/docker-panel.po")` 硬编码了 zh_CN 一份，`detect_lang()` 也只判 `zh*`。新增语言必须把这两处扩成按 locale 选择（或在 PR 中标注由维护者补齐） |
+| `build.rs` | **无需改动**。`with_bundled_translations("translations")` 扫描整个目录纳入 Slint 侧；本模块的目录表已列出六个非英语 locale，新文件落地即会被 `include_str!` 编译进二进制（缺失时为空串 → 回落英文） |
+| `src/i18n.rs` | **七语言范围内无需改动**。`SUPPORTED_LOCALES` 已列出六个非英语 locale，`plural_index()` 已覆盖六种复数规则；新增**超出七语言**的语种才需要同步扩展这两处 |
 | 验证 | `LANG=de_DE.UTF-8 cargo run`，检查界面文案是否切换；未翻译条目应显示英文而不是空白 |
 
-**翻译 PR 请说明**：目标 locale、覆盖的 msgid 条数（对照 264 条的完成度）、占位符是否全部保留、是否已实测启动验证。
+**翻译 PR 请说明**：目标 locale、覆盖的 msgid 条数（对照 264 条的完成度）、占位符是否全部保留、是否已实测启动验证；确认未引入任何日文字符。
 
 ## 7. 日志状态提示文案
 
@@ -149,7 +163,7 @@ cp translations/zh_CN/LC_MESSAGES/docker-panel.po translations/de/LC_MESSAGES/do
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | 贡献流程与 PR 要求 |
 | [AGENTS.md](../AGENTS.md) | 技术栈与 Slint 1.18 已验证限制 |
 | [src/i18n.rs](../src/i18n.rs) | 运行时查表实现 |
-| [translations/zh_CN/LC_MESSAGES/docker-panel.po](../translations/zh_CN/LC_MESSAGES/docker-panel.po) | 现有翻译文件 |
+| [translations/](../translations/) | 七语言目录（英语无文件；禁止日语） |
 
 ---
 

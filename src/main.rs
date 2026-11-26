@@ -111,7 +111,8 @@ fn main() {
         }
     };
 
-    // 按系统 locale 选择语言（zh* → 简体中文，其它语言回落英文源串）
+    // 按系统 locale 选择语言（zh_CN / es_ES / fr_FR / de_DE / ru_RU / pt_PT；
+    // 其它语言与缺译文回落英文 msgid 源串；不识别日语）
     i18n::init();
 
     // AppState::new() 返回 (Arc<Mutex<AppState>>, Receiver<Msg>)；

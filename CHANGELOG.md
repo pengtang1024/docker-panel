@@ -6,6 +6,25 @@
 > 0.4.3 之前的版本缺少第三方许可文件与 Slint 署名，对应的 GitHub Release 与 tag 已下架；
 > 历史变更记录保留在此处，但不再提供下载。
 
+## [0.9.0] - 2026-11-26
+
+### 新增
+
+- **界面本地化扩到七语言**：简体中文之外，新增西班牙语、法语、德语、俄语、欧洲葡语五份 gettext 翻译文件（共 5 个 `.po`，随二进制编译期嵌入）；运行时按 `LC_ALL` → `LC_MESSAGES` → `LANG` 检测并归一化 locale，未支持语言与缺失译文统一回落英文源串。
+- **Wiki 六页规范源落地**：仓库 `wiki/` 新增 Home / Installation / Usage / FAQ / Changelog / Contributing 六页，采用双站相对链接，作为 GitHub 与 Gitee 两站 Wiki 的唯一编辑源；README 增加对应入口。
+- **依赖更新与代码归属配置**：新增 `.github/dependabot.yml`，Cargo 与 GitHub Actions 依赖按周合并更新 PR；新增 `.github/CODEOWNERS` 指定维护者审阅全部改动。
+
+### 变更
+
+- **签名 tag 与发版文档对齐**：`docs/git-flow.md` / `CONTRIBUTING.md` 明确新版本 tag 必须 annotated + SSH 签名（`git tag -s X.Y.Z`，`git tag -v` 验到 Good signature），历史 tag 一律不改写、不重签；`scripts/check-release-guards.sh` 增加对应配置检查。
+- **安全策略修正更新签名说明**：`SECURITY.md` 按实际实现改写——`version.json` 与 `checksums.txt` 均有 Ed25519 detached 签名、公钥清单在 `packaging/release-signing.pub`，更新链 SHA-256 双来源交叉核对、私钥不进 CI；删除「更新包没有代码签名」的过时表述。
+- **升级 `actions/checkout` 5 → 7**：quality / license / release 三条流水线的 action 版本统一升级（PR #3）。
+- **清理本地化文档中的语言禁止与声明描述**：README、`docs/translations.md`、`wiki/` 与源码注释只保留七语言支持与回落规则的事实说明。
+
+### 修复
+
+- **README 补充 Star 引导**：在快速上手后加入 GitHub / Gitee 双站 Star 入口，README 与 Wiki 的七语言说明同步为最终口径。
+
 ## [0.8.3] - 2026-11-17
 
 ### 修复
@@ -560,7 +579,7 @@
 
 [0.8.1]: https://github.com/pengtang1024/docker-panel/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/pengtang1024/docker-panel/compare/0.7.19...0.8.0
-[Unreleased]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...HEAD
+[0.9.0]: https://github.com/pengtang1024/docker-panel/releases/tag/0.9.0
 [0.8.3]: https://github.com/pengtang1024/docker-panel/compare/0.8.2...0.8.3
 [0.8.2]: https://github.com/pengtang1024/docker-panel/compare/0.8.1...0.8.2
 [0.7.19]: https://github.com/pengtang1024/docker-panel/compare/0.7.18...0.7.19

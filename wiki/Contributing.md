@@ -118,7 +118,7 @@ Wiki 是 GitHub 与 Gitee 两个独立仓库，**任何变更必须同一批改�
 
 ## 10. 翻译与沟通
 
-界面文案用 gettext，七语言为简体中文 / 英语（msgid 源串，无 en 目录）/ 西班牙语 / 法语 / 德语 / 俄语 / 葡萄牙语，locale 目录为 zh_CN / es_ES / fr_FR / de_DE / ru_RU / pt_PT；缺失译文回落英文源串；**不支持且不建立日语（ja / jp）locale**。新增语言按仓库 docs/translations.md 走。
+界面文案用 gettext，七语言为简体中文 / 英语（msgid 源串，无 en 目录）/ 西班牙语 / 法语 / 德语 / 俄语 / 葡萄牙语，locale 目录为 zh_CN / es_ES / fr_FR / de_DE / ru_RU / pt_PT；缺失译文回落英文源串。新增语言按仓库 docs/translations.md 走。
 
 缺陷与功能建议走 [GitHub Issues](https://github.com/pengtang1024/docker-panel/issues) 或 [Gitee Issues](https://gitee.com/pengtang1024/docker-panel/issues)；提问前看 SUPPORT.md；安全漏洞走私用渠道（SECURITY.md），不要发公开 Issue。版本改了什么见 [Changelog](Changelog)，排障见 [FAQ](FAQ)。
 

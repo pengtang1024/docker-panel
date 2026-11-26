@@ -3,7 +3,7 @@
 //! - 配置文件是唯一文案源：Slint 编译器在 build.rs 阶段把 .po 嵌入二进制，
 //!   本模块通过构建脚本生成的常量表读取同一批文件，运行时按需查表，零额外依赖。
 //! - 支持七语言：简体中文（zh_CN）、英语（msgid 源串，无 en 文件）、西班牙语（es_ES）、
-//!   法语（fr_FR）、德语（de_DE）、俄语（ru_RU）、葡萄牙语（pt_PT）；**不支持日语**。
+//!   法语（fr_FR）、德语（de_DE）、俄语（ru_RU）、葡萄牙语（pt_PT）。
 //! - 语言检测：LC_ALL > LC_MESSAGES > LANG，按 locale 归一化到上述目录名；
 //!   只识别语言部分（如 es_MX → es_ES），缺失翻译回落英文 msgid 源串。
 //! - 占位符约定：`{0}` `{1}` …，与 .slint 中 @tr 的编号保持一致。
@@ -146,7 +146,7 @@ fn locale_from_env() -> &'static str {
 
 /// 将系统 locale 归一化到受支持目录名：
 /// 先精确匹配（去编码/修饰符），再按语言部分匹配（如 es_MX → es_ES）；
-/// 不支持的语言（含 ja/jp）与未匹配上的一律英文。
+/// 未匹配上的语言一律英文。
 fn detect_locale() -> &'static str {
     let raw = locale_from_env();
     let normalized: String = raw

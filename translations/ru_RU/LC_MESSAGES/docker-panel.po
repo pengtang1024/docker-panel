@@ -1,0 +1,862 @@
+# docker-panel русский перевод
+# 配置文件格式：gettext .po（编译期嵌入二进制，运行时按系统 locale 选择）
+# 维护规则：
+#   1. Slint 文件中新增 @tr("...") 后，在此文件追加同名 msgid 条目
+#   2. Rust 动态消息 msgid 为英文，占位符统一 {0}/{1}...，翻译保留占位符
+#   3. 无翻译的条目自动回落英文源串
+msgid ""
+msgstr ""
+"Project-Id-Version: docker-panel\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-17\n"
+"PO-Revision-Date: 2026-10-17\n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+# ===== 顶栏 =====
+msgid "Connecting..."
+msgstr "Подключение..."
+
+msgid "Connected"
+msgstr "Подключено"
+
+msgid "Disconnected"
+msgstr "Отключено"
+
+msgid "Pull"
+msgstr "Загрузить"
+
+# 采样过期状态位（连续多轮拿不到 stats / 磁盘占用时显示，不弹窗）
+msgid "Live data may be stale"
+msgstr "Реальные данные могут быть устаревшими"
+
+msgid "Disk data may be stale"
+msgstr "Данные о дисках могут быть устаревшими"
+
+msgid "Live and disk data may be stale"
+msgstr "Реальные данные и данные о дисках могут быть устаревшими"
+
+# ===== 筛选栏 =====
+msgid "All"
+msgstr "Все"
+
+msgid "Running"
+msgstr "Запущенные"
+
+msgid "Stopped"
+msgstr "Остановленные"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "CPU"
+msgstr "CPU"
+
+msgid "Memory"
+msgstr "Память"
+
+msgid "Disk"
+msgstr "Диск"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Containers"
+msgstr "Контейнеры"
+
+msgid "Images"
+msgstr "Образы"
+
+msgid "Networks"
+msgstr "Сети"
+
+msgid "Volumes"
+msgstr "Тома"
+
+# ===== 台账（方向 A）=====
+msgid "Needs attention"
+msgstr "Требуют внимания"
+
+msgid "CPU TOP"
+msgstr "ТОП CPU"
+
+msgid "Project"
+msgstr "Проект"
+
+# ===== 卡片 =====
+msgid "{0} in use"
+msgstr "{0} используется"
+
+msgid "{0} container"
+msgid_plural "{0} containers"
+msgstr[0] "{0} контейнер"
+msgstr[1] "{0} контейнера"
+msgstr[2] "{0} контейнеров"
+
+msgid "CPU usage"
+msgstr "Использование CPU"
+
+msgid "Memory usage"
+msgstr "Использование памяти"
+
+msgid "Disk usage"
+msgstr "Использование диска"
+
+msgid "Compose project"
+msgstr "Проект Compose"
+
+msgid "More"
+msgstr "Ещё"
+
+# ===== 底栏 =====
+msgid "Docker"
+msgstr "Docker"
+
+msgid "{0} containers · {1} images · {2} nets · {3} vols"
+msgstr "{0} контейнеров · {1} образов · {2} сетей · {3} томов"
+
+# ===== 批量栏 =====
+msgid "{0} selected"
+msgstr "Выбрано: {0}"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+# ===== 抽屉 =====
+msgid "Details"
+msgstr "Подробности"
+
+msgid "Logs"
+msgstr "Логи"
+
+msgid "Environment"
+msgstr "Окружение"
+
+msgid "Overview"
+msgstr "Обзор"
+
+msgid "Image"
+msgstr "Образ"
+
+msgid "PID"
+msgstr "PID"
+
+msgid "Resources"
+msgstr "Ресурсы"
+
+msgid "Time"
+msgstr "Время"
+
+msgid "Created"
+msgstr "Создан"
+
+msgid "Started"
+msgstr "Запущен"
+
+msgid "Restart Policy"
+msgstr "Политика перезапуска"
+
+msgid "Network"
+msgstr "Сеть"
+
+msgid "Mode"
+msgstr "Режим"
+
+msgid "Ports"
+msgstr "Порты"
+
+msgid "Environment Variables"
+msgstr "Переменные окружения"
+
+msgid "Port Mappings"
+msgstr "Проброс портов"
+
+msgid "Mounts"
+msgstr "Монтирования"
+
+# ===== 拉取对话框 =====
+msgid "Pull Image"
+msgstr "Загрузить образ"
+
+msgid "Enter image name, optional tag (default latest)"
+msgstr "Введите имя образа, необязательный тег (по умолчанию latest)"
+
+msgid "Progress"
+msgstr "Прогресс"
+
+msgid "Waiting to pull..."
+msgstr "Ожидание загрузки..."
+
+# ===== 清理对话框 =====
+msgid "Cleanup Resources"
+msgstr "Очистка ресурсов"
+
+msgid "Select resource types to clean up"
+msgstr "Выберите типы ресурсов для очистки"
+
+msgid "Cleanup finished"
+msgstr "Очистка завершена"
+
+msgid "Stopped Containers"
+msgstr "Остановленные контейнеры"
+
+msgid "Remove all stopped containers"
+msgstr "Удалить все остановленные контейнеры"
+
+msgid "Dangling Images"
+msgstr "Висячие образы"
+
+msgid "Remove unused image layers"
+msgstr "Удалить неиспользуемые слои образов"
+
+msgid "Unused Networks"
+msgstr "Неиспользуемые сети"
+
+msgid "Remove networks not in use"
+msgstr "Удалить неиспользуемые сети"
+
+msgid "Unused Volumes"
+msgstr "Неиспользуемые тома"
+
+msgid "Remove volumes not in use"
+msgstr "Удалить неиспользуемые тома"
+
+msgid "Cleanup"
+msgstr "Очистить"
+
+msgid "Cleanup result"
+msgstr "Результат очистки"
+
+msgid "Cleaning..."
+msgstr "Очистка..."
+
+# ===== Rust 动态：状态栏 =====
+msgid "Ready"
+msgstr "Готово"
+
+msgid "Docker API timeout"
+msgstr "Тайм-аут Docker API"
+
+msgid "Log stream interrupted, reconnecting…"
+msgstr "Поток логов прерван, переподключение…"
+
+msgid "Log stream reconnected"
+msgstr "Поток логов переподключён"
+
+msgid "Log stream stopped"
+msgstr "Поток логов остановлен"
+
+msgid "Log flood: showing a sample, {0} lines omitted"
+msgstr "Поток логов: показана выборка, пропущено строк: {0}"
+
+msgid "Loaded {0} containers"
+msgstr "Загружено контейнеров: {0}"
+
+msgid "Container refresh failed: {0}"
+msgstr "Не удалось обновить контейнеры: {0}"
+
+msgid "Image refresh failed: {0}"
+msgstr "Не удалось обновить образы: {0}"
+
+msgid "Pull failed: {0}"
+msgstr "Не удалось загрузить: {0}"
+
+msgid "Cleanup failed: {0}"
+msgstr "Не удалось очистить: {0}"
+
+msgid "Toggling container..."
+msgstr "Переключение состояния контейнера..."
+
+msgid "Container stopped"
+msgstr "Контейнер остановлен"
+
+msgid "Failed to stop"
+msgstr "Не удалось остановить"
+
+msgid "Container started"
+msgstr "Контейнер запущен"
+
+msgid "Failed to start"
+msgstr "Не удалось запустить"
+
+msgid "Container restarted"
+msgstr "Контейнер перезапущен"
+
+msgid "Failed to restart"
+msgstr "Не удалось перезапустить"
+
+msgid "Container removed"
+msgstr "Контейнер удалён"
+
+msgid "Failed to remove"
+msgstr "Не удалось удалить"
+
+msgid "Start {0}"
+msgstr "Запустить {0}"
+
+msgid "Stop {0}"
+msgstr "Остановить {0}"
+
+msgid "Restart {0}"
+msgstr "Перезапустить {0}"
+
+msgid "Remove {0}"
+msgstr "Удалить {0}"
+
+msgid "Inspect {0}"
+msgstr "Просмотр {0}"
+
+msgid "Inspect image {0}"
+msgstr "Просмотр образа {0}"
+
+msgid "Image removed"
+msgstr "Образ удалён"
+
+msgid "Failed to remove image"
+msgstr "Не удалось удалить образ"
+
+msgid "Please enter an image name"
+msgstr "Введите имя образа"
+
+msgid "Select at least one item"
+msgstr "Выберите хотя бы один элемент"
+
+# ===== Rust 动态：Docker 层错误/结果 =====
+msgid "inspect container failed: {0}"
+msgstr "не удалось просмотреть контейнер: {0}"
+
+msgid "Stopped containers: removed {0}, freed {1}"
+msgstr "Остановленные контейнеры: удалено {0}, освобождено {1}"
+
+msgid "Dangling images: removed {0}, freed {1}"
+msgstr "Висячие образы: удалено {0}, освобождено {1}"
+
+msgid "Unused networks: removed {0}"
+msgstr "Неиспользуемые сети: удалено {0}"
+
+msgid "Unused volumes: removed {0}, freed {1}"
+msgstr "Неиспользуемые тома: удалено {0}, освобождено {1}"
+
+msgid "Cleanup stopped containers failed: {0}"
+msgstr "Не удалось очистить остановленные контейнеры: {0}"
+
+msgid "Cleanup dangling images failed: {0}"
+msgstr "Не удалось очистить висячие образы: {0}"
+
+msgid "Cleanup unused networks failed: {0}"
+msgstr "Не удалось очистить неиспользуемые сети: {0}"
+
+msgid "Cleanup unused volumes failed: {0}"
+msgstr "Не удалось очистить неиспользуемые тома: {0}"
+
+msgid "Nothing to clean up"
+msgstr "Нечего очищать"
+
+# ===== Rust 动态：Docker 层 =====
+msgid "Failed to connect to Docker: {0}"
+msgstr "Не удалось подключиться к Docker: {0}"
+
+msgid "Failed to fetch container list: {0}"
+msgstr "Не удалось получить список контейнеров: {0}"
+
+msgid "Failed to fetch image list: {0}"
+msgstr "Не удалось получить список образов: {0}"
+
+msgid "Failed to start container: {0}"
+msgstr "Не удалось запустить контейнер: {0}"
+
+msgid "Failed to stop container: {0}"
+msgstr "Не удалось остановить контейнер: {0}"
+
+msgid "Failed to restart container: {0}"
+msgstr "Не удалось перезапустить контейнер: {0}"
+
+msgid "Failed to remove container: {0}"
+msgstr "Не удалось удалить контейнер: {0}"
+
+msgid "Failed to remove image: {0}"
+msgstr "Не удалось удалить образ: {0}"
+
+msgid "Image {0} removed"
+msgstr "Образ {0} удалён"
+
+msgid "Please enter an image name, e.g. nginx:latest"
+msgstr "Введите имя образа, например nginx:latest"
+
+msgid "Failed to pull image: {0}"
+msgstr "Не удалось загрузить образ: {0}"
+
+msgid "{0}:{1} pulled"
+msgstr "{0}:{1} загружен"
+
+msgid "Failed to list networks: {0}"
+msgstr "Не удалось получить список сетей: {0}"
+
+msgid "Failed to list volumes: {0}"
+msgstr "Не удалось получить список томов: {0}"
+
+msgid "Failed to read volume sizes: {0}"
+msgstr "Не удалось прочитать размеры томов: {0}"
+
+msgid "Failed to read container sizes: {0}"
+msgstr "Не удалось прочитать размеры контейнеров: {0}"
+
+msgid "Empty stats response"
+msgstr "Пустой ответ stats"
+
+msgid "Failed to fetch stats: {0}"
+msgstr "Не удалось получить статистику: {0}"
+
+msgid "Image inspect failed ({0}): {1}"
+msgstr "Не удалось получить информацию об образе ({0}): {1}"
+
+msgid "Theme"
+msgstr "Тема"
+
+msgid "Refresh"
+msgstr "Обновить"
+
+msgid "Start"
+msgstr "Запустить"
+
+msgid "Stop"
+msgstr "Остановить"
+
+msgid "Restart"
+msgstr "Перезапустить"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Run"
+msgstr "Запустить"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Follow logs"
+msgstr "Следить за логами"
+
+msgid "Copy logs"
+msgstr "Копировать логи"
+
+msgid "Clear logs"
+msgstr "Очистить логи"
+
+msgid "Log is empty"
+msgstr "Логи пусты"
+
+msgid "Copied {0} log lines"
+msgstr "Скопировано строк логов: {0}"
+
+msgid "Copy failed"
+msgstr "Не удалось скопировать"
+
+msgid "Log cleared"
+msgstr "Логи очищены"
+
+# ===== 抽屉：网络 / 卷 / 镜像详情 =====
+msgid "Repo"
+msgstr "Репозиторий"
+
+msgid "Size"
+msgstr "Размер"
+
+msgid "Layers"
+msgstr "Слои"
+
+msgid "Config"
+msgstr "Конфигурация"
+
+msgid "Entrypoint"
+msgstr "Точка входа"
+
+msgid "Command"
+msgstr "Команда"
+
+msgid "Driver"
+msgstr "Драйвер"
+
+msgid "Scope"
+msgstr "Область"
+
+msgid "Subnet"
+msgstr "Подсеть"
+
+msgid "Gateway"
+msgstr "Шлюз"
+
+msgid "Mountpoint"
+msgstr "Точка монтирования"
+
+msgid "Restart Count"
+msgstr "Число перезапусков"
+
+msgid "None"
+msgstr "Нет"
+
+msgid "No ports"
+msgstr "Портов нет"
+
+msgid "unlimited"
+msgstr "без ограничений"
+
+msgid "{0} times"
+msgstr "{0} раз"
+
+msgid "{0} layers"
+msgstr "{0} слоёв"
+
+# ===== 卡片：网络 / 卷 / 空状态 =====
+msgid "Builtin"
+msgstr "Встроенный"
+
+msgid "Anonymous volume"
+msgstr "Анонимный том"
+
+msgid "No matching containers"
+msgstr "Нет подходящих контейнеров"
+
+msgid "No matching images"
+msgstr "Нет подходящих образов"
+
+msgid "No matching networks"
+msgstr "Нет подходящих сетей"
+
+msgid "No matching volumes"
+msgstr "Нет подходящих томов"
+
+msgid "Pull new image or adjust search"
+msgstr "Загрузите новый образ или измените поиск"
+
+msgid "Try adjusting filters or keywords"
+msgstr "Попробуйте изменить фильтры или ключевое слово"
+
+# ===== 顶栏 =====
+msgid "Search name, image..."
+msgstr "Поиск по имени, образу..."
+
+# ===== 相对时间 =====
+msgid "{0} minutes ago"
+msgstr "{0} минут назад"
+
+msgid "{0} hours ago"
+msgstr "{0} часов назад"
+
+msgid "{0} days ago"
+msgstr "{0} дней назад"
+
+msgid "{0} weeks ago"
+msgstr "{0} недель назад"
+
+msgid "{0} months ago"
+msgstr "{0} месяцев назад"
+
+# ===== Rust 动态：网络 / 卷 / 镜像操作 =====
+msgid "Network removed"
+msgstr "Сеть удалена"
+
+msgid "Volume removed"
+msgstr "Том удалён"
+
+msgid "Failed to remove network: {0}"
+msgstr "Не удалось удалить сеть: {0}"
+
+msgid "Failed to remove volume: {0}"
+msgstr "Не удалось удалить том: {0}"
+
+msgid "Run {0}"
+msgstr "Запустить {0}"
+
+# ===== 分组操作（台账内联树的分组带按钮 / 菜单）=====
+msgid "Start all"
+msgstr "Запустить все"
+
+msgid "Stop all"
+msgstr "Остановить все"
+
+msgid "Restart all"
+msgstr "Перезапустить все"
+
+msgid "Remove all"
+msgstr "Удалить все"
+
+msgid "Merged logs"
+msgstr "Объединённые логи"
+
+msgid "Group actions"
+msgstr "Действия с группой"
+
+msgid "No running containers in this group"
+msgstr "В этой группе нет запущенных контейнеров"
+
+msgid "{0} containers merged"
+msgstr "Объединено логов контейнеров: {0}"
+
+# ===== 自动更新 =====
+msgid "Update available"
+msgstr "Доступно обновление"
+
+msgid "Restart to apply update"
+msgstr "Перезапустите, чтобы применить обновление"
+
+msgid "Check for updates"
+msgstr "Проверить обновления"
+
+msgid "Software Update"
+msgstr "Обновление программы"
+
+msgid "Current {0} · Latest {1}"
+msgstr "Текущая {0} · Последняя {1}"
+
+msgid "Updated to {0}"
+msgstr "Обновлено до {0}"
+
+msgid "Current {0}"
+msgstr "Текущая {0}"
+
+msgid "No release notes."
+msgstr "Нет примечаний к выпуску."
+
+msgid "Check for updates on startup"
+msgstr "Проверять обновления при запуске"
+
+msgid "Download and install updates automatically"
+msgstr "Загружать и устанавливать обновления автоматически"
+
+msgid "Open release page"
+msgstr "Открыть страницу выпуска"
+
+msgid "Restart now"
+msgstr "Перезапустить сейчас"
+
+msgid "Installing..."
+msgstr "Установка..."
+
+msgid "Install update"
+msgstr "Установить обновление"
+
+msgid "You're up to date."
+msgstr "У вас последняя версия."
+
+msgid "{0} failed"
+msgstr "{0} не удалось"
+
+msgid "{0} failed: {1}"
+msgstr "{0} не удалось: {1}"
+
+msgid "{0} failed: cannot connect"
+msgstr "{0} не удалось: нет подключения"
+
+msgid "{0} failed: cannot resolve host"
+msgstr "{0} не удалось: не удалось разрешить имя хоста"
+
+msgid "{0} failed (curl exit code {1})"
+msgstr "{0} не удалось (код выхода curl {1})"
+
+msgid "{0} failed: server returned an HTTP error"
+msgstr "{0} не удалось: сервер вернул ошибку HTTP"
+
+msgid "Already up to date"
+msgstr "Уже последняя версия"
+
+msgid "Automatic install is not supported"
+msgstr "Автоматическая установка не поддерживается"
+
+msgid "Automatic install is not supported on this platform"
+msgstr "Автоматическая установка не поддерживается на этой платформе"
+
+msgid "Check for updates first"
+msgstr "Сначала проверьте обновления"
+
+msgid "Downloading update..."
+msgstr "Загрузка обновления..."
+
+msgid "Downloading update... {0}%"
+msgstr "Загрузка обновления... {0}%"
+
+msgid "Failed to create update cache: {0}"
+msgstr "Не удалось создать кэш обновлений: {0}"
+
+msgid "Failed to download update: {0}"
+msgstr "Не удалось загрузить обновление: {0}"
+
+msgid "Failed to locate current executable: {0}"
+msgstr "Не удалось найти текущий исполняемый файл: {0}"
+
+msgid "Failed to locate install directory"
+msgstr "Не удалось найти каталог установки"
+
+msgid "Failed to open browser: {0}"
+msgstr "Не удалось открыть браузер: {0}"
+
+msgid "Failed to open update file: {0}"
+msgstr "Не удалось открыть файл обновления: {0}"
+
+msgid "Failed to read new binary: {0}"
+msgstr "Не удалось прочитать новый двоичный файл: {0}"
+
+msgid "Failed to read update file: {0}"
+msgstr "Не удалось прочитать файл обновления: {0}"
+
+msgid "Failed to replace binary: {0}"
+msgstr "Не удалось заменить исполняемый файл: {0}"
+
+msgid "Failed to restart application: {0}"
+msgstr "Не удалось перезапустить приложение: {0}"
+
+msgid "Failed to run curl: {0}"
+msgstr "Не удалось запустить curl: {0}"
+
+msgid "Failed to run pkexec: {0}"
+msgstr "Не удалось запустить pkexec: {0}"
+
+msgid "Failed to set binary permissions: {0}"
+msgstr "Не удалось установить права на исполняемый файл: {0}"
+
+msgid "Failed to write new binary: {0}"
+msgstr "Не удалось записать новый двоичный файл: {0}"
+
+msgid "Installing update..."
+msgstr "Установка обновления..."
+
+msgid "Malformed update response: {0}"
+msgstr "Некорректный ответ с обновлением: {0}"
+
+msgid "Malformed update response: missing tag_name"
+msgstr "Некорректный ответ с обновлением: отсутствует tag_name"
+
+msgid "No installable asset for this release"
+msgstr "Для этого выпуска нет пригодного для установки файла"
+
+msgid "Package installation failed: {0}"
+msgstr "Не удалось установить пакет: {0}"
+
+msgid "pkexec not found, please install the deb manually"
+msgstr "pkexec не найден, установите deb-пакет вручную"
+
+msgid "Preparing update..."
+msgstr "Подготовка обновления..."
+
+msgid "Release checksums.txt does not contain this asset"
+msgstr "checksums.txt выпуска не содержит этот файл"
+
+msgid "Release checksums.txt is missing"
+msgstr "В выпуске отсутствует checksums.txt"
+
+msgid "Unsupported release tag: {0}"
+msgstr "Неподдерживаемый тег выпуска: {0}"
+
+msgid "Update checksum mismatch"
+msgstr "Контрольная сумма обновления не совпала"
+
+msgid "Update request timed out"
+msgstr "Запрос обновления превысил время ожидания"
+
+msgid "Update response is too large"
+msgstr "Ответ с обновлением слишком большой"
+
+msgid "Update task failed"
+msgstr "Задача обновления не выполнена"
+
+msgid "Verifying update..."
+msgstr "Проверка обновления..."
+
+msgid "Updated to {0}. Restart to apply"
+msgstr "Обновлено до {0}. Перезапустите, чтобы применить"
+
+msgid "New version {0} available"
+msgstr "Доступна новая версия {0}"
+
+msgid "Checking for updates..."
+msgstr "Проверка обновлений..."
+
+msgid "An update task is already running"
+msgstr "Задача проверки обновлений уже выполняется"
+
+msgid "Update check"
+msgstr "Проверка обновлений"
+
+msgid "Update download"
+msgstr "Загрузка обновления"
+
+msgid "Development builds do not install updates automatically"
+msgstr "Сборки для разработки не устанавливают обновления автоматически"
+
+msgid "pkexec is required to install the deb package"
+msgstr "Для установки deb-пакета требуется pkexec"
+
+msgid "No deb package is available for this architecture"
+msgstr "Для этой архитектуры нет deb-пакета"
+
+msgid "The release does not include a binary asset"
+msgstr "В выпуске нет двоичного файла"
+
+msgid "The release does not include checksums.txt"
+msgstr "В выпуске нет checksums.txt"
+
+msgid "The install directory is not writable, please use the download page"
+msgstr "Каталог установки недоступен для записи, используйте страницу загрузки"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Appearance"
+msgstr "Внешний вид"
+
+msgid "Follow system"
+msgstr "Следовать за системой"
+
+msgid "Light"
+msgstr "Светлая"
+
+msgid "Dark"
+msgstr "Тёмная"
+
+msgid "Updates"
+msgstr "Обновления"
+
+msgid "Restart automatically after install"
+msgstr "Перезапускать автоматически после установки"
+
+msgid "Updates run in the background; installing the deb asks for system authorization once."
+msgstr "Обновления выполняются в фоне; при установке deb-пакета потребуется однократное подтверждение в системе."
+
+msgid "Update installed, restarting automatically..."
+msgstr "Обновление установлено, приложение перезапускается автоматически..."
+
+msgid "Images size"
+msgstr "Размер образов"
+
+msgid "Disk = image + writable layer + mounted volumes (what this container occupies).\nImages shared by several containers are counted in each row; the footer total deduplicates them."
+msgstr "Диск = образ + слой для записи + подключённые тома (сколько занимает этот контейнер).\nОбразы, общие для нескольких контейнеров, учитываются в каждой строке; в итоге внизу они учитываются один раз."
+
+msgid "Update manifest does not match checksums.txt"
+msgstr "Манифест обновления не совпадает с checksums.txt"
+
+msgid "Update manifest is malformed"
+msgstr "Манифест обновления некорректен"
+
+msgid "Update manifest does not match the release"
+msgstr "Манифест обновления не соответствует выпуску"
+
+msgid "Update manifest does not match the package"
+msgstr "Манифест обновления не соответствует пакету"
+
+msgid "Update manifest signature is not verifiable: {0}"
+msgstr "Не удалось проверить подпись манифеста обновления: {0}"
+
+msgid "Version {0} is already installed, restart to apply"
+msgstr "Версия {0} уже установлена, перезапустите, чтобы применить"
+
+msgid "Using the package already downloaded"
+msgstr "Используется уже загруженный пакет обновления"
+
+msgid "Check now"
+msgstr "Проверить сейчас"
+
+msgid "Checking for updates…"
+msgstr "Проверка обновлений…"

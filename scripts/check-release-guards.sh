@@ -51,6 +51,16 @@ grep -q 'sync-gitee-release' docs/git-flow.md && ok "git-flow 记录了 Gitee �
 grep -q 'immutable' docs/git-flow.md && ok "git-flow 记录了不可变产物处置" || bad "docs/git-flow.md 缺不可变产物处置"
 grep -q '破坏性操作' AGENTS.md && ok "AGENTS.md 有破坏性操作门禁" || bad "AGENTS.md 缺破坏性操作门禁"
 
+# 新 tag 必须签名：配置与文档约定缺一不可（历史 tag 不改写、不重签，脚本不触碰任何 ref）
+[ "$(git config --get gpg.format 2>/dev/null)" = ssh ] && ok "本地 git 使用 SSH 签名（gpg.format=ssh）" || bad "gpg.format 不是 ssh（应为 ssh）"
+[ -n "$(git config --get user.signingKey 2>/dev/null)" ] && ok "本地 git 已设置 user.signingKey" || bad "本地 git 缺 user.signingKey"
+[ "$(git config --get tag.gpgSign 2>/dev/null)" = true ] && ok "tag.gpgSign=true（新 tag 自动签名）" || bad "tag.gpgSign 不是 true（新 tag 可能无签名）"
+[ -n "$(git config --get gpg.ssh.allowedSignersFile 2>/dev/null)" ] && ok "已设置 gpg.ssh.allowedSignersFile（git tag -v 可验签）" || bad "缺 gpg.ssh.allowedSignersFile（git tag -v 无法给出 Good signature）"
+for kw in 'tag -s' 'Good signature' '历史 tag'; do
+  grep -q -- "$kw" docs/git-flow.md || bad "docs/git-flow.md 缺签名 tag 约定关键词：$kw"
+done
+grep -q 'tag -s' CONTRIBUTING.md || bad "CONTRIBUTING.md 缺签名 tag 约定"
+
 echo "== 3. GitHub 侧设置（需要 GH_TOKEN）=="
 repo="${GUARD_REPO:-pengtang1024/docker-panel}"
 if [ -n "${GH_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then

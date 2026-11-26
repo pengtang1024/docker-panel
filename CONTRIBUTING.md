@@ -112,7 +112,7 @@ CI 的 `quality.yml` 用固定工具链 `1.99.1` 跑前三项；`license.yml` �
 | `bugfix/*` | 缺陷修复，从 `develop` 切出，合回 `develop` |
 | `release/*` / `hotfix/*` | 发版与线上紧急修复，属维护者职责 |
 
-不要向 `master` 直接提 PR——`master` 的每次提交都必须对应一个纯数字 tag `X.Y.Z`（不带 `v` 前缀），由发版流程创建。完整规则见 [docs/git-flow.md](docs/git-flow.md)。
+不要向 `master` 直接提 PR——`master` 的每次提交都必须对应一个纯数字 tag `X.Y.Z`（不带 `v` 前缀），由发版流程创建。新 tag 一律用 `git tag -s X.Y.Z -m "release: vX.Y.Z"` 签名（维护者职责），并 `git tag -v X.Y.Z` 验到 **Good signature** 才算有效；GitHub 会显示 "This tag was signed with the committer's verified signature"。**历史 tag 一律不改写、不删除、不重签、不强推覆盖**，签名约定只约束今后新建的 tag。完整规则与本地配置（SSH 签名密钥 / allowedSignersFile）见 [docs/git-flow.md](docs/git-flow.md)「签名 tag 约定」。
 
 ```
 feat(update): 发布后自动提交清单到 master，jsDelivr 备源生效

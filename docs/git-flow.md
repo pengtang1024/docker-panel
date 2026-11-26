@@ -26,9 +26,15 @@
 2. **禁止向 `master` 直接提交。**
    即使只有一个文件的改动，也必须走 `hotfix` 分支，否则发布历史会出现无法追溯的提交。
 
-3. **`master` 的每次提交都必须对应一个 tag。**
+3. **`master` 的每次提交都必须对应一个签名 tag。**
    tag 由 git flow 在 finish 时创建，格式为纯数字 `X.Y.Z`（不带 `v` 前缀），
    与 Release 流水线的触发正则 `[0-9]+.[0-9]+.[0-9]+` 保持一致。
+   新 tag 一律带 GPG/SSH 签名，必须 annotated + signed 一体：
+   `git tag -s X.Y.Z -m "release: vX.Y.Z"`（git flow finish 询问说明时回车用默认说明），
+   生成后 `git tag -v X.Y.Z` 必须出现 **Good signature** 且签名者身份正确，
+   `BAD signature` / `no signature` / warning 一律当作发布阻断处理。
+   所有**历史 tag 一律不改写、不删除、不重签、不强推覆盖**；历史遗留的无签名 tag 原样保留，
+   只对本次新版本打新的签名 tag（见下文「签名 tag 约定」）。
 
 4. **`release` 分支只做发版准备，不接受新功能。**
    切出后只允许：版本号同步、更新 CHANGELOG、发布前修复。功能需求应回到 `feature` 分支。
@@ -91,6 +97,44 @@ scripts/check-release-guards.sh
 > **为什么签名不在 CI**：私钥进 secret 就等于把「谁能发布更新」交给 CI 供应链。现在流水线只产草稿（用户看不到），签名与发布都必须在本机、用离线私钥完成；CI 被攻破最多改草稿，签不出能通过客户端校验的清单（`packaging/release-signing.pub` 内置公钥清单，验不过一律 fail closed）。
 
 `git flow release finish` 会询问 tag 说明，直接回车使用默认的 `release: vX.Y.Z` 即可。
+
+### 签名 tag 约定（新 tag 必须签名，历史 tag 一律不动）
+
+> 本节是发布 tag 签名的唯一权威约定：与仓库本地 git config 及 `scripts/check-release-guards.sh` 的检查项保持一致。
+
+**配置（当前维护者机器已配好，仓库本地 config，不随 clone 分发）**
+
+```bash
+# 回读三项配置，缺一项就不要打 tag
+git config --get gpg.format          # ssh
+git config --get user.signingKey     # ~/.ssh/id_ed25519_github_docker_panel
+git config --get tag.gpgSign         # true
+# SSH 签名验签需要 allowedSignersFile，否则只报警告，必须指向仓库本地的信任锚
+git config --get gpg.ssh.allowedSignersFile   # .git/allowed_signers
+```
+
+本仓库用 **SSH 签名**（`gpg.format=ssh`），专用密钥 `~/.ssh/id_ed25519_github_docker_panel`
+（公钥指纹 `SHA256:rmD48/4QMXSKhsVWi85ks7TMYDXTwSVInMW2ioP3r/I`）已在 GitHub 账号登记为
+SSH signing key（标题 `docker-panel signing (2026-11-20)`），因而 GitHub tag 页显示
+**"This tag was signed with the committer's verified signature"**，右上角为 Verified 徽标。
+`.git/allowed_signers` 存同一把公钥，使本机 `git tag -v` 能给出 Good signature；该文件位于 `.git/`，
+不随仓库分发。**换机器 / 换密钥**时按需配置，不把私钥放进仓库或 CI。
+
+**打新 tag（只允许新版本，禁止重签历史 tag）**
+
+```bash
+git tag -s X.Y.Z -m "release: vX.Y.Z"   # -s 强制 SSH/GPG 签名；tag.gpgSign=true 也是兜底
+git tag -v X.Y.Z                         # 必须 Good signature，签名者 = 上述指纹/身份
+```
+
+- `git tag -v` 输出里出现 `Good "git" signature`（GPG 则 `Good signature`）才算通过；
+  `BAD signature` / `no signature` / `cannot verify` 一律停手修配置，绝不退化成不带签名的 tag。
+- 远端核对：GitHub tag 对象的 message 里含 `-----BEGIN SSH SIGNATURE-----` 载荷，
+  且 tag 页显示 verified signature 文案。
+- **所有历史 tag（含 0.8.3 / 0.8.2 / 0.7.19 等 annotated 但无签名的旧 tag）一律不改写、
+  不删除、不重新签名、不强推覆盖**；它们属于已 immutable release 的历史记录。
+  签名约定只约束**今后新建**的 tag。
+- `scripts/check-release-guards.sh` 发版收尾会核对本地签名配置与文档约定；配置缺失或文档未写清即报错。
 
 ### 版本号同步的四个位置
 
@@ -261,6 +305,9 @@ PKG_CONFIG_LIBDIR=/tmp/fake-pc cargo build --release --locked   # 复现缺 font
 | deb 包版本号不对 | 只改了 Cargo.toml | 四处版本号一起改（含 `Cargo.lock`；`scripts/check-version.sh` 可一键核对） |
 | 推了 tag 但流水线没触发，重推后却跑出**两个** run，第二个报 `Cannot delete asset from an immutable release` | 第一次 run 已发布 Release 并把它设为 immutable；重推 tag 又触发一次 run，它想先删同名旧资产 → 被 immutable 拒绝 | 第二个 run 失败**不影响结果**（Release 与资产已由第一个 run 生成好）；排查时先确认 `gh release list` 里有没有该版本，再决定要不要重推。推 tag 前先 `git push origin refs/tags/X.Y.Z`，若 `gh run list` 查不到，等 1~2 分钟再重推（重推会留下两条流水线记录） |
 | finish 报「无标签说明」 | tag 说明输入为空 | 回车用默认说明，或输入说明文字 |
+| `git tag -v` 报 `error: ssh 签名验证需要 gpg.ssh.allowedSignersFile 被设置且存在` | SSH 验签缺少 allowed signers 文件 | 仓库本地配 `gpg.ssh.allowedSignersFile=.git/allowed_signers`，内容为 `git <公钥行>` |
+| GitHub tag 页没有 "This tag was signed with the committer's verified signature" | 签名公钥未在 GitHub 账号登记为 SSH signing key | 停止发布，先核对 `gh api user/ssh_signing_keys`；新增账号级 key 须用户确认，不自行添加 |
+| tag 是 annotated 但 `git tag -v` 没有签名载荷 | 用了 `git tag -a` / 未启用 `tag.gpgSign` | 仅对**新版本**用 `git tag -s` 重打；历史 tag 一律不改写、不重签 |
 
 ---
 

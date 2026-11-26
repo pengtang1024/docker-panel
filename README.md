@@ -21,6 +21,8 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 > [!TIP]
 > **30 秒上手**：从 [Releases](https://github.com/pengtang1024/docker-panel/releases) 下载 `.deb` → `sudo dpkg -i docker-panel_<版本>_amd64.deb` → 应用菜单打开 **Docker Panel**。点了没反应多半是没给 Docker socket 权限：`sudo usermod -aG docker $USER`（重新登录生效）。
 
+如果 Docker Panel 对你有用，欢迎点个 Star ⭐（[GitHub](https://github.com/pengtang1024/docker-panel) · [Gitee](https://gitee.com/pengtang1024/docker-panel)）。
+
 ## 目录
 
 | # | 章节 | 你会在这里找到 |
@@ -111,7 +113,7 @@ Rust 单二进制 · Slint 原生 GUI · 纯软件渲染
 
 - 浅色 / 深色 / 跟随系统 三态主题，完整的浅 / 深双套色板（语义色 + 状态 / 微条 / 日志等辅助色）
 - 内置 Material 3 组件库（`@material` 的 ScrollView / ListView）的色板由项目令牌映射而来，跟随**应用**主题而非系统主题
-- 界面文案中英双语，跟随系统 locale 自动选择（`zh*` → `zh_CN`）
+- 界面文案支持 **7 种语言**：简体中文 / 英语 / 西班牙语 / 法语 / 德语 / 俄语 / 葡萄牙语，跟随系统 locale 自动选择，缺失译文回落英语；**不提供日语**
 
 ### 2.7 配置持久化
 
@@ -456,6 +458,7 @@ docker-panel/
 | 读者 | 入口 | 内容 |
 |------|------|------|
 | **只是想用** | [Wiki（GitHub）](https://github.com/pengtang1024/docker-panel/wiki) · [Wiki（Gitee）](https://gitee.com/pengtang1024/docker-panel/wikis) | 安装、使用、常见问题（两站内容一致，国内外访问速度不同可互为备份） |
+| | [Home](wiki/Home.md) · [Installation](wiki/Installation.md) · [Usage](wiki/Usage.md) · [FAQ](wiki/FAQ.md) · [Changelog](wiki/Changelog.md) · [Contributing](wiki/Contributing.md) | 两站 Wiki 的六页规范源（仓库内可直接编辑，改动后同步到 GitHub / Gitee） |
 | | [配置手册](docs/configuration.md) · [故障排查](docs/troubleshooting.md) · [翻译指南](docs/translations.md) | 改配置、修毛病、加翻译 |
 | **想参与** | [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [支持与求助](SUPPORT.md) · [安全策略](SECURITY.md) | 提 PR、提问、报漏洞 |
 | | [路线图](docs/roadmap.md) | 下一步想做什么、明确不做什么 |

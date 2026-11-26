@@ -3,19 +3,11 @@
   "version": "0.9.1",
   "version_code": 9001,
   "channel": "stable",
-  "released_at": "2026-11-26T11:25:22Z",
+  "released_at": "2026-11-26T11:36:40Z",
   "mandatory": false,
   "notes_url": "https://github.com/pengtang1024/docker-panel/releases/tag/0.9.1",
   "assets": {
-    "deb": {
-      "name": "PLACEHOLDER-replaced-by-CI",
-      "size": 0,
-      "sha256": "PLACEHOLDER-replaced-by-CI"
-    },
-    "binary": {
-      "name": "PLACEHOLDER-replaced-by-CI",
-      "size": 0,
-      "sha256": "PLACEHOLDER-replaced-by-CI"
-    }
+    "deb": { "name": "docker-panel_0.9.1_amd64.deb", "size": 5848084, "sha256": "9650c43a5873da5209c8c7911f56895e015560cbcbe134b2a8a99cf43f3b0f84" },
+    "binary": { "name": "docker-panel", "size": 14060488, "sha256": "c62ecf14c6060561f541a0a76b1ccc38f39245dc05b35af230eacbfdec8ef51d" }
   }
 }
